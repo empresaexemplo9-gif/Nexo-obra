@@ -11,9 +11,6 @@ import {
   CalendarRange,
   Check,
   CircleAlert,
-  CircleDollarSign,
-  Clock3,
-  Database,
   Eye,
   EyeOff,
   Files,
@@ -34,6 +31,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { BudgetsWorkspace } from "@/components/budgets-workspace";
+import { FinanceWorkspace } from "@/components/finance-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -111,17 +109,13 @@ type Project = {
   id: string; clientId: string | null; clientName: string | null; code: string; name: string;
   kind: "project" | "work"; status: string; phase: string; progressPercent: number;
   ownerName: string | null; targetDate: string | null; budgetCents: number | null;
+  externalFinancialCostCenterId?: string | null;
 };
 type Task = {
   id: string; projectId: string; projectName: string; title: string; status: string;
   priority: string; assigneeName: string | null; dueAt: string | null;
 };
 type Member = TeamMember;
-type FinancialSummary = {
-  currentBalance: number; receivables: number; payables: number; projected30d: number;
-  overdueReceivables: number; updatedAt: string; source: "drap";
-};
-
 class RequestError extends Error {
   constructor(message: string, public code?: string) { super(message); }
 }
@@ -158,9 +152,6 @@ const modulePermissionMap: Record<ModuleId, PermissionModule> = {
 const roleLabels: Record<string, string> = {
   ...accessProfileLabels, client: "Cliente",
 };
-const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const compactCurrency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact", maximumFractionDigits: 1 });
-
 function Brand({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   if (compact) return <span className="grid size-10 place-items-center rounded-xl bg-cyan-500 font-black text-slate-950 shadow-lg">D</span>;
   return (
@@ -330,8 +321,6 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [financial, setFinancial] = useState<FinancialSummary | null>(null);
-  const [financialMessage, setFinancialMessage] = useState("");
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickKind, setQuickKind] = useState<CreateKind>("project");
   const [companyOpen, setCompanyOpen] = useState(false);
@@ -351,7 +340,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
 
   const loadData = useCallback(async () => {
     await Promise.resolve();
-    setLoading(true); setError(""); setFinancialMessage("");
+    setLoading(true); setError("");
     try {
       const [clientData, projectData, taskData, memberData] = await Promise.all([
         canView("crm") ? requestJson<{ clients: Client[] }>("/api/clients") : Promise.resolve({ clients: [] }),
@@ -360,9 +349,6 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
         canView("team") ? requestJson<{ members: Member[] }>("/api/members") : Promise.resolve({ members: [] }),
       ]);
       setClients(clientData.clients); setProjects(projectData.projects); setTasks(taskData.tasks); setMembers(memberData.members);
-      if (!canView("finance")) { setFinancial(null); setFinancialMessage(""); }
-      else try { const financeData = await requestJson<FinancialSummary>("/api/integrations/drap/summary"); setFinancial(financeData); }
-      catch (cause) { setFinancial(null); setFinancialMessage(cause instanceof Error ? cause.message : "Financeiro indisponível."); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar os dados."); }
     finally { setLoading(false); }
   }, [canView]);
@@ -409,7 +395,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "crm") return <div className="space-y-5"><PageIntro module="crm" action={() => openCreate("client")} actionLabel="Novo cliente" />{clients.length ? <Card className="overflow-hidden"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-5">Cliente</TableHead><TableHead>Contato</TableHead><TableHead>Documento</TableHead></TableRow></TableHeader><TableBody>{clients.map((client) => <TableRow key={client.id}><TableCell className="pl-5 font-medium">{client.name}</TableCell><TableCell><p>{client.email ?? "Sem e-mail"}</p><p className="text-xs text-slate-500">{client.phone ?? "Sem telefone"}</p></TableCell><TableCell>{client.document ?? "Não informado"}</TableCell></TableRow>)}</TableBody></Table></Card> : <HonestEmpty icon={Target} title="Nenhum cliente cadastrado" description="Adicione o primeiro cliente real para iniciar o fluxo comercial." action={() => openCreate("client")} actionLabel="Cadastrar cliente" />}</div>;
     if (activeModule === "tasks") return <div className="space-y-5"><PageIntro module="tasks" action={() => openCreate("task")} actionLabel="Nova tarefa" />{tasks.length ? <Card><CardContent className="divide-y p-0">{tasks.map((task) => <div key={task.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"><button disabled={task.status === "done"} onClick={() => void completeTask(task)} aria-label={`Concluir ${task.title}`} className="grid size-6 shrink-0 place-items-center rounded-full border border-slate-300 text-transparent enabled:hover:border-emerald-500 enabled:hover:text-emerald-600 disabled:bg-emerald-50 disabled:text-emerald-600"><Check className="size-3.5" /></button><div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-slate-500">{task.projectName}{task.assigneeName ? ` · ${task.assigneeName}` : ""}</p></div><StatusBadge status={task.status} /></div>)}</CardContent></Card> : <HonestEmpty icon={ListChecks} title="Nenhuma tarefa cadastrada" description={projects.length ? "Crie a primeira tarefa ligada a um projeto." : "Cadastre um projeto antes de criar tarefas."} action={projects.length ? () => openCreate("task") : () => openCreate("project")} actionLabel={projects.length ? "Criar tarefa" : "Cadastrar projeto"} />}</div>;
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("team")} /></div>;
-    if (activeModule === "finance") return <div className="space-y-5"><PageIntro module="finance" />{financial ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi icon={CircleDollarSign} label="Saldo atual" value={currency.format(financial.currentBalance)} detail={`Atualizado em ${new Date(financial.updatedAt).toLocaleString("pt-BR")}`} tone="emerald" /><Kpi icon={WalletCards} label="A receber" value={compactCurrency.format(financial.receivables)} detail={`${currency.format(financial.overdueReceivables)} vencidos`} /><Kpi icon={CircleAlert} label="A pagar" value={compactCurrency.format(financial.payables)} detail="fonte oficial Drap" tone="amber" /><Kpi icon={Clock3} label="Projetado em 30 dias" value={compactCurrency.format(financial.projected30d)} detail="fonte oficial Drap" /></div> : <HonestEmpty icon={Database} title="Financeiro ainda não conectado" description={financialMessage || "Conecte a conta Drap desta empresa para exibir valores oficiais."} />}</div>;
+    if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     const future = activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
     return <div className="space-y-5"><PageIntro module={activeModule} /><HonestEmpty {...future} /></div>;

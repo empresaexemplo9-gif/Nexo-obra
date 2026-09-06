@@ -245,6 +245,27 @@ export const integrationEvents = sqliteTable("integration_events", {
   index("idx_integration_events_provider_type").on(table.provider, table.eventType),
 ]);
 
+export const financialChargeRequests = sqliteTable("financial_charge_requests", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  clientId: text("client_id").references(() => clients.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  dueDate: text("due_date").notNull(),
+  reminderPolicyJson: text("reminder_policy_json").notNull().default("{}"),
+  status: text("status").notNull().default("pending"),
+  externalChargeId: text("external_charge_id"),
+  shareUrl: text("share_url"),
+  lastError: text("last_error"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_financial_charge_org_idempotency").on(table.organizationId, table.idempotencyKey),
+  index("idx_financial_charge_org_project_created").on(table.organizationId, table.projectId, table.createdAt),
+  index("idx_financial_charge_org_status_due").on(table.organizationId, table.status, table.dueDate),
+]);
+
 export const superadminLoginAttempts = sqliteTable("superadmin_login_attempts", {
   fingerprint: text("fingerprint").primaryKey(),
   failedCount: integer("failed_count").notNull().default(0),

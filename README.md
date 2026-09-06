@@ -23,6 +23,7 @@ flowchart TD
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
+- Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -121,6 +122,8 @@ DRAP_API_URL=https://empresa.drap.app.br
 DRAP_API_TOKEN=token_de_servico
 DRAP_API_KEY_HEADER=
 DRAP_SUMMARY_PATH=/api/v1/finance/summary
+DRAP_TRANSACTIONS_PATH=
+DRAP_CHARGES_PATH=
 DRAP_WEBHOOK_SECRET=segredo_compartilhado
 ```
 
@@ -271,9 +274,9 @@ CLAUDE.md
 ### Fase 4 — financeiro remoto e automações
 
 - Conector Drap homologado em sandbox.
-- Vínculo de projeto com centro de custo remoto.
-- Leitura de saldos, contas e DRE por projeto.
-- Criação remota de cobrança/conta somente com idempotência.
+- Vínculo de projeto com centro de custo remoto. **Concluído no produto; homologação Drap pendente.**
+- Leitura de saldos e contas por projeto, com relatório CSV. **Concluída no produto; endpoint Drap pendente.**
+- Criação remota de cobrança com idempotência e política de lembretes. **Concluída no produto; endpoint Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.
 - Alertas úteis: atraso, caixa negativo, margem baixa e tarefa bloqueadora.
 

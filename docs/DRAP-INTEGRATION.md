@@ -77,6 +77,18 @@ X-Correlation-Id: <uuid-da-requisicao>
 
 O nome do header de autenticação pode ser configurado por `DRAP_API_KEY_HEADER` quando a API não usa Bearer.
 
+Os caminhos efetivamente usados pelo adaptador são configurados sem alterar o código:
+
+```dotenv
+DRAP_SUMMARY_PATH=/api/v1/finance/summary
+DRAP_TRANSACTIONS_PATH=
+DRAP_CHARGES_PATH=
+```
+
+Enquanto `DRAP_TRANSACTIONS_PATH` ou `DRAP_CHARGES_PATH` estiverem vazios, as respectivas ações permanecem bloqueadas na interface. Isso impede que um caminho de API ainda não confirmado produza efeito financeiro.
+
+Na criação da cobrança, a Nexo Obra envia a política de lembretes junto à operação remota: dias antes do vencimento, envio no vencimento e intervalo após atraso. A automação só deve ser marcada como homologada quando a Drap confirmar que executa essa política.
+
 ## Mapeamentos persistidos
 
 | Entidade Nexo | ID Drap | Observação |
@@ -128,6 +140,7 @@ Eventos úteis:
 - Payload de webhook limitado por tamanho antes de persistir.
 - Logs sem token, documento, dados bancários ou payload completo sensível.
 - Auditoria de quem iniciou cada escrita remota.
+- Chave de idempotência única por empresa, persistida antes da chamada de criação de cobrança.
 
 ## Checklist de homologação
 

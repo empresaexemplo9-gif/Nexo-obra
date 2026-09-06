@@ -261,3 +261,35 @@ test("supports bulk budgeting and an official-only SINAPI adapter", async () => 
   assert.match(route, /sinapi_not_configured/);
   assert.doesNotMatch(`${ui}\n${adapter}\n${route}`, /demoSinapi|mockSinapi|SINAPI_DEMO/i);
 });
+
+test("integrates finance with each project through tenant-owned Drap links", async () => {
+  const ui = await source("components/finance-workspace.tsx");
+  const transactions = await source("app/api/integrations/drap/transactions/route.ts");
+  const projectLink = await source("app/api/integrations/drap/project-link/route.ts");
+  const connection = await source("app/api/integrations/drap/connection/route.ts");
+
+  assert.match(ui, /Contas a pagar e receber/);
+  assert.match(ui, /Relatório personalizado/);
+  assert.match(ui, /Lembretes automáticos/);
+  for (const route of [transactions, projectLink, connection]) {
+    assert.match(route, /requireOrganizationContext/);
+    assert.match(route, /requireModulePermission\(context, "finance"/);
+  }
+  assert.match(transactions, /external_financial_cost_center_id/);
+  assert.match(projectLink, /organization_id = \?2|organization_id = \?3/);
+});
+
+test("creates remote charges only with idempotency and confirmed Drap output", async () => {
+  const schema = await source("db/schema.ts");
+  const charges = await source("app/api/integrations/drap/charges/route.ts");
+  const adapter = await source("lib/integrations/drap.ts");
+
+  assert.match(schema, /sqliteTable\("financial_charge_requests"/);
+  assert.match(schema, /uidx_financial_charge_org_idempotency/);
+  assert.match(charges, /isDrapChargesConfigured/);
+  assert.match(charges, /idempotencyKey: z\.string\(\)\.uuid\(\)/);
+  assert.match(charges, /requireActiveDrapConnection/);
+  assert.match(adapter, /Idempotency-Key/);
+  assert.match(adapter, /reminder_policy/);
+  assert.doesNotMatch(`${charges}\n${adapter}`, /demoCharge|mockCharge|fakeCharge/);
+});
