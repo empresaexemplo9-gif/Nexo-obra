@@ -162,6 +162,25 @@ export const budgetItems = sqliteTable("budget_items", {
   sourceReference: text("source_reference"),
 }, (table) => [index("idx_budget_items_version_order").on(table.budgetVersionId, table.sortOrder)]);
 
+export const budgetCatalogItems = sqliteTable("budget_catalog_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  code: text("code").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull().default("Geral"),
+  unit: text("unit").notNull().default("un"),
+  unitCostCents: integer("unit_cost_cents").notNull().default(0),
+  defaultUnitPriceCents: integer("default_unit_price_cents"),
+  source: text("source").notNull().default("manual"),
+  sourceReference: text("source_reference"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_budget_catalog_org_source_code").on(table.organizationId, table.source, table.code),
+  index("idx_budget_catalog_org_category").on(table.organizationId, table.category),
+  index("idx_budget_catalog_org_description").on(table.organizationId, table.description),
+]);
+
 export const crmOpportunities = sqliteTable("crm_opportunities", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),

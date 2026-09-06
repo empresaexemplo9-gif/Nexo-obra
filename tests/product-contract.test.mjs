@@ -230,3 +230,34 @@ test("redacts project client, budget and finance fields by module permission", a
   assert.match(projects, /includeFinance: context\.member\.permissions\.finance\.view/);
   assert.match(project, /visibleProject/);
 });
+
+test("provides real multi-tenant budget versions, items and company catalog", async () => {
+  const schema = await source("db/schema.ts");
+  const budgets = await source("app/api/budgets/route.ts");
+  const items = await source("app/api/budgets/[budgetId]/items/route.ts");
+  const catalog = await source("app/api/budget-library/route.ts");
+
+  assert.match(schema, /sqliteTable\("budget_catalog_items"/);
+  assert.match(schema, /uidx_budget_catalog_org_source_code/);
+  for (const route of [budgets, items, catalog]) {
+    assert.match(route, /requireOrganizationContext/);
+    assert.match(route, /requireModulePermission\(context, "budgets"/);
+  }
+  assert.match(items, /Math\.round\(item\.unitCostCents \* factor\)/);
+  assert.match(items, /MAX\(sort_order\)/);
+  assert.match(items, /budget\.items_added/);
+});
+
+test("supports bulk budgeting and an official-only SINAPI adapter", async () => {
+  const ui = await source("components/budgets-workspace.tsx");
+  const adapter = await source("lib/integrations/sinapi.ts");
+  const route = await source("app/api/integrations/sinapi/items/route.ts");
+
+  assert.match(ui, /Importar itens em lote/);
+  assert.match(ui, /Biblioteca da empresa/);
+  assert.match(ui, /Buscar na SINAPI/);
+  assert.match(adapter, /SINAPI_API_TOKEN/);
+  assert.match(adapter, /Authorization/);
+  assert.match(route, /sinapi_not_configured/);
+  assert.doesNotMatch(`${ui}\n${adapter}\n${route}`, /demoSinapi|mockSinapi|SINAPI_DEMO/i);
+});

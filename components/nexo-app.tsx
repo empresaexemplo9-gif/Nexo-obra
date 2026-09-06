@@ -33,6 +33,7 @@ import {
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { BudgetsWorkspace } from "@/components/budgets-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -337,6 +338,17 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const canView = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].view), [session.member]);
   const canEdit = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].edit), [session.member]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const requested = new URLSearchParams(window.location.search).get("module");
+      if (requested && Object.hasOwn(modulePermissionMap, requested)) {
+        const requestedModule = requested as ModuleId;
+        if (canView(requestedModule)) setActiveModule(requestedModule);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [canView]);
+
   const loadData = useCallback(async () => {
     await Promise.resolve();
     setLoading(true); setError(""); setFinancialMessage("");
@@ -398,7 +410,8 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "tasks") return <div className="space-y-5"><PageIntro module="tasks" action={() => openCreate("task")} actionLabel="Nova tarefa" />{tasks.length ? <Card><CardContent className="divide-y p-0">{tasks.map((task) => <div key={task.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"><button disabled={task.status === "done"} onClick={() => void completeTask(task)} aria-label={`Concluir ${task.title}`} className="grid size-6 shrink-0 place-items-center rounded-full border border-slate-300 text-transparent enabled:hover:border-emerald-500 enabled:hover:text-emerald-600 disabled:bg-emerald-50 disabled:text-emerald-600"><Check className="size-3.5" /></button><div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-slate-500">{task.projectName}{task.assigneeName ? ` · ${task.assigneeName}` : ""}</p></div><StatusBadge status={task.status} /></div>)}</CardContent></Card> : <HonestEmpty icon={ListChecks} title="Nenhuma tarefa cadastrada" description={projects.length ? "Crie a primeira tarefa ligada a um projeto." : "Cadastre um projeto antes de criar tarefas."} action={projects.length ? () => openCreate("task") : () => openCreate("project")} actionLabel={projects.length ? "Criar tarefa" : "Cadastrar projeto"} />}</div>;
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("team")} /></div>;
     if (activeModule === "finance") return <div className="space-y-5"><PageIntro module="finance" />{financial ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><Kpi icon={CircleDollarSign} label="Saldo atual" value={currency.format(financial.currentBalance)} detail={`Atualizado em ${new Date(financial.updatedAt).toLocaleString("pt-BR")}`} tone="emerald" /><Kpi icon={WalletCards} label="A receber" value={compactCurrency.format(financial.receivables)} detail={`${currency.format(financial.overdueReceivables)} vencidos`} /><Kpi icon={CircleAlert} label="A pagar" value={compactCurrency.format(financial.payables)} detail="fonte oficial Drap" tone="amber" /><Kpi icon={Clock3} label="Projetado em 30 dias" value={compactCurrency.format(financial.projected30d)} detail="fonte oficial Drap" /></div> : <HonestEmpty icon={Database} title="Financeiro ainda não conectado" description={financialMessage || "Conecte a conta Drap desta empresa para exibir valores oficiais."} />}</div>;
-    const future = activeModule === "budgets" ? { icon: Calculator, title: "Orçamentos ainda não conectados", description: "A próxima etapa ligará composições e versões reais ao projeto." } : activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
+    if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
+    const future = activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
     return <div className="space-y-5"><PageIntro module={activeModule} /><HonestEmpty {...future} /></div>;
   })();
 

@@ -22,6 +22,7 @@ flowchart TD
 - Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
+- Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -37,6 +38,7 @@ flowchart TD
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
 - Endpoint financeiro sem fallback fictício: ausência ou falha da Drap aparece como indisponibilidade.
+- Adaptador SINAPI exclusivamente no servidor, sem preços demonstrativos quando a fonte oficial não está configurada.
 - Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 
@@ -189,6 +191,8 @@ O texto público vigente fica em `/termos`. Cada aceite grava a versão, data e 
 app/
   api/
     clients/            # CRUD de clientes
+    budget-library/     # produtos e serviços padronizados da empresa
+    budgets/            # versões, composições e importação em lote
     integrations/drap/  # proxy financeiro e webhook
     members/            # equipe da empresa atual
     maintenance/        # sessão do administrador em ambiente isolado
@@ -214,6 +218,7 @@ db/
   schema.ts             # modelo relacional multiempresa
 docs/
   DRAP-INTEGRATION.md
+  SINAPI-INTEGRATION.md
 lib/
   integrations/drap.ts
   server/backend.ts       # identidade, organização, permissões e auditoria
@@ -243,16 +248,17 @@ CLAUDE.md
 - Termos versionados e aceite eletrônico obrigatório. **Concluído; revisão jurídica pendente antes da monetização.**
 - Interface conectada às queries reais. **Concluído.**
 - Central do ciclo de cada projeto/obra. **Concluída para dados-base, tarefas e resumo financeiro da empresa; conexões detalhadas seguem nas fases seguintes.**
+- Versões de orçamento, itens, cálculo, biblioteca e inclusão em lote. **Concluído.**
 - Testes de isolamento entre duas organizações.
 
 ### Fase 2 — comercial e orçamento
 
 - Funil configurável e histórico de atividades.
 - Conversão de oportunidade em cliente e projeto sem recadastro.
-- Biblioteca de serviços, insumos e composições.
-- BDI separado por produto/serviço, margem mínima e versões imutáveis.
+- Biblioteca de serviços, insumos e composições. **Concluída para cadastro próprio.**
+- BDI, margem e versões numeradas. **Concluído no núcleo; bloqueio imutável após envio ainda pendente.**
 - PDF de proposta e aprovação digital.
-- Importação SINAPI condicionada à licença/fonte oficial escolhida.
+- Importação SINAPI com adaptador pronto, condicionada à licença e às credenciais da fonte oficial escolhida.
 
 ### Fase 3 — planejamento e obra
 
