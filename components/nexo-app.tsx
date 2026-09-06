@@ -196,17 +196,17 @@ const compactCurrency = new Intl.NumberFormat("pt-BR", {
 
 function statusClasses(status: ProjectStatus | string) {
   if (["Em dia", "Aprovado", "Concluída"].includes(status)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-200/80 bg-emerald-50/90 text-emerald-700 shadow-[0_5px_14px_-10px_rgba(5,150,105,0.8)]";
   }
   if (["Atenção", "Em revisão", "Aguardando cliente"].includes(status)) {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-amber-200/80 bg-amber-50/90 text-amber-700 shadow-[0_5px_14px_-10px_rgba(217,119,6,0.8)]";
   }
-  return "border-red-200 bg-red-50 text-red-700";
+  return "border-red-200/80 bg-red-50/90 text-red-700 shadow-[0_5px_14px_-10px_rgba(220,38,38,0.8)]";
 }
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <Badge variant="outline" className={statusClasses(status)}>
+    <Badge variant="outline" className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusClasses(status)}`}>
       {status}
     </Badge>
   );
@@ -221,7 +221,7 @@ function Card({
 }) {
   return (
     <section
-      className={`rounded-xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.035)] ${className}`}
+      className={`workspace-card relative rounded-[1.25rem] border border-white/90 bg-white/90 ring-1 ring-slate-900/[0.035] backdrop-blur-sm transition duration-300 hover:-translate-y-0.5 ${className}`}
     >
       {children}
     </section>
@@ -238,10 +238,10 @@ function CardHeading({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+    <div className="flex items-start justify-between gap-4 border-b border-slate-200/60 px-5 py-[1.125rem] sm:px-6">
       <div>
-        <h2 className="text-[15px] font-semibold text-slate-900">{title}</h2>
-        {detail ? <p className="mt-0.5 text-[13px] text-slate-500">{detail}</p> : null}
+        <h2 className="display-heading text-base font-semibold tracking-[-0.015em] text-slate-950">{title}</h2>
+        {detail ? <p className="mt-1 text-[13px] leading-5 text-slate-500">{detail}</p> : null}
       </div>
       {action}
     </div>
@@ -262,21 +262,39 @@ function KpiCard({
   tone?: "blue" | "amber" | "emerald" | "slate";
 }) {
   const tones = {
-    blue: "bg-blue-50 text-blue-700",
-    amber: "bg-amber-50 text-amber-700",
-    emerald: "bg-emerald-50 text-emerald-700",
-    slate: "bg-slate-100 text-slate-700",
+    blue: {
+      icon: "bg-blue-600 text-white shadow-[0_8px_20px_-10px_rgba(37,99,235,0.9)]",
+      wash: "from-blue-50/80 via-white/90 to-white/90",
+      accent: "bg-blue-500",
+    },
+    amber: {
+      icon: "bg-amber-500 text-white shadow-[0_8px_20px_-10px_rgba(245,158,11,0.9)]",
+      wash: "from-amber-50/80 via-white/90 to-white/90",
+      accent: "bg-amber-400",
+    },
+    emerald: {
+      icon: "bg-emerald-600 text-white shadow-[0_8px_20px_-10px_rgba(5,150,105,0.9)]",
+      wash: "from-emerald-50/80 via-white/90 to-white/90",
+      accent: "bg-emerald-500",
+    },
+    slate: {
+      icon: "bg-slate-800 text-white shadow-[0_8px_20px_-10px_rgba(30,41,59,0.85)]",
+      wash: "from-slate-100/80 via-white/90 to-white/90",
+      accent: "bg-slate-500",
+    },
   };
+  const selectedTone = tones[tone];
 
   return (
-    <Card className="p-4 sm:p-5">
+    <Card className={`overflow-hidden bg-gradient-to-br p-4 sm:p-5 ${selectedTone.wash}`}>
+      <span className={`absolute inset-y-5 left-0 w-1 rounded-r-full ${selectedTone.accent}`} />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[13px] font-medium text-slate-500">{label}</p>
-          <p className="metric-number mt-2 text-2xl font-semibold text-slate-950">{value}</p>
-          <p className="mt-1 text-[13px] text-slate-500">{detail}</p>
+          <p className="text-[13px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+          <p className="metric-number display-heading mt-2.5 text-[1.75rem] font-semibold leading-none text-slate-950">{value}</p>
+          <p className="mt-2 text-[13px] text-slate-500">{detail}</p>
         </div>
-        <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${tones[tone]}`}>
+        <span className={`grid size-10 shrink-0 place-items-center rounded-xl ${selectedTone.icon}`}>
           <Icon className="size-[18px]" aria-hidden="true" />
         </span>
       </div>
@@ -295,22 +313,23 @@ function PageIntro({
 }) {
   const copy = moduleTitles[module];
   return (
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div className="flex flex-col justify-between gap-5 pb-1 pt-1 sm:flex-row sm:items-end">
       <div>
-        <p className="text-[13px] font-medium text-slate-500">
+        <p className="inline-flex items-center gap-2 rounded-full border border-blue-200/70 bg-blue-50/80 px-3 py-1 text-[12px] font-semibold uppercase tracking-[0.08em] text-blue-700 shadow-sm">
+          <span className="size-1.5 rounded-full bg-blue-500 shadow-[0_0_0_4px_rgba(59,130,246,0.12)]" />
           {new Intl.DateTimeFormat("pt-BR", {
             weekday: "long",
             day: "2-digit",
             month: "long",
           }).format(new Date())}
         </p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-[28px]">
+        <h1 className="display-heading mt-3 text-[2rem] font-semibold leading-none tracking-[-0.045em] text-slate-950 sm:text-[2.5rem]">
           {copy.title}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">{copy.description}</p>
+        <p className="mt-2.5 max-w-2xl text-[15px] leading-6 text-slate-500">{copy.description}</p>
       </div>
       {actionLabel ? (
-        <Button onClick={onAction} className="self-start shadow-sm sm:self-auto">
+        <Button onClick={onAction} className="self-start rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 shadow-[0_10px_24px_-12px_rgba(37,99,235,0.9)] transition hover:-translate-y-0.5 sm:self-auto">
           <Plus className="size-4" />
           {actionLabel}
         </Button>
@@ -363,15 +382,17 @@ function Overview({ financial }: { financial: FinancialSummary }) {
           </div>
         </Card>
 
-        <Card className="overflow-hidden bg-[#192235] text-white">
-          <div className="blueprint-grid h-full p-5">
+        <Card className="overflow-hidden border-blue-400/15 bg-[radial-gradient(circle_at_95%_0%,rgba(65,126,255,0.38),transparent_45%),linear-gradient(145deg,#10284f_0%,#091a34_55%,#071323_100%)] text-white ring-blue-300/10">
+          <div className="blueprint-grid relative h-full p-5 sm:p-6">
+            <span className="absolute -right-10 -top-12 size-40 rounded-full border border-blue-300/15" />
+            <span className="absolute -right-2 -top-4 size-24 rounded-full border border-blue-300/20" />
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 text-[13px] text-slate-300">
                   <Cloud className="size-4" />
                   Financeiro via Drap
                 </div>
-                <p className="metric-number mt-4 text-3xl font-semibold">{currency.format(financial.currentBalance)}</p>
+                <p className="metric-number display-heading mt-5 text-[2rem] font-semibold tracking-[-0.05em]">{currency.format(financial.currentBalance)}</p>
                 <p className="mt-1 text-sm text-slate-300">Saldo consolidado</p>
               </div>
               <Badge className="border-white/10 bg-white/10 text-white hover:bg-white/10">
@@ -388,7 +409,7 @@ function Overview({ financial }: { financial: FinancialSummary }) {
                 <p className="metric-number mt-1 text-base font-medium">{currency.format(financial.projected30d)}</p>
               </div>
             </div>
-            <button className="mt-5 flex items-center gap-2 text-sm font-medium text-blue-200 hover:text-white">
+            <button className="mt-6 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-medium text-blue-100 transition hover:border-white/20 hover:bg-white/10 hover:text-white">
               Abrir visão financeira <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -436,7 +457,7 @@ function ProjectTable({ limit, query = "" }: { limit?: number; query?: string })
       />
       <Table>
         <TableHeader>
-          <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+          <TableRow className="bg-gradient-to-r from-blue-50/70 to-slate-50/50 hover:from-blue-50/70 hover:to-slate-50/50">
             <TableHead className="pl-5 text-xs text-slate-500">Trabalho</TableHead>
             <TableHead className="text-xs text-slate-500">Etapa</TableHead>
             <TableHead className="min-w-36 text-xs text-slate-500">Avanço</TableHead>
@@ -446,10 +467,10 @@ function ProjectTable({ limit, query = "" }: { limit?: number; query?: string })
         </TableHeader>
         <TableBody>
           {rows.map((project) => (
-            <TableRow key={project.id} className="cursor-pointer">
+            <TableRow key={project.id} className="cursor-pointer transition-colors hover:bg-blue-50/45">
               <TableCell className="pl-5">
                 <div className="flex items-center gap-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-semibold text-slate-600">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-slate-800 to-slate-600 text-xs font-semibold text-white shadow-[0_8px_18px_-10px_rgba(15,23,42,0.85)]">
                     {project.kind === "Obra" ? "OB" : "AR"}
                   </span>
                   <div>
@@ -554,7 +575,7 @@ function BudgetsView({ onAction }: { onAction: () => void }) {
         <CardHeading title="Orçamentos recentes" detail="Cada revisão preserva sua versão anterior" />
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="bg-gradient-to-r from-blue-50/70 to-slate-50/50 hover:from-blue-50/70 hover:to-slate-50/50">
               <TableHead className="pl-5 text-xs text-slate-500">Orçamento</TableHead>
               <TableHead className="text-xs text-slate-500">Versão</TableHead>
               <TableHead className="text-xs text-slate-500">Valor</TableHead>
@@ -649,11 +670,11 @@ function CrmView({ onAction }: { onAction: () => void }) {
           const cards = crmCards.filter((card) => card.stage === stage);
           const total = cards.reduce((sum, card) => sum + card.value, 0);
           return (
-            <section key={stage} className="min-w-[270px] rounded-xl bg-slate-200/55 p-3 lg:min-w-0">
+            <section key={stage} className="min-w-[270px] rounded-[1.25rem] border border-white/80 bg-slate-200/45 p-3.5 shadow-inner ring-1 ring-slate-900/[0.03] lg:min-w-0">
               <div className="mb-3 flex items-center justify-between gap-3 px-1"><div><h2 className="text-sm font-semibold text-slate-800">{stage}</h2><p className="text-xs text-slate-500">{cards.length} · {compactCurrency.format(total)}</p></div><Button variant="ghost" size="icon-xs" aria-label={`Adicionar em ${stage}`}><Plus /></Button></div>
               <div className="space-y-2.5">
                 {cards.map((card) => (
-                  <article key={card.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                  <article key={card.id} className="rounded-xl border border-white bg-white/95 p-4 shadow-[0_14px_30px_-24px_rgba(15,36,67,0.5)] ring-1 ring-slate-900/[0.04] transition hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-22px_rgba(37,99,235,0.35)]">
                     <div className="flex items-start justify-between gap-2"><p className="text-sm font-medium leading-5 text-slate-900">{card.name}</p><Button variant="ghost" size="icon-xs" aria-label="Mais ações"><MoreHorizontal /></Button></div>
                     <p className="mt-1 text-xs text-slate-500">{card.client}</p>
                     <p className="metric-number mt-4 text-base font-semibold text-slate-900">{currency.format(card.value)}</p>
@@ -679,8 +700,8 @@ function TeamView({ onAction }: { onAction: () => void }) {
         <CardHeading title="Carga desta semana" detail="Horas comprometidas x capacidade disponível" />
         <div className="grid gap-4 p-5 md:grid-cols-2">
           {team.map((member) => (
-            <div key={member.name} className="rounded-xl border border-slate-200 p-4">
-              <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-full bg-slate-900 text-xs font-semibold text-white">{member.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900">{member.name}</p><p className="text-xs text-slate-500">{member.role}</p></div><span className={`text-sm font-semibold tabular-nums ${member.load > 100 ? "text-red-600" : "text-slate-700"}`}>{member.load}%</span></div>
+            <div key={member.name} className="rounded-xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50/70 p-4 shadow-[0_12px_28px_-24px_rgba(15,36,67,0.5)]">
+              <div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-xs font-semibold text-white shadow-lg ring-2 ring-blue-100">{member.initials}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium text-slate-900">{member.name}</p><p className="text-xs text-slate-500">{member.role}</p></div><span className={`text-sm font-semibold tabular-nums ${member.load > 100 ? "text-red-600" : "text-slate-700"}`}>{member.load}%</span></div>
               <Progress value={Math.min(member.load, 100)} className={`mt-4 h-1.5 bg-slate-100 ${member.load > 100 ? "[&_[data-slot=progress-indicator]]:bg-red-500" : "[&_[data-slot=progress-indicator]]:bg-blue-600"}`} />
               <p className="mt-2 text-xs text-slate-500">{member.hours}</p>
             </div>
@@ -719,14 +740,14 @@ function FilesView({ onAction }: { onAction: () => void }) {
       <PageIntro module="files" actionLabel="Enviar arquivo" onAction={onAction} />
       <div className="grid gap-3 sm:grid-cols-3">
         {[{ label: "Projetos", count: "184 arquivos", icon: FolderKanban }, { label: "Obras", count: "362 arquivos", icon: Building2 }, { label: "Modelos do escritório", count: "28 arquivos", icon: Archive }].map((folder) => (
-          <Card key={folder.label} className="flex cursor-pointer items-center gap-3 p-4 hover:border-blue-300"><span className="grid size-10 place-items-center rounded-lg bg-blue-50 text-blue-700"><folder.icon className="size-5" /></span><div><p className="text-sm font-medium text-slate-900">{folder.label}</p><p className="text-xs text-slate-500">{folder.count}</p></div></Card>
+          <Card key={folder.label} className="flex cursor-pointer items-center gap-3 p-4 hover:border-blue-300"><span className="grid size-11 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-[0_10px_22px_-12px_rgba(37,99,235,0.9)]"><folder.icon className="size-5" /></span><div><p className="text-sm font-semibold text-slate-900">{folder.label}</p><p className="mt-0.5 text-xs text-slate-500">{folder.count}</p></div></Card>
         ))}
       </div>
       <Card className="overflow-hidden">
         <CardHeading title="Atualizados recentemente" detail="Revisões mais novas primeiro" />
         <Table>
-          <TableHeader><TableRow className="bg-slate-50/70 hover:bg-slate-50/70"><TableHead className="pl-5 text-xs text-slate-500">Arquivo</TableHead><TableHead className="text-xs text-slate-500">Trabalho</TableHead><TableHead className="text-xs text-slate-500">Tamanho</TableHead><TableHead className="text-xs text-slate-500">Responsável</TableHead><TableHead className="pr-5 text-right text-xs text-slate-500">Atualização</TableHead></TableRow></TableHeader>
-          <TableBody>{files.map((file) => <TableRow key={file.name}><TableCell className="pl-5"><div className="flex items-center gap-2.5"><span className="grid size-8 place-items-center rounded-lg bg-slate-100 text-slate-600"><Paperclip className="size-4" /></span><div><p className="text-sm font-medium text-slate-900">{file.name}</p><p className="text-xs text-slate-500">{file.type}</p></div></div></TableCell><TableCell className="text-[13px] text-slate-600">{file.project}</TableCell><TableCell className="text-[13px] text-slate-500">{file.size}</TableCell><TableCell className="text-[13px] text-slate-600">{file.author}</TableCell><TableCell className="pr-5 text-right text-[13px] text-slate-500">{file.updatedAt}</TableCell></TableRow>)}</TableBody>
+          <TableHeader><TableRow className="bg-gradient-to-r from-blue-50/70 to-slate-50/50 hover:from-blue-50/70 hover:to-slate-50/50"><TableHead className="pl-5 text-xs text-slate-500">Arquivo</TableHead><TableHead className="text-xs text-slate-500">Trabalho</TableHead><TableHead className="text-xs text-slate-500">Tamanho</TableHead><TableHead className="text-xs text-slate-500">Responsável</TableHead><TableHead className="pr-5 text-right text-xs text-slate-500">Atualização</TableHead></TableRow></TableHeader>
+          <TableBody>{files.map((file) => <TableRow key={file.name} className="transition-colors hover:bg-blue-50/45"><TableCell className="pl-5"><div className="flex items-center gap-2.5"><span className="grid size-9 place-items-center rounded-xl bg-blue-50 text-blue-700 ring-1 ring-blue-100"><Paperclip className="size-4" /></span><div><p className="text-sm font-medium text-slate-900">{file.name}</p><p className="text-xs text-slate-500">{file.type}</p></div></div></TableCell><TableCell className="text-[13px] text-slate-600">{file.project}</TableCell><TableCell className="text-[13px] text-slate-500">{file.size}</TableCell><TableCell className="text-[13px] text-slate-600">{file.author}</TableCell><TableCell className="pr-5 text-right text-[13px] text-slate-500">{file.updatedAt}</TableCell></TableRow>)}</TableBody>
         </Table>
       </Card>
     </div>
@@ -741,7 +762,7 @@ function ScheduleView() {
         <CardHeading title="Planejamento integrado" detail="6 semanas · 01 set a 12 out" action={<Button variant="outline" size="sm">Hoje</Button>} />
         <div className="overflow-x-auto">
           <div className="min-w-[820px]">
-            <div className="grid grid-cols-[210px_1fr] border-b border-slate-200 bg-slate-50/70">
+            <div className="grid grid-cols-[210px_1fr] border-b border-slate-200 bg-gradient-to-r from-blue-50/70 to-slate-50/50">
               <div className="border-r border-slate-200 px-5 py-3 text-xs font-medium text-slate-500">Etapa</div>
               <div className="grid grid-cols-6">{["01–07 set", "08–14 set", "15–21 set", "22–28 set", "29 set–05 out", "06–12 out"].map((week) => <div key={week} className="border-r border-slate-200 px-2 py-3 text-center text-xs text-slate-500 last:border-r-0">{week}</div>)}</div>
             </div>
@@ -779,8 +800,8 @@ function QuickCreate({ open, onOpenChange }: { open: boolean; onOpenChange: (val
         <DialogHeader><DialogTitle>Criar</DialogTitle><DialogDescription>Escolha o que precisa registrar agora.</DialogDescription></DialogHeader>
         <div className="grid gap-2 sm:grid-cols-2">
           {actions.map((action) => (
-            <button key={action.label} className="flex items-start gap-3 rounded-xl border border-slate-200 p-4 text-left hover:border-blue-300 hover:bg-blue-50/40" onClick={() => { onOpenChange(false); toast.success(`${action.label} iniciado`, { description: "O fluxo já está preparado para conexão com o banco de dados." }); }}>
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-blue-700"><action.icon className="size-[18px]" /></span>
+            <button key={action.label} className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-gradient-to-br from-white to-slate-50/60 p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md" onClick={() => { onOpenChange(false); toast.success(`${action.label} iniciado`, { description: "O fluxo já está preparado para conexão com o banco de dados." }); }}>
+              <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg"><action.icon className="size-[18px]" /></span>
               <span><span className="block text-sm font-semibold text-slate-900">{action.label}</span><span className="mt-0.5 block text-xs text-slate-500">{action.detail}</span></span>
             </button>
           ))}
@@ -825,11 +846,11 @@ export function NexoApp() {
   })();
 
   return (
-    <SidebarProvider style={{ "--sidebar-width": "15.75rem" } as React.CSSProperties}>
-      <Sidebar collapsible="icon" className="border-r-0">
-        <SidebarHeader className="p-3">
-          <button className="flex h-12 items-center gap-3 overflow-hidden rounded-lg px-2 text-left hover:bg-sidebar-accent" aria-label="Selecionar empresa">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-500 text-sm font-bold text-white">N</span>
+    <SidebarProvider className="nexo-shell" style={{ "--sidebar-width": "17rem" } as React.CSSProperties}>
+      <Sidebar collapsible="icon" className="nexo-sidebar border-r-0">
+        <SidebarHeader className="p-3.5">
+          <button className="flex h-14 items-center gap-3 overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.035] px-2.5 text-left transition hover:border-white/10 hover:bg-white/[0.07]" aria-label="Selecionar empresa">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-blue-400 via-blue-500 to-blue-700 text-sm font-bold text-white shadow-[0_10px_24px_-12px_rgba(62,124,255,0.95)] ring-1 ring-white/20">N</span>
             <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden"><span className="block truncate text-sm font-semibold text-white">Nexo Obra</span><span className="block truncate text-xs text-slate-400">Ateliê Norte Arquitetura</span></span>
             <ChevronDown className="size-4 shrink-0 text-slate-500 group-data-[collapsible=icon]:hidden" />
           </button>
@@ -838,12 +859,12 @@ export function NexoApp() {
         <SidebarContent className="px-1 py-2">
           {navSections.map((section) => (
             <SidebarGroup key={section.label}>
-              <SidebarGroupLabel className="uppercase tracking-[0.12em] text-slate-500">{section.label}</SidebarGroupLabel>
+              <SidebarGroupLabel className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{section.label}</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   {section.items.map((item) => (
                     <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton tooltip={item.label} isActive={activeModule === item.id} onClick={() => setActiveModule(item.id)} className="h-9 text-slate-300 data-[active=true]:bg-blue-500 data-[active=true]:text-white hover:text-white">
+                      <SidebarMenuButton tooltip={item.label} isActive={activeModule === item.id} onClick={() => setActiveModule(item.id)} className="h-10 rounded-lg text-slate-300 transition data-[active=true]:bg-gradient-to-r data-[active=true]:from-blue-600 data-[active=true]:to-blue-500 data-[active=true]:text-white data-[active=true]:shadow-[0_9px_22px_-12px_rgba(55,111,245,0.95)] hover:bg-white/[0.07] hover:text-white">
                         <item.icon /><span>{item.label}</span>
                       </SidebarMenuButton>
                       {item.badge ? <SidebarMenuBadge className={activeModule === item.id ? "text-white" : "text-slate-400"}>{item.badge}</SidebarMenuBadge> : null}
@@ -859,7 +880,7 @@ export function NexoApp() {
           <SidebarMenu>
             <SidebarMenuItem><SidebarMenuButton tooltip="Configurações" className="text-slate-300 hover:text-white"><Settings2 /><span>Configurações</span></SidebarMenuButton></SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton size="lg" tooltip="Conta" className="mt-1 text-slate-300 hover:text-white"><span className="grid size-8 shrink-0 place-items-center rounded-full bg-slate-700 text-xs font-semibold text-white">MA</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">Marina Alves</span><span className="block truncate text-xs text-slate-400">Administradora</span></span></SidebarMenuButton>
+              <SidebarMenuButton size="lg" tooltip="Conta" className="mt-1 rounded-xl text-slate-300 hover:bg-white/[0.06] hover:text-white"><span className="grid size-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 text-xs font-semibold text-white shadow-lg ring-2 ring-white/10">MA</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">Marina Alves</span><span className="block truncate text-xs text-slate-400">Administradora</span></span></SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
@@ -867,18 +888,18 @@ export function NexoApp() {
       </Sidebar>
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/90 bg-white/95 px-4 backdrop-blur sm:px-6">
-          <SidebarTrigger className="size-9" />
+        <header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-white/80 px-4 backdrop-blur-xl sm:px-6">
+          <SidebarTrigger className="size-10 rounded-xl border border-slate-200/80 bg-white/80 shadow-sm" />
           <div className="hidden h-5 w-px bg-slate-200 sm:block" />
-          <p className="hidden text-sm font-medium text-slate-700 sm:block">{activeLabel}</p>
+          <p className="hidden items-center gap-2 text-sm font-semibold text-slate-700 sm:flex"><span className="size-1.5 rounded-full bg-blue-500" />{activeLabel}</p>
           <div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0">
-            <div className="relative"><Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar projetos, clientes, tarefas..." aria-label="Buscar" className="h-9 bg-slate-50 pl-9 shadow-none" /></div>
+            <div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar projetos, clientes, tarefas..." aria-label="Buscar" className="h-10 rounded-xl border-white bg-white/75 pl-10 shadow-[0_8px_22px_-18px_rgba(15,36,67,0.55)] ring-1 ring-slate-200/70 transition focus-visible:bg-white" /></div>
           </div>
           <Button variant="ghost" size="icon" aria-label="Notificações" className="relative"><Bell className="size-[18px]" /><span className="absolute right-2 top-2 size-1.5 rounded-full bg-red-500" /></Button>
-          <Button size="sm" onClick={() => setQuickOpen(true)}><Plus className="size-4" /><span className="hidden sm:inline">Criar</span></Button>
+          <Button size="sm" onClick={() => setQuickOpen(true)} className="rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 shadow-[0_10px_22px_-12px_rgba(37,99,235,0.85)]"><Plus className="size-4" /><span className="hidden sm:inline">Criar</span></Button>
         </header>
 
-        <main className="blueprint-grid min-h-[calc(100svh-4rem)] p-4 sm:p-6 lg:p-7">
+        <main className="nexo-canvas blueprint-grid min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8">
           <div className="mx-auto max-w-[1480px]">{content}</div>
         </main>
       </SidebarInset>

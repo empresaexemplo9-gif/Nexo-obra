@@ -19,38 +19,38 @@
 }
 
 :root {
-  --background: #f4f6f8;
-  --foreground: #172033;
+  --background: #edf2f8;
+  --foreground: #10213b;
   --card: #ffffff;
-  --card-foreground: #172033;
+  --card-foreground: #10213b;
   --popover: #ffffff;
-  --popover-foreground: #172033;
-  --primary: #2458d6;
+  --popover-foreground: #10213b;
+  --primary: #1858e8;
   --primary-foreground: #ffffff;
-  --secondary: #eef2f7;
-  --secondary-foreground: #25324a;
-  --muted: #eef2f7;
-  --muted-foreground: #68748a;
-  --accent: #e8efff;
-  --accent-foreground: #1f4cb8;
-  --destructive: #c53a3a;
-  --border: #dfe4eb;
-  --input: #d6dce5;
-  --ring: #2458d6;
-  --chart-1: #2458d6;
-  --chart-2: #1b9476;
-  --chart-3: #dc8c24;
-  --chart-4: #6b5cc7;
-  --chart-5: #c74d70;
-  --radius: 0.75rem;
-  --sidebar: #151b26;
-  --sidebar-foreground: #dce3ee;
+  --secondary: #e9eff7;
+  --secondary-foreground: #243550;
+  --muted: #e9eff7;
+  --muted-foreground: #66758d;
+  --accent: #e5eeff;
+  --accent-foreground: #174bbd;
+  --destructive: #c63843;
+  --border: #d9e2ee;
+  --input: #cfd9e7;
+  --ring: #3974f3;
+  --chart-1: #1858e8;
+  --chart-2: #0f9f82;
+  --chart-3: #e09a28;
+  --chart-4: #785fd6;
+  --chart-5: #d34f79;
+  --radius: 0.95rem;
+  --sidebar: #09172d;
+  --sidebar-foreground: #e6edf8;
   --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #151b26;
-  --sidebar-accent: #242d3d;
+  --sidebar-primary-foreground: #09172d;
+  --sidebar-accent: #132747;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #2c3545;
-  --sidebar-ring: #6f96ff;
+  --sidebar-border: #203452;
+  --sidebar-ring: #73a2ff;
 }
 
 @theme inline {
@@ -89,7 +89,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Aptos", "Inter", "Segoe UI", Arial, sans-serif;
+  --font-sans: "Aptos", "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -99,15 +99,25 @@
 
 html {
   background: var(--background);
+  color-scheme: light;
 }
 
 body {
   min-width: 320px;
-  background: var(--background);
+  background:
+    radial-gradient(circle at 82% -10%, rgba(39, 105, 245, 0.14), transparent 30rem),
+    radial-gradient(circle at 12% 110%, rgba(15, 159, 130, 0.08), transparent 34rem),
+    var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
   font-size: 16px;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(24, 88, 232, 0.18);
+  color: #08162d;
 }
 
 button,
@@ -120,14 +130,55 @@ textarea {
 
 .blueprint-grid {
   background-image:
-    linear-gradient(rgba(36, 88, 214, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 88, 214, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+    linear-gradient(rgba(24, 88, 232, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 88, 232, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
 .metric-number {
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.045em;
+}
+
+.nexo-shell {
+  background: transparent;
+}
+
+.nexo-sidebar [data-sidebar="sidebar"] {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(47, 108, 239, 0.2), transparent 16rem),
+    linear-gradient(180deg, #0b1c37 0%, #081426 58%, #07111f 100%);
+  box-shadow: 18px 0 50px -36px rgba(3, 12, 29, 0.95);
+}
+
+.nexo-header {
+  background: rgba(249, 251, 254, 0.86);
+  box-shadow: 0 10px 35px -28px rgba(15, 36, 67, 0.55);
+}
+
+.nexo-canvas {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 74% -8%, rgba(57, 116, 243, 0.12), transparent 34rem),
+    radial-gradient(circle at 18% 92%, rgba(15, 159, 130, 0.06), transparent 30rem),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.34), rgba(238, 244, 251, 0.18));
+}
+
+.workspace-card {
+  box-shadow:
+    0 18px 48px -34px rgba(15, 36, 67, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.workspace-card:hover {
+  box-shadow:
+    0 24px 60px -34px rgba(18, 53, 107, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.display-heading {
+  font-family: "Aptos Display", "Segoe UI Variable Display", var(--font-sans);
 }
 
 @media (prefers-reduced-motion: reduce) {
