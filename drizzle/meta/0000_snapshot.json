@@ -1,134 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "146fe310-3c07-47f2-a248-46c72b28e2a5",
+  "id": "70838adc-f4c9-45ed-99ff-76d14f85ad7e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "budget_items": {
-      "name": "budget_items",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "budget_version_id": {
-          "name": "budget_version_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "parent_item_id": {
-          "name": "parent_item_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "unit": {
-          "name": "unit",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'un'"
-        },
-        "quantity": {
-          "name": "quantity",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "unit_cost_cents": {
-          "name": "unit_cost_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "unit_price_cents": {
-          "name": "unit_price_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'manual'"
-        },
-        "source_reference": {
-          "name": "source_reference",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "idx_budget_items_version_order": {
-          "name": "idx_budget_items_version_order",
-          "columns": [
-            "budget_version_id",
-            "sort_order"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "budget_items_budget_version_id_budget_versions_id_fk": {
-          "name": "budget_items_budget_version_id_budget_versions_id_fk",
-          "tableFrom": "budget_items",
-          "tableTo": "budget_versions",
-          "columnsFrom": [
-            "budget_version_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "budget_versions": {
-      "name": "budget_versions",
+    "audit_events": {
+      "name": "audit_events",
       "columns": {
         "id": {
           "name": "id",
@@ -144,122 +21,64 @@
           "notNull": true,
           "autoincrement": false
         },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "code": {
-          "name": "code",
+        "actor_user_id": {
+          "name": "actor_user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "status": {
-          "name": "status",
+        "action": {
+          "name": "action",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'draft'"
-        },
-        "direct_cost_cents": {
-          "name": "direct_cost_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "bdi_percent": {
-          "name": "bdi_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "margin_percent": {
-          "name": "margin_percent",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "total_cents": {
-          "name": "total_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
           "autoincrement": false
         },
-        "approved_at": {
-          "name": "approved_at",
+        "entity_type": {
+          "name": "entity_type",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "metadata_json": {
+          "name": "metadata_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'{}'"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "uidx_budget_versions_org_code_version": {
-          "name": "uidx_budget_versions_org_code_version",
+        "audit_events_org_created_idx": {
+          "name": "audit_events_org_created_idx",
           "columns": [
             "organization_id",
-            "code",
-            "version"
-          ],
-          "isUnique": true
-        },
-        "idx_budget_versions_project_status": {
-          "name": "idx_budget_versions_project_status",
-          "columns": [
-            "project_id",
-            "status"
+            "created_at"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "budget_versions_organization_id_organizations_id_fk": {
-          "name": "budget_versions_organization_id_organizations_id_fk",
-          "tableFrom": "budget_versions",
+        "audit_events_organization_id_organizations_id_fk": {
+          "name": "audit_events_organization_id_organizations_id_fk",
+          "tableFrom": "audit_events",
           "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
@@ -270,12 +89,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "budget_versions_project_id_projects_id_fk": {
-          "name": "budget_versions_project_id_projects_id_fk",
-          "tableFrom": "budget_versions",
-          "tableTo": "projects",
+        "audit_events_actor_user_id_users_id_fk": {
+          "name": "audit_events_actor_user_id_users_id_fk",
+          "tableFrom": "audit_events",
+          "tableTo": "users",
           "columnsFrom": [
-            "project_id"
+            "actor_user_id"
           ],
           "columnsTo": [
             "id"
@@ -312,13 +131,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "document": {
-          "name": "document",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "email": {
           "name": "email",
           "type": "text",
@@ -333,54 +145,36 @@
           "notNull": false,
           "autoincrement": false
         },
-        "external_financial_id": {
-          "name": "external_financial_id",
+        "remote_id": {
+          "name": "remote_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "idx_clients_org_name": {
-          "name": "idx_clients_org_name",
+        "clients_org_name_idx": {
+          "name": "clients_org_name_idx",
           "columns": [
             "organization_id",
             "name"
           ],
           "isUnique": false
-        },
-        "uidx_clients_org_external_financial": {
-          "name": "uidx_clients_org_external_financial",
-          "columns": [
-            "organization_id",
-            "external_financial_id"
-          ],
-          "isUnique": true
         }
       },
       "foreignKeys": {
@@ -402,8 +196,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "crm_opportunities": {
-      "name": "crm_opportunities",
+    "organization_members": {
+      "name": "organization_members",
       "columns": {
         "id": {
           "name": "id",
@@ -419,418 +213,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "client_id": {
-          "name": "client_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "stage": {
-          "name": "stage",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'new'"
-        },
-        "estimated_value_cents": {
-          "name": "estimated_value_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "probability_percent": {
-          "name": "probability_percent",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "owner_member_id": {
-          "name": "owner_member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "next_action": {
-          "name": "next_action",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "next_action_at": {
-          "name": "next_action_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "won_project_id": {
-          "name": "won_project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "lost_reason": {
-          "name": "lost_reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_crm_org_stage": {
-          "name": "idx_crm_org_stage",
-          "columns": [
-            "organization_id",
-            "stage"
-          ],
-          "isUnique": false
-        },
-        "idx_crm_org_next_action": {
-          "name": "idx_crm_org_next_action",
-          "columns": [
-            "organization_id",
-            "next_action_at"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "crm_opportunities_organization_id_organizations_id_fk": {
-          "name": "crm_opportunities_organization_id_organizations_id_fk",
-          "tableFrom": "crm_opportunities",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "crm_opportunities_client_id_clients_id_fk": {
-          "name": "crm_opportunities_client_id_clients_id_fk",
-          "tableFrom": "crm_opportunities",
-          "tableTo": "clients",
-          "columnsFrom": [
-            "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "crm_opportunities_owner_member_id_members_id_fk": {
-          "name": "crm_opportunities_owner_member_id_members_id_fk",
-          "tableFrom": "crm_opportunities",
-          "tableTo": "members",
-          "columnsFrom": [
-            "owner_member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "crm_opportunities_won_project_id_projects_id_fk": {
-          "name": "crm_opportunities_won_project_id_projects_id_fk",
-          "tableFrom": "crm_opportunities",
-          "tableTo": "projects",
-          "columnsFrom": [
-            "won_project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "integration_connections": {
-      "name": "integration_connections",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "external_company_id": {
-          "name": "external_company_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'active'"
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "last_error": {
-          "name": "last_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "uidx_integrations_provider_external_company": {
-          "name": "uidx_integrations_provider_external_company",
-          "columns": [
-            "provider",
-            "external_company_id"
-          ],
-          "isUnique": true
-        },
-        "uidx_integrations_org_provider": {
-          "name": "uidx_integrations_org_provider",
-          "columns": [
-            "organization_id",
-            "provider"
-          ],
-          "isUnique": true
-        }
-      },
-      "foreignKeys": {
-        "integration_connections_organization_id_organizations_id_fk": {
-          "name": "integration_connections_organization_id_organizations_id_fk",
-          "tableFrom": "integration_connections",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "integration_events": {
-      "name": "integration_events",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "provider": {
-          "name": "provider",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "event_type": {
-          "name": "event_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "payload": {
-          "name": "payload",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'received'"
-        },
-        "processed_at": {
-          "name": "processed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "error": {
-          "name": "error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_integration_events_org_status": {
-          "name": "idx_integration_events_org_status",
-          "columns": [
-            "organization_id",
-            "status"
-          ],
-          "isUnique": false
-        },
-        "idx_integration_events_provider_type": {
-          "name": "idx_integration_events_provider_type",
-          "columns": [
-            "provider",
-            "event_type"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "integration_events_organization_id_organizations_id_fk": {
-          "name": "integration_events_organization_id_organizations_id_fk",
-          "tableFrom": "integration_events",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "members": {
-      "name": "members",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "external_user_id": {
-          "name": "external_user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "email": {
-          "name": "email",
+        "user_id": {
+          "name": "user_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -841,67 +225,53 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "'member'"
-        },
-        "weekly_capacity_minutes": {
-          "name": "weekly_capacity_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 2400
-        },
-        "active": {
-          "name": "active",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": true
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "uidx_members_org_external_user": {
-          "name": "uidx_members_org_external_user",
+        "organization_members_org_user_unique": {
+          "name": "organization_members_org_user_unique",
           "columns": [
             "organization_id",
-            "external_user_id"
+            "user_id"
           ],
           "isUnique": true
         },
-        "idx_members_org_active": {
-          "name": "idx_members_org_active",
+        "organization_members_user_idx": {
+          "name": "organization_members_user_idx",
           "columns": [
-            "organization_id",
-            "active"
+            "user_id"
           ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "members_organization_id_organizations_id_fk": {
-          "name": "members_organization_id_organizations_id_fk",
-          "tableFrom": "members",
+        "organization_members_organization_id_organizations_id_fk": {
+          "name": "organization_members_organization_id_organizations_id_fk",
+          "tableFrom": "organization_members",
           "tableTo": "organizations",
           "columnsFrom": [
             "organization_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "organization_members_user_id_users_id_fk": {
+          "name": "organization_members_user_id_users_id_fk",
+          "tableFrom": "organization_members",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -938,34 +308,24 @@
           "notNull": true,
           "autoincrement": false
         },
-        "timezone": {
-          "name": "timezone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'America/Sao_Paulo'"
-        },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "uidx_organizations_slug": {
-          "name": "uidx_organizations_slug",
+        "organizations_slug_unique": {
+          "name": "organizations_slug_unique",
           "columns": [
             "slug"
           ],
@@ -998,11 +358,11 @@
           "name": "project_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
-        "storage_key": {
-          "name": "storage_key",
+        "object_key": {
+          "name": "object_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -1015,54 +375,53 @@
           "notNull": true,
           "autoincrement": false
         },
-        "mime_type": {
-          "name": "mime_type",
+        "content_type": {
+          "name": "content_type",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "size_bytes": {
-          "name": "size_bytes",
+        "size": {
+          "name": "size",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "version": {
-          "name": "version",
+        "revision": {
+          "name": "revision",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 1
         },
-        "uploaded_by_member_id": {
-          "name": "uploaded_by_member_id",
+        "uploaded_by_user_id": {
+          "name": "uploaded_by_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
+          "notNull": true,
           "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "uidx_project_files_storage_key": {
-          "name": "uidx_project_files_storage_key",
+        "project_files_object_key_unique": {
+          "name": "project_files_object_key_unique",
           "columns": [
-            "storage_key"
+            "object_key"
           ],
           "isUnique": true
         },
-        "idx_project_files_org_project": {
-          "name": "idx_project_files_org_project",
+        "project_files_org_project_idx": {
+          "name": "project_files_org_project_idx",
           "columns": [
             "organization_id",
             "project_id"
@@ -1097,12 +456,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "project_files_uploaded_by_member_id_members_id_fk": {
-          "name": "project_files_uploaded_by_member_id_members_id_fk",
+        "project_files_uploaded_by_user_id_users_id_fk": {
+          "name": "project_files_uploaded_by_user_id_users_id_fk",
           "tableFrom": "project_files",
-          "tableTo": "members",
+          "tableTo": "users",
           "columnsFrom": [
-            "uploaded_by_member_id"
+            "uploaded_by_user_id"
           ],
           "columnsTo": [
             "id"
@@ -1139,13 +498,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "name": {
           "name": "name",
           "type": "text",
@@ -1153,13 +505,27 @@
           "notNull": true,
           "autoincrement": false
         },
-        "kind": {
-          "name": "kind",
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "stage": {
+          "name": "stage",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'project'"
+          "default": "'briefing'"
         },
         "status": {
           "name": "status",
@@ -1169,53 +535,30 @@
           "autoincrement": false,
           "default": "'active'"
         },
-        "phase": {
-          "name": "phase",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'briefing'"
-        },
-        "progress_percent": {
-          "name": "progress_percent",
+        "progress": {
+          "name": "progress",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
           "default": 0
         },
-        "owner_member_id": {
-          "name": "owner_member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "start_date": {
-          "name": "start_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "target_date": {
-          "name": "target_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "budget_cents": {
-          "name": "budget_cents",
+        "starts_at": {
+          "name": "starts_at",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
+          "notNull": false,
+          "autoincrement": false
         },
-        "external_financial_cost_center_id": {
-          "name": "external_financial_cost_center_id",
+        "deadline_at": {
+          "name": "deadline_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "drap_cost_center_id": {
+          "name": "drap_cost_center_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1223,51 +566,41 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "uidx_projects_org_code": {
-          "name": "uidx_projects_org_code",
+        "projects_org_code_unique": {
+          "name": "projects_org_code_unique",
           "columns": [
             "organization_id",
             "code"
           ],
           "isUnique": true
         },
-        "idx_projects_org_status": {
-          "name": "idx_projects_org_status",
+        "projects_org_status_idx": {
+          "name": "projects_org_status_idx",
           "columns": [
             "organization_id",
             "status"
           ],
           "isUnique": false
         },
-        "idx_projects_org_kind_status": {
-          "name": "idx_projects_org_kind_status",
+        "projects_org_deadline_idx": {
+          "name": "projects_org_deadline_idx",
           "columns": [
             "organization_id",
-            "kind",
-            "status"
-          ],
-          "isUnique": false
-        },
-        "idx_projects_client": {
-          "name": "idx_projects_client",
-          "columns": [
-            "client_id"
+            "deadline_at"
           ],
           "isUnique": false
         }
@@ -1292,166 +625,6 @@
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "projects_owner_member_id_members_id_fk": {
-          "name": "projects_owner_member_id_members_id_fk",
-          "tableFrom": "projects",
-          "tableTo": "members",
-          "columnsFrom": [
-            "owner_member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "site_diary_entries": {
-      "name": "site_diary_entries",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "organization_id": {
-          "name": "organization_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "entry_date": {
-          "name": "entry_date",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "weather": {
-          "name": "weather",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "workforce_count": {
-          "name": "workforce_count",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "summary": {
-          "name": "summary",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "blockers": {
-          "name": "blockers",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
-        },
-        "author_member_id": {
-          "name": "author_member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "client_signed_at": {
-          "name": "client_signed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
-        }
-      },
-      "indexes": {
-        "idx_site_diary_project_date": {
-          "name": "idx_site_diary_project_date",
-          "columns": [
-            "project_id",
-            "entry_date"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "site_diary_entries_organization_id_organizations_id_fk": {
-          "name": "site_diary_entries_organization_id_organizations_id_fk",
-          "tableFrom": "site_diary_entries",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "site_diary_entries_project_id_projects_id_fk": {
-          "name": "site_diary_entries_project_id_projects_id_fk",
-          "tableFrom": "site_diary_entries",
-          "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "site_diary_entries_author_member_id_members_id_fk": {
-          "name": "site_diary_entries_author_member_id_members_id_fk",
-          "tableFrom": "site_diary_entries",
-          "tableTo": "members",
-          "columnsFrom": [
-            "author_member_id"
           ],
           "columnsTo": [
             "id"
@@ -1485,6 +658,13 @@
           "name": "project_id",
           "type": "text",
           "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "assignee_user_id": {
+          "name": "assignee_user_id",
+          "type": "text",
+          "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
@@ -1494,14 +674,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
         },
         "status": {
           "name": "status",
@@ -1517,71 +689,40 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false,
-          "default": "'normal'"
-        },
-        "assignee_member_id": {
-          "name": "assignee_member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "parent_task_id": {
-          "name": "parent_task_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "default": "'medium'"
         },
         "due_at": {
           "name": "due_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "estimated_minutes": {
-          "name": "estimated_minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
         "completed_at": {
           "name": "completed_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
         }
       },
       "indexes": {
-        "idx_tasks_org_status_due": {
-          "name": "idx_tasks_org_status_due",
+        "tasks_org_status_due_idx": {
+          "name": "tasks_org_status_due_idx",
           "columns": [
             "organization_id",
             "status",
@@ -1589,18 +730,17 @@
           ],
           "isUnique": false
         },
-        "idx_tasks_project_status": {
-          "name": "idx_tasks_project_status",
+        "tasks_project_idx": {
+          "name": "tasks_project_idx",
           "columns": [
-            "project_id",
-            "status"
+            "project_id"
           ],
           "isUnique": false
         },
-        "idx_tasks_assignee_status": {
-          "name": "idx_tasks_assignee_status",
+        "tasks_assignee_idx": {
+          "name": "tasks_assignee_idx",
           "columns": [
-            "assignee_member_id",
+            "assignee_user_id",
             "status"
           ],
           "isUnique": false
@@ -1633,12 +773,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "tasks_assignee_member_id_members_id_fk": {
-          "name": "tasks_assignee_member_id_members_id_fk",
+        "tasks_assignee_user_id_users_id_fk": {
+          "name": "tasks_assignee_user_id_users_id_fk",
           "tableFrom": "tasks",
-          "tableTo": "members",
+          "tableTo": "users",
           "columnsFrom": [
-            "assignee_member_id"
+            "assignee_user_id"
           ],
           "columnsTo": [
             "id"
@@ -1651,8 +791,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "time_entries": {
-      "name": "time_entries",
+    "users": {
+      "name": "users",
       "columns": {
         "id": {
           "name": "id",
@@ -1661,146 +801,45 @@
           "notNull": true,
           "autoincrement": false
         },
-        "organization_id": {
-          "name": "organization_id",
+        "email": {
+          "name": "email",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "task_id": {
-          "name": "task_id",
+        "display_name": {
+          "name": "display_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "project_id": {
-          "name": "project_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "started_at": {
-          "name": "started_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "minutes": {
-          "name": "minutes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "note": {
-          "name": "note",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "''"
         },
         "created_at": {
           "name": "created_at",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "CURRENT_TIMESTAMP"
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
         }
       },
       "indexes": {
-        "idx_time_entries_org_project_started": {
-          "name": "idx_time_entries_org_project_started",
+        "users_email_unique": {
+          "name": "users_email_unique",
           "columns": [
-            "organization_id",
-            "project_id",
-            "started_at"
+            "email"
           ],
-          "isUnique": false
-        },
-        "idx_time_entries_member_started": {
-          "name": "idx_time_entries_member_started",
-          "columns": [
-            "member_id",
-            "started_at"
-          ],
-          "isUnique": false
+          "isUnique": true
         }
       },
-      "foreignKeys": {
-        "time_entries_organization_id_organizations_id_fk": {
-          "name": "time_entries_organization_id_organizations_id_fk",
-          "tableFrom": "time_entries",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "organization_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "time_entries_task_id_tasks_id_fk": {
-          "name": "time_entries_task_id_tasks_id_fk",
-          "tableFrom": "time_entries",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "time_entries_project_id_projects_id_fk": {
-          "name": "time_entries_project_id_projects_id_fk",
-          "tableFrom": "time_entries",
-          "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "time_entries_member_id_members_id_fk": {
-          "name": "time_entries_member_id_members_id_fk",
-          "tableFrom": "time_entries",
-          "tableTo": "members",
-          "columnsFrom": [
-            "member_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}

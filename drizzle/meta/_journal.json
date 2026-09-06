@@ -5,8 +5,15 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1788568452976,
-      "tag": "0000_condemned_medusa",
+      "when": 1788653525402,
+      "tag": "0000_amazing_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788660000000,
+      "tag": "0001_nexo_schema_extension",
       "breakpoints": true
     }
   ]

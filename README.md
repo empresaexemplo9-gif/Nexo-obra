@@ -95,7 +95,7 @@ npm run db:generate
 ## Repositório e publicação
 
 - O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
-- O projeto `nexo-obra` no Vercel está vinculado a esse repositório; alterações integradas à branch `main` seguem para a publicação de produção e branches de trabalho geram validações de preview.
+- O projeto `nexo-obra` no Vercel está vinculado a esse repositório e funciona como gateway para o runtime Vinext publicado no OpenAI Sites; alterações integradas à branch `main` seguem para produção e branches de trabalho geram validações de preview.
 - O projeto também preserva o vínculo com o OpenAI Sites por meio do `project_id` em `.openai/hosting.json`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
