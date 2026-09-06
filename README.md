@@ -21,6 +21,7 @@ flowchart TD
 
 - Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
+- Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -201,6 +202,7 @@ app/
     terms/              # aceite eletrônico da versão vigente
   layout.tsx
   page.tsx
+  projetos/[projectId]/ # central contextual de cada projeto ou obra
   superadmin/           # painel global protegido
   convite/              # criação de acesso por link
   termos/               # Termos de Uso públicos e versionados
@@ -240,6 +242,7 @@ CLAUDE.md
 - Permissões de leitura/edição por módulo no servidor e auditoria de escritas. **Concluído no backend.**
 - Termos versionados e aceite eletrônico obrigatório. **Concluído; revisão jurídica pendente antes da monetização.**
 - Interface conectada às queries reais. **Concluído.**
+- Central do ciclo de cada projeto/obra. **Concluída para dados-base, tarefas e resumo financeiro da empresa; conexões detalhadas seguem nas fases seguintes.**
 - Testes de isolamento entre duas organizações.
 
 ### Fase 2 — comercial e orçamento

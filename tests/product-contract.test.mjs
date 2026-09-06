@@ -205,3 +205,28 @@ test("provides an isolated maintenance administrator without storing its passwor
   assert.match(login, /Entrar no ambiente de manutenção/);
   assert.doesNotMatch(`${auth}\n${session}\n${backend}\n${login}`, /147532159/);
 });
+
+test("centralizes each project without inventing unfinished module data", async () => {
+  const hub = await source("components/project-hub.tsx");
+  const page = await source("app/projetos/[projectId]/page.tsx");
+  const shell = await source("components/nexo-app.tsx");
+
+  assert.match(page, /ProjectHub/);
+  assert.match(shell, /\/projetos\/\$\{project\.id\}/);
+  for (const area of ["Planejamento", "Tarefas", "Orçamento", "Financeiro", "Diário de obra", "Compras", "Medições", "Arquivos"]) {
+    assert.match(hub, new RegExp(area));
+  }
+  assert.match(hub, /Próxima conexão/);
+  assert.match(hub, /Estes valores são da empresa inteira, não desta obra isoladamente/);
+  assert.doesNotMatch(hub, /Residência Aurora|Clínica Átrio|demo-data/);
+});
+
+test("redacts project client, budget and finance fields by module permission", async () => {
+  const projects = await source("app/api/projects/route.ts");
+  const project = await source("app/api/projects/[projectId]/route.ts");
+
+  assert.match(projects, /includeClient: context\.member\.permissions\.crm\.view/);
+  assert.match(projects, /includeBudget: context\.member\.permissions\.budgets\.view/);
+  assert.match(projects, /includeFinance: context\.member\.permissions\.finance\.view/);
+  assert.match(project, /visibleProject/);
+});

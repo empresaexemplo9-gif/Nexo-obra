@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -108,7 +109,7 @@ type Client = { id: string; name: string; email: string | null; phone: string | 
 type Project = {
   id: string; clientId: string | null; clientName: string | null; code: string; name: string;
   kind: "project" | "work"; status: string; phase: string; progressPercent: number;
-  ownerName: string | null; targetDate: string | null; budgetCents: number;
+  ownerName: string | null; targetDate: string | null; budgetCents: number | null;
 };
 type Task = {
   id: string; projectId: string; projectName: string; title: string; status: string;
@@ -275,7 +276,7 @@ function StatusBadge({ status }: { status: string }) {
 function ProjectTable({ projects, query }: { projects: Project[]; query: string }) {
   const normalized = query.trim().toLocaleLowerCase("pt-BR");
   const rows = projects.filter((project) => !normalized || `${project.name} ${project.clientName ?? ""} ${project.code}`.toLocaleLowerCase("pt-BR").includes(normalized));
-  return <Card className="overflow-hidden"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-5">Trabalho</TableHead><TableHead>Etapa</TableHead><TableHead>Avanço</TableHead><TableHead>Prazo</TableHead><TableHead className="pr-5 text-right">Situação</TableHead></TableRow></TableHeader><TableBody>{rows.map((project) => <TableRow key={project.id}><TableCell className="pl-5"><p className="font-medium text-slate-900">{project.name}</p><p className="text-xs text-slate-500">{project.code} · {project.clientName ?? "Sem cliente"}</p></TableCell><TableCell>{project.phase}</TableCell><TableCell><div className="flex min-w-32 items-center gap-2"><Progress value={project.progressPercent} className="h-1.5" /><span className="text-xs tabular-nums">{project.progressPercent}%</span></div></TableCell><TableCell>{project.targetDate ? new Date(`${project.targetDate}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</TableCell><TableCell className="pr-5 text-right"><StatusBadge status={project.status} /></TableCell></TableRow>)}</TableBody></Table></Card>;
+  return <Card className="overflow-hidden"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-5">Trabalho</TableHead><TableHead>Etapa</TableHead><TableHead>Avanço</TableHead><TableHead>Prazo</TableHead><TableHead className="pr-5 text-right">Situação</TableHead></TableRow></TableHeader><TableBody>{rows.map((project) => <TableRow key={project.id} className="group"><TableCell className="pl-5"><Link href={`/projetos/${project.id}`} className="block rounded-md outline-none focus-visible:ring-2 focus-visible:ring-blue-500"><p className="font-medium text-slate-900 transition-colors group-hover:text-blue-700">{project.name}</p><p className="text-xs text-slate-500">{project.code} · {project.clientName ?? "Cliente não informado"}</p></Link></TableCell><TableCell>{project.phase}</TableCell><TableCell><div className="flex min-w-32 items-center gap-2"><Progress value={project.progressPercent} className="h-1.5" /><span className="text-xs tabular-nums">{project.progressPercent}%</span></div></TableCell><TableCell>{project.targetDate ? new Date(`${project.targetDate}T12:00:00`).toLocaleDateString("pt-BR") : "Sem prazo"}</TableCell><TableCell className="pr-5 text-right"><StatusBadge status={project.status} /></TableCell></TableRow>)}</TableBody></Table></Card>;
 }
 
 function QuickCreate({ open, onOpenChange, projects, clients, initialKind, allowedKinds = ["client", "project", "task"], onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; projects: Project[]; clients: Client[]; initialKind: CreateKind; allowedKinds?: CreateKind[]; onCreated: () => Promise<void> }) {

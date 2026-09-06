@@ -55,11 +55,22 @@ export const projectSelect = `SELECT
   LEFT JOIN clients c ON c.id = p.client_id AND c.organization_id = p.organization_id
   LEFT JOIN members m ON m.id = p.owner_member_id AND m.organization_id = p.organization_id`;
 
-export function projectResponse(row: ProjectRow) {
+type ProjectResponseOptions = {
+  includeClient?: boolean;
+  includeBudget?: boolean;
+  includeFinance?: boolean;
+};
+
+export function projectResponse(row: ProjectRow, options: ProjectResponseOptions = {}) {
+  const {
+    includeClient = true,
+    includeBudget = true,
+    includeFinance = true,
+  } = options;
   return {
     id: row.id,
-    clientId: row.client_id,
-    clientName: row.client_name,
+    clientId: includeClient ? row.client_id : null,
+    clientName: includeClient ? row.client_name : null,
     code: row.code,
     name: row.name,
     kind: row.kind,
@@ -70,8 +81,8 @@ export function projectResponse(row: ProjectRow) {
     ownerName: row.owner_name,
     startDate: row.start_date,
     targetDate: row.target_date,
-    budgetCents: row.budget_cents,
-    externalFinancialCostCenterId: row.external_financial_cost_center_id,
+    budgetCents: includeBudget ? row.budget_cents : null,
+    externalFinancialCostCenterId: includeFinance ? row.external_financial_cost_center_id : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -112,7 +123,12 @@ export async function GET(request: Request) {
       .prepare(`${projectSelect} WHERE ${filters.join(" AND ")} ORDER BY p.updated_at DESC LIMIT 100`)
       .bind(...values)
       .all<ProjectRow>();
-    return Response.json({ projects: result.results.map(projectResponse) });
+    const visibility = {
+      includeClient: context.member.permissions.crm.view,
+      includeBudget: context.member.permissions.budgets.view,
+      includeFinance: context.member.permissions.finance.view,
+    };
+    return Response.json({ projects: result.results.map((project) => projectResponse(project, visibility)) });
   });
 }
 
@@ -170,6 +186,12 @@ export async function POST(request: Request) {
       .prepare(`${projectSelect} WHERE p.id = ?1 AND p.organization_id = ?2`)
       .bind(projectId, context.organization.id)
       .first<ProjectRow>();
-    return Response.json({ project: projectResponse(project!) }, { status: 201 });
+    return Response.json({
+      project: projectResponse(project!, {
+        includeClient: context.member.permissions.crm.view,
+        includeBudget: context.member.permissions.budgets.view,
+        includeFinance: context.member.permissions.finance.view,
+      }),
+    }, { status: 201 });
   });
 }

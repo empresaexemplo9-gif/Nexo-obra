@@ -31,6 +31,14 @@ const updateProjectSchema = z.object({
 
 type RouteContext = { params: Promise<{ projectId: string }> };
 
+function visibleProject(context: Awaited<ReturnType<typeof requireOrganizationContext>>, project: ProjectRow) {
+  return projectResponse(project, {
+    includeClient: context.member.permissions.crm.view,
+    includeBudget: context.member.permissions.budgets.view,
+    includeFinance: context.member.permissions.finance.view,
+  });
+}
+
 async function verifyRelation(db: D1Database, table: "clients" | "members", id: string | null, orgId: string) {
   if (!id) return;
   const row = await db.prepare(`SELECT id FROM ${table} WHERE id = ?1 AND organization_id = ?2`)
@@ -48,7 +56,7 @@ export async function GET(request: Request, route: RouteContext) {
         .bind(projectId, context.organization.id).first<ProjectRow>(),
       "Projeto",
     );
-    return Response.json({ project: projectResponse(project) });
+    return Response.json({ project: visibleProject(context, project) });
   });
 }
 
@@ -104,7 +112,7 @@ export async function PATCH(request: Request, route: RouteContext) {
         .bind(projectId, context.organization.id).first<ProjectRow>(),
       "Projeto",
     );
-    return Response.json({ project: projectResponse(project) });
+    return Response.json({ project: visibleProject(context, project) });
   });
 }
 
