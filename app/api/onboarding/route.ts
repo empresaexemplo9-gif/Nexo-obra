@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  ApiError,
   apiRoute,
   authenticatedIdentity,
   jsonBody,
@@ -26,7 +27,8 @@ function slugify(value: string) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const user = authenticatedIdentity(request);
+    const user = await authenticatedIdentity(request);
+    if (user.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção não cria empresas contratantes.");
     const parsed = onboardingSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const db = getDatabase();

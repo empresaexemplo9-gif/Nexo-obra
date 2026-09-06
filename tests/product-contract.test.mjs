@@ -189,3 +189,19 @@ test("keeps the superadmin overview out of tenant content", async () => {
   assert.doesNotMatch(overview, /c\.name|p\.name|t\.title|budget_cents|financial/);
   assert.match(ui, /conteúdo confidencial de cada empresa não é exibido/);
 });
+
+test("provides an isolated maintenance administrator without storing its password", async () => {
+  const auth = await source("lib/server/maintenance.ts");
+  const session = await source("app/api/maintenance/session/route.ts");
+  const backend = await source("lib/server/backend.ts");
+  const login = await source("components/maintenance-login.tsx");
+
+  assert.match(auth, /MAINTENANCE_ADMIN_PASSWORD_HASH/);
+  assert.match(auth, /PBKDF2/);
+  assert.match(auth, /HttpOnly; Secure; SameSite=Strict/);
+  assert.match(session, /Ambiente de manutenção/);
+  assert.match(backend, /MAINTENANCE_ORGANIZATION_ID/);
+  assert.match(backend, /identity\.scope === "maintenance"/);
+  assert.match(login, /Entrar no ambiente de manutenção/);
+  assert.doesNotMatch(`${auth}\n${session}\n${backend}\n${login}`, /147532159/);
+});

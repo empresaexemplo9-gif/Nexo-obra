@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { readMaintenanceIdentity } from "@/lib/server/maintenance";
 
 import {
   ApiError,
@@ -19,7 +20,8 @@ const selectOrganizationSchema = z.object({ organizationId: z.string().uuid() })
 export async function GET(request: Request) {
   return apiRoute(async () => {
     try {
-      const identity = authenticatedIdentity(request);
+      const identity = await authenticatedIdentity(request);
+      const maintenanceIdentity = await readMaintenanceIdentity(request);
       const memberships = await listOrganizationMemberships(request);
       if (memberships.length === 0) {
         return Response.json({
@@ -33,6 +35,7 @@ export async function GET(request: Request) {
       const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
       return Response.json({
         authenticated: true,
+        authMethod: maintenanceIdentity ? "maintenance" : "chatgpt",
         needsOrganization: false,
         user: context.user,
         member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },
@@ -62,7 +65,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    authenticatedIdentity(request);
+    await authenticatedIdentity(request);
     const parsed = selectOrganizationSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const memberships = await listOrganizationMemberships(request);

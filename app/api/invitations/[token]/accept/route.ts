@@ -31,7 +31,8 @@ const acceptanceSchema = z.object({ acceptTerms: z.literal(true) });
 
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const identity = authenticatedIdentity(request);
+    const identity = await authenticatedIdentity(request);
+    if (identity.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção permanece isolado do ambiente dos clientes.");
     const parsed = acceptanceSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const { token } = await route.params;

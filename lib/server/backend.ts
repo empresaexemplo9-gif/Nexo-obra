@@ -1,6 +1,7 @@
 import { getDatabase } from "@/db";
 import { parseStoredPermissions, type PermissionAction, type PermissionModule, type PermissionSet } from "@/lib/permissions";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { MAINTENANCE_ORGANIZATION_ID, readMaintenanceIdentity } from "@/lib/server/maintenance";
 
 export type OrganizationContext = {
   db: D1Database;
@@ -23,7 +24,7 @@ type MembershipRow = {
   timezone: string;
 };
 
-export type AuthenticatedIdentity = { id: string; email: string; displayName: string };
+export type AuthenticatedIdentity = { id: string; email: string; displayName: string; scope?: "maintenance" };
 const ORGANIZATION_COOKIE = "__Host-nexo-organization";
 
 export class ApiError extends Error {
@@ -37,7 +38,7 @@ export async function requireOrganizationContext(
   allowedRoles?: readonly string[],
   options: { allowUnacceptedTerms?: boolean } = {},
 ): Promise<OrganizationContext> {
-  const identity = authenticatedIdentity(request);
+  const identity = await authenticatedIdentity(request);
   const db = getDatabase();
   const memberships = await findMemberships(db, identity);
   if (memberships.length === 0) {
@@ -55,10 +56,12 @@ export async function requireOrganizationContext(
   return context;
 }
 
-export function authenticatedIdentity(request: Request): AuthenticatedIdentity {
+export async function authenticatedIdentity(request: Request): Promise<AuthenticatedIdentity> {
   const userId = request.headers.get("oai-authenticated-user-id")?.trim();
   const email = request.headers.get("oai-authenticated-user-email")?.trim();
   if (!userId || !email) {
+    const maintenance = await readMaintenanceIdentity(request);
+    if (maintenance) return maintenance;
     throw new ApiError(401, "sign_in_required", "Entre com sua conta para acessar os dados da empresa.");
   }
   const encodedName = request.headers.get("oai-authenticated-user-full-name");
@@ -68,19 +71,20 @@ export function authenticatedIdentity(request: Request): AuthenticatedIdentity {
 }
 
 export async function listOrganizationMemberships(request: Request) {
-  const identity = authenticatedIdentity(request);
+  const identity = await authenticatedIdentity(request);
   return findMemberships(getDatabase(), identity);
 }
 
 async function findMemberships(db: D1Database, identity: AuthenticatedIdentity) {
+  const maintenanceFilter = identity.scope === "maintenance" ? " AND m.organization_id = ?3" : "";
   const result = await db.prepare(
     `SELECT m.id AS member_id, m.external_user_id, m.name AS member_name, m.email,
       m.role, m.permissions_json, o.id AS organization_id, o.name AS organization_name,
       o.slug AS organization_slug, o.timezone
      FROM members m INNER JOIN organizations o ON o.id = m.organization_id
-     WHERE m.active = 1 AND (m.external_user_id = ?1 OR lower(m.email) = lower(?2))
+     WHERE m.active = 1 AND (m.external_user_id = ?1 OR lower(m.email) = lower(?2))${maintenanceFilter}
      ORDER BY CASE m.role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'manager' THEN 3 WHEN 'member' THEN 4 ELSE 5 END, o.name`,
-  ).bind(identity.id, identity.email).all<MembershipRow>();
+  ).bind(...(identity.scope === "maintenance" ? [identity.id, identity.email, MAINTENANCE_ORGANIZATION_ID] : [identity.id, identity.email])).all<MembershipRow>();
   return result.results;
 }
 

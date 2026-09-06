@@ -31,6 +31,7 @@ flowchart TD
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
 - Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
 - Painel do superadmin limitado a metadados e indicadores agregados, sem abrir o conteúdo sigiloso dos ambientes contratantes.
+- Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
@@ -161,6 +162,8 @@ Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador 
 
 As APIs não aceitam `organization_id` do navegador. A identidade autenticada é associada a um membro no servidor e todas as consultas recebem o `organization_id` dessa associação.
 
+O administrador de manutenção utiliza uma organização interna reservada, criada vazia no primeiro login. A resolução de sessão força esse acesso exclusivamente à organização de manutenção, mesmo que o mesmo e-mail participe legitimamente de outra empresa. Ele não pode aceitar convites de clientes nem criar empresas contratantes.
+
 O backend inicial está documentado em [`docs/BACKEND.md`](docs/BACKEND.md).
 
 Papéis mínimos recomendados:
@@ -187,6 +190,7 @@ app/
     clients/            # CRUD de clientes
     integrations/drap/  # proxy financeiro e webhook
     members/            # equipe da empresa atual
+    maintenance/        # sessão do administrador em ambiente isolado
     invitations/        # leitura e aceite de convite individual
     organization-invitations/ # convites secundários e permissões da empresa atual
     onboarding/         # criação segura da primeira empresa
