@@ -41,7 +41,7 @@ function requiredConfig() {
 function parsePasswordHash(value: string): PasswordHash | null {
   const [algorithm, iterationsText, saltText, digestText] = value.split("$");
   const iterations = Number(iterationsText);
-  if (algorithm !== "pbkdf2-sha256" || !Number.isSafeInteger(iterations) || iterations < 100_000) return null;
+  if (algorithm !== "pbkdf2-sha256" || iterations !== 100_000) return null;
   try {
     return {
       iterations,
