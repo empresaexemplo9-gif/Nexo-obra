@@ -23,7 +23,9 @@ flowchart TD
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Dados de demonstração isolados em `lib/demo-data.ts`.
 - Esquema relacional multiempresa em `db/schema.ts`.
-- Endpoint inicial `GET/POST /api/projects` com validação Zod e separação por organização.
+- Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
+- Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
+- Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
 - Endpoint de resumo financeiro com fallback explícito para demonstração.
 - Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
@@ -95,7 +97,7 @@ npm run db:generate
 ## Repositório e publicação
 
 - O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
-- O projeto `nexo-obra` no Vercel está vinculado a esse repositório e funciona como gateway para o runtime Vinext publicado no OpenAI Sites; alterações integradas à branch `main` seguem para produção e branches de trabalho geram validações de preview.
+- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app). O projeto `nexo-obra` no Vercel está vinculado a esse repositório e funciona como porta de entrada para o runtime Vinext; alterações integradas à branch `main` seguem para produção.
 - O projeto também preserva o vínculo com o OpenAI Sites por meio do `project_id` em `.openai/hosting.json`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
@@ -150,7 +152,9 @@ Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 
 Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.
 
-O endpoint inicial de projetos usa temporariamente o header `x-organization-id` para deixar o contrato visível. Ele precisa ser substituído pela organização resolvida pela autenticação antes de produção.
+As APIs não aceitam `organization_id` do navegador. A identidade autenticada é associada a um membro no servidor e todas as consultas recebem o `organization_id` dessa associação.
+
+O backend inicial está documentado em [`docs/BACKEND.md`](docs/BACKEND.md).
 
 Papéis mínimos recomendados:
 
@@ -166,8 +170,13 @@ Papéis mínimos recomendados:
 ```text
 app/
   api/
+    clients/            # CRUD de clientes
     integrations/drap/  # proxy financeiro e webhook
-    projects/           # primeira API operacional
+    members/            # equipe da empresa atual
+    onboarding/         # criação segura da primeira empresa
+    projects/           # CRUD de projetos e obras
+    session/            # identidade e organização ativas
+    tasks/              # CRUD de tarefas
   layout.tsx
   page.tsx
 components/
@@ -200,11 +209,10 @@ CLAUDE.md
 
 ### Fase 1 — núcleo operacional
 
-- Autenticação e seleção segura da organização.
-- CRUD de clientes, projetos e tarefas.
-- Permissões no servidor.
+- Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
+- CRUD de clientes, projetos e tarefas. **Concluído no backend.**
+- Permissões no servidor e auditoria de escritas. **Concluído no backend.**
 - Substituição dos dados demonstrativos por queries reais.
-- Log de auditoria para criação, edição, exclusão e mudança de status.
 - Testes de isolamento entre duas organizações.
 
 ### Fase 2 — comercial e orçamento

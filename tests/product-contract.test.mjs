@@ -52,3 +52,43 @@ test("models operational records with organization ownership", async () => {
   }
   assert.match(schema, /organizationId: text\("organization_id"\)/);
 });
+
+test("resolves identity and organization only on the server", async () => {
+  const backend = await source("lib/server/backend.ts");
+  const projectsApi = await source("app/api/projects/route.ts");
+
+  assert.match(backend, /oai-authenticated-user-id/);
+  assert.match(backend, /members m/);
+  assert.match(backend, /m\.organization_id/);
+  assert.doesNotMatch(projectsApi, /x-organization-id/);
+  assert.match(projectsApi, /requireOrganizationContext/);
+});
+
+test("provides audited CRUD routes for the operational core", async () => {
+  for (const route of [
+    "app/api/clients/route.ts",
+    "app/api/clients/[clientId]/route.ts",
+    "app/api/projects/route.ts",
+    "app/api/projects/[projectId]/route.ts",
+    "app/api/tasks/route.ts",
+    "app/api/tasks/[taskId]/route.ts",
+  ]) {
+    const api = await source(route);
+    assert.match(api, /requireOrganizationContext/);
+  }
+
+  const backend = await source("lib/server/backend.ts");
+  assert.match(backend, /INSERT INTO audit_events/);
+});
+
+test("removes the obsolete password-session backend", async () => {
+  for (const path of [
+    "lib/auth.ts",
+    "pages/api/access-login.ts",
+    "pages/api/admin-login.ts",
+    "pages/api/logout.ts",
+    "pages/api/session.ts",
+  ]) {
+    await assert.rejects(source(path));
+  }
+});

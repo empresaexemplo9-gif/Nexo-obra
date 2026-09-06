@@ -54,11 +54,10 @@ Para cada fatia:
 
 ## Prioridade atual
 
-1. Criar autenticação e resolver `organizationId` no servidor.
-2. Remover o uso do header temporário `x-organization-id`.
-3. Implementar CRUD de cliente → projeto → tarefa.
-4. Trocar os dados demonstrativos desses três domínios por dados reais.
-5. Só então ampliar CRM, orçamento e obra.
+1. Conectar a interface aos CRUDs autenticados de cliente → projeto → tarefa.
+2. Trocar os dados demonstrativos desses três domínios por dados reais.
+3. Implementar seleção segura entre organizações quando uma pessoa pertencer a mais de uma.
+4. Só então ampliar CRM, orçamento e obra.
 
 ## Integração Drap
 
