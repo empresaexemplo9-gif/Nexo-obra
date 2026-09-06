@@ -35,6 +35,14 @@ type MembershipRow = {
   timezone: string;
 };
 
+export type AuthenticatedIdentity = {
+  id: string;
+  email: string;
+  displayName: string;
+};
+
+const ORGANIZATION_COOKIE = "__Host-nexo-organization";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -50,6 +58,35 @@ export async function requireOrganizationContext(
   request: Request,
   allowedRoles?: readonly string[],
 ): Promise<OrganizationContext> {
+  const identity = authenticatedIdentity(request);
+  const db = getDatabase();
+  const memberships = await findMemberships(db, identity);
+
+  if (memberships.length === 0) {
+    throw new ApiError(
+      403,
+      "membership_required",
+      "Sua conta ainda não pertence a uma empresa no Nexo Obra.",
+    );
+  }
+
+  const requestedOrganizationId = selectedOrganizationId(request);
+  const membership = memberships.find(
+    (item) => item.organization_id === requestedOrganizationId,
+  ) ?? memberships[0];
+
+  if (allowedRoles && !allowedRoles.includes(membership.role)) {
+    throw new ApiError(
+      403,
+      "insufficient_permission",
+      "Seu perfil não permite executar esta ação.",
+    );
+  }
+
+  return contextFromMembership(db, identity, membership);
+}
+
+export function authenticatedIdentity(request: Request): AuthenticatedIdentity {
   const userId = request.headers.get("oai-authenticated-user-id")?.trim();
   const email = request.headers.get("oai-authenticated-user-email")?.trim();
 
@@ -61,8 +98,23 @@ export async function requireOrganizationContext(
     );
   }
 
+  const encodedName = request.headers.get("oai-authenticated-user-full-name");
+  const displayName = encodedName &&
+    request.headers.get("oai-authenticated-user-full-name-encoding") === "percent-encoded-utf-8"
+    ? safeDecode(encodedName) ?? email
+    : email;
+
+  return { id: userId, email, displayName };
+}
+
+export async function listOrganizationMemberships(request: Request) {
+  const identity = authenticatedIdentity(request);
   const db = getDatabase();
-  const membership = await db
+  return findMemberships(db, identity);
+}
+
+async function findMemberships(db: D1Database, identity: AuthenticatedIdentity) {
+  const result = await db
     .prepare(
       `SELECT
         m.id AS member_id,
@@ -86,34 +138,24 @@ export async function requireOrganizationContext(
           WHEN 'member' THEN 4
           ELSE 5
         END,
-        o.name
-      LIMIT 1`,
+        o.name`,
     )
-    .bind(userId, email)
-    .first<MembershipRow>();
+    .bind(identity.id, identity.email)
+    .all<MembershipRow>();
+  return result.results;
+}
 
-  if (!membership) {
-    throw new ApiError(
-      403,
-      "membership_required",
-      "Sua conta ainda não pertence a uma empresa no Nexo Obra.",
-    );
-  }
-
-  if (allowedRoles && !allowedRoles.includes(membership.role)) {
-    throw new ApiError(
-      403,
-      "insufficient_permission",
-      "Seu perfil não permite executar esta ação.",
-    );
-  }
-
+function contextFromMembership(
+  db: D1Database,
+  identity: AuthenticatedIdentity,
+  membership: MembershipRow,
+): OrganizationContext {
   return {
     db,
     user: {
-      id: userId,
-      email,
-      displayName: membership.member_name || email,
+      id: identity.id,
+      email: identity.email,
+      displayName: membership.member_name || identity.displayName,
     },
     member: {
       id: membership.member_id,
@@ -127,6 +169,25 @@ export async function requireOrganizationContext(
       timezone: membership.timezone,
     },
   };
+}
+
+function selectedOrganizationId(request: Request) {
+  const cookie = request.headers.get("cookie") ?? "";
+  for (const item of cookie.split(";")) {
+    const [name, ...value] = item.trim().split("=");
+    if (name === ORGANIZATION_COOKIE) {
+      try { return decodeURIComponent(value.join("=")); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function safeDecode(value: string) {
+  try { return decodeURIComponent(value); } catch { return null; }
+}
+
+export function organizationSelectionCookie(organizationId: string) {
+  return `${ORGANIZATION_COOKIE}=${encodeURIComponent(organizationId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`;
 }
 
 export async function apiRoute(

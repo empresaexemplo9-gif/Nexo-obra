@@ -16,7 +16,7 @@ test("keeps every requested workspace in the product shell", async () => {
     "Obras",
     "Orçamentos",
     "Cronograma",
-    "Vendas e clientes",
+    "Clientes",
     "Financeiro",
     "Equipe",
     "Tarefas",
@@ -91,4 +91,32 @@ test("removes the obsolete password-session backend", async () => {
   ]) {
     await assert.rejects(source(path));
   }
+});
+
+test("ships no fabricated product or financial data", async () => {
+  const app = await source("components/nexo-app.tsx");
+  const finance = await source("app/api/integrations/drap/summary/route.ts");
+
+  await assert.rejects(source("lib/demo-data.ts"));
+  assert.doesNotMatch(app, /demo-data|Residência Aurora|Clínica Átrio/);
+  assert.doesNotMatch(finance, /demoFinancialSummary|demo-company/);
+  assert.match(finance, /integration_not_configured/);
+});
+
+test("supports verified organization selection", async () => {
+  const backend = await source("lib/server/backend.ts");
+  const session = await source("app/api/session/route.ts");
+  const onboarding = await source("app/api/onboarding/route.ts");
+
+  assert.match(backend, /__Host-nexo-organization/);
+  assert.match(session, /membership\.organization_id === parsed\.data\.organizationId/);
+  assert.match(onboarding, /organizationSelectionCookie/);
+});
+
+test("uses the supplied Drap Architector brand", async () => {
+  const app = await source("components/nexo-app.tsx");
+  const layout = await source("app/layout.tsx");
+
+  assert.match(app, /\/drap-architector-logo\.png/);
+  assert.match(layout, /Drap Architector/);
 });

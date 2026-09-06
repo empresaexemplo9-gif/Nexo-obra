@@ -15,8 +15,9 @@ O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.a
 
 | Método | Caminho | Uso |
 | --- | --- | --- |
-| `GET` | `/api/session` | Retorna pessoa, papel e empresa ativos |
-| `POST` | `/api/onboarding` | Cria a primeira empresa para uma pessoa autenticada |
+| `GET` | `/api/session` | Retorna pessoa, empresa ativa e todas as associações permitidas |
+| `POST` | `/api/session` | Seleciona uma empresa após validar a associação no servidor |
+| `POST` | `/api/onboarding` | Cria uma nova empresa e torna o usuário seu proprietário |
 | `GET` | `/api/members` | Lista membros ativos da empresa |
 | `GET`, `POST` | `/api/clients` | Lista, busca e cria clientes |
 | `GET`, `PATCH`, `DELETE` | `/api/clients/:clientId` | Consulta, altera e exclui um cliente |
@@ -32,3 +33,5 @@ Erros usam o formato `{ "error": "mensagem", "code": "codigo" }`. Validações t
 ## Dados e segredos
 
 Clientes, projetos, tarefas, membros e auditoria ficam no D1. Arquivos permanecem destinados ao R2. Credenciais da Drap são lidas somente no servidor e não aparecem nas respostas da API nem no código enviado ao navegador.
+
+O identificador da empresa ativa fica em cookie `HttpOnly`, `Secure` e `SameSite=Lax`. Esse valor é apenas uma preferência: cada requisição confirma novamente que a pessoa autenticada pertence à empresa selecionada.

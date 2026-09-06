@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import {
+  apiRoute,
+  authenticatedIdentity,
+  jsonBody,
+  organizationSelectionCookie,
+  validationError,
+} from "@/lib/server/backend";
 import { getDatabase } from "@/db";
 
 export const dynamic = "force-dynamic";
@@ -9,21 +15,6 @@ const onboardingSchema = z.object({
   organizationName: z.string().trim().min(2).max(120),
 });
 
-function identity(request: Request) {
-  const id = request.headers.get("oai-authenticated-user-id")?.trim();
-  const email = request.headers.get("oai-authenticated-user-email")?.trim();
-  const encodedName = request.headers.get("oai-authenticated-user-full-name");
-  const name = encodedName && request.headers.get("oai-authenticated-user-full-name-encoding") === "percent-encoded-utf-8"
-    ? decodeName(encodedName)
-    : null;
-  if (!id || !email) throw new ApiError(401, "sign_in_required", "Entre com sua conta para criar a empresa.");
-  return { id, email, name: name || email };
-}
-
-function decodeName(value: string) {
-  try { return decodeURIComponent(value); } catch { return null; }
-}
-
 function slugify(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
     .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "empresa";
@@ -31,18 +22,7 @@ function slugify(value: string) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const user = identity(request);
-    try {
-      const existing = await requireOrganizationContext(request);
-      return Response.json({
-        organization: existing.organization,
-        member: { id: existing.member.id, role: existing.member.role },
-        created: false,
-      });
-    } catch (error) {
-      if (!(error instanceof ApiError) || error.code !== "membership_required") throw error;
-    }
-
+    const user = authenticatedIdentity(request);
     const parsed = onboardingSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const db = getDatabase();
@@ -59,7 +39,7 @@ export async function POST(request: Request) {
       db.prepare(
         `INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?4)`,
-      ).bind(userId, user.email, user.name, now),
+      ).bind(userId, user.email, user.displayName, now),
       db.prepare(
         `INSERT INTO organizations (id, name, slug, timezone, created_at, updated_at)
          VALUES (?1, ?2, ?3, 'America/Sao_Paulo', ?4, ?4)`,
@@ -73,18 +53,30 @@ export async function POST(request: Request) {
           id, organization_id, external_user_id, name, email, role,
           weekly_capacity_minutes, active, created_at, updated_at
         ) VALUES (?1, ?2, ?3, ?4, ?5, 'owner', 2400, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      ).bind(memberId, organizationId, userId, user.name, user.email),
+      ).bind(memberId, organizationId, userId, user.displayName, user.email),
+      db.prepare(
+        `INSERT INTO audit_events (
+          id, organization_id, actor_user_id, action, entity_type, entity_id,
+          metadata_json, created_at
+        ) VALUES (?1, ?2, ?3, 'organization.created', 'organization', ?2, '{}', ?4)`,
+      ).bind(crypto.randomUUID(), organizationId, userId, now),
     ]);
 
-    return Response.json({
-      organization: {
-        id: organizationId,
-        name: parsed.data.organizationName,
-        slug,
-        timezone: "America/Sao_Paulo",
+    return Response.json(
+      {
+        organization: {
+          id: organizationId,
+          name: parsed.data.organizationName,
+          slug,
+          timezone: "America/Sao_Paulo",
+        },
+        member: { id: memberId, role: "owner" },
+        created: true,
       },
-      member: { id: memberId, role: "owner" },
-      created: true,
-    }, { status: 201 });
+      {
+        status: 201,
+        headers: { "Set-Cookie": organizationSelectionCookie(organizationId) },
+      },
+    );
   });
 }

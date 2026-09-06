@@ -2,7 +2,9 @@
 
 > Nome provisório. Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-Este repositório é uma fundação executável para construir a plataforma no Claude Code. Ele já contém uma interface responsiva e navegável, dados demonstrativos realistas, modelo de dados multiempresa, uma API inicial de projetos e o limite técnico da integração financeira remota com a Drap.
+A identidade visual oficial usa a marca Drap Architector em `public/drap-architector-logo.png`.
+
+Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
 O objetivo não é copiar a Vobi. O objetivo é reunir o ciclo do negócio em um fluxo menor, mais claro e mais previsível:
 
@@ -21,13 +23,13 @@ flowchart TD
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
-- Dados de demonstração isolados em `lib/demo-data.ts`.
+- Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
 - Esquema relacional multiempresa em `db/schema.ts`.
 - Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
-- Endpoint de resumo financeiro com fallback explícito para demonstração.
+- Endpoint financeiro sem fallback fictício: ausência ou falha da Drap aparece como indisponibilidade.
 - Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 
@@ -120,7 +122,7 @@ O site público da Drap informa suporte a API REST e webhooks assinados, mas nã
 - `/api/v1/finance/summary` é um contrato configurável de referência, não um endpoint confirmado;
 - o token nunca é enviado ao navegador;
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
-- até as credenciais e o contrato real serem fornecidos, a tela mostra dados marcados como demonstração;
+- até as credenciais e o contrato real serem fornecidos, a tela informa que a integração está indisponível, sem fabricar valores;
 - nenhuma escrita financeira deve ser liberada antes de testes em ambiente sandbox.
 
 Para concluir a conexão real, obtenha da Drap:
@@ -188,8 +190,8 @@ db/
 docs/
   DRAP-INTEGRATION.md
 lib/
-  demo-data.ts
   integrations/drap.ts
+  server/backend.ts       # identidade, organização, permissões e auditoria
 build/
   sites-vite-plugin.ts
 drizzle/
@@ -212,7 +214,7 @@ CLAUDE.md
 - Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
 - CRUD de clientes, projetos e tarefas. **Concluído no backend.**
 - Permissões no servidor e auditoria de escritas. **Concluído no backend.**
-- Substituição dos dados demonstrativos por queries reais.
+- Interface conectada às queries reais. **Concluído.**
 - Testes de isolamento entre duas organizações.
 
 ### Fase 2 — comercial e orçamento

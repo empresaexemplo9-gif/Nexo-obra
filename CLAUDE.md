@@ -54,10 +54,10 @@ Para cada fatia:
 
 ## Prioridade atual
 
-1. Conectar a interface aos CRUDs autenticados de cliente → projeto → tarefa.
-2. Trocar os dados demonstrativos desses três domínios por dados reais.
-3. Implementar seleção segura entre organizações quando uma pessoa pertencer a mais de uma.
-4. Só então ampliar CRM, orçamento e obra.
+1. Ampliar CRM, orçamento e obra usando somente dados persistentes.
+2. Implementar convites e administração de membros por empresa.
+3. Preparar planos, limites e cobrança para monetização.
+4. Homologar a integração Drap antes de liberar operações financeiras.
 
 ## Integração Drap
 
