@@ -120,3 +120,34 @@ test("uses the supplied Drap Architector brand", async () => {
   assert.match(app, /\/drap-architector-logo\.png/);
   assert.match(layout, /Drap Architector/);
 });
+
+test("keeps superadmin credentials and authorization on the server", async () => {
+  const auth = await source("lib/server/superadmin.ts");
+  const session = await source("app/api/superadmin/session/route.ts");
+  const overview = await source("app/api/superadmin/overview/route.ts");
+  const ui = await source("components/superadmin-app.tsx");
+
+  assert.match(auth, /SUPERADMIN_PASSWORD_HASH/);
+  assert.match(auth, /SUPERADMIN_EMAIL/);
+  assert.match(auth, /PBKDF2/);
+  assert.match(auth, /HttpOnly; Secure; SameSite=Strict/);
+  assert.match(session, /superadmin_login_attempts/);
+  assert.match(overview, /requireSuperAdmin/);
+  assert.match(await source("components/nexo-app.tsx"), /initial-superadmin-email/);
+  assert.doesNotMatch(`${auth}\n${session}\n${overview}\n${ui}`, /147532159/);
+});
+
+test("creates single-use organization access from protected invitation links", async () => {
+  const schema = await source("db/schema.ts");
+  const adminInvites = await source("app/api/superadmin/invitations/route.ts");
+  const acceptInvite = await source("app/api/invitations/[token]/accept/route.ts");
+  const invitePage = await source("components/invitation-app.tsx");
+
+  assert.match(schema, /sqliteTable\("organization_invitations"/);
+  assert.match(adminInvites, /requireSuperAdmin/);
+  assert.match(adminInvites, /invitationTokenHash/);
+  assert.match(acceptInvite, /authenticatedIdentity/);
+  assert.match(acceptInvite, /invitation_email_mismatch/);
+  assert.match(acceptInvite, /organizationSelectionCookie/);
+  assert.match(invitePage, /Aceitar e criar acesso/);
+});

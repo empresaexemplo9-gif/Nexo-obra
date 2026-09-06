@@ -13,12 +13,15 @@ import {
   CircleDollarSign,
   Clock3,
   Database,
+  Eye,
+  EyeOff,
   Files,
   FolderKanban,
   LayoutDashboard,
   ListChecks,
   LoaderCircle,
   LogOut,
+  KeyRound,
   Plus,
   Search,
   ShieldCheck,
@@ -160,18 +163,49 @@ function LoadingScreen() {
 }
 
 function AccessScreen({ signInPath = "/signin-with-chatgpt?return_to=%2F" }: { signInPath?: string }) {
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState("");
+
+  async function submitSuperadmin(event: FormEvent) {
+    event.preventDefault();
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      await requestJson("/api/superadmin/session", {
+        method: "POST",
+        body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+      });
+      window.location.assign("/superadmin");
+    } catch (cause) {
+      setAdminError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
+    } finally {
+      setAdminLoading(false);
+    }
+  }
+
   return (
     <main className="relative grid min-h-svh place-items-center overflow-hidden bg-[#06111f] p-5">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_10%,rgba(13,205,219,0.18),transparent_32%),radial-gradient(circle_at_80%_80%,rgba(37,99,235,0.16),transparent_35%)]" />
-      <Card className="relative w-full max-w-md border-white/10 bg-slate-950/80 text-white shadow-2xl backdrop-blur-xl">
+      <Card className="relative w-full max-w-lg border-white/10 bg-slate-950/80 text-white shadow-2xl backdrop-blur-xl">
         <CardContent className="p-7 sm:p-9">
           <Brand dark />
-          <h1 className="mt-8 text-3xl font-semibold tracking-tight">Sua operação, em um só lugar.</h1>
-          <p className="mt-3 text-base leading-7 text-slate-300">Entre para acessar somente as empresas, projetos e tarefas vinculados à sua conta.</p>
-          <Button asChild className="mt-8 h-11 w-full rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400">
+          <h1 className="mt-8 text-3xl font-semibold tracking-tight">Acesse o Nexo Obra</h1>
+          <p className="mt-3 text-base leading-7 text-slate-300">Escolha o tipo de acesso para continuar.</p>
+          <p className="mt-7 text-sm font-medium text-slate-200">Conta da empresa</p>
+          <Button asChild className="mt-3 h-11 w-full rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400">
             <a href={signInPath} target="_top">Entrar com ChatGPT</a>
           </Button>
-          <p className="mt-5 flex items-center justify-center gap-2 text-xs text-slate-500"><ShieldCheck className="size-4" />Seus dados ficam separados por empresa.</p>
+          <div className="my-7 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-600"><span className="h-px flex-1 bg-white/10" />Superadmin<span className="h-px flex-1 bg-white/10" /></div>
+          <form onSubmit={submitSuperadmin} className="space-y-4">
+            <div><label htmlFor="initial-superadmin-email" className="mb-2 block text-sm font-medium text-slate-200">E-mail</label><Input id="initial-superadmin-email" type="email" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} autoComplete="username" required className="h-11 border-white/10 bg-white/[0.06] text-white placeholder:text-slate-600" /></div>
+            <div><label htmlFor="initial-superadmin-password" className="mb-2 block text-sm font-medium text-slate-200">Senha</label><div className="relative"><Input id="initial-superadmin-password" type={showAdminPassword ? "text" : "password"} value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} autoComplete="current-password" required className="h-11 border-white/10 bg-white/[0.06] pr-11 text-white placeholder:text-slate-600" /><button type="button" onClick={() => setShowAdminPassword((value) => !value)} aria-label={showAdminPassword ? "Ocultar senha" : "Mostrar senha"} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">{showAdminPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div></div>
+            {adminError ? <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm text-red-200">{adminError}</p> : null}
+            <Button type="submit" variant="outline" disabled={adminLoading} className="h-11 w-full rounded-xl border-cyan-300/25 bg-cyan-300/10 text-cyan-100 hover:bg-cyan-300/20 hover:text-white">{adminLoading ? <LoaderCircle className="animate-spin" /> : <KeyRound />}Entrar como superadmin</Button>
+          </form>
+          <p className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500"><ShieldCheck className="size-4" />Acesso protegido e dados separados por empresa.</p>
         </CardContent>
       </Card>
     </main>

@@ -11,6 +11,17 @@ O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.a
 - `owner`, `admin`, `manager` e `member` operam o núcleo. Exclusões exigem `owner`, `admin` ou `manager`.
 - Todas as criações, alterações e exclusões geram evento em `audit_events`.
 
+O superadmin usa uma sessão separada das contas das empresas. O e-mail configurado e o hash PBKDF2 da senha ficam exclusivamente no ambiente de produção. O cookie administrativo é assinado, `HttpOnly`, `Secure` e `SameSite=Strict`; cinco falhas dentro de 15 minutos bloqueiam novas tentativas temporariamente.
+
+## Convites e criação de acesso
+
+- O superadmin escolhe empresa, e-mail e perfil e recebe um link aleatório de uso único.
+- O banco armazena somente o SHA-256 do token; o token original aparece apenas na resposta de criação para ser copiado.
+- O convite expira em sete dias por padrão e pode ser revogado antes do aceite.
+- O usuário precisa autenticar a identidade do mesmo e-mail informado no convite.
+- No aceite, o backend cria ou atualiza o membro, registra a associação à empresa e seleciona essa empresa no cookie de sessão.
+- Um convite nunca concede o papel `owner`; propriedade continua sendo criada somente no onboarding da empresa.
+
 ## Rotas
 
 | Método | Caminho | Uso |
@@ -25,6 +36,12 @@ O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.a
 | `GET`, `PATCH`, `DELETE` | `/api/projects/:projectId` | Consulta, altera e exclui um projeto |
 | `GET`, `POST` | `/api/tasks` | Lista, filtra e cria tarefas |
 | `GET`, `PATCH`, `DELETE` | `/api/tasks/:taskId` | Consulta, altera e exclui uma tarefa |
+| `GET`, `POST`, `DELETE` | `/api/superadmin/session` | Consulta, cria ou encerra a sessão administrativa |
+| `GET` | `/api/superadmin/overview` | Retorna os indicadores globais da plataforma |
+| `GET`, `POST` | `/api/superadmin/invitations` | Lista e cria convites individuais |
+| `DELETE` | `/api/superadmin/invitations/:invitationId` | Revoga um convite pendente |
+| `GET` | `/api/invitations/:token` | Valida e apresenta os dados públicos mínimos do convite |
+| `POST` | `/api/invitations/:token/accept` | Cria o acesso após validar identidade e e-mail |
 
 ## Respostas de erro
 
@@ -35,3 +52,5 @@ Erros usam o formato `{ "error": "mensagem", "code": "codigo" }`. Validações t
 Clientes, projetos, tarefas, membros e auditoria ficam no D1. Arquivos permanecem destinados ao R2. Credenciais da Drap são lidas somente no servidor e não aparecem nas respostas da API nem no código enviado ao navegador.
 
 O identificador da empresa ativa fica em cookie `HttpOnly`, `Secure` e `SameSite=Lax`. Esse valor é apenas uma preferência: cada requisição confirma novamente que a pessoa autenticada pertence à empresa selecionada.
+
+Os segredos `SUPERADMIN_PASSWORD_HASH` e `SUPERADMIN_SESSION_SECRET` são configurados no ambiente de hospedagem e nunca entram no Git. O endereço de e-mail administrativo não é enviado ao código do navegador até existir uma sessão válida.

@@ -26,6 +26,8 @@ flowchart TD
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
 - Esquema relacional multiempresa em `db/schema.ts`.
 - Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
+- Acesso superadmin próprio, protegido por hash, sessão assinada e bloqueio de tentativas repetidas.
+- Convites individuais por link para criar o acesso de usuários à empresa e ao perfil definidos.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
@@ -175,12 +177,16 @@ app/
     clients/            # CRUD de clientes
     integrations/drap/  # proxy financeiro e webhook
     members/            # equipe da empresa atual
+    invitations/        # leitura e aceite de convite individual
     onboarding/         # criação segura da primeira empresa
     projects/           # CRUD de projetos e obras
     session/            # identidade e organização ativas
+    superadmin/         # sessão, visão global e geração de convites
     tasks/              # CRUD de tarefas
   layout.tsx
   page.tsx
+  superadmin/           # painel global protegido
+  convite/              # criação de acesso por link
 components/
   nexo-app.tsx          # protótipo funcional dos módulos
   ui/                   # primitivas acessíveis
@@ -212,6 +218,7 @@ CLAUDE.md
 ### Fase 1 — núcleo operacional
 
 - Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
+- Superadmin e criação de acesso por convite individual. **Concluído.**
 - CRUD de clientes, projetos e tarefas. **Concluído no backend.**
 - Permissões no servidor e auditoria de escritas. **Concluído no backend.**
 - Interface conectada às queries reais. **Concluído.**

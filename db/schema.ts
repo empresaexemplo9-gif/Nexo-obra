@@ -224,3 +224,29 @@ export const integrationEvents = sqliteTable("integration_events", {
   index("idx_integration_events_org_status").on(table.organizationId, table.status),
   index("idx_integration_events_provider_type").on(table.provider, table.eventType),
 ]);
+
+export const superadminLoginAttempts = sqliteTable("superadmin_login_attempts", {
+  fingerprint: text("fingerprint").primaryKey(),
+  failedCount: integer("failed_count").notNull().default(0),
+  windowStartedAt: integer("window_started_at").notNull(),
+  lockedUntil: integer("locked_until").notNull().default(0),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_superadmin_login_locked_until").on(table.lockedUntil)]);
+
+export const organizationInvitations = sqliteTable("organization_invitations", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("member"),
+  tokenHash: text("token_hash").notNull(),
+  invitedByEmail: text("invited_by_email").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  acceptedAt: integer("accepted_at"),
+  acceptedByUserId: text("accepted_by_user_id"),
+  revokedAt: integer("revoked_at"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_organization_invitations_token_hash").on(table.tokenHash),
+  index("idx_organization_invitations_org_created").on(table.organizationId, table.createdAt),
+  index("idx_organization_invitations_email_status").on(table.email, table.acceptedAt, table.revokedAt),
+]);
