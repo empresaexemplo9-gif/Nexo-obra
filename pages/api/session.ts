@@ -8,7 +8,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const token = cookies["__Host-session"];
     const session = verifySession(token);
     return res.status(200).json({ role: session?.role || null });
-  } catch (e) {
+  } catch {
     return res.status(200).json({ role: null });
   }
 }

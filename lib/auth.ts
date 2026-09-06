@@ -49,7 +49,7 @@ export function verifySession(token: string | undefined): SessionPayload | null 
     const obj = JSON.parse(bodyStr) as SessionPayload;
     if (obj.exp && Math.floor(Date.now() / 1000) > obj.exp) return null;
     return obj;
-  } catch (e) {
+  } catch {
     return null;
   }
 }

@@ -27,8 +27,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const cookie = createSessionCookie(token);
     res.setHeader("Set-Cookie", cookie);
     return res.status(200).json({ role });
-  } catch (e: any) {
-    console.error(e);
-    return res.status(500).json({ error: e?.message || "server error" });
+  } catch (error: unknown) {
+    console.error(error);
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : "server error",
+    });
   }
 }
