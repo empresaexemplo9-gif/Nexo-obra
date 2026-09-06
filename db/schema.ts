@@ -28,6 +28,7 @@ export const members = sqliteTable("members", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   role: text("role").notNull().default("member"),
+  permissionsJson: text("permissions_json").notNull().default("{}"),
   weeklyCapacityMinutes: integer("weekly_capacity_minutes").notNull().default(2400),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   ...timestamps,
@@ -238,6 +239,7 @@ export const organizationInvitations = sqliteTable("organization_invitations", {
   organizationId: text("organization_id").notNull().references(() => organizations.id),
   email: text("email").notNull(),
   role: text("role").notNull().default("member"),
+  permissionsJson: text("permissions_json").notNull().default("{}"),
   tokenHash: text("token_hash").notNull(),
   invitedByEmail: text("invited_by_email").notNull(),
   expiresAt: integer("expires_at").notNull(),
@@ -249,4 +251,19 @@ export const organizationInvitations = sqliteTable("organization_invitations", {
   uniqueIndex("uidx_organization_invitations_token_hash").on(table.tokenHash),
   index("idx_organization_invitations_org_created").on(table.organizationId, table.createdAt),
   index("idx_organization_invitations_email_status").on(table.email, table.acceptedAt, table.revokedAt),
+]);
+
+export const termsAcceptances = sqliteTable("terms_acceptances", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  externalUserId: text("external_user_id").notNull(),
+  email: text("email").notNull(),
+  termsVersion: text("terms_version").notNull(),
+  invitationId: text("invitation_id").references(() => organizationInvitations.id),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: integer("accepted_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_terms_acceptance_org_user_version").on(table.organizationId, table.externalUserId, table.termsVersion),
+  index("idx_terms_acceptance_org_version").on(table.organizationId, table.termsVersion),
 ]);

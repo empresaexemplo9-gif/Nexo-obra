@@ -29,6 +29,13 @@
       "when": 1788669143333,
       "tag": "0003_wise_carmella_unuscione",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788670513258,
+      "tag": "0004_tan_swordsman",
+      "breakpoints": true
     }
   ]
 }

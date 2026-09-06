@@ -151,3 +151,41 @@ test("creates single-use organization access from protected invitation links", a
   assert.match(acceptInvite, /organizationSelectionCookie/);
   assert.match(invitePage, /Aceitar e criar acesso/);
 });
+
+test("lets only the current company manage scoped secondary access", async () => {
+  const permissions = await source("lib/permissions.ts");
+  const invitations = await source("app/api/organization-invitations/route.ts");
+  const revocation = await source("app/api/organization-invitations/[invitationId]/route.ts");
+  const backend = await source("lib/server/backend.ts");
+
+  for (const profile of ["partner", "service_provider", "finance", "accounting"]) {
+    assert.match(invitations, new RegExp(profile));
+  }
+  assert.match(permissions, /PermissionSet/);
+  assert.match(invitations, /context\.organization\.id/);
+  assert.match(invitations, /canManageOrganizationAccess/);
+  assert.match(revocation, /organization_id = \?2/);
+  assert.match(backend, /module_permission_denied/);
+});
+
+test("records versioned terms before tenant data access", async () => {
+  const schema = await source("db/schema.ts");
+  const backend = await source("lib/server/backend.ts");
+  const acceptance = await source("app/api/terms/accept/route.ts");
+  const invitationAcceptance = await source("app/api/invitations/[token]/accept/route.ts");
+  const terms = await source("components/terms-page.tsx");
+
+  assert.match(schema, /sqliteTable\("terms_acceptances"/);
+  assert.match(backend, /terms_acceptance_required/);
+  assert.match(acceptance, /CURRENT_TERMS_VERSION/);
+  assert.match(invitationAcceptance, /acceptTerms/);
+  assert.match(terms, /Superadmin e separação dos dados/);
+});
+
+test("keeps the superadmin overview out of tenant content", async () => {
+  const overview = await source("app/api/superadmin/overview/route.ts");
+  const ui = await source("components/superadmin-app.tsx");
+
+  assert.doesNotMatch(overview, /c\.name|p\.name|t\.title|budget_cents|financial/);
+  assert.match(ui, /conteúdo confidencial de cada empresa não é exibido/);
+});

@@ -5,7 +5,7 @@ import {
   apiRoute,
   auditStatement,
   jsonBody,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -55,6 +55,7 @@ const clientColumns = `
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "crm", "view");
     const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
     const statement = query
       ? context.db
@@ -84,7 +85,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "crm", "edit");
     const parsed = createClientSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
 

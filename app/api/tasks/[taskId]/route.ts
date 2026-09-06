@@ -6,8 +6,7 @@ import {
   auditStatement,
   ensureFound,
   jsonBody,
-  managementRoles,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -38,6 +37,7 @@ async function ownedRecord(db: D1Database, table: "projects" | "members" | "task
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "tasks", "view");
     const { taskId } = await route.params;
     const task = ensureFound(
       await context.db.prepare(`${taskSelect} WHERE t.id = ?1 AND t.organization_id = ?2`)
@@ -50,7 +50,8 @@ export async function GET(request: Request, route: RouteContext) {
 
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "tasks", "edit");
     const { taskId } = await route.params;
     ensureFound(await ownedRecord(context.db, "tasks", taskId, context.organization.id), "Tarefa");
     const parsed = updateTaskSchema.safeParse(await jsonBody(request));
@@ -115,7 +116,8 @@ export async function PATCH(request: Request, route: RouteContext) {
 
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, managementRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "tasks", "edit");
     const { taskId } = await route.params;
     ensureFound(await ownedRecord(context.db, "tasks", taskId, context.organization.id), "Tarefa");
     const children = await context.db.prepare(

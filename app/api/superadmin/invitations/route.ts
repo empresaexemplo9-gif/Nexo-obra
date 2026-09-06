@@ -4,13 +4,14 @@ import { getDatabase } from "@/db";
 import { ApiError, apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
 import { rejectCrossSiteMutation, requireSuperAdmin } from "@/lib/server/superadmin";
+import { permissionsForRole } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 const invitationSchema = z.object({
   organizationId: z.string().uuid(),
   email: z.string().trim().email().max(160),
-  role: z.enum(["admin", "manager", "member"]),
+  role: z.literal("owner").default("owner"),
   expiresInDays: z.number().int().min(1).max(30).default(7),
 });
 
@@ -86,10 +87,10 @@ export async function POST(request: Request) {
     const expiresAt = createdAt + parsed.data.expiresInDays * 24 * 60 * 60 * 1000;
     await db.prepare(
       `INSERT INTO organization_invitations (
-        id, organization_id, email, role, token_hash, invited_by_email,
+        id, organization_id, email, role, permissions_json, token_hash, invited_by_email,
         expires_at, accepted_at, accepted_by_user_id, revoked_at, created_at
-      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, NULL, NULL, ?8)`,
-    ).bind(id, organization.id, email, parsed.data.role, tokenHash, admin.email, expiresAt, createdAt).run();
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, NULL, NULL, ?9)`,
+    ).bind(id, organization.id, email, parsed.data.role, JSON.stringify(permissionsForRole("owner")), tokenHash, admin.email, expiresAt, createdAt).run();
 
     return Response.json({
       invitation: invitationResponse({

@@ -1,6 +1,7 @@
 import { getDatabase } from "@/db";
 import { ApiError, apiRoute } from "@/lib/server/backend";
 import { invitationTokenHash, validateInvitationState } from "@/lib/server/invitations";
+import { parseStoredPermissions } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,7 @@ type InvitationRow = {
   organization_name: string;
   email: string;
   role: string;
+  permissions_json: string;
   expires_at: number;
   accepted_at: number | null;
   revoked_at: number | null;
@@ -22,7 +24,7 @@ export async function GET(_request: Request, route: RouteContext) {
     if (token.length < 32 || token.length > 100) throw new ApiError(404, "invitation_not_found", "Convite não encontrado.");
     const tokenHash = await invitationTokenHash(token);
     const invitation = await getDatabase().prepare(
-      `SELECT i.id, i.organization_id, o.name AS organization_name, i.email, i.role,
+      `SELECT i.id, i.organization_id, o.name AS organization_name, i.email, i.role, i.permissions_json,
         i.expires_at, i.accepted_at, i.revoked_at
        FROM organization_invitations i
        INNER JOIN organizations o ON o.id = i.organization_id
@@ -33,6 +35,7 @@ export async function GET(_request: Request, route: RouteContext) {
     return Response.json({ invitation: {
       email: invitation.email,
       role: invitation.role,
+      permissions: parseStoredPermissions(invitation.permissions_json, invitation.role),
       organizationName: invitation.organization_name,
       expiresAt: invitation.expires_at,
     } });

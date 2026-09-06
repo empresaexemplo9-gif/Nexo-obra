@@ -8,11 +8,15 @@ import {
   validationError,
 } from "@/lib/server/backend";
 import { getDatabase } from "@/db";
+import { requestEvidenceHashes } from "@/lib/server/terms";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { permissionsForRole } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
 const onboardingSchema = z.object({
   organizationName: z.string().trim().min(2).max(120),
+  acceptTerms: z.literal(true),
 });
 
 function slugify(value: string) {
@@ -34,6 +38,7 @@ export async function POST(request: Request) {
     const suffix = organizationId.replaceAll("-", "").slice(0, 8);
     const slug = `${slugify(parsed.data.organizationName)}-${suffix}`;
     const now = Date.now();
+    const evidence = await requestEvidenceHashes(request);
 
     await db.batch([
       db.prepare(
@@ -51,15 +56,21 @@ export async function POST(request: Request) {
       db.prepare(
         `INSERT INTO members (
           id, organization_id, external_user_id, name, email, role,
-          weekly_capacity_minutes, active, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, 'owner', 2400, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      ).bind(memberId, organizationId, userId, user.displayName, user.email),
+          permissions_json, weekly_capacity_minutes, active, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, 'owner', ?6, 2400, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      ).bind(memberId, organizationId, userId, user.displayName, user.email, JSON.stringify(permissionsForRole("owner"))),
       db.prepare(
         `INSERT INTO audit_events (
           id, organization_id, actor_user_id, action, entity_type, entity_id,
           metadata_json, created_at
         ) VALUES (?1, ?2, ?3, 'organization.created', 'organization', ?2, '{}', ?4)`,
       ).bind(crypto.randomUUID(), organizationId, userId, now),
+      db.prepare(
+        `INSERT INTO terms_acceptances (
+          id, organization_id, external_user_id, email, terms_version,
+          invitation_id, ip_hash, user_agent_hash, accepted_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, ?8)`,
+      ).bind(crypto.randomUUID(), organizationId, user.id, user.email, CURRENT_TERMS_VERSION, evidence.ipHash, evidence.userAgentHash, now),
     ]);
 
     return Response.json(

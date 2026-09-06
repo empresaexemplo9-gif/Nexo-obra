@@ -1,4 +1,4 @@
-import { apiRoute, requireOrganizationContext } from "@/lib/server/backend";
+import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { fetchDrapFinancialSummary, isDrapConfigured } from "@/lib/integrations/drap";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,7 @@ type ConnectionRow = { external_company_id: string; status: string };
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "finance", "view");
 
     if (!isDrapConfigured()) {
       return Response.json(

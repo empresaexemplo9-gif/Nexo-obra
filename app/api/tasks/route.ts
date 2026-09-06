@@ -5,7 +5,7 @@ import {
   apiRoute,
   auditStatement,
   jsonBody,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -82,6 +82,7 @@ async function ownedRecord(db: D1Database, table: "projects" | "members" | "task
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "tasks", "view");
     const url = new URL(request.url);
     const projectId = url.searchParams.get("projectId");
     const status = url.searchParams.get("status");
@@ -101,7 +102,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "tasks", "edit");
     const parsed = createTaskSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;

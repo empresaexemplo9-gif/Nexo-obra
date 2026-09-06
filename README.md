@@ -27,7 +27,10 @@ flowchart TD
 - Esquema relacional multiempresa em `db/schema.ts`.
 - Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
 - Acesso superadmin próprio, protegido por hash, sessão assinada e bloqueio de tentativas repetidas.
-- Convites individuais por link para criar o acesso de usuários à empresa e ao perfil definidos.
+- Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
+- Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
+- Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
+- Painel do superadmin limitado a metadados e indicadores agregados, sem abrir o conteúdo sigiloso dos ambientes contratantes.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
@@ -167,7 +170,14 @@ Papéis mínimos recomendados:
 - `manager`: projetos, obras, orçamentos e relatórios;
 - `member`: itens atribuídos e módulos liberados;
 - `partner`: acesso limitado a projetos específicos;
+- `service_provider`: execução operacional com escopo definido pelo contratante;
+- `finance`: acesso financeiro configurável para a equipe responsável;
+- `accounting`: prestação de contas com leitura ou edição explicitamente liberada;
 - `client`: portal externo somente para leitura/aprovação/comentário.
+
+Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
+
+O texto público vigente fica em `/termos`. Cada aceite grava a versão, data e evidências técnicas transformadas em hash, sem armazenar IP ou agente do navegador em formato bruto. Antes da cobrança comercial, o documento deve receber revisão jurídica e os dados legais do fornecedor, canal de privacidade e condições comerciais do plano.
 
 ## Estrutura do projeto
 
@@ -178,15 +188,18 @@ app/
     integrations/drap/  # proxy financeiro e webhook
     members/            # equipe da empresa atual
     invitations/        # leitura e aceite de convite individual
+    organization-invitations/ # convites secundários e permissões da empresa atual
     onboarding/         # criação segura da primeira empresa
     projects/           # CRUD de projetos e obras
     session/            # identidade e organização ativas
     superadmin/         # sessão, visão global e geração de convites
     tasks/              # CRUD de tarefas
+    terms/              # aceite eletrônico da versão vigente
   layout.tsx
   page.tsx
   superadmin/           # painel global protegido
   convite/              # criação de acesso por link
+  termos/               # Termos de Uso públicos e versionados
 components/
   nexo-app.tsx          # protótipo funcional dos módulos
   ui/                   # primitivas acessíveis
@@ -218,9 +231,10 @@ CLAUDE.md
 ### Fase 1 — núcleo operacional
 
 - Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
-- Superadmin e criação de acesso por convite individual. **Concluído.**
+- Superadmin, convite do contratante e convites secundários com permissões granulares. **Concluído.**
 - CRUD de clientes, projetos e tarefas. **Concluído no backend.**
-- Permissões no servidor e auditoria de escritas. **Concluído no backend.**
+- Permissões de leitura/edição por módulo no servidor e auditoria de escritas. **Concluído no backend.**
+- Termos versionados e aceite eletrônico obrigatório. **Concluído; revisão jurídica pendente antes da monetização.**
 - Interface conectada às queries reais. **Concluído.**
 - Testes de isolamento entre duas organizações.
 

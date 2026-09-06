@@ -6,8 +6,7 @@ import {
   auditStatement,
   ensureFound,
   jsonBody,
-  managementRoles,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -48,6 +47,7 @@ function serialize(row: ClientRow) {
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "crm", "view");
     const { clientId } = await route.params;
     const client = ensureFound(
       await context.db.prepare(clientSelect).bind(clientId, context.organization.id).first<ClientRow>(),
@@ -59,7 +59,8 @@ export async function GET(request: Request, route: RouteContext) {
 
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "crm", "edit");
     const { clientId } = await route.params;
     ensureFound(
       await context.db.prepare("SELECT id FROM clients WHERE id = ?1 AND organization_id = ?2")
@@ -107,7 +108,8 @@ export async function PATCH(request: Request, route: RouteContext) {
 
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, managementRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "crm", "edit");
     const { clientId } = await route.params;
     ensureFound(
       await context.db.prepare("SELECT id FROM clients WHERE id = ?1 AND organization_id = ?2")

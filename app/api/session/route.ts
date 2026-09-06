@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 
 import {
   ApiError,
@@ -29,12 +30,13 @@ export async function GET(request: Request) {
         });
       }
 
-      const context = await requireOrganizationContext(request);
+      const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
       return Response.json({
         authenticated: true,
         needsOrganization: false,
         user: context.user,
-        member: { id: context.member.id, role: context.member.role },
+        member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },
+        terms: { version: CURRENT_TERMS_VERSION, accepted: context.termsAccepted },
         organization: context.organization,
         organizations: memberships.map((membership) => ({
           id: membership.organization_id,

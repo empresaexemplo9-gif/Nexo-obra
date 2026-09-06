@@ -5,7 +5,7 @@ import {
   apiRoute,
   auditStatement,
   jsonBody,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -93,6 +93,7 @@ async function verifyRelation(
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "projects", "view");
     const url = new URL(request.url);
     const kind = url.searchParams.get("kind");
     const status = url.searchParams.get("status");
@@ -117,7 +118,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "projects", "edit");
     const parsed = createProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;

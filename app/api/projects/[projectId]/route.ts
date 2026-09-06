@@ -6,8 +6,7 @@ import {
   auditStatement,
   ensureFound,
   jsonBody,
-  managementRoles,
-  operationalRoles,
+  requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
@@ -42,6 +41,7 @@ async function verifyRelation(db: D1Database, table: "clients" | "members", id: 
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "projects", "view");
     const { projectId } = await route.params;
     const project = ensureFound(
       await context.db.prepare(`${projectSelect} WHERE p.id = ?1 AND p.organization_id = ?2`)
@@ -54,7 +54,8 @@ export async function GET(request: Request, route: RouteContext) {
 
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, operationalRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "projects", "edit");
     const { projectId } = await route.params;
     ensureFound(
       await context.db.prepare("SELECT id FROM projects WHERE id = ?1 AND organization_id = ?2")
@@ -109,7 +110,8 @@ export async function PATCH(request: Request, route: RouteContext) {
 
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request, managementRoles);
+    const context = await requireOrganizationContext(request);
+    requireModulePermission(context, "projects", "edit");
     const { projectId } = await route.params;
     ensureFound(
       await context.db.prepare("SELECT id FROM projects WHERE id = ?1 AND organization_id = ?2")
