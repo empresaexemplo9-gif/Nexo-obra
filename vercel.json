@@ -5,6 +5,10 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/",
+      "destination": "https://nexo-obra.thiagohcarvalho09.chatgpt.site/"
+    },
+    {
       "source": "/:path*",
       "destination": "https://nexo-obra.thiagohcarvalho09.chatgpt.site/:path*"
     }
