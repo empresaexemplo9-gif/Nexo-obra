@@ -24,6 +24,7 @@ flowchart TD
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
 - Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
+- Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -196,6 +197,7 @@ app/
     clients/            # CRUD de clientes
     budget-library/     # produtos e serviços padronizados da empresa
     budgets/            # versões, composições e importação em lote
+    diary/              # diário, revisões, fotos privadas e relatórios
     integrations/drap/  # proxy financeiro e webhook
     members/            # equipe da empresa atual
     maintenance/        # sessão do administrador em ambiente isolado
@@ -222,6 +224,7 @@ db/
 docs/
   DRAP-INTEGRATION.md
   SINAPI-INTEGRATION.md
+  DIARIO-DE-OBRA.md
 lib/
   integrations/drap.ts
   server/backend.ts       # identidade, organização, permissões e auditoria
@@ -266,7 +269,7 @@ CLAUDE.md
 ### Fase 3 — planejamento e obra
 
 - Etapas, dependências e recálculo do cronograma.
-- Diário de obra com fotos, clima, equipe, ocorrências e assinatura.
+- Diário de obra com fotos, clima, equipe, ocorrências, histórico e relatórios. **Concluído; assinatura do cliente permanece pendente.**
 - Medições, compras, fornecedores e previsto x realizado.
 - Cronograma físico-financeiro e curva S.
 - Portal enxuto do cliente.

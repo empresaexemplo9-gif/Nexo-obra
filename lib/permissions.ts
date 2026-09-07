@@ -1,5 +1,5 @@
 export const permissionModules = [
-  "overview", "projects", "budgets", "schedule", "crm", "finance", "team", "tasks", "files",
+  "overview", "projects", "budgets", "schedule", "diary", "crm", "finance", "team", "tasks", "files",
 ] as const;
 
 export type PermissionModule = typeof permissionModules[number];
@@ -12,6 +12,7 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
   projects: "Projetos e obras",
   budgets: "Orçamentos",
   schedule: "Cronograma",
+  diary: "Diário de obra",
   crm: "Clientes e CRM",
   finance: "Financeiro",
   team: "Equipe e acessos",
@@ -73,7 +74,8 @@ export function normalizePermissions(value: unknown, role: string): PermissionSe
   for (const area of permissionModules) {
     const grant = input[area];
     if (!grant || typeof grant !== "object" || Array.isArray(grant)) {
-      normalized[area] = defaults[area];
+      // New modules must not expand an already customized secondary account's access.
+      normalized[area] = area === "diary" && Object.keys(input).length > 0 ? { view: false, edit: false } : defaults[area];
       continue;
     }
     const candidate = grant as Record<string, unknown>;

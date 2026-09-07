@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
+  BookOpenText,
   Building2,
   Calculator,
   CalendarRange,
@@ -32,6 +33,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { BudgetsWorkspace } from "@/components/budgets-workspace";
 import { FinanceWorkspace } from "@/components/finance-workspace";
+import { DiaryWorkspace } from "@/components/diary-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -89,7 +91,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "crm" | "finance" | "team" | "tasks" | "files";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "crm" | "finance" | "team" | "tasks" | "files";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -137,6 +139,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   works: { title: "Obras", description: "Obras em execução e seus avanços." },
   budgets: { title: "Orçamentos", description: "Custos, BDI, margem e aprovação." },
   schedule: { title: "Cronograma", description: "Prazos ligados a projetos e tarefas." },
+  diary: { title: "Diário de obra", description: "Atividades, ocorrências, fotos e histórico." },
   crm: { title: "Clientes", description: "Base de clientes da empresa atual." },
   finance: { title: "Financeiro", description: "Informações oficiais vindas da Drap." },
   team: { title: "Equipe", description: "Pessoas com acesso a esta empresa." },
@@ -146,7 +149,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
-  schedule: "schedule", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
+  schedule: "schedule", diary: "diary", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
 };
 
 const roleLabels: Record<string, string> = {
@@ -358,7 +361,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   }, [loadData, session.organization?.id]);
   useEffect(() => {
     if (!canView(activeModule)) {
-      const first = (["overview", "projects", "works", "budgets", "schedule", "crm", "finance", "team", "tasks", "files"] as ModuleId[]).find(canView);
+      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "crm", "finance", "team", "tasks", "files"] as ModuleId[]).find(canView);
       const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0);
       return () => window.clearTimeout(timer);
     }
@@ -384,7 +387,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const navSections = ([
     { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
     { label: "Negócio", items: [{ id: "crm", label: "Clientes", icon: Target, badge: clients.length }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
-    { label: "Organização", items: [{ id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }] },
+    { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[])
     .map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) }))
     .filter((section) => section.items.length);
@@ -397,6 +400,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("team")} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
+    if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
     const future = activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
     return <div className="space-y-5"><PageIntro module={activeModule} /><HonestEmpty {...future} /></div>;
   })();

@@ -123,9 +123,44 @@ export const siteDiaryEntries = sqliteTable("site_diary_entries", {
   blockers: text("blockers").notNull().default(""),
   authorMemberId: text("author_member_id").references(() => members.id),
   clientSignedAt: text("client_signed_at"),
+  revision: integer("revision").notNull().default(1),
+  authorName: text("author_name").notNull().default(""),
+  occurrenceType: text("occurrence_type").notNull().default("none"),
   ...timestamps,
 }, (table) => [
   index("idx_site_diary_project_date").on(table.projectId, table.entryDate),
+  index("idx_site_diary_org_date").on(table.organizationId, table.entryDate, table.id),
+]);
+
+export const diaryRevisions = sqliteTable("diary_revisions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  entryId: text("entry_id").notNull().references(() => siteDiaryEntries.id),
+  revision: integer("revision").notNull(),
+  snapshotJson: text("snapshot_json").notNull(),
+  editorMemberId: text("editor_member_id").references(() => members.id),
+  editorName: text("editor_name").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("uidx_diary_revisions_entry_revision").on(table.entryId, table.revision)]);
+
+export const diaryPhotos = sqliteTable("diary_photos", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  entryId: text("entry_id").notNull().references(() => siteDiaryEntries.id),
+  slot: integer("slot").notNull(),
+  storageKey: text("storage_key").notNull(),
+  name: text("name").notNull(),
+  caption: text("caption").notNull().default(""),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  uploadedByMemberId: text("uploaded_by_member_id").references(() => members.id),
+  uploadedByName: text("uploaded_by_name").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("uidx_diary_photos_entry_slot").on(table.entryId, table.slot),
+  uniqueIndex("uidx_diary_photos_storage_key").on(table.storageKey),
 ]);
 
 export const budgetVersions = sqliteTable("budget_versions", {

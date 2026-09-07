@@ -50,6 +50,13 @@
       "when": 1788727863665,
       "tag": "0006_colorful_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788749443092,
+      "tag": "0007_magical_wonder_man",
+      "breakpoints": true
     }
   ]
 }
