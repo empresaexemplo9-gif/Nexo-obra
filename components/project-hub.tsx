@@ -29,6 +29,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { DiaryWorkspace } from "@/components/diary-workspace";
+import { PortalManager } from "@/components/portal-manager";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -38,7 +39,7 @@ import type { PermissionModule, PermissionSet } from "@/lib/permissions";
 type SessionData = {
   authenticated: boolean;
   signInPath?: string;
-  member?: { permissions: PermissionSet };
+  member?: { role: string; permissions: PermissionSet };
   terms?: { accepted: boolean };
   organization?: { name: string };
 };
@@ -244,6 +245,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
             <TabsTrigger value="planejamento" className="px-1 pb-3">Planejamento</TabsTrigger>
             <TabsTrigger value="custos" className="px-1 pb-3">Custos e financeiro</TabsTrigger>
             <TabsTrigger value="registros" className="px-1 pb-3">Diário e registros</TabsTrigger>
+            {can(session, "portal") && <TabsTrigger value="portal" className="px-1 pb-3">Portal do cliente</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="resumo" className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
@@ -265,6 +267,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
             {can(session, "diary") ? <DiaryWorkspace projectId={projectId} canEdit={Boolean(session.member?.permissions.diary.edit)} /> : <HonestMessage icon={LockKeyhole} title="Diário restrito" description="O administrador da empresa precisa liberar a visualização do Diário de obra para este acesso." />}
             <Card className="workspace-card border-white/80"><CardHeader><CardTitle className="flex items-center gap-2"><ClipboardCheck className="size-5 text-blue-600" />Outros registros operacionais</CardTitle><p className="text-sm leading-6 text-slate-500">As próximas conexões serão ativadas sem inserir dados demonstrativos.</p></CardHeader><CardContent className="grid gap-3 sm:grid-cols-3"><ModuleCard title="Compras" description="Cotações, pedidos e fornecedores." status="Próxima conexão" icon={Boxes} /><ModuleCard title="Medições" description="Evolução física e aprovações." status="Próxima conexão" icon={ClipboardCheck} /><ModuleCard title="Arquivos" description="Projetos, contratos e comprovantes." status="Próxima conexão" icon={FileStack} allowed={can(session, "files")} /></CardContent></Card>
           </TabsContent>
+          {can(session, "portal") && <TabsContent value="portal" className="mt-6"><PortalManager projectId={projectId} canEdit={Boolean(session.member?.permissions.portal.edit)} canManage={Boolean(session.member?.permissions.portal.edit) && (session.member?.role === "owner" || (session.member?.role === "admin" && Boolean(session.member?.permissions.team.edit)))} canReadDiary={can(session, "diary")} /></TabsContent>}
         </Tabs>
       </div>
     </main>

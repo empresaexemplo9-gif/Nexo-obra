@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { readMaintenanceIdentity } from "@/lib/server/maintenance";
+import { portalAccessesForUser } from "@/lib/server/portal";
 
 import {
   ApiError,
@@ -24,9 +25,11 @@ export async function GET(request: Request) {
       const maintenanceIdentity = await readMaintenanceIdentity(request);
       const memberships = await listOrganizationMemberships(request);
       if (memberships.length === 0) {
+        const { accesses } = await portalAccessesForUser(request);
         return Response.json({
           authenticated: true,
-          needsOrganization: true,
+          needsOrganization: accesses.length === 0,
+          portalOnly: accesses.length > 0,
           user: identity,
           organizations: [],
         });

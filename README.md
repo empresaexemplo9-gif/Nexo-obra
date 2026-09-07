@@ -25,6 +25,7 @@ flowchart TD
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
 - Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
 - Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
+- Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -272,7 +273,7 @@ CLAUDE.md
 - Diário de obra com fotos, clima, equipe, ocorrências, histórico e relatórios. **Concluído; assinatura do cliente permanece pendente.**
 - Medições, compras, fornecedores e previsto x realizado.
 - Cronograma físico-financeiro e curva S.
-- Portal enxuto do cliente.
+- Portal enxuto do cliente. **Implementado: acesso por obra, convites, avanços autorizados, publicações e fotos selecionadas, aprovações e ajustes.**
 
 ### Fase 4 — financeiro remoto e automações
 
@@ -312,3 +313,15 @@ O recorte funcional foi elaborado a partir das páginas públicas informadas no 
 - [Drap Empresa](https://empresa.drap.app.br/)
 
 Essas páginas servem apenas como pesquisa de necessidades. O código, a arquitetura, os textos e a interface deste repositório são originais.
+
+## Portal do cliente
+
+Na empresa, abra **Portal do cliente** ou a aba correspondente na central da obra. O administrador autorizado cria um convite para o e-mail do cliente, escolhe a obra e libera separadamente avanço/datas e aprovações. O convite expira em sete dias; renovar substitui o link anterior e exige nova ativação. Revogar bloqueia imediatamente o acesso.
+
+O cliente abre `/portal/convite/[token]`, autentica com a conta ChatGPT do e-mail convidado e aceita os termos vigentes. A partir da ativação, a autorização usa seu ID estável e o acesso específico da obra. Não é criado um membro da empresa. Superadmin e manutenção não assumem a identidade do cliente.
+
+A equipe com permissão de edição do portal publica textos e solicitações imutáveis. Fotos são selecionadas explicitamente de um diário da mesma obra, exigindo também leitura do diário. O cliente não recebe acesso genérico a tarefas, arquivos, orçamento ou financeiro. Pode aprovar ou solicitar ajustes quando autorizado. A decisão registra identidade, data, comentário e evidências técnicas transformadas em hash. Publicações abertas podem ser retiradas com motivo; respostas já registradas permanecem preservadas.
+
+Esta entrega não inclui disparo automático de e-mail/WhatsApp, documentos arbitrários ou sincronização automática de aprovações com orçamentos. Os links de convite são copiados para envio pelo administrador.
+
+Validação: testes de API executam as migrações e SQL reais em SQLite, substituindo apenas o transporte D1 e o armazenamento R2 em memória. Cobrem isolamento, convite expirado, aceite obrigatório, revogação, permissões, decisão idempotente e fotos privadas.

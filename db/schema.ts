@@ -163,6 +163,76 @@ export const diaryPhotos = sqliteTable("diary_photos", {
   uniqueIndex("uidx_diary_photos_storage_key").on(table.storageKey),
 ]);
 
+export const clientPortalAccess = sqliteTable("client_portal_access", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  externalUserId: text("external_user_id"),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  status: text("status").notNull().default("pending"),
+  viewProgress: integer("view_progress", { mode: "boolean" }).notNull().default(true),
+  canApprove: integer("can_approve", { mode: "boolean" }).notNull().default(false),
+  revision: integer("revision").notNull().default(1),
+  createdByMemberId: text("created_by_member_id").notNull().references(() => members.id),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_client_portal_access_token").on(table.tokenHash),
+  uniqueIndex("uidx_client_portal_access_project_email").on(table.organizationId, table.projectId, table.email),
+  index("idx_client_portal_access_identity_status").on(table.externalUserId, table.status),
+]);
+
+export const clientPortalAcceptances = sqliteTable("client_portal_acceptances", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  externalUserId: text("external_user_id").notNull(),
+  termsVersion: text("terms_version").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: integer("accepted_at").notNull(),
+}, (table) => [uniqueIndex("uidx_client_portal_acceptance_version").on(table.accessId, table.externalUserId, table.termsVersion)]);
+
+export const clientPortalItems = sqliteTable("client_portal_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  dueDate: text("due_date"),
+  sourceDiaryId: text("source_diary_id").references(() => siteDiaryEntries.id),
+  sourceDiaryRevision: integer("source_diary_revision"),
+  photoIdsJson: text("photo_ids_json").notNull().default("[]"),
+  status: text("status").notNull().default("open"),
+  createdByMemberId: text("created_by_member_id").notNull().references(() => members.id),
+  authorName: text("author_name").notNull(),
+  withdrawalReason: text("withdrawal_reason").notNull().default(""),
+  withdrawnByName: text("withdrawn_by_name").notNull().default(""),
+  ...timestamps,
+}, (table) => [
+  index("idx_client_portal_items_access_created").on(table.accessId, table.createdAt, table.id),
+  index("idx_client_portal_items_org_project").on(table.organizationId, table.projectId, table.createdAt),
+]);
+
+export const clientPortalDecisions = sqliteTable("client_portal_decisions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  itemId: text("item_id").notNull().references(() => clientPortalItems.id),
+  choice: text("choice").notNull(),
+  comment: text("comment").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("uidx_client_portal_decision_item").on(table.itemId)]);
+
 export const budgetVersions = sqliteTable("budget_versions", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),

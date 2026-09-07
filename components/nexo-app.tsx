@@ -34,6 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import { BudgetsWorkspace } from "@/components/budgets-workspace";
 import { FinanceWorkspace } from "@/components/finance-workspace";
 import { DiaryWorkspace } from "@/components/diary-workspace";
+import { PortalManager } from "@/components/portal-manager";
+import { ClientPortalApp } from "@/components/client-portal-app";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -91,7 +93,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "crm" | "finance" | "team" | "tasks" | "files";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -99,6 +101,7 @@ type SessionData = {
   authenticated: boolean;
   authMethod?: "chatgpt" | "maintenance";
   needsOrganization: boolean;
+  portalOnly?: boolean;
   signInPath?: string;
   user?: { id: string; email: string; displayName: string };
   member?: { id: string; role: string; permissions: PermissionSet };
@@ -140,6 +143,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   budgets: { title: "Orçamentos", description: "Custos, BDI, margem e aprovação." },
   schedule: { title: "Cronograma", description: "Prazos ligados a projetos e tarefas." },
   diary: { title: "Diário de obra", description: "Atividades, ocorrências, fotos e histórico." },
+  portal: { title: "Portal do cliente", description: "Andamento compartilhado e decisões registradas." },
   crm: { title: "Clientes", description: "Base de clientes da empresa atual." },
   finance: { title: "Financeiro", description: "Informações oficiais vindas da Drap." },
   team: { title: "Equipe", description: "Pessoas com acesso a esta empresa." },
@@ -149,7 +153,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
-  schedule: "schedule", diary: "diary", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
+  schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
 };
 
 const roleLabels: Record<string, string> = {
@@ -204,6 +208,7 @@ function AccessScreen({ signInPath = "/signin-with-chatgpt?return_to=%2F" }: { s
           <Button asChild className="mt-3 h-11 w-full rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400">
             <a href={signInPath} target="_top">Entrar com ChatGPT</a>
           </Button>
+          <a href="/portal" className="mt-4 block text-center text-sm text-cyan-300 hover:text-cyan-200">Sou cliente: acompanhar minha obra</a>
           <div className="my-7 flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-slate-600"><span className="h-px flex-1 bg-white/10" />Superadmin<span className="h-px flex-1 bg-white/10" /></div>
           <form onSubmit={submitSuperadmin} className="space-y-4">
             <div><label htmlFor="initial-superadmin-email" className="mb-2 block text-sm font-medium text-slate-200">E-mail</label><Input id="initial-superadmin-email" type="email" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} autoComplete="username" required className="h-11 border-white/10 bg-white/[0.06] text-white placeholder:text-slate-600" /></div>
@@ -361,7 +366,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   }, [loadData, session.organization?.id]);
   useEffect(() => {
     if (!canView(activeModule)) {
-      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "crm", "finance", "team", "tasks", "files"] as ModuleId[]).find(canView);
+      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files"] as ModuleId[]).find(canView);
       const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0);
       return () => window.clearTimeout(timer);
     }
@@ -386,7 +391,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const canCreateAny = canEdit("projects") || canEdit("crm") || canEdit("tasks");
   const navSections = ([
     { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
-    { label: "Negócio", items: [{ id: "crm", label: "Clientes", icon: Target, badge: clients.length }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
+    { label: "Negócio", items: [{ id: "crm", label: "Clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[])
     .map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) }))
@@ -401,6 +406,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
+    if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
     const future = activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
     return <div className="space-y-5"><PageIntro module={activeModule} /><HonestEmpty {...future} /></div>;
   })();
@@ -441,6 +447,7 @@ export function NexoApp() {
   const ready = useMemo(() => session?.authenticated && !session.needsOrganization && session.organization, [session]);
   if (loading || !session) return <LoadingScreen />;
   if (!session.authenticated) return <AccessScreen signInPath={session.signInPath} />;
+  if (session.portalOnly) return <ClientPortalApp />;
   if (session.needsOrganization) return <OrganizationForm onCreated={loadSession} />;
   if (!ready) return <LoadingScreen />;
   if (session.terms && !session.terms.accepted) return <TermsGate version={session.terms.version} onAccepted={loadSession} />;
