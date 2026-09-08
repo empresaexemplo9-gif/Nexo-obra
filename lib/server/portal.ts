@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getDatabase } from "@/db";
+import { assertPlatformAccess } from "@/lib/server/platform-access";
 import { ApiError, apiRoute, authenticatedIdentity, requireModulePermission, requireOrganizationContext, canManageOrganizationAccess, ensureFound, validationError, auditStatement, type OrganizationContext } from "@/lib/server/backend";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
 import { requestEvidenceHashes } from "@/lib/server/terms";
@@ -54,6 +55,7 @@ export async function clientAccess(request: Request, id: string, allowUnaccepted
   const db = getDatabase();
   const access = ensureFound(await db.prepare(`${accessSelect} WHERE a.id = ?1 AND a.external_user_id = ?2 AND a.status = 'active'`)
     .bind(portalId(id), identity.id).first<AccessRow>(), "Acesso");
+  await assertPlatformAccess(access.organization_id, identity.email, identity.id);
   const accepted = await db.prepare("SELECT id FROM client_portal_acceptances WHERE organization_id = ?1 AND access_id = ?2 AND external_user_id = ?3 AND terms_version = ?4")
     .bind(access.organization_id, access.id, identity.id, CURRENT_TERMS_VERSION).first();
   if (!accepted && !allowUnaccepted) throw new ApiError(403, "portal_terms_required", "Aceite os termos vigentes para abrir este portal.");
@@ -65,7 +67,12 @@ export async function portalAccessesForUser(request: Request) {
   const rows = await db.prepare(`${accessSelect} WHERE a.external_user_id = ?1 AND a.status = 'active' ORDER BY o.name, p.name, a.id`).bind(identity.id).all<AccessRow>();
   const acceptances = await db.prepare("SELECT access_id FROM client_portal_acceptances WHERE external_user_id = ?1 AND terms_version = ?2")
     .bind(identity.id, CURRENT_TERMS_VERSION).all<{ access_id: string }>();
-  return { identity, accesses: rows.results.map((row) => accessResponse(row, acceptances.results.some((item) => item.access_id === row.id))) };
+  const visible: AccessRow[] = [];
+  for (const row of rows.results) {
+    try { await assertPlatformAccess(row.organization_id, identity.email, identity.id); visible.push(row); }
+    catch (error) { if (!(error instanceof ApiError) || error.status !== 403) throw error; }
+  }
+  return { identity, accesses: visible.map((row) => accessResponse(row, acceptances.results.some((item) => item.access_id === row.id))) };
 }
 export async function createPortalAccess(context: OrganizationContext, body: unknown) {
   const parsed = portalAccessSchema.safeParse(body);
@@ -115,6 +122,7 @@ export async function portalInvitation(request: Request, token: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw new ApiError(404, "not_found", "Convite não encontrado.");
   const db = getDatabase();
   const access = ensureFound(await db.prepare(`${accessSelect} WHERE a.token_hash = ?1`).bind(await invitationTokenHash(token)).first<AccessRow>(), "Convite");
+  await assertPlatformAccess(access.organization_id, identity.email, identity.id);
   if (access.email !== identity.email.trim().toLowerCase()) throw new ApiError(403, "portal_invitation_email_mismatch", "Entre com o mesmo e-mail que recebeu este convite.");
   if (access.status === "revoked") throw new ApiError(410, "portal_invitation_revoked", "Este convite foi revogado.");
   if (access.status === "pending" && access.expires_at <= Date.now()) throw new ApiError(410, "portal_invitation_expired", "Este convite expirou. Solicite um novo à empresa.");

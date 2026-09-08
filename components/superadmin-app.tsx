@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { PlatformControl } from "@/components/platform-control";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import {
@@ -178,6 +179,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
         {error ? <Card className="border-red-200 bg-red-50 p-5 text-red-700">{error}</Card> : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-blue-600" /></Card> : <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric icon={Building2} label="Empresas" value={overview.totals.organizations} /><Metric icon={Users} label="Membros ativos" value={overview.totals.members} /><Metric icon={Target} label="Clientes" value={overview.totals.clients} /><Metric icon={FolderKanban} label="Projetos e obras" value={overview.totals.projects} /><Metric icon={ListChecks} label="Tarefas abertas" value={overview.totals.open_tasks} /></div>
           <InvitationsPanel organizations={overview.organizations} />
+          <PlatformControl organizations={overview.organizations} />
           <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-slate-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-slate-900">{organization.name}</p><p className="text-xs text-slate-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell></TableRow>) : <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">Nenhuma empresa cadastrada.</TableCell></TableRow>}</TableBody></Table></div></Card>
         </>}
       </div>

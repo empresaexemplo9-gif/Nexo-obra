@@ -19,6 +19,7 @@ flowchart TD
 
 ## O que já está no código
 
+- Ativador de assinatura por API e painel de parceiros/acessos no superadmin: mensalidade Empresa × 1,5, confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
 - Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
