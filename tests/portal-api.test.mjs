@@ -101,10 +101,19 @@ const clientRoutes = await vite.ssrLoadModule('/app/api/portal/access/[accessId]
 const decisionRoutes = await vite.ssrLoadModule('/app/api/portal/access/[accessId]/items/[itemId]/route.ts');
 const withdrawRoutes = await vite.ssrLoadModule('/app/api/portal-management/items/[itemId]/route.ts');
 const photoRoutes = await vite.ssrLoadModule('/app/api/portal/access/[accessId]/items/[itemId]/photos/[photoId]/route.ts');
+const portalListing = await vite.ssrLoadModule('/app/api/portal/route.ts');
 const params = (values) => ({ params: Promise.resolve(values) });
 function customer(method = 'GET', json, email = 'client@example.test', uid = 'client-id') {
   return request('/api/portal', { user: null, method, json, headers: { 'oai-authenticated-user-id': uid, 'oai-authenticated-user-email': email } });
 }
+test('platform company block protects portal content, listing and decisions without revoking the client record', async () => {
+  const invitation = await invited(); await activate(invitation); const item = await published(invitation.access.id);
+  db.sqlite.prepare("INSERT INTO platform_access_rules(organization_id,subject,state,reason,updated_at) VALUES (?,'*','blocked','Bloqueio administrativo',?)").run(orgA, Date.now());
+  assert.equal((await clientRoutes.GET(customer(), params({ accessId: invitation.access.id }))).status, 403);
+  assert.equal((await decisionRoutes.POST(customer('POST', { id: crypto.randomUUID(), choice: 'approved', comment: 'Confirmo', confirmed: true }), params({ accessId: invitation.access.id, itemId: item.id }))).status, 403);
+  const listing = await portalListing.GET(customer()); assert.equal(listing.status, 200); assert.equal((await listing.json()).accesses.length, 0);
+  assert.equal(db.sqlite.prepare('SELECT status FROM client_portal_access WHERE id=?').get(invitation.access.id).status, 'active');
+});
 async function invited() {
   const response = await accessRoutes.POST(request('/api/portal-management/access', { method: 'POST', json: { projectId: projectA, name: 'Cliente A', email: 'client@example.test', viewProgress: true, canApprove: true } }));
   assert.equal(response.status, 201, await response.clone().text());
@@ -174,4 +183,3 @@ test('selected diary photos are project scoped, private, and disappear after wit
   assert.equal((await withdrawRoutes.PATCH(request('/', { method: 'PATCH', json: { accessId: invitation.access.id, reason: 'Registro substituído por atualização.' } }), params({ itemId: item.id }))).status, 200);
   assert.equal((await photoRoutes.GET(customer(), pp)).status, 404);
 });
-

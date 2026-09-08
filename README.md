@@ -2,7 +2,7 @@
 
 > Nome provisório. Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-A identidade visual oficial usa a marca Drap Architector em `public/drap-architector-logo.png`.
+A identidade visual usa a marca oficial **H.OIKOS — Ecossistema para arquitetos**. Os vetores em `public/brand/` preservam os contornos do manual fornecido, sem redesenhar letras ou símbolo. A paleta é preto `#000000`, marrom `#38301B`, greige `#B5B19E` e off-white `#F7F7F0`. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
 
 Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
@@ -19,6 +19,7 @@ flowchart TD
 
 ## O que já está no código
 
+- Ativador de assinatura por API e painel de parceiros/acessos no superadmin: mensalidade Empresa × 1,5, confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
 - Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.

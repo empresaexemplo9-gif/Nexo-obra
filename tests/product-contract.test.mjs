@@ -113,12 +113,37 @@ test("supports verified organization selection", async () => {
   assert.match(onboarding, /organizationSelectionCookie/);
 });
 
-test("uses the supplied Drap Architector brand", async () => {
+test("uses the supplied H.OIKOS brand across the product", async () => {
   const app = await source("components/nexo-app.tsx");
   const layout = await source("app/layout.tsx");
+  const brand = await source("components/brand-logo.tsx");
+  assert.match(app, /BrandLogo/);
+  assert.match(layout, /H\.OIKOS/);
+  assert.match(brand, /min-w-\[164px\]/);
+  for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page"]) {
+    const ui = await source(`components/${screen}.tsx`);
+    assert.match(ui, /BrandLogo/);
+    assert.doesNotMatch(ui, /drap-architector-logo|Drap Architector/);
+  }
+  for (const variant of ["wordmark", "stacked", "symbol"]) {
+    for (const tone of ["light", "dark"]) {
+      const svg = await source(`public/brand/hoikos-${variant}-${tone}.svg`);
+      assert.match(svg, /viewBox=/);
+      assert.match(svg, /<path /);
+      assert.doesNotMatch(svg, /<text|<script|<image|filter=/);
+      assert.match(svg, tone === "light" ? /#38301B/ : /#F7F7F0/);
+    }
+  }
+  await assert.rejects(source("public/drap-architector-logo.png"));
+});
 
-  assert.match(app, /\/drap-architector-logo\.png/);
-  assert.match(layout, /Drap Architector/);
+test("uses only the H.OIKOS master palette in the theme", async () => {
+  const css = await source("app/globals.css");
+  assert.deepEqual([...new Set(css.match(/#[0-9a-f]{6}/gi))].sort(), ["#000000", "#38301B", "#B5B19E", "#F7F7F0"].sort());
+  assert.doesNotMatch(css, /gradient\(|blueprint-grid/);
+  for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page", "budgets-workspace", "finance-workspace", "diary-workspace", "platform-control", "portal-manager", "portal-shared", "team-access-manager"]) {
+    assert.doesNotMatch(await source(`components/${screen}.tsx`), /(?:bg|text|border|ring)-(?:blue|cyan|slate|emerald|amber|red)-\d|gradient\(/);
+  }
 });
 
 test("keeps superadmin credentials and authorization on the server", async () => {

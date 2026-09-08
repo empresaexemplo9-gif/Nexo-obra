@@ -1,4 +1,5 @@
 import { getDatabase } from "@/db";
+import { assertPlatformAccess } from "@/lib/server/platform-access";
 import { parseStoredPermissions, type PermissionAction, type PermissionModule, type PermissionSet } from "@/lib/permissions";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { MAINTENANCE_ORGANIZATION_ID, readMaintenanceIdentity } from "@/lib/server/maintenance";
@@ -46,6 +47,7 @@ export async function requireOrganizationContext(
   }
   const requestedOrganizationId = selectedOrganizationId(request);
   const membership = memberships.find((item) => item.organization_id === requestedOrganizationId) ?? memberships[0];
+  await assertPlatformAccess(membership.organization_id, identity.email, identity.id);
   if (allowedRoles && !allowedRoles.includes(membership.role)) {
     throw new ApiError(403, "insufficient_permission", "Seu perfil não permite executar esta ação.");
   }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-import { apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { activationFor } from "@/lib/server/activation";
 import { isDrapChargesConfigured, isDrapConfigured, isDrapTransactionsConfigured } from "@/lib/integrations/drap";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,8 @@ export async function PUT(request: Request) {
     requireModulePermission(context, "finance", "edit");
     const parsed = connectionSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
+    const activation = await activationFor(context.organization.id);
+    if (activation && activation.company_id !== parsed.data.externalCompanyId) throw new ApiError(409, "activation_company_locked", "Esta empresa está vinculada à assinatura do Drap Empresa. Solicite a alteração ao administrador.");
     const existing = await context.db.prepare("SELECT id FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap'").bind(context.organization.id).first<{ id: string }>();
     const id = existing?.id ?? crypto.randomUUID();
     await context.db.batch([

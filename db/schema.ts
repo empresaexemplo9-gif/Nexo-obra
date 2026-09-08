@@ -21,6 +21,50 @@ export const organizations = sqliteTable("organizations", {
   ...timestamps,
 }, (table) => [uniqueIndex("uidx_organizations_slug").on(table.slug)]);
 
+export const platformAccessRules = sqliteTable("platform_access_rules", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subject: text("subject").notNull(), // '*' means the company; otherwise a normalized email.
+  state: text("state").notNull(),
+  until: integer("until"),
+  reason: text("reason").notNull(),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_platform_access_subject").on(t.organizationId, t.subject)]);
+
+export const drapActivations = sqliteTable("drap_activations", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id),
+  companyId: text("company_id").notNull(),
+  planId: text("plan_id").notNull(),
+  requestKey: text("request_key").notNull(),
+  status: text("status").notNull().default("pending"),
+  subscriptionId: text("subscription_id"),
+  baseCents: integer("base_cents"),
+  monthlyCents: integer("monthly_cents"),
+  remoteRevision: integer("remote_revision").notNull().default(0),
+  lastRequestedAt: integer("last_requested_at").notNull().default(0),
+  lastError: text("last_error"),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_drap_activation_company").on(t.companyId), uniqueIndex("uidx_drap_activation_request").on(t.requestKey), uniqueIndex("uidx_drap_activation_subscription").on(t.subscriptionId)]);
+
+export const drapActivationEvents = sqliteTable("drap_activation_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  digest: text("digest").notNull(),
+  receivedAt: integer("received_at").notNull(),
+});
+
+// Administrators and service actors are not tenant members or customer users.
+export const platformAuditEvents = sqliteTable("platform_audit_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  actorUserId: text("actor_user_id").notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [index("idx_platform_audit_org_created").on(t.organizationId, t.createdAt)]);
+
 export const members = sqliteTable("members", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),

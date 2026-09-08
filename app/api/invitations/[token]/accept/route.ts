@@ -1,4 +1,5 @@
 import { getDatabase } from "@/db";
+import { assertPlatformAccess } from "@/lib/server/platform-access";
 import {
   ApiError,
   apiRoute,
@@ -45,6 +46,7 @@ export async function POST(request: Request, route: RouteContext) {
     ).bind(tokenHash).first<InvitationRow>();
     if (!invitation) throw new ApiError(404, "invitation_not_found", "Convite não encontrado.");
     validateInvitationState(invitation);
+    await assertPlatformAccess(invitation.organization_id, identity.email, identity.id, false);
     if (identity.email.trim().toLowerCase() !== invitation.email.trim().toLowerCase()) {
       throw new ApiError(403, "invitation_email_mismatch", `Entre com o e-mail ${invitation.email} para aceitar este convite.`);
     }

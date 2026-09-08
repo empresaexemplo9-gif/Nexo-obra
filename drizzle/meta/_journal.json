@@ -64,6 +64,20 @@
       "when": 1788751774774,
       "tag": "0008_mixed_franklin_richards",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788839259503,
+      "tag": "0009_blue_darkhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788839727307,
+      "tag": "0010_cooing_bill_hollister",
+      "breakpoints": true
     }
   ]
 }
