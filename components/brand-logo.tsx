@@ -1,28 +1,45 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-/** Official outlines from the supplied H.OIKOS manual; never typeset or distort the mark. */
+/**
+ * Marca H.OIKOS.
+ *
+ * Os arquivos em `public/brand` são os contornos originais do manual de identidade
+ * visual; nunca redesenhe, recomponha ou aplique efeito sobre eles. As proporções
+ * abaixo vêm da própria arte, então a imagem nunca achata nem estica.
+ */
+export type BrandVariant = "symbol" | "wordmark" | "signature" | "stacked" | "lockup";
+
+const artwork: Record<BrandVariant, { width: number; height: number; minWidth: number }> = {
+  // O manual exige 150 px de largura mínima para o logotipo em uso digital.
+  symbol: { width: 340, height: 352, minWidth: 24 },
+  wordmark: { width: 978, height: 171, minWidth: 150 },
+  signature: { width: 978, height: 269, minWidth: 150 },
+  stacked: { width: 978, height: 724, minWidth: 150 },
+  lockup: { width: 1297, height: 241, minWidth: 168 },
+};
+
 export function BrandLogo({
-  compact = false,
+  variant = "wordmark",
   dark = false,
-  stacked = false,
   className,
 }: {
-  compact?: boolean;
+  variant?: BrandVariant;
+  /** Aplicação em fundo escuro: a marca vira off-white. */
   dark?: boolean;
-  stacked?: boolean;
   className?: string;
 }) {
-  const variant = compact ? "symbol" : stacked ? "stacked" : "wordmark";
+  const art = artwork[variant];
   return (
     <Image
       src={`/brand/hoikos-${variant}-${dark ? "dark" : "light"}.svg`}
       alt="H.OIKOS — Ecossistema para arquitetos"
-      width={compact ? 390 : 1060}
-      height={compact ? 405 : stacked ? 810 : 335}
+      width={art.width}
+      height={art.height}
       priority
       unoptimized
-      className={cn("hoikos-brand block h-auto shrink-0", compact ? "w-10" : "min-w-[164px] w-[220px] max-w-full", stacked && "mx-auto", className)}
+      style={{ minWidth: `${art.minWidth}px` }}
+      className={cn("hoikos-brand block h-auto w-full shrink-0", className)}
     />
   );
 }

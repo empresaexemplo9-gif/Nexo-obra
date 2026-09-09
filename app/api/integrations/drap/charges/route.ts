@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       ]);
     } catch {
       await context.db.prepare("UPDATE financial_charge_requests SET status = 'failed', last_error = 'drap_unavailable', updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND organization_id = ?2").bind(id, context.organization.id).run();
-      return Response.json({ error: "A Drap não confirmou a cobrança. Nenhum pagamento foi registrado na Nexo Obra.", code: "drap_charge_failed" }, { status: 502 });
+      return Response.json({ error: "A Drap não confirmou a cobrança. Nenhum pagamento foi registrado na H.OIKOS.", code: "drap_charge_failed" }, { status: 502 });
     }
     const created = await context.db.prepare(`${select} WHERE r.id = ?1 AND r.organization_id = ?2`).bind(id, context.organization.id).first<ChargeRow>();
     return Response.json({ charge: response(created!) }, { status: 201 });

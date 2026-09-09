@@ -1,8 +1,8 @@
-# Nexo Obra
+# H.OIKOS
 
-> Nome provisório. Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
+> **H.OIKOS — Ecossistema para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-A identidade visual usa a marca oficial **H.OIKOS — Ecossistema para arquitetos**. Os vetores em `public/brand/` preservam os contornos do manual fornecido, sem redesenhar letras ou símbolo. A paleta é preto `#000000`, marrom `#38301B`, greige `#B5B19E` e off-white `#F7F7F0`. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
+A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta é preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E` e off-white `#F7F7F0`. A tipografia usa as substitutas livres de Barium e Ador Hairline, servidas de `public/fonts/`. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
 
 Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
@@ -154,13 +154,13 @@ Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 
 ## Divisão de responsabilidade dos dados
 
-| Dado | Fonte oficial | Uso na Nexo Obra |
+| Dado | Fonte oficial | Uso na H.OIKOS |
 | --- | --- | --- |
-| Clientes | Nexo Obra, com ID remoto opcional | CRM, projeto, obra e proposta |
-| Projetos e obras | Nexo Obra | Contexto central de operação |
-| Tarefas, horas e cronograma | Nexo Obra | Planejamento e execução |
-| Orçamentos técnicos e versões | Nexo Obra | Composição, BDI, margem e aceite |
-| Arquivos e revisões | Nexo Obra | R2 + metadados no banco |
+| Clientes | H.OIKOS, com ID remoto opcional | CRM, projeto, obra e proposta |
+| Projetos e obras | H.OIKOS | Contexto central de operação |
+| Tarefas, horas e cronograma | H.OIKOS | Planejamento e execução |
+| Orçamentos técnicos e versões | H.OIKOS | Composição, BDI, margem e aceite |
+| Arquivos e revisões | H.OIKOS | R2 + metadados no banco |
 | Lançamentos, contas e saldo | Drap | Consulta remota e vínculo por centro de custo |
 | Cobranças, PIX, boleto e nota | Drap | Acionamento remoto após confirmação |
 | DRE e conciliação | Drap | Leitura e contextualização por projeto |
