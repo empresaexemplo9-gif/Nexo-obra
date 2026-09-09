@@ -43,7 +43,7 @@ export async function requireOrganizationContext(
   const db = getDatabase();
   const memberships = await findMemberships(db, identity);
   if (memberships.length === 0) {
-    throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa no Nexo Obra.");
+    throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa na H.OIKOS.");
   }
   const requestedOrganizationId = selectedOrganizationId(request);
   const membership = memberships.find((item) => item.organization_id === requestedOrganizationId) ?? memberships[0];
@@ -147,7 +147,7 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     if (error instanceof ApiError) {
       return Response.json({ error: error.message, code: error.code, details: error.details }, { status: error.status });
     }
-    console.error("Nexo Obra API failure", error);
+    console.error("H.OIKOS API failure", error);
     return Response.json({ error: "Não foi possível concluir a operação.", code: "internal_error" }, { status: 500 });
   }
 }

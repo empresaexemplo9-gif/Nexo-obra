@@ -130,7 +130,7 @@ function MetricCard({ label, value, note, icon: Icon }: { label: string; value: 
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-hoikos-500">{label}</p><p className="metric-number mt-3 text-2xl font-semibold text-hoikos-950">{value}</p><p className="mt-2 text-xs text-hoikos-500">{note}</p></div>
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-hoikos-50 text-hoikos-700"><Icon className="size-5" /></span>
+          <span className="grid size-10 shrink-0 place-items-center rounded-md bg-hoikos-50 text-hoikos-700"><Icon className="size-5" /></span>
         </div>
       </CardContent>
     </Card>
@@ -140,9 +140,9 @@ function MetricCard({ label, value, note, icon: Icon }: { label: string; value: 
 function ModuleCard({ title, description, status, icon: Icon, allowed = true }: { title: string; description: string; status: "Ativo" | "Próxima conexão" | "Restrito"; icon: typeof Clock3; allowed?: boolean }) {
   const effectiveStatus = allowed ? status : "Restrito";
   return (
-    <div className="rounded-xl border border-hoikos-200/80 bg-white p-4 shadow-none">
+    <div className="rounded-md border border-hoikos-200/80 bg-white p-4 shadow-none">
       <div className="flex items-start justify-between gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-hoikos-100 text-hoikos-700">{allowed ? <Icon className="size-5" /> : <LockKeyhole className="size-4" />}</span>
+        <span className="grid size-10 place-items-center rounded-md bg-hoikos-100 text-hoikos-700">{allowed ? <Icon className="size-5" /> : <LockKeyhole className="size-4" />}</span>
         <Badge variant="outline" className={effectiveStatus === "Ativo" ? "border-hoikos-200 bg-hoikos-50 text-hoikos-700" : effectiveStatus === "Restrito" ? "border-hoikos-200 bg-hoikos-50 text-hoikos-500" : "border-hoikos-200 bg-hoikos-50 text-hoikos-700"}>{effectiveStatus}</Badge>
       </div>
       <p className="mt-4 font-semibold text-hoikos-900">{title}</p>
@@ -152,7 +152,7 @@ function ModuleCard({ title, description, status, icon: Icon, allowed = true }: 
 }
 
 function LoadingHub() {
-  return <main className="grid min-h-svh place-items-center bg-primary"><div className="flex flex-col items-center gap-5"><BrandLogo dark className="h-auto w-[220px]" /><LoaderCircle className="size-6 animate-spin text-hoikos-500" /><p className="text-sm text-hoikos-500">Organizando a central da obra…</p></div></main>;
+  return <main className="grid min-h-svh place-items-center bg-primary"><div className="flex flex-col items-center gap-5"><BrandLogo variant="stacked" dark className="w-[200px]" /><LoaderCircle className="size-6 animate-spin text-hoikos-500" /><p className="text-sm text-hoikos-500">Organizando a central da obra…</p></div></main>;
 }
 
 export function ProjectHub({ projectId }: { projectId: string }) {
@@ -198,10 +198,10 @@ export function ProjectHub({ projectId }: { projectId: string }) {
   const project = state.project;
 
   if (loading) return <LoadingHub />;
-  if (!session?.authenticated) return <main className="grid min-h-svh place-items-center bg-hoikos-950 p-5"><Card className="w-full max-w-md border-white/10 bg-hoikos-900 text-white"><CardContent className="p-8 text-center"><ShieldCheck className="mx-auto size-10 text-hoikos-300" /><h1 className="mt-5 text-2xl font-semibold">Entre para abrir esta central</h1><p className="mt-3 text-sm leading-6 text-hoikos-300">O projeto permanece protegido dentro da empresa responsável.</p><Button asChild className="mt-6 w-full bg-hoikos-400 text-hoikos-950 hover:bg-hoikos-200"><a href={session?.signInPath ?? "/"}>Acessar conta</a></Button></CardContent></Card></main>;
-  if (!session.terms?.accepted) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><ClipboardCheck className="mx-auto size-10 text-hoikos-600" /><h1 className="mt-5 text-2xl font-semibold">Aceite necessário</h1><p className="mt-3 text-sm text-hoikos-500">Confirme os Termos de Uso na página inicial antes de abrir dados da empresa.</p><Button asChild className="mt-6"><Link href="/">Voltar para o início</Link></Button></CardContent></Card></main>;
-  if (!can(session, "projects")) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><LockKeyhole className="mx-auto size-10 text-hoikos-500" /><h1 className="mt-5 text-2xl font-semibold">Área não liberada</h1><p className="mt-3 text-sm text-hoikos-500">O administrador da empresa não liberou projetos e obras para este acesso.</p><Button asChild variant="outline" className="mt-6"><Link href="/">Voltar</Link></Button></CardContent></Card></main>;
-  if (error || !project) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><TriangleAlert className="mx-auto size-10 text-hoikos-500" /><h1 className="mt-5 text-2xl font-semibold">Central indisponível</h1><p className="mt-3 text-sm text-hoikos-500">{error || "Este projeto não foi encontrado na empresa atual."}</p><div className="mt-6 flex justify-center gap-3"><Button variant="outline" asChild><Link href="/">Voltar</Link></Button><Button onClick={() => void load()}>Tentar novamente</Button></div></CardContent></Card></main>;
+  if (!session?.authenticated) return <main className="grid min-h-svh place-items-center bg-hoikos-950 p-5"><Card className="w-full max-w-md border-white/10 bg-hoikos-900 text-white"><CardContent className="p-8 text-center"><ShieldCheck className="mx-auto size-10 text-hoikos-300" /><h1 className="display-heading mt-5 text-3xl">Entre para abrir esta central</h1><p className="mt-3 text-sm leading-6 text-hoikos-300">O projeto permanece protegido dentro da empresa responsável.</p><Button asChild className="mt-6 w-full bg-hoikos-400 text-hoikos-950 hover:bg-hoikos-200"><a href={session?.signInPath ?? "/"}>Acessar conta</a></Button></CardContent></Card></main>;
+  if (!session.terms?.accepted) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><ClipboardCheck className="mx-auto size-10 text-hoikos-600" /><h1 className="display-heading mt-5 text-3xl">Aceite necessário</h1><p className="mt-3 text-sm text-hoikos-500">Confirme os Termos de Uso na página inicial antes de abrir dados da empresa.</p><Button asChild className="mt-6"><Link href="/">Voltar para o início</Link></Button></CardContent></Card></main>;
+  if (!can(session, "projects")) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><LockKeyhole className="mx-auto size-10 text-hoikos-500" /><h1 className="display-heading mt-5 text-3xl">Área não liberada</h1><p className="mt-3 text-sm text-hoikos-500">O administrador da empresa não liberou projetos e obras para este acesso.</p><Button asChild variant="outline" className="mt-6"><Link href="/">Voltar</Link></Button></CardContent></Card></main>;
+  if (error || !project) return <main className="grid min-h-svh place-items-center p-5"><Card className="max-w-md"><CardContent className="p-8 text-center"><TriangleAlert className="mx-auto size-10 text-hoikos-500" /><h1 className="display-heading mt-5 text-3xl">Central indisponível</h1><p className="mt-3 text-sm text-hoikos-500">{error || "Este projeto não foi encontrado na empresa atual."}</p><div className="mt-6 flex justify-center gap-3"><Button variant="outline" asChild><Link href="/">Voltar</Link></Button><Button onClick={() => void load()}>Tentar novamente</Button></div></CardContent></Card></main>;
 
   const budgetAllowed = can(session, "budgets");
   const tasksAllowed = can(session, "tasks");
@@ -211,8 +211,8 @@ export function ProjectHub({ projectId }: { projectId: string }) {
     <main className="min-h-svh bg-background">
       <header className="border-b border-white/10 bg-primary text-white shadow-none">
         <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
-          <Link href="/" aria-label="Voltar para a plataforma" className="grid size-10 place-items-center rounded-xl border border-white/10 bg-white/[0.06] text-hoikos-300 transition hover:bg-white/10 hover:text-white"><ArrowLeft className="size-4" /></Link>
-          <BrandLogo dark className="h-auto w-[150px] sm:w-[190px]" />
+          <Link href="/" aria-label="Voltar para a plataforma" className="grid size-10 place-items-center rounded-md border border-white/10 bg-white/[0.06] text-hoikos-300 transition hover:bg-white/10 hover:text-white"><ArrowLeft className="size-4" /></Link>
+          <BrandLogo variant="lockup" dark className="w-[170px] sm:w-[200px]" />
           <div className="ml-auto min-w-0 text-right"><p className="truncate text-sm font-medium text-white">{session.organization?.name}</p><p className="text-xs text-hoikos-500">Central da obra</p></div>
         </div>
       </header>
@@ -223,10 +223,10 @@ export function ProjectHub({ projectId }: { projectId: string }) {
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2"><Badge className="border-hoikos-300/20 bg-hoikos-300/10 text-hoikos-100">{project.kind === "work" ? <HardHat /> : <BriefcaseBusiness />}{project.kind === "work" ? "Obra" : "Projeto"}</Badge><StateBadge status={project.status} /><span className="text-xs font-semibold uppercase tracking-[0.18em] text-hoikos-500">{project.code}</span></div>
-              <h1 className="display-heading mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">{project.name}</h1>
+              <h1 className="display-heading mt-5 text-5xl sm:text-6xl">{project.name}</h1>
               <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-hoikos-300"><span className="flex items-center gap-2"><Building2 className="size-4 text-hoikos-300" />{project.clientName ?? "Cliente não informado ou não liberado"}</span><span className="flex items-center gap-2"><UserRound className="size-4 text-hoikos-300" />{project.ownerName ?? "Responsável não definido"}</span></p>
             </div>
-            <div className="w-full max-w-sm rounded-xl border border-white/10 bg-white/[0.06] p-5 backdrop-blur"><div className="flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.16em] text-hoikos-500">Avanço informado</p><p className="metric-number mt-2 text-4xl font-semibold">{project.progressPercent}%</p></div><TargetMark value={project.progressPercent} /></div><Progress value={project.progressPercent} className="mt-5 h-2 bg-white/10 [&_[data-slot=progress-indicator]]:bg-hoikos-400" /></div>
+            <div className="w-full max-w-sm rounded-md border border-white/10 bg-white/[0.06] p-5 backdrop-blur"><div className="flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.16em] text-hoikos-500">Avanço informado</p><p className="metric-number mt-2 text-4xl font-semibold">{project.progressPercent}%</p></div><TargetMark value={project.progressPercent} /></div><Progress value={project.progressPercent} className="mt-5 h-2 bg-white/10 [&_[data-slot=progress-indicator]]:bg-hoikos-400" /></div>
           </div>
         </div>
       </section>
@@ -255,7 +255,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
 
           <TabsContent value="planejamento" className="mt-6 grid gap-6 lg:grid-cols-[0.75fr_1.25fr]">
             <Card className="workspace-card border-border"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><CalendarDays className="size-5 text-hoikos-600" />Janela planejada</CardTitle></CardHeader><CardContent><div className="relative space-y-7 pl-8 before:absolute before:bottom-3 before:left-[0.7rem] before:top-3 before:w-px before:bg-hoikos-200"><TimelinePoint title="Início" value={formatDate(project.startDate)} active /><TimelinePoint title="Fase atual" value={project.phase} active /><TimelinePoint title="Entrega prevista" value={formatDate(project.targetDate)} /></div></CardContent></Card>
-            <Card className="workspace-card border-border"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><ListChecks className="size-5 text-hoikos-600" />Tarefas vinculadas</CardTitle><p className="text-sm text-hoikos-500">Execução real organizada por prioridade, responsável e prazo.</p></CardHeader><CardContent>{tasksAllowed ? state.tasks.length ? <div className="space-y-3">{state.tasks.slice(0, 8).map((task) => <div key={task.id} className="flex flex-col gap-3 rounded-xl border border-hoikos-100 bg-hoikos-50/70 p-4 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-xl bg-white text-hoikos-600 shadow-none">{task.status === "done" ? <CheckCircle2 className="size-4 text-hoikos-600" /> : <Clock3 className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate font-medium text-hoikos-900">{task.title}</p><p className="mt-1 text-xs text-hoikos-500">{task.assigneeName ?? "Sem responsável"} · {task.dueAt ? formatDate(task.dueAt) : "Sem prazo"}</p></div><StateBadge status={task.status} /></div>)}</div> : <HonestMessage icon={ListChecks} title="Nenhuma tarefa vinculada" description="Cadastre as tarefas na plataforma para acompanhar a execução aqui." /> : <HonestMessage icon={LockKeyhole} title="Tarefas restritas" description="O administrador da empresa não liberou esta área para o seu acesso." />}</CardContent></Card>
+            <Card className="workspace-card border-border"><CardHeader><CardTitle className="flex items-center gap-2 text-base"><ListChecks className="size-5 text-hoikos-600" />Tarefas vinculadas</CardTitle><p className="text-sm text-hoikos-500">Execução real organizada por prioridade, responsável e prazo.</p></CardHeader><CardContent>{tasksAllowed ? state.tasks.length ? <div className="space-y-3">{state.tasks.slice(0, 8).map((task) => <div key={task.id} className="flex flex-col gap-3 rounded-md border border-hoikos-100 bg-hoikos-50/70 p-4 sm:flex-row sm:items-center"><span className="grid size-9 place-items-center rounded-md bg-white text-hoikos-600 shadow-none">{task.status === "done" ? <CheckCircle2 className="size-4 text-hoikos-600" /> : <Clock3 className="size-4" />}</span><div className="min-w-0 flex-1"><p className="truncate font-medium text-hoikos-900">{task.title}</p><p className="mt-1 text-xs text-hoikos-500">{task.assigneeName ?? "Sem responsável"} · {task.dueAt ? formatDate(task.dueAt) : "Sem prazo"}</p></div><StateBadge status={task.status} /></div>)}</div> : <HonestMessage icon={ListChecks} title="Nenhuma tarefa vinculada" description="Cadastre as tarefas na plataforma para acompanhar a execução aqui." /> : <HonestMessage icon={LockKeyhole} title="Tarefas restritas" description="O administrador da empresa não liberou esta área para o seu acesso." />}</CardContent></Card>
           </TabsContent>
 
           <TabsContent value="custos" className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -287,9 +287,9 @@ function TimelinePoint({ title, value, active = false }: { title: string; value:
 }
 
 function HonestMessage({ icon: Icon, title, description }: { icon: typeof Clock3; title: string; description: string }) {
-  return <div className="rounded-xl border border-dashed border-hoikos-200 bg-hoikos-50/70 p-6 text-center"><Icon className="mx-auto size-8 text-hoikos-500" /><p className="mt-4 font-medium text-hoikos-800">{title}</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-hoikos-500">{description}</p></div>;
+  return <div className="rounded-md border border-dashed border-hoikos-200 bg-hoikos-50/70 p-6 text-center"><Icon className="mx-auto size-8 text-hoikos-500" /><p className="mt-4 font-medium text-hoikos-800">{title}</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-hoikos-500">{description}</p></div>;
 }
 
 function FinancialValue({ label, value }: { label: string; value: number }) {
-  return <div className="rounded-xl bg-hoikos-50 p-4"><p className="text-xs text-hoikos-500">{label}</p><p className="metric-number mt-2 text-lg font-semibold text-hoikos-900">{currency.format(value)}</p></div>;
+  return <div className="rounded-md bg-hoikos-50 p-4"><p className="text-xs text-hoikos-500">{label}</p><p className="metric-number mt-2 text-lg font-semibold text-hoikos-900">{currency.format(value)}</p></div>;
 }

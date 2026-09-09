@@ -1,4 +1,4 @@
-# Backend do Nexo Obra
+# Backend da H.OIKOS
 
 O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.app`. A interface deve chamar somente caminhos relativos, como `/api/projects`.
 

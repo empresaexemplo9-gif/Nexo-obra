@@ -119,13 +119,14 @@ test("uses the supplied H.OIKOS brand across the product", async () => {
   const brand = await source("components/brand-logo.tsx");
   assert.match(app, /BrandLogo/);
   assert.match(layout, /H\.OIKOS/);
-  assert.match(brand, /min-w-\[164px\]/);
+  // O manual exige 150 px de largura mínima para o logotipo em uso digital.
+  assert.match(brand, /minWidth: 150/);
   for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page"]) {
     const ui = await source(`components/${screen}.tsx`);
     assert.match(ui, /BrandLogo/);
     assert.doesNotMatch(ui, /drap-architector-logo|Drap Architector/);
   }
-  for (const variant of ["wordmark", "stacked", "symbol"]) {
+  for (const variant of ["wordmark", "stacked", "symbol", "signature", "lockup"]) {
     for (const tone of ["light", "dark"]) {
       const svg = await source(`public/brand/hoikos-${variant}-${tone}.svg`);
       assert.match(svg, /viewBox=/);
@@ -135,6 +136,20 @@ test("uses the supplied H.OIKOS brand across the product", async () => {
     }
   }
   await assert.rejects(source("public/drap-architector-logo.png"));
+});
+
+test("serves the brand typography from the product itself", async () => {
+  const css = await source("app/globals.css");
+  const layout = await source("app/layout.tsx");
+  // As duas famílias do manual (sans geométrica e serifada fina) vêm do próprio domínio.
+  assert.match(css, /font-family: "Hoikos Sans"/);
+  assert.match(css, /font-family: "Hoikos Display"/);
+  assert.match(css, /--font-display:/);
+  assert.doesNotMatch(css, /fonts\.googleapis\.com|fonts\.gstatic\.com|@import url\(/);
+  assert.match(layout, /rel="preload"[^>]*fonts\//);
+  for (const file of ["jost-latin.woff2", "jost-latin-ext.woff2", "cormorant-latin.woff2", "cormorant-latin-ext.woff2"]) {
+    await source(`public/fonts/${file}`);
+  }
 });
 
 test("uses only the H.OIKOS master palette in the theme", async () => {
