@@ -197,8 +197,8 @@ function AccessScreen({ signInPath = "/signin-with-chatgpt?return_to=%2F" }: { s
       <Card className="relative w-full max-w-lg border-white/10 bg-primary text-white shadow-none ">
         <CardContent className="p-7 sm:p-9">
           <Brand variant="stacked" dark className="mx-auto w-[210px]" />
-          <h1 className="display-heading mt-8 text-4xl">Acesse a H.OIKOS</h1>
-          <p className="mt-3 text-base leading-7 text-hoikos-300">Escolha o tipo de acesso para continuar.</p>
+          <h1 className="sr-only">Acesso à plataforma</h1>
+          <p className="mt-8 text-base leading-7 text-hoikos-300">Escolha o tipo de acesso para continuar.</p>
           <p className="mt-7 text-sm font-medium text-hoikos-200">Conta da empresa</p>
           <Button asChild className="mt-3 h-11 w-full rounded-md bg-hoikos-500 text-hoikos-950 hover:bg-hoikos-400">
             <a href={signInPath} target="_top">Entrar com ChatGPT</a>
