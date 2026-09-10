@@ -31,7 +31,12 @@ function CompanyControls({ organizationId, name }: { organizationId: string; nam
   const [subject, setSubject] = useState("*"); const [state, setState] = useState("suspended"); const [until, setUntil] = useState(""); const [reason, setReason] = useState("");
   const [confirmation, setConfirmation] = useState<{ body: object; text: string } | null>(null);
   const load = useCallback(async () => setData(await api<Snapshot>(`/api/superadmin/platform?organizationId=${organizationId}`)), [organizationId]);
-  useEffect(() => { void load().catch((e: Error) => setError(e.message)); }, [load]);
+  // O horário entra por estado: comparar com Date.now() durante o render é impuro.
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { setNow(Date.now()); void load().catch((e: Error) => setError(e.message)); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   async function save(body: object, success: string) {
     setBusy(true); setError(""); setMessage("");
     try { const result = await api<{ invitationPath?: string }>("/api/superadmin/platform", { ...body, organizationId });
@@ -87,7 +92,7 @@ function CompanyControls({ organizationId, name }: { organizationId: string; nam
         const rule = denies(companyRule) ? companyRule : denies(ownRule) ? ownRule : undefined;
         return <div className="rounded-lg border p-4" key={member.id}><p className="font-medium">{member.name}</p><p className="break-all text-sm text-hoikos-600">{member.email} · {labels[member.role] ?? member.role}</p><p className="mt-2 text-sm">{rule ? labels[rule.state] : member.active ? "Ativo" : "Inativo"}{rule?.until ? ` até ${new Date(rule.until).toLocaleString("pt-BR")}` : ""}</p><Button className="mt-2" size="sm" variant="outline" onClick={() => setSubject(member.email.toLowerCase())}>Selecionar acesso</Button></div>;
       })}</div>
-      {data.rules.filter((r) => r.subject === "*").map((r) => <p key={r.subject} className="text-sm">Regra da empresa: {r.state === "suspended" && r.until && r.until <= Date.now() ? "Bloqueio temporário encerrado" : labels[r.state]}. Motivo: {r.reason}</p>)}
+      {data.rules.filter((r) => r.subject === "*").map((r) => <p key={r.subject} className="text-sm">Regra da empresa: {r.state === "suspended" && r.until && now > 0 && r.until <= now ? "Bloqueio temporário encerrado" : labels[r.state]}. Motivo: {r.reason}</p>)}
     </CardContent></Card>
     <Card><CardHeader><CardTitle>Histórico administrativo</CardTitle></CardHeader><CardContent><div className="space-y-3">{!data.history.length && <p>Nenhuma alteração registrada.</p>}{data.history.map((event, i) => <div key={i} className="border-b pb-3 text-sm"><p className="font-medium">{({ "platform.access_changed": "Alteração de acesso", "platform.partner_invited": "Convite de parceiro", "drap.activation_enrolled": "Assinatura vinculada", "drap.activation_requested": "Ativação solicitada", "drap.activation_confirmed": "Assinatura confirmada pelo Empresa" } as Record<string, string>)[event.action] ?? event.action}</p><p className="break-all">{event.entity_id === "*" ? "Empresa inteira" : event.entity_id} · {event.actor_user_id}</p><p className="text-hoikos-500">{new Date(event.created_at).toLocaleString("pt-BR")}</p></div>)}</div></CardContent></Card>
     <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) setConfirmation(null); }}><AlertDialogContent><AlertDialogTitle>Confirmar alteração</AlertDialogTitle><AlertDialogDescription>{confirmation?.text}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => { if (confirmation) void save(confirmation.body, "Alteração registrada."); }}>Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>

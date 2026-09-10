@@ -47,7 +47,6 @@ class D1Local {
 const platform = await vite.ssrLoadModule('/app/api/superadmin/platform/route.ts');
 const callback = await vite.ssrLoadModule('/app/api/integrations/drap/activation/route.ts');
 const backend = await vite.ssrLoadModule('/lib/server/backend.ts');
-const guard = await vite.ssrLoadModule('/lib/server/platform-access.ts');
 const activation = await vite.ssrLoadModule('/lib/server/activation.ts');
 const superadmin = await vite.ssrLoadModule('/lib/server/superadmin.ts');
 const accept = await vite.ssrLoadModule('/app/api/invitations/[token]/accept/route.ts');
