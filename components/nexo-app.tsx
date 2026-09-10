@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Bell,
+  BellRing,
   BookOpenText,
   Building2,
   Calculator,
@@ -38,6 +38,7 @@ import { FinanceWorkspace } from "@/components/finance-workspace";
 import { DiaryWorkspace } from "@/components/diary-workspace";
 import { UsageWorkspace, useUsageHeartbeat } from "@/components/usage-workspace";
 import { WorksheetsWorkspace } from "@/components/worksheets-workspace";
+import { ReminderBell, RemindersWorkspace, useReminders } from "@/components/reminders-workspace";
 import { PortalManager } from "@/components/portal-manager";
 import { ClientPortalApp } from "@/components/client-portal-app";
 import { Button } from "@/components/ui/button";
@@ -97,7 +98,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -157,15 +158,16 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   files: { title: "Arquivos", description: "Documentos vinculados aos trabalhos." },
   usage: { title: "Tempo de uso", description: "Tempo online por dia, medido no servidor." },
   sheets: { title: "Planilha e documento", description: "Cálculo sobre os dados reais da empresa." },
+  reminders: { title: "Lembretes do dia", description: "Cobranças, boletos, follow-ups, prazos e metas." },
 };
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
   schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
   // Tempo de uso não é um módulo de permissão: todo acesso enxerga ao menos o próprio.
-  usage: "overview", sheets: "overview",
+  usage: "overview", sheets: "overview", reminders: "overview",
 };
-const alwaysVisibleModules: ModuleId[] = ["usage", "sheets"];
+const alwaysVisibleModules: ModuleId[] = ["usage", "sheets", "reminders"];
 
 const roleLabels: Record<string, string> = {
   ...accessProfileLabels, client: "Cliente",
@@ -342,6 +344,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickKind, setQuickKind] = useState<CreateKind>("project");
   const [companyOpen, setCompanyOpen] = useState(false);
+  const { agenda, error: remindersError, reload: reloadReminders, mark: markReminder, pending } = useReminders(true);
   const canView = useCallback((module: ModuleId) => alwaysVisibleModules.includes(module)
     || Boolean(session.member?.permissions[modulePermissionMap[module]].view), [session.member]);
   const canEdit = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].edit), [session.member]);
@@ -377,7 +380,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   }, [loadData, session.organization?.id]);
   useEffect(() => {
     if (!canView(activeModule)) {
-      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "usage", "sheets"] as ModuleId[]).find(canView);
+      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "usage", "sheets", "reminders"] as ModuleId[]).find(canView);
       const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0);
       return () => window.clearTimeout(timer);
     }
@@ -401,7 +404,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const activeProjects = projects.filter((project) => project.status === "active");
   const canCreateAny = canEdit("projects") || canEdit("crm") || canEdit("tasks");
   const navSections = ([
-    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
+    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
     { label: "Negócio", items: [{ id: "crm", label: "Clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "sheets", label: "Planilha e documento", icon: Sigma }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[])
@@ -417,6 +420,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
+    if (activeModule === "reminders") return <div className="space-y-5"><PageIntro module="reminders" /><RemindersWorkspace agenda={agenda} error={remindersError} reload={reloadReminders} mark={markReminder} members={members.map((member) => ({ id: member.id, name: member.name }))} /></div>;
     if (activeModule === "sheets") return <div className="space-y-5"><PageIntro module="sheets" /><WorksheetsWorkspace query={query} /></div>;
     if (activeModule === "usage") return <div className="space-y-5"><PageIntro module="usage" /><UsageWorkspace query={query} /></div>;
     if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
@@ -437,7 +441,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
         <SidebarMenuItem>{session.authMethod === "superadmin" ? <SidebarMenuButton asChild tooltip="Painel da plataforma" className="text-hoikos-300 hover:text-white"><a href="/superadmin"><ShieldCheck /><span>Painel da plataforma</span></a></SidebarMenuButton> : session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton asChild tooltip="Sair" className="text-hoikos-500 hover:text-white"><a href="/signout-with-chatgpt?return_to=%2F" target="_top"><LogOut /><span>Sair</span></a></SidebarMenuButton>}</SidebarMenuItem>
       </SidebarMenu></SidebarFooter><SidebarRail />
     </Sidebar>
-    <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4  sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{(session.maintenanceEnvironment ?? session.authMethod === "maintenance") ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}{session.authMethod === "superadmin" ? <Badge className="border-hoikos-800 bg-hoikos-900 text-white">Superadmin · acesso total</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><Button variant="ghost" size="icon" aria-label="Notificações"><Bell /></Button>{canCreateAny ? <Button size="sm" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
+    <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4  sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{(session.maintenanceEnvironment ?? session.authMethod === "maintenance") ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}{session.authMethod === "superadmin" ? <Badge className="border-hoikos-800 bg-hoikos-900 text-white">Superadmin · acesso total</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><ReminderBell pending={pending} onOpen={() => setActiveModule("reminders")} />{canCreateAny ? <Button size="sm" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
     <QuickCreate key={`${quickKind}-${quickOpen}`} open={quickOpen} onOpenChange={setQuickOpen} projects={projects} clients={clients} initialKind={quickKind} allowedKinds={allowedKinds} onCreated={loadData} />
     <Dialog open={companyOpen} onOpenChange={setCompanyOpen}><DialogContent><DialogHeader><DialogTitle>Nova empresa</DialogTitle><DialogDescription>Crie outro ambiente totalmente separado dos dados atuais.</DialogDescription></DialogHeader><OrganizationForm embedded onCreated={async () => { setCompanyOpen(false); await reloadSession(); }} /></DialogContent></Dialog><Toaster position="bottom-right" />
   </SidebarProvider>;

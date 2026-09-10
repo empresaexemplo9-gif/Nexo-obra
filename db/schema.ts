@@ -513,3 +513,33 @@ export const worksheets = sqliteTable("worksheets", {
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("idx_worksheets_org_updated").on(t.organizationId, t.updatedAt)]);
+
+// Metas da empresa. O alvo é digitado; o realizado nunca é: sai sempre da fonte oficial
+// do dado (tarefas concluídas, orçamentos aprovados, clientes cadastrados e assim por
+// diante), recalculado a cada leitura.
+export const goals = sqliteTable("goals", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  metric: text("metric").notNull(),
+  targetValue: integer("target_value").notNull(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  ownerMemberId: text("owner_member_id"),
+  createdByMemberId: text("created_by_member_id"),
+  createdByName: text("created_by_name").notNull(),
+  active: integer("active").notNull().default(1),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("idx_goals_org_period").on(t.organizationId, t.periodEnd)]);
+
+// Estado diário dos lembretes: o que cada acesso já viu e o que dispensou naquele dia.
+// Nada aqui muda o dado de origem — um lembrete dispensado continua pendente no módulo.
+export const reminderStates = sqliteTable("reminder_states", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  day: text("day").notNull(),
+  itemKey: text("item_key").notNull(),
+  state: text("state").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_reminder_states_subject_day_item").on(t.organizationId, t.subjectId, t.day, t.itemKey)]);

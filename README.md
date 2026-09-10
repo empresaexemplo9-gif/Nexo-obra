@@ -29,7 +29,7 @@ flowchart TD
 - Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
 - Contador de tempo online por dia para todos os acessos, medido no servidor, com histórico próprio para cada pessoa, visão da empresa para o contratante e visão de toda a plataforma para o superadmin. Consulte [Tempo de uso](docs/TEMPO-DE-USO.md).
 - Planilha com fórmulas em português e documento com campos calculados, sobre os dados reais da empresa, com importação de orçamentos, projetos, clientes e tarefas. Consulte [Planilha e documento](docs/PLANILHA-E-DOCUMENTO.md).
-- Interface responsiva, com menu recolhível e busca.
+- Lembretes diários para todos os acessos — cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo e metas em aberto — com metas cujo realizado é calculado a partir dos dados reais. Consulte [Lembretes e metas](docs/LEMBRETES-E-METAS.md).\n- Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
 - Esquema relacional multiempresa em `db/schema.ts`.
@@ -73,7 +73,7 @@ flowchart TD
 | Equipe | Distribuir capacidade | Papéis, permissões, carga e horas planejadas x realizadas |
 | Arquivos | Encontrar a versão certa | Pastas por projeto, revisão, metadados e acesso do cliente |
 | Tempo de uso | Saber quanto tempo cada acesso ficou online | Total por dia, sessões, ações e histórico por pessoa |
-| Planilha e documento | Somar sem sair da plataforma | Fórmulas em português sobre dados reais, com exportação |
+| Planilha e documento | Somar sem sair da plataforma | Fórmulas em português sobre dados reais, com exportação |\n| Lembretes do dia | Saber o que exige ação hoje | Cobranças, boletos, follow-ups, prazos e metas por acesso |
 | Financeiro | Ver resultado no contexto | Saldo, contas, caixa e resultado por projeto vindos da Drap |
 
 ## Stack escolhida
