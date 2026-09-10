@@ -48,17 +48,37 @@ Para cada fatia:
 3. Altere schema/migração, API e interface na mesma fatia quando aplicável.
 4. Valide entradas com Zod na borda do servidor.
 5. Adicione pelo menos um teste do caminho feliz e um de permissão/erro para regras críticas.
-6. Execute `npm run build`.
-7. Se o schema mudou, execute `npm run db:generate` e inspecione o SQL.
+6. Execute `npm run build` e `node --test tests/*.test.mjs`.
+7. Se o schema mudou, execute `npm run db:generate`, inspecione o SQL e aplique
+   com `npm run db:migrate:local` antes de testar na mão.
 8. Atualize a seção correspondente do README quando o estado do produto mudar.
+
+## Estado atual
+
+A Fase 1 está concluída. Já existe e deve ser preservado:
+
+- `lib/auth/identity.ts` é a única peça que sabe COMO o usuário foi autenticado.
+  Não espalhe `headers()` por rotas e telas; troque o provedor aqui.
+- `lib/auth/session.ts` resolve a empresa ativa. O cookie `nexo_org` é só
+  preferência e é reconferido contra `members` a cada requisição.
+- `lib/auth/roles.ts` define permissão por capacidade. Use `assertCan` nas rotas;
+  não volte a checar papel solto com `if (role === "owner")`.
+- `lib/data/*` exige `organizationId` em toda função e o aplica em toda cláusula
+  `where`. Função nova nesse diretório segue a mesma assinatura.
+- `lib/view/workspace.ts` monta o retrato que a interface recebe. A tela não
+  escolhe de qual empresa carregar.
+- O header `x-organization-id` foi removido e tem teste de regressão. Não volte.
 
 ## Prioridade atual
 
-1. Criar autenticação e resolver `organizationId` no servidor.
-2. Remover o uso do header temporário `x-organization-id`.
-3. Implementar CRUD de cliente → projeto → tarefa.
-4. Trocar os dados demonstrativos desses três domínios por dados reais.
-5. Só então ampliar CRM, orçamento e obra.
+1. Convite e gestão de integrantes (hoje o papel é gravado direto no banco).
+2. Funil configurável e conversão de oportunidade em cliente e projeto sem
+   recadastro.
+3. Biblioteca de serviços, insumos e composições, com BDI e versões imutáveis.
+4. Só então cronograma, diário de obra e o conector Drap em sandbox.
+
+Ao migrar um módulo que ainda usa `lib/demo-data.ts`, remova o `DemoNotice`
+correspondente da tela no mesmo commit.
 
 ## Integração Drap
 

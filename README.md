@@ -2,7 +2,7 @@
 
 > Nome provisório. Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-Este repositório é uma fundação executável para construir a plataforma no Claude Code. Ele já contém uma interface responsiva e navegável, dados demonstrativos realistas, modelo de dados multiempresa, uma API inicial de projetos e o limite técnico da integração financeira remota com a Drap.
+Este repositório contém o núcleo operacional do produto em funcionamento: fluxo autenticado multiempresa, persistência real de clientes, projetos, obras e tarefas, permissões no servidor, trilha de auditoria e o limite técnico da integração financeira remota com a Drap. Os módulos comerciais e de obra seguem em demonstração, rotulados como tal na própria tela.
 
 O objetivo não é copiar a Vobi. O objetivo é reunir o ciclo do negócio em um fluxo menor, mais claro e mais previsível:
 
@@ -17,16 +17,41 @@ flowchart TD
 
 ## O que já está no código
 
-- Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
-- Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
-- Interface responsiva, com menu recolhível e busca.
-- Fluxo de criação rápida preparado para virar formulários reais.
-- Dados de demonstração isolados em `lib/demo-data.ts`.
-- Esquema relacional multiempresa em `db/schema.ts`.
-- Endpoint inicial `GET/POST /api/projects` com validação Zod e separação por organização.
+A Fase 1 do roadmap está implementada: o produto tem autenticação, organização
+resolvida no servidor e persistência real para cliente, projeto/obra e tarefa.
+
+**Funcionando com dados reais**
+
+- Fluxo autenticado completo: entrar → criar empresa → cliente → projeto/obra → tarefa.
+- Organização resolvida na sessão do servidor e conferida contra as associações do
+  usuário a cada requisição. O navegador não escolhe a empresa.
+- Papéis por capacidade (`owner`, `admin`, `manager`, `member`, `partner`, `client`),
+  checados no servidor antes de qualquer escrita.
+- CRUD de clientes, projetos/obras e tarefas: `GET/POST` nas coleções e
+  `GET/PATCH/DELETE` por id, com validação Zod na borda.
+- Seletor de empresa para quem participa de mais de uma.
+- Trilha de auditoria com autor e diferença em criação, edição, exclusão e mudança
+  de situação.
+- Visão geral monta a fila de decisões dos dados reais: tarefa atrasada, bloqueada,
+  vencendo hoje e trabalho sem responsável.
+- Equipe mostra capacidade contra apontamentos reais.
+- 47 testes, incluindo isolamento entre duas empresas exercitando o SQL de verdade.
+
+**Ainda em demonstração, e rotulado como tal na tela**
+
+- Orçamentos, cronograma, arquivos e o funil comercial seguem sobre
+  `lib/demo-data.ts`, cada tela com aviso visível. As fases 2 e 3 os migram.
+- O financeiro mostra dados de demonstração enquanto as credenciais e o contrato
+  real da Drap não forem fornecidos.
+
+**Limites técnicos já estabelecidos**
+
+- Esquema relacional multiempresa em `db/schema.ts`: `organization_id` em toda
+  tabela operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
-- Endpoint de resumo financeiro com fallback explícito para demonstração.
-- Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
+- Webhook Drap com verificação HMAC SHA-256, identificação da empresa e
+  idempotência pelo ID do evento.
+- Interface responsiva, com menu recolhível e busca.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 
 ## Princípios do produto
@@ -71,25 +96,34 @@ A arquitetura pode ser adaptada pelo Claude Code para Postgres, Supabase, Neon o
 Pré-requisitos: Node.js 22.13 ou superior e npm.
 
 ```bash
-cd nexo-obra
 npm ci
 cp .env.example .env
-npm run dev
+npm run dev          # cria o banco D1 local na primeira execução
+npm run db:migrate:local
 ```
 
-Depois, abra a pasta no Claude Code e use este primeiro comando:
+O banco local do Miniflare nasce vazio, então a primeira tela cai no estado
+“banco indisponível” até as migrações serem aplicadas. Rode `npm run dev` uma
+vez, aplique as migrações e recarregue.
 
-```text
-Leia CLAUDE.md e README.md por completo. Preserve a arquitetura multiempresa e o limite da integração Drap. Primeiro execute o build e corrija apenas erros reais. Depois implemente a Fase 1 do roadmap, começando pelo fluxo autenticado organização → cliente → projeto → tarefa. Faça mudanças pequenas, valide ao final de cada fatia e atualize o README quando o estado do produto mudar.
+Para entrar sem o host autenticado, defina no `.env`:
+
+```dotenv
+NEXO_DEV_USER_EMAIL=voce@exemplo.test
+NEXO_DEV_USER_NAME=Seu Nome
 ```
+
+Na primeira entrada a tela pede o nome da empresa e torna você `owner` dela.
 
 Comandos úteis:
 
 ```bash
-npm run dev
-npm run build
+npm run dev               # servidor de desenvolvimento
+npm run build             # build verificado (é o que o CI roda)
 npm run lint
-npm run db:generate
+npm test                  # build + testes
+npm run db:generate       # gera migração a partir de db/schema.ts
+npm run db:migrate:local  # aplica as migrações no D1 local
 ```
 
 ## Configuração da Drap
@@ -99,10 +133,16 @@ Crie `.env` a partir de `.env.example`:
 ```dotenv
 DRAP_API_URL=https://empresa.drap.app.br
 DRAP_API_TOKEN=token_de_servico
+# Vazio usa "Authorization: Bearer <token>"; informe um header para o token cru.
 DRAP_API_KEY_HEADER=
 DRAP_SUMMARY_PATH=/api/v1/finance/summary
 DRAP_WEBHOOK_SECRET=segredo_compartilhado
 ```
+
+Nenhuma dessas variáveis pode ganhar o prefixo `NEXT_PUBLIC_`. O módulo
+`lib/integrations/drap.ts` lê as credenciais do ambiente do Worker e é importado
+apenas no servidor; o navegador fala com `/api/integrations/drap/summary`, nunca
+com a Drap.
 
 ### Importante
 
@@ -126,6 +166,50 @@ Para concluir a conexão real, obtenha da Drap:
 
 Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 
+## API interna
+
+Todas as rotas resolvem a empresa pela sessão. Nenhuma aceita `organizationId` no
+corpo ou em header — o schema Zod recusa o campo com 422.
+
+| Rota | Métodos | Capacidade exigida |
+| --- | --- | --- |
+| `/api/session` | `GET` | — (devolve o estado da sessão) |
+| `/api/organizations` | `GET`, `POST` | autenticado; quem cria vira `owner` |
+| `/api/organizations/active` | `POST` | participar da empresa informada |
+| `/api/clients` | `GET`, `POST` | `client:read` / `client:write` |
+| `/api/clients/:id` | `GET`, `PATCH`, `DELETE` | `client:read` / `client:write` |
+| `/api/projects` | `GET`, `POST` | `project:read` / `project:write` |
+| `/api/projects/:id` | `GET`, `PATCH`, `DELETE` | `project:read` / `project:write` |
+| `/api/tasks` | `GET`, `POST` | `task:read` / `task:write` |
+| `/api/tasks/:id` | `GET`, `PATCH`, `DELETE` | `task:read` / `task:write` |
+| `/api/integrations/drap/summary` | `GET` | — (marca a origem em `source`) |
+| `/api/integrations/drap/webhook` | `POST` | assinatura HMAC SHA-256 |
+
+Respostas de erro têm formato único, para a interface reagir sem depender do texto:
+
+```json
+{ "error": { "code": "forbidden", "message": "...", "fields": [] } }
+```
+
+`code` assume `unauthorized`, `no_organization`, `forbidden`, `not_found`,
+`conflict`, `invalid_body`, `invalid_input`, `unavailable` ou `internal`. Em
+`invalid_input`, `fields` traz `{ field, message }` por campo recusado.
+
+Capacidades por papel:
+
+| Capacidade | owner | admin | manager | member | partner | client |
+| --- | --- | --- | --- | --- | --- | --- |
+| `organization:manage` | ✅ | | | | | |
+| `member:manage` | ✅ | ✅ | | | | |
+| `client:read` | ✅ | ✅ | ✅ | ✅ | | |
+| `client:write` | ✅ | ✅ | ✅ | | | |
+| `project:read` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `project:write` | ✅ | ✅ | ✅ | | | |
+| `task:read` | ✅ | ✅ | ✅ | ✅ | ✅ | |
+| `task:write` | ✅ | ✅ | ✅ | ✅ | | |
+| `finance:read` | ✅ | ✅ | ✅ | | | |
+| `audit:read` | ✅ | ✅ | | | | |
+
 ## Divisão de responsabilidade dos dados
 
 | Dado | Fonte oficial | Uso na Nexo Obra |
@@ -141,9 +225,38 @@ Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 
 ## Modelo multiempresa
 
-Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.
+Toda tabela operacional carrega `organization_id`. O identificador de organização
+nunca vem do navegador: a API o deriva da sessão autenticada e confere a
+associação do usuário no servidor.
 
-O endpoint inicial de projetos usa temporariamente o header `x-organization-id` para deixar o contrato visível. Ele precisa ser substituído pela organização resolvida pela autenticação antes de produção.
+Como funciona hoje:
+
+1. `lib/auth/identity.ts` resolve QUEM é o usuário. É a única peça que conhece o
+   provedor de autenticação — hoje os headers da borda autenticada do host, com
+   uma identidade de desenvolvimento habilitada por variável de ambiente fora de
+   produção. Trocar de provedor é editar este arquivo.
+2. `lib/auth/session.ts` resolve QUAL empresa está ativa, carregando as
+   associações reais do usuário em `members`.
+3. O cookie `nexo_org` guarda apenas a *preferência* de qual empresa abrir. Ele é
+   reconferido contra as associações a cada requisição, então não concede nada —
+   um cookie apontando para empresa alheia é simplesmente ignorado. É por isso que
+   ele não precisa ser assinado.
+4. `lib/data/*` exige `organizationId` em toda função e o aplica em toda cláusula
+   `where`, inclusive nos joins, updates e deletes.
+5. Chave estrangeira de outra empresa é recusada com 422. A FK do banco só exige
+   que a linha exista; o recorte por empresa é da aplicação.
+6. Registro de outra empresa responde **404, nunca 403** — 403 confirmaria que ele
+   existe em algum lugar.
+
+> **Atenção ao implantar.** O provedor de identidade atual confia em headers
+> injetados pela borda autenticada. O ambiente precisa remover esses headers
+> quando vierem do cliente; caso contrário qualquer visitante pode se passar por
+> outro usuário. Se o destino de implantação não fizer isso, troque
+> `lib/auth/identity.ts` por um provedor de sessão próprio antes de ir ao ar.
+
+O header `x-organization-id` que a API inicial usava foi removido. Não o
+reintroduza: era o furo que a Fase 1 fechou, e há teste de regressão para isso.
+
 
 Papéis mínimos recomendados:
 
@@ -159,34 +272,65 @@ Papéis mínimos recomendados:
 ```text
 app/
   api/
+    clients/            # CRUD de clientes
     integrations/drap/  # proxy financeiro e webhook
-    projects/           # primeira API operacional
+    organizations/      # criação, listagem e troca de empresa ativa
+    projects/           # CRUD de projetos e obras
+    session/            # estado da sessão para a interface
+    tasks/              # CRUD de tarefas
+  chatgpt-auth.ts       # detalhe do provedor de identidade do host
   layout.tsx
-  page.tsx
+  page.tsx              # resolve a sessão e escolhe a tela de acesso
 components/
-  nexo-app.tsx          # protótipo funcional dos módulos
-  ui/                   # primitivas acessíveis
+  access-screens.tsx    # anônimo, sem empresa, banco indisponível
+  nexo-app.tsx          # casca dos módulos, já sobre dados reais
+  quick-create.tsx      # formulários de cliente, trabalho e tarefa
+  ui/                   # primitivas acessíveis do catálogo Shadcn
 db/
   index.ts              # acesso centralizado ao banco
   schema.ts             # modelo relacional multiempresa
+drizzle/                # migrações geradas
 docs/
   DRAP-INTEGRATION.md
 lib/
-  demo-data.ts
-  integrations/drap.ts
+  auth/
+    identity.ts         # QUEM é o usuário (fronteira do provedor)
+    roles.ts            # papéis e capacidades
+    session.ts          # QUAL empresa está ativa
+  data/                 # consultas, sempre recortadas por organização
+  domain/               # vocabulário e schemas Zod compartilhados
+  integrations/drap.ts  # adaptador financeiro, só servidor
+  server/               # helpers de API e trilha de auditoria
+  view/workspace.ts     # retrato que a interface recebe
+  demo-data.ts          # módulos ainda não migrados
+scripts/
+  migrate-local.mjs     # aplica migrações no D1 local
+tests/
+  authorization.test.mjs
+  tenant-isolation.test.mjs
+  product-contract.test.mjs
 CLAUDE.md
 ```
 
 ## Roadmap de implementação
 
-### Fase 1 — núcleo operacional
+### Fase 1 — núcleo operacional ✅ concluída
 
-- Autenticação e seleção segura da organização.
-- CRUD de clientes, projetos e tarefas.
-- Permissões no servidor.
-- Substituição dos dados demonstrativos por queries reais.
-- Log de auditoria para criação, edição, exclusão e mudança de status.
-- Testes de isolamento entre duas organizações.
+- [x] Autenticação e seleção segura da organização.
+- [x] CRUD de clientes, projetos e tarefas.
+- [x] Permissões no servidor.
+- [x] Substituição dos dados demonstrativos por queries reais nesses três domínios.
+- [x] Log de auditoria para criação, edição, exclusão e mudança de status.
+- [x] Testes de isolamento entre duas organizações.
+
+Pendências conhecidas, que a Fase 2 absorve:
+
+- Convite e gestão de integrantes ainda não têm interface; o papel é gravado
+  direto no banco.
+- `partner` e `client` já existem como papéis de leitura, mas o recorte por
+  projeto específico só entra na Fase 3, junto com o portal do cliente.
+- Falta limitação de taxa em autenticação, criação e webhooks (ver critérios
+  mínimos antes de produção).
 
 ### Fase 2 — comercial e orçamento
 
