@@ -16,6 +16,7 @@ O superadmin usa uma sessão separada das contas das empresas. Enquanto ela exis
 ## Convites e criação de acesso
 
 - O superadmin escolhe empresa, e-mail e perfil e recebe um link aleatório de uso único.
+- Convite criado dentro da empresa nunca concede além do acesso de quem convida (`permission_beyond_grantor`), exceto quando quem convida é o `owner` ou o superadmin.
 - O banco armazena somente o SHA-256 do token; o token original aparece apenas na resposta de criação para ser copiado.
 - O convite expira em sete dias por padrão e pode ser revogado antes do aceite.
 - O usuário precisa autenticar a identidade do mesmo e-mail informado no convite.

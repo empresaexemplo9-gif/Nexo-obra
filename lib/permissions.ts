@@ -90,6 +90,13 @@ export function normalizePermissions(value: unknown, role: string): PermissionSe
   return normalized;
 }
 
+// Ninguém libera mais do que tem. Sem isso, um administrador sem acesso ao Financeiro
+// poderia convidar uma conta com Financeiro liberado e entrar por ela.
+export function permissionsBeyond(granted: PermissionSet, granter: PermissionSet): PermissionModule[] {
+  return permissionModules.filter((module) =>
+    (granted[module].view && !granter[module].view) || (granted[module].edit && !granter[module].edit));
+}
+
 export function parseStoredPermissions(value: string | null | undefined, role: string) {
   if (!value) return permissionsForRole(role);
   try { return normalizePermissions(JSON.parse(value), role); }

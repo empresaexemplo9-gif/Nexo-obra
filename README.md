@@ -193,7 +193,7 @@ Papéis mínimos recomendados:
 - `accounting`: prestação de contas com leitura ou edição explicitamente liberada;
 - `client`: portal externo somente para leitura/aprovação/comentário.
 
-Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. O papel `superadmin` é a única exceção: sua matriz é sempre total e é resolvida no servidor a partir da sessão administrativa, nunca do navegador. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
+Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. Ninguém libera mais do que tem: um `admin` sem acesso ao Financeiro não consegue criar um convite com Financeiro liberado. Somente o `owner` e o superadmin, que já têm tudo, escapam dessa checagem. O papel `superadmin` é a única exceção: sua matriz é sempre total e é resolvida no servidor a partir da sessão administrativa, nunca do navegador. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
 
 O texto público vigente fica em `/termos`. Cada aceite grava a versão, data e evidências técnicas transformadas em hash, sem armazenar IP ou agente do navegador em formato bruto. Antes da cobrança comercial, o documento deve receber revisão jurídica e os dados legais do fornecedor, canal de privacidade e condições comerciais do plano.
 

@@ -5,13 +5,16 @@ import {
   apiRoute,
   auditStatement,
   canManageOrganizationAccess,
+  isPlatformSuperAdmin,
   jsonBody,
   requireModulePermission,
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
-import { normalizePermissions, parseStoredPermissions, permissionModules } from "@/lib/permissions";
+import {
+  normalizePermissions, parseStoredPermissions, permissionModuleLabels, permissionModules, permissionsBeyond,
+} from "@/lib/permissions";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
@@ -75,6 +78,14 @@ export async function POST(request: Request) {
     const permissions = normalizePermissions(parsed.data.permissions, parsed.data.role);
     if (!permissionModules.some((module) => permissions[module].view)) {
       throw new ApiError(400, "empty_permissions", "Marque ao menos uma área como visível.");
+    }
+    // O contratante e a plataforma já têm acesso total; qualquer outro só reparte o que tem.
+    if (context.member.role !== "owner" && !isPlatformSuperAdmin(context)) {
+      const beyond = permissionsBeyond(permissions, context.member.permissions);
+      if (beyond.length) {
+        throw new ApiError(403, "permission_beyond_grantor",
+          `Você não pode liberar mais do que o seu próprio acesso: ${beyond.map((module) => permissionModuleLabels[module]).join(", ")}.`);
+      }
     }
     const pending = await context.db.prepare(
       `SELECT id FROM organization_invitations
