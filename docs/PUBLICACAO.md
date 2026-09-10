@@ -40,3 +40,37 @@ não está lá; sem o 4, está lá mas sem as tabelas.
 Ficam no ambiente de publicação, nunca no repositório. Sem `SUPERADMIN_EMAIL`,
 `SUPERADMIN_PASSWORD_HASH` e `SUPERADMIN_SESSION_SECRET`, o painel responde
 `superadmin_not_configured` e nenhuma sessão administrativa é emitida.
+
+### O hash da senha e a armadilha do `$`
+
+Gere o hash com:
+
+```bash
+npm run superadmin:hash -- "sua senha"
+```
+
+A saída usa **dois-pontos** como separador:
+
+```
+pbkdf2-sha256:100000:<salt>:<digest>
+```
+
+Isso não é estética. Painéis de publicação e leitores de `.env` costumam expandir `$`
+como variável, e um hash no formato `pbkdf2-sha256$100000$salt$digest` **chega mutilado ao
+servidor** — `$salt` e `$digest` viram texto vazio. O login então responde
+*"Usuário ou senha inválidos"* mesmo com a senha correta, e nada indica que o problema é
+de configuração. Isso foi verificado na prática: o hash chegou com 37 caracteres em vez
+de 80.
+
+O separador `$` continua aceito, para não invalidar um hash já configurado. Mas prefira
+`:`, que atravessa qualquer expansão intacto.
+
+Se o hash chegar ilegível, o login responde `503 superadmin_hash_invalid` com a instrução,
+em vez de fingir que a senha está errada.
+
+### O login não depende do banco migrado
+
+A rota que aplica migrações exige sessão de superadministrador. Se o login dependesse de
+tabela migrada, seria um impasse: nem migrar sem entrar, nem entrar sem migrar. Por isso o
+portão cria a própria tabela de tentativas quando ela não existe, mantendo o bloqueio por
+tentativa em qualquer estado do banco.

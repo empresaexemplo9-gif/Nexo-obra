@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
+import { ensureLoginAttemptsTable } from "@/lib/server/migrations";
 import { permissionsForRole } from "@/lib/permissions";
 import { ApiError, apiRoute, jsonBody, organizationSelectionCookie, validationError } from "@/lib/server/backend";
 import {
@@ -34,6 +35,9 @@ export async function POST(request: Request) {
     const parsed = credentialsSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const db = getDatabase();
+    // Garante a tabela de tentativas: um banco sem migração não pode barrar o login
+    // que dá acesso justamente à rota de migrar.
+    await ensureLoginAttemptsTable(db);
     const fingerprint = `maintenance:${await loginFingerprint(request)}`;
     const now = Date.now();
     const attempt = await db.prepare("SELECT failed_count, window_started_at, locked_until FROM superadmin_login_attempts WHERE fingerprint = ?1")

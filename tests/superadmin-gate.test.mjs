@@ -53,11 +53,11 @@ const secret = "test-only-shared-secret-at-least-32-characters";
 
 // Gera o hash no mesmo formato que o servidor verifica: pbkdf2-sha256$100000$salt$digest.
 const base64url = (bytes) => Buffer.from(bytes).toString("base64").replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
-async function passwordHash(password) {
+async function passwordHash(password, separator = ":") {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: 100_000 }, key, 256);
-  return `pbkdf2-sha256$100000$${base64url(salt)}$${base64url(new Uint8Array(bits))}`;
+  return ["pbkdf2-sha256", "100000", base64url(salt), base64url(new Uint8Array(bits))].join(separator);
 }
 
 let db; let hash;
@@ -110,15 +110,20 @@ test("cinco tentativas erradas bloqueiam, e a senha certa não passa durante o b
 });
 
 test("a senha guardada nunca é comparada em texto e o hash não sai da configuração", async () => {
-  assert.match(runtime.SUPERADMIN_PASSWORD_HASH, /^pbkdf2-sha256\$100000\$/);
+  assert.match(runtime.SUPERADMIN_PASSWORD_HASH, /^pbkdf2-sha256[:$]100000[:$]/);
   assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), true);
   assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, `${SENHA} `), false);
   assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL.toUpperCase(), SENHA), true, "o e-mail não diferencia maiúsculas");
-  // Um hash em formato antigo ou adulterado não vira acesso.
-  runtime.SUPERADMIN_PASSWORD_HASH = "pbkdf2-sha256$1000$abc$def";
-  assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), false, "iteração fora do padrão é recusada");
-  runtime.SUPERADMIN_PASSWORD_HASH = SENHA;
-  assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), false, "senha em texto puro não abre nada");
+  // Hash adulterado ou senha em texto puro nunca abrem acesso: agora recusam com erro
+  // de configuração, o que é mais útil do que devolver "senha inválida".
+  for (const configurado of ["pbkdf2-sha256:1000:abc:def", SENHA, "", "pbkdf2-sha256:100000:aa:bb"]) {
+    runtime.SUPERADMIN_PASSWORD_HASH = configurado;
+    await assert.rejects(
+      superadmin.verifySuperAdminCredentials(EMAIL, SENHA),
+      (error) => ["superadmin_hash_invalid", "superadmin_not_configured"].includes(error.code),
+      `não deveria abrir com ${JSON.stringify(configurado)}`,
+    );
+  }
 });
 
 test("a sessão é assinada: um cookie adulterado não vale", async () => {
@@ -211,4 +216,51 @@ test("um convite já aceito não pode ser revogado para apagar o vínculo", asyn
     { params: Promise.resolve({ invitationId: criado.invitation.id }) });
   assert.equal(response.status, 409);
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM members").get().n, 1, "o acesso já criado permanece");
+});
+
+test("o hash funciona com dois-pontos e com dólar, e aspas do painel não atrapalham", async () => {
+  for (const separador of [":", "$"]) {
+    runtime.SUPERADMIN_PASSWORD_HASH = await passwordHash(SENHA, separador);
+    assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), true, `separador ${separador}`);
+    assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, "outra"), false, `separador ${separador}`);
+  }
+  // Painel que guarda o valor entre aspas não deve derrubar o login.
+  runtime.SUPERADMIN_PASSWORD_HASH = `'${await passwordHash(SENHA)}'`;
+  assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), true);
+  runtime.SUPERADMIN_PASSWORD_HASH = ` ${await passwordHash(SENHA)} `;
+  assert.equal(await superadmin.verifySuperAdminCredentials(EMAIL, SENHA), true);
+});
+
+test("hash mutilado pela expansão de variáveis avisa, em vez de dizer senha errada", async () => {
+  // Foi o que aconteceu de verdade: o painel expandiu $salt e $digest como variáveis e o
+  // login respondia "senha inválida" com a senha correta.
+  runtime.SUPERADMIN_PASSWORD_HASH = "pbkdf2-sha256$100000-L";
+  await assert.rejects(superadmin.verifySuperAdminCredentials(EMAIL, SENHA), (error) => {
+    assert.equal(error.status, 503);
+    assert.equal(error.code, "superadmin_hash_invalid");
+    assert.match(error.message, /dois-pontos/);
+    return true;
+  });
+
+  const resposta = await sessionRoute.POST(login({ email: EMAIL, password: SENHA }));
+  assert.equal(resposta.status, 503);
+  assert.equal((await resposta.json()).code, "superadmin_hash_invalid");
+});
+
+test("o login funciona num banco ainda não migrado, senão migrar seria impossível", async () => {
+  // A rota que aplica migração exige sessão de superadministrador. Se o login dependesse
+  // de tabela migrada, não haveria como sair do lugar.
+  db.sqlite.exec("DROP TABLE IF EXISTS superadmin_login_attempts");
+  runtime.SUPERADMIN_PASSWORD_HASH = await passwordHash(SENHA);
+
+  const entrada = await sessionRoute.POST(login({ email: EMAIL, password: SENHA }));
+  assert.equal(entrada.status, 200, await entrada.clone().text());
+  assert.ok(db.sqlite.prepare("SELECT COUNT(*) n FROM sqlite_master WHERE name='superadmin_login_attempts'").get().n,
+    "o portão criou a própria tabela de tentativas");
+
+  // E o bloqueio continua valendo nesse banco.
+  for (let tentativa = 0; tentativa < 5; tentativa += 1) {
+    await sessionRoute.POST(login({ email: EMAIL, password: "errada" }));
+  }
+  assert.equal((await sessionRoute.POST(login({ email: EMAIL, password: SENHA }))).status, 429);
 });

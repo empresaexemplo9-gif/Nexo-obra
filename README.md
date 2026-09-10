@@ -141,6 +141,8 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 
 Crie `.env` a partir de `.env.example`:
 
+Gere o hash da senha administrativa com `npm run superadmin:hash -- "sua senha"`. Ele sai com **dois-pontos** como separador de propósito: painéis de publicação expandem `$` e mutilam o hash sem avisar, fazendo o login recusar a senha correta. Detalhes em [Publicação](docs/PUBLICACAO.md).
+
 ```dotenv
 DRAP_API_URL=https://empresa.drap.app.br
 DRAP_API_TOKEN=token_de_servico

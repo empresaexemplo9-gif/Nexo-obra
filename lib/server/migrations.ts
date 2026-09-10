@@ -15,6 +15,22 @@ export const migrations: MigrationFile[] = Object.entries(files)
   }))
   .sort((left, right) => left.id.localeCompare(right.id));
 
+// O portão do superadministrador registra tentativas de senha no banco. Num banco ainda
+// não migrado essa tabela não existe, e o login falhava — mas só o login dá acesso à
+// rota que migra. Era um impasse: nem migrar sem entrar, nem entrar sem migrar.
+// Por isso o próprio portão garante a sua tabela, de forma idempotente.
+export const LOGIN_ATTEMPTS_TABLE = `CREATE TABLE IF NOT EXISTS superadmin_login_attempts (
+  fingerprint text PRIMARY KEY NOT NULL,
+  failed_count integer DEFAULT 0 NOT NULL,
+  window_started_at integer NOT NULL,
+  locked_until integer DEFAULT 0 NOT NULL,
+  updated_at integer NOT NULL
+)`;
+
+export async function ensureLoginAttemptsTable(db: D1Database) {
+  await db.prepare(LOGIN_ATTEMPTS_TABLE).run();
+}
+
 const LEDGER = `CREATE TABLE IF NOT EXISTS _platform_migrations (
   id text PRIMARY KEY NOT NULL,
   statements integer NOT NULL,

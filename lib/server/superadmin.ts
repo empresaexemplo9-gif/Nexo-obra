@@ -42,16 +42,24 @@ function requiredConfig() {
   };
 }
 
+// O separador aceita "$" e ":".
+//
+// Muitos painéis de publicação e leitores de .env expandem "$" como variável, o que
+// destrói silenciosamente um hash como pbkdf2-sha256$100000$salt$digest: chega mutilado
+// e o login responde "senha inválida" mesmo com a senha certa. Por isso ":" é aceito e
+// recomendado — ele não colide com base64url e atravessa qualquer expansão intacto.
 function parsePasswordHash(value: string): PasswordHash | null {
-  const [algorithm, iterationsText, saltText, digestText] = value.split("$");
+  const trimmed = value.trim().replace(/^['"]|['"]$/g, "");
+  const parts = trimmed.includes(":") ? trimmed.split(":") : trimmed.split("$");
+  if (parts.length !== 4) return null;
+  const [algorithm, iterationsText, saltText, digestText] = parts;
   const iterations = Number(iterationsText);
   if (algorithm !== "pbkdf2-sha256" || iterations !== 100_000) return null;
   try {
-    return {
-      iterations,
-      salt: fromBase64Url(saltText),
-      digest: fromBase64Url(digestText),
-    };
+    const salt = fromBase64Url(saltText);
+    const digest = fromBase64Url(digestText);
+    if (salt.byteLength < 8 || digest.byteLength < 16) return null;
+    return { iterations, salt, digest };
   } catch {
     return null;
   }
@@ -79,6 +87,15 @@ async function emailMatches(email: string, expected: string) {
 
 export async function verifySuperAdminCredentials(email: string, password: string) {
   const config = requiredConfig();
+  // Hash ilegível é erro de configuração, não senha errada. Responder "senha inválida"
+  // aqui esconderia o problema real e mandaria a pessoa tentar a senha de novo.
+  if (!parsePasswordHash(config.passwordHash)) {
+    throw new ApiError(
+      503,
+      "superadmin_hash_invalid",
+      "A senha administrativa está configurada em formato inválido. Gere o hash com `npm run superadmin:hash` e use a forma com dois-pontos, que não é alterada pela expansão de variáveis do ambiente.",
+    );
+  }
   const [validEmail, validPassword] = await Promise.all([
     emailMatches(email, config.email),
     passwordMatches(password, config.passwordHash),

@@ -71,8 +71,13 @@ export async function readMaintenanceIdentity(request: Request) {
   } catch { return null; }
 }
 
+// Aceita "$" e ":" pelo mesmo motivo descrito em lib/server/superadmin.ts: painéis de
+// publicação expandem "$" e mutilam o hash sem avisar.
 function parseHash(value: string) {
-  const [algorithm, iterationsText, saltText, digestText] = value.split("$");
+  const trimmed = value.trim().replace(/^['"]|['"]$/g, "");
+  const parts = trimmed.includes(":") ? trimmed.split(":") : trimmed.split("$");
+  if (parts.length !== 4) return null;
+  const [algorithm, iterationsText, saltText, digestText] = parts;
   const iterations = Number(iterationsText);
   if (algorithm !== "pbkdf2-sha256" || iterations !== 100_000) return null;
   try { return { iterations, salt: fromBase64Url(saltText), digest: fromBase64Url(digestText) }; }
