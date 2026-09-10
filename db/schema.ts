@@ -496,3 +496,20 @@ export const usageDays = sqliteTable("usage_days", {
   index("idx_usage_days_org_day").on(t.organizationId, t.day),
   index("idx_usage_days_day").on(t.day),
 ]);
+
+// Planilhas e documentos da empresa. O conteúdo é guardado como digitado; o cálculo é
+// refeito por lib/spreadsheet.ts, que roda igual no navegador e no servidor.
+export const worksheets = sqliteTable("worksheets", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  kind: text("kind").notNull().default("sheet"),
+  name: text("name").notNull(),
+  contentJson: text("content_json").notNull().default("{}"),
+  columns: integer("columns").notNull().default(12),
+  rows: integer("rows").notNull().default(60),
+  createdByMemberId: text("created_by_member_id"),
+  createdByName: text("created_by_name").notNull(),
+  revision: integer("revision").notNull().default(1),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("idx_worksheets_org_updated").on(t.organizationId, t.updatedAt)]);
