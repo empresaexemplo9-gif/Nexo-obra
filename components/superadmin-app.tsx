@@ -3,14 +3,16 @@
 import { BrandLogo } from "@/components/brand-logo";
 import { PlatformControl } from "@/components/platform-control";
 import { UsageWorkspace } from "@/components/usage-workspace";
+import { PLATFORM_BUILD, PLATFORM_BUILT_AT } from "@/lib/build-info";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Check,
   Copy,
   Database,
   DoorOpen,
+  GitCommitHorizontal,
   Eye,
   EyeOff,
   FolderKanban,
@@ -188,6 +190,40 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
 
 type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number };
 
+// Qual versão está servindo. O domínio público reescreve as rotas para outro alvo de
+// publicação, então uma versão antiga no ar não tem sintoma nenhum além de "não mudou
+// nada". Este bloco dá o sintoma.
+function BuildPanel() {
+  // O selo é uma constante do bundle, então a data não muda entre renders.
+  const builtAt = useMemo(() => (PLATFORM_BUILT_AT ? new Date(PLATFORM_BUILT_AT) : null), []);
+  // A idade entra por estado: comparar com Date.now() durante o render é impuro.
+  const [days, setDays] = useState<number | null>(null);
+  useEffect(() => {
+    if (!builtAt) return;
+    const timer = window.setTimeout(() => {
+      setDays(Math.floor((Date.now() - builtAt.getTime()) / 86_400_000));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [builtAt]);
+  const stale = days !== null && days >= 2;
+
+  return <Card className={stale ? "border-hoikos-400 bg-hoikos-50" : "workspace-card"}>
+    <CardContent className="flex flex-wrap items-center gap-3 p-4">
+      <GitCommitHorizontal className={`size-5 ${stale ? "text-hoikos-700" : "text-hoikos-600"}`} />
+      <p className="min-w-0 flex-1 text-sm text-hoikos-700">
+        Versão no ar: <strong className="font-mono">{PLATFORM_BUILD}</strong>
+        {builtAt ? ` · compilada em ${builtAt.toLocaleString("pt-BR")}` : ""}
+        {stale ? ` · há ${days} dia(s)` : ""}
+      </p>
+      {stale ? <p className="w-full text-sm leading-6 text-hoikos-800">
+        Se você publicou alterações depois dessa data, elas não estão neste build. O domínio público apenas
+        reescreve as rotas para o alvo de publicação; ele não compila o repositório. Republique o projeto para
+        o código novo entrar no ar.
+      </p> : null}
+    </CardContent>
+  </Card>;
+}
+
 // O banco desatualizado derruba o resto do painel, então este bloco é carregado por
 // conta própria e aparece mesmo quando os indicadores falham.
 function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onApplied: () => Promise<void> }) {
@@ -306,6 +342,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
       </header>
       <div className=" mx-auto max-w-[1480px] px-5 py-7 sm:px-8 sm:py-10">
         <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-hoikos-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-hoikos-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-hoikos-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
+        <div className="mb-4"><BuildPanel /></div>
         {database ? <div className="mb-6"><DatabasePanel status={database} onApplied={reload} /></div> : null}
         {error && !database?.pending.length ? <Card className="border-hoikos-200 bg-hoikos-50 p-5 text-hoikos-700">{error}</Card>
           : error ? null

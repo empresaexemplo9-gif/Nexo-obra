@@ -118,3 +118,9 @@ test("sem sessão, o painel pede a senha e não revela nada", async () => {
   assert.doesNotMatch(texto, /Banco de dados/);
   assert.ok(container.querySelector('input[type="password"]'));
 });
+
+test("o painel diz qual versão está no ar", async () => {
+  await abrir({ ...sessao, ...semConvites, "/api/superadmin/migrations": emDia, "/api/superadmin/overview": indicadores });
+  assert.match(textOf(container), /Versão no ar:/,
+    "sem isso, um build antigo servindo o site não tem nenhum sintoma visível");
+});

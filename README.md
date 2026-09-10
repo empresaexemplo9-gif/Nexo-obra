@@ -132,7 +132,8 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 ## Repositório e publicação
 
 - O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
-- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app). O projeto `nexo-obra` no Vercel está vinculado a esse repositório e funciona como porta de entrada para o runtime Vinext; alterações integradas à branch `main` seguem para produção.
+- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app). **Ele não compila o repositório**: o `vercel.json` tem `buildCommand` vazio e reescreve todas as rotas para o alvo do OpenAI Sites, que é onde a aplicação roda.
+- **Enviar commit para `main` não publica nada.** Depois do envio é preciso republicar o projeto no OpenAI Sites e confirmar em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
 - O projeto também preserva o vínculo com o OpenAI Sites por meio do `project_id` em `.openai/hosting.json`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
