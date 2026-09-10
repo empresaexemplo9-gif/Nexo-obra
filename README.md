@@ -121,6 +121,7 @@ Comandos úteis:
 npm run dev               # servidor de desenvolvimento
 npm run build             # build verificado (é o que o CI roda)
 npm run lint
+npm run typecheck         # tsc --noEmit
 npm test                  # build + testes
 npm run db:generate       # gera migração a partir de db/schema.ts
 npm run db:migrate:local  # aplica as migrações no D1 local

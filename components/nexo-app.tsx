@@ -1449,6 +1449,35 @@ function ScheduleView() {
 }
 
 
+/**
+ * Confere o resumo financeiro recebido da própria API.
+ *
+ * `Response.json()` devolve `unknown`, e é assim que deve ser: o corpo vem da
+ * rede. Os campos monetários precisam ser números finitos — um `null` ou uma
+ * string atravessariam o `Intl.NumberFormat` como "NaN" na tela.
+ */
+function isFinancialSummary(value: unknown): value is FinancialSummary {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+
+  const numericFields = [
+    "currentBalance",
+    "receivables",
+    "payables",
+    "projected30d",
+    "overdueReceivables",
+  ] as const;
+
+  for (const field of numericFields) {
+    if (typeof candidate[field] !== "number" || !Number.isFinite(candidate[field])) return false;
+  }
+
+  return (
+    typeof candidate.updatedAt === "string" &&
+    (candidate.source === "drap" || candidate.source === "demo")
+  );
+}
+
 export function NexoApp({ workspace }: { workspace: WorkspaceSnapshot }) {
   const router = useRouter();
   const [activeModule, setActiveModule] = useState<ModuleId>("overview");
@@ -1463,7 +1492,13 @@ export function NexoApp({ workspace }: { workspace: WorkspaceSnapshot }) {
       .then((response) =>
         response.ok ? response.json() : Promise.reject(new Error("Finance unavailable")),
       )
-      .then((data: FinancialSummary) => setFinancial(data))
+      .then((data: unknown) => {
+        // A resposta é conferida antes de entrar na tela. Um corpo fora do
+        // formato esperado viraria NaN nos valores monetários, o que é pior do
+        // que mostrar o fallback marcado como demonstração.
+        if (!isFinancialSummary(data)) throw new Error("Finance payload inválido");
+        setFinancial(data);
+      })
       .catch((error: Error) => {
         if (error.name !== "AbortError") setFinancial(demoFinancialSummary);
       });
