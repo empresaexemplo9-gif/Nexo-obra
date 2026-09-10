@@ -7,6 +7,7 @@ import {
   ApiError,
   apiRoute,
   authenticatedIdentity,
+  isMaintenanceOrganization,
   jsonBody,
   listOrganizationMemberships,
   organizationSelectionCookie,
@@ -50,6 +51,7 @@ export async function GET(request: Request) {
       return Response.json({
         authenticated: true,
         authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "chatgpt",
+        maintenanceEnvironment: isMaintenanceOrganization(context),
         needsOrganization: false,
         user: context.user,
         member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },

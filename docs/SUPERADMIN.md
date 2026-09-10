@@ -31,6 +31,33 @@ O isolamento multiempresa continua intacto: o superadmin opera **uma empresa por
 toda query recebe o `organization_id` resolvido no servidor. Não existe consulta que
 atravesse empresas.
 
+## Ambiente de manutenção
+
+A manutenção continua existindo como sempre: login próprio em `/manutencao`, credenciais
+separadas e uma organização interna reservada, à qual o administrador de manutenção fica
+confinado — ele não alcança nenhuma empresa contratante, mesmo escolhendo uma.
+
+O superadmin também opera esse ambiente, com mais recursos:
+
+| Recurso | Manutenção | Superadmin |
+| --- | --- | --- |
+| Entrar no ambiente interno | com a senha de manutenção | pela sessão da plataforma, sem essa senha |
+| Módulos do ambiente interno | todos | todos |
+| Criar o ambiente se ainda não existe | sim, no primeiro login | sim, ao abrir pelo painel |
+| Trocar para uma empresa contratante | não | sim, sem sair da sessão |
+| Cadastrar empresa e convidar contratante | não | sim |
+| Controlar acesso e ler o histórico do ambiente interno | não | sim |
+| Assinatura e parceiros no ambiente interno | não se aplica | não se aplica |
+
+`POST /api/superadmin/maintenance` cria o ambiente quando necessário, grava
+`platform.maintenance_opened` e devolve o cookie de seleção. O ambiente interno nunca é o
+destino padrão do superadmin: sem escolha explícita, ele cai em uma empresa contratante.
+Ele também não entra nas contagens de empresas do painel — aparece em bloco próprio.
+
+No painel “Assinaturas, parceiros e acessos”, escolher o ambiente de manutenção mostra
+somente controle de acesso e histórico. Assinatura e convite de parceiro seguem recusados
+no servidor, porque ali não existe contratante.
+
 ## Limites que continuam valendo
 
 - O membro reservado nunca é alcançado por um login comum, mesmo com o mesmo e-mail:
@@ -39,6 +66,8 @@ atravesse empresas.
   substituído pelo aceite de um convite.
 - O superadmin não cria empresas pelo onboarding do contratante; usa o painel.
 - O superadmin não assume a identidade de um cliente do portal.
+- O administrador de manutenção não alcança nada do painel da plataforma: todas as rotas
+  `/api/superadmin/*` respondem 401 para a sessão dele.
 
 ## Auditoria
 

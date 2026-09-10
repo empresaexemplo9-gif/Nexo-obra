@@ -10,7 +10,7 @@ import {
   type PermissionSet,
 } from "@/lib/permissions";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
-import { MAINTENANCE_ORGANIZATION_ID, readMaintenanceIdentity } from "@/lib/server/maintenance";
+import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMaintenanceIdentity } from "@/lib/server/maintenance";
 import { readSuperAdminIdentity, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
 
 export { ApiError };
@@ -107,16 +107,22 @@ export async function listOrganizationMemberships(request: Request) {
   return findMemberships(db, identity);
 }
 
-// A empresa aberta pelo superadministrador vem do mesmo cookie de seleção. Sem escolha
-// válida, cai na empresa mais recente para que o painel abra com contexto real.
+// A empresa aberta pelo superadministrador vem do mesmo cookie de seleção. O ambiente de
+// manutenção só é aberto quando escolhido de propósito, e nunca é o destino padrão.
 async function superAdminOrganization(db: D1Database, request: Request) {
   const requested = selectedOrganizationId(request);
   const columns = "SELECT id, name, slug, timezone FROM organizations";
-  const selected = requested
-    ? await db.prepare(`${columns} WHERE id = ?1`).bind(requested).first<OrganizationRow>()
-    : null;
+  const find = (id: string) => db.prepare(`${columns} WHERE id = ?1`).bind(id).first<OrganizationRow>();
+  if (requested === MAINTENANCE_ORGANIZATION_ID) {
+    const existing = await find(requested);
+    if (existing) return existing;
+    await maintenanceOrganizationStatement(db).run();
+    return ensureFound(await find(requested), "Ambiente de manutenção");
+  }
+  const selected = requested ? await find(requested) : null;
   if (selected) return selected;
-  const latest = await db.prepare(`${columns} ORDER BY created_at DESC LIMIT 1`).first<OrganizationRow>();
+  const latest = await db.prepare(`${columns} WHERE id != ?1 ORDER BY created_at DESC LIMIT 1`)
+    .bind(MAINTENANCE_ORGANIZATION_ID).first<OrganizationRow>();
   if (!latest) throw new ApiError(404, "no_organization", "Nenhuma empresa cadastrada na plataforma.");
   return latest;
 }
@@ -213,6 +219,10 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
     },
     termsAccepted: Boolean(acceptedTerms),
   };
+}
+
+export function isMaintenanceOrganization(context: OrganizationContext) {
+  return context.organization.id === MAINTENANCE_ORGANIZATION_ID;
 }
 
 export function isPlatformSuperAdmin(context: OrganizationContext) {

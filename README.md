@@ -38,7 +38,7 @@ flowchart TD
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
 - Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
 - Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
-- Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado.
+- Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado. O superadmin opera o mesmo ambiente pela sessão da plataforma, com recursos que a manutenção não tem.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
@@ -172,7 +172,7 @@ Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador 
 
 As APIs não aceitam `organization_id` do navegador. A identidade autenticada é associada a um membro no servidor e todas as consultas recebem o `organization_id` dessa associação.
 
-O administrador de manutenção utiliza uma organização interna reservada, criada vazia no primeiro login. A resolução de sessão força esse acesso exclusivamente à organização de manutenção, mesmo que o mesmo e-mail participe legitimamente de outra empresa. Ele não pode aceitar convites de clientes nem criar empresas contratantes.
+O administrador de manutenção utiliza uma organização interna reservada, criada vazia no primeiro acesso, seja dele ou do superadmin. A resolução de sessão força esse acesso exclusivamente à organização de manutenção, mesmo que o mesmo e-mail participe legitimamente de outra empresa. Ele não pode aceitar convites de clientes, criar empresas contratantes nem alcançar o painel da plataforma. Esse ambiente não entra nas contagens de empresas do superadmin e nunca é o destino padrão dele.
 
 O backend inicial está documentado em [`docs/BACKEND.md`](docs/BACKEND.md).
 

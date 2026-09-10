@@ -39,6 +39,7 @@ O superadmin usa uma sessão separada das contas das empresas. Enquanto ela exis
 | `GET`, `POST`, `DELETE` | `/api/superadmin/session` | Consulta, cria ou encerra a sessão administrativa |
 | `GET` | `/api/superadmin/overview` | Retorna os indicadores globais da plataforma |
 | `POST` | `/api/superadmin/organizations` | Cadastra uma empresa contratante vazia |
+| `POST` | `/api/superadmin/maintenance` | Abre o ambiente interno de manutenção pela sessão da plataforma |
 | `GET`, `POST` | `/api/superadmin/invitations` | Lista e cria convites individuais |
 | `DELETE` | `/api/superadmin/invitations/:invitationId` | Revoga um convite pendente |
 | `GET` | `/api/invitations/:token` | Valida e apresenta os dados públicos mínimos do convite |

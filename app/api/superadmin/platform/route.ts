@@ -20,22 +20,27 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("enroll"), organizationId: id, companyId: z.string().trim().min(1).max(120), planId: z.string().trim().min(1).max(120), confirmed: z.literal(true) }).strict(),
   z.object({ action: z.literal("send"), organizationId: id }).strict(),
 ]);
-async function organization(organizationId: string) {
+// O ambiente de manutenção aceita leitura e controle de acesso — recursos que o próprio
+// administrador de manutenção não tem —, mas não tem contratante, parceiro nem assinatura.
+async function organization(organizationId: string, allowMaintenance = false) {
   if (!id.safeParse(organizationId).success) throw new ApiError(400, "invalid_organization", "Selecione uma empresa.");
-  if (organizationId === MAINTENANCE_ORGANIZATION_ID) throw new ApiError(403, "maintenance_reserved", "O ambiente de manutenção é reservado.");
+  if (organizationId === MAINTENANCE_ORGANIZATION_ID && !allowMaintenance) {
+    throw new ApiError(403, "maintenance_reserved", "O ambiente de manutenção não tem contratante, parceiro nem assinatura.");
+  }
   if (!await getDatabase().prepare("SELECT id FROM organizations WHERE id = ?1").bind(organizationId).first()) throw new ApiError(404, "organization_not_found", "Empresa não encontrada.");
 }
 export async function GET(request: Request) {
   const response = await apiRoute(async () => {
     await requireSuperAdmin(request);
-    const organizationId = new URL(request.url).searchParams.get("organizationId") ?? ""; await organization(organizationId);
+    const organizationId = new URL(request.url).searchParams.get("organizationId") ?? ""; await organization(organizationId, true);
     const db = getDatabase();
     const [members, rules, activation, history, targets] = await Promise.all([
       db.prepare("SELECT id, name, email, role, active FROM members WHERE organization_id = ?1 AND role != 'superadmin' ORDER BY name").bind(organizationId).all(),
       db.prepare("SELECT subject, state, until, reason, revision FROM platform_access_rules WHERE organization_id = ?1").bind(organizationId).all(),
       activationFor(organizationId),
       db.prepare(`SELECT action, entity_id, actor_user_id, metadata_json, created_at FROM platform_audit_events
-        WHERE organization_id = ?1 AND (action LIKE 'platform.%' OR action LIKE 'drap.activation%') ORDER BY created_at DESC LIMIT 50`).bind(organizationId).all(),
+        WHERE organization_id = ?1 AND (action LIKE 'platform.%' OR action LIKE 'drap.activation%')
+        ORDER BY created_at DESC LIMIT 50`).bind(organizationId).all(),
       db.prepare(`SELECT lower(email) email FROM members WHERE organization_id = ?1 AND role != 'superadmin'
         UNION SELECT lower(email) FROM client_portal_access WHERE organization_id = ?1
         UNION SELECT lower(email) FROM organization_invitations WHERE organization_id = ?1`).bind(organizationId).all(),
@@ -48,7 +53,7 @@ export async function POST(request: Request) {
   const response = await apiRoute(async () => {
     checkPortalOrigin(request); const admin = await requireSuperAdmin(request);
     const parsed = schema.safeParse(await jsonBody(request)); if (!parsed.success) throw validationError(parsed.error.flatten());
-    const data = parsed.data; await organization(data.organizationId); const db = getDatabase();
+    const data = parsed.data; await organization(data.organizationId, data.action === "access"); const db = getDatabase();
     if (data.action === "access") {
       if (data.state === "suspended" && (!data.until || data.until <= Date.now() || data.until > Date.now() + 366 * 86400000)) throw new ApiError(400, "invalid_expiry", "Escolha o término do bloqueio, dentro de um ano.");
       if (data.state !== "suspended" && data.until !== null) throw new ApiError(400, "invalid_expiry", "Somente o bloqueio temporário recebe uma data.");

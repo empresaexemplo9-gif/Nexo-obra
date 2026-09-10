@@ -8,6 +8,16 @@ type RuntimeEnv = {
 
 const COOKIE = "__Host-nexo-maintenance";
 export const MAINTENANCE_ORGANIZATION_ID = "00000000-0000-4000-9000-000000000001";
+export const MAINTENANCE_ORGANIZATION_NAME = "Ambiente de manutenção";
+
+// O ambiente interno nasce vazio no primeiro acesso, seja do administrador de
+// manutenção ou do superadministrador. Os dois caminhos usam esta mesma instrução.
+export function maintenanceOrganizationStatement(db: D1Database, now = Date.now()) {
+  return db.prepare(
+    `INSERT OR IGNORE INTO organizations (id, name, slug, timezone, created_at, updated_at)
+     VALUES (?1, ?2, 'ambiente-de-manutencao', 'America/Sao_Paulo', ?3, ?3)`,
+  ).bind(MAINTENANCE_ORGANIZATION_ID, MAINTENANCE_ORGANIZATION_NAME, now);
+}
 const DURATION_SECONDS = 8 * 60 * 60;
 const encoder = new TextEncoder();
 

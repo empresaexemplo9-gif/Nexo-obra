@@ -23,7 +23,7 @@ async function api<T>(url: string, body?: object): Promise<T> {
   const result = await response.json(); if (!response.ok) throw new Error(result.error ?? "Não foi possível concluir."); return result;
 }
 
-function CompanyControls({ organizationId, name }: { organizationId: string; name: string }) {
+function CompanyControls({ organizationId, name, maintenance = false }: { organizationId: string; name: string; maintenance?: boolean }) {
   const [data, setData] = useState<Snapshot | null>(null);
   const [busy, setBusy] = useState(false); const [error, setError] = useState(""); const [message, setMessage] = useState("");
   const [companyId, setCompanyId] = useState(""); const [planId, setPlanId] = useState("");
@@ -56,7 +56,8 @@ function CompanyControls({ organizationId, name }: { organizationId: string; nam
   return <div className="space-y-6">
     {error && <p role="alert" className="rounded-lg bg-hoikos-50 p-4 text-hoikos-800">{error}</p>}
     {message && <p role="status" className="rounded-lg bg-hoikos-50 p-4 text-hoikos-800">{message}</p>}
-    <div className="grid gap-6 lg:grid-cols-2">
+    {maintenance && <p className="rounded-lg border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">Ambiente interno da plataforma. Não tem contratante, parceiro nem assinatura: aqui você controla o acesso do administrador de manutenção e lê o histórico administrativo.</p>}
+    <div className={`grid gap-6 lg:grid-cols-2 ${maintenance ? "hidden" : ""}`}>
       <Card><CardHeader><CardTitle>Ativação e mensalidade</CardTitle></CardHeader><CardContent className="space-y-4">
         <p>Mensalidade do Drap Empresa + 50%. A cobrança fica no Empresa, inclusive para quem usa somente o Architector.</p>
         {!data.configured && <p className="rounded-lg bg-hoikos-50 p-3 text-sm text-hoikos-900">A conexão de ativação com o Empresa ainda não está configurada. Nenhuma cobrança foi iniciada por esta ferramenta.</p>}
@@ -98,8 +99,9 @@ function CompanyControls({ organizationId, name }: { organizationId: string; nam
     <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) setConfirmation(null); }}><AlertDialogContent><AlertDialogTitle>Confirmar alteração</AlertDialogTitle><AlertDialogDescription>{confirmation?.text}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => { if (confirmation) void save(confirmation.body, "Alteração registrada."); }}>Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </div>;
 }
-export function PlatformControl({ organizations }: { organizations: { id: string; name: string }[] }) {
+export function PlatformControl({ organizations, maintenanceId }: { organizations: { id: string; name: string }[]; maintenanceId?: string }) {
   const [selected, setSelected] = useState("");
-  const organization = organizations.find((o) => o.id === selected);
-  return <section className="mt-6 space-y-4"><div className="flex flex-wrap items-end gap-4"><h2 className="text-xl font-semibold">Assinaturas, parceiros e acessos</h2><label className="block text-sm">Empresa<NativeSelect value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Selecione uma empresa</option>{organizations.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</NativeSelect></label></div>{organization && <CompanyControls key={selected} organizationId={selected} name={organization.name} />}</section>;
+  const options = maintenanceId ? [...organizations, { id: maintenanceId, name: "Ambiente de manutenção" }] : organizations;
+  const organization = options.find((o) => o.id === selected);
+  return <section className="mt-6 space-y-4"><div className="flex flex-wrap items-end gap-4"><h2 className="text-xl font-semibold">Assinaturas, parceiros e acessos</h2><label className="block text-sm">Empresa<NativeSelect value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Selecione uma empresa</option>{options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</NativeSelect></label></div>{organization && <CompanyControls key={selected} organizationId={selected} name={organization.name} maintenance={selected === maintenanceId} />}</section>;
 }

@@ -245,7 +245,8 @@ test("provides an isolated maintenance administrator without storing its passwor
   assert.match(auth, /MAINTENANCE_ADMIN_PASSWORD_HASH/);
   assert.match(auth, /PBKDF2/);
   assert.match(auth, /HttpOnly; Secure; SameSite=Strict/);
-  assert.match(session, /Ambiente de manutenção/);
+  assert.match(auth, /Ambiente de manutenção/);
+  assert.match(session, /maintenanceOrganizationStatement/);
   assert.match(backend, /MAINTENANCE_ORGANIZATION_ID/);
   assert.match(backend, /identity\.scope === "maintenance"/);
   assert.match(login, /Entrar no ambiente de manutenção/);

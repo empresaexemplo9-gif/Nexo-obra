@@ -19,6 +19,7 @@ import {
   MailPlus,
   Plus,
   ShieldCheck,
+  Wrench,
   Target,
   Users,
   XCircle,
@@ -38,6 +39,7 @@ type Overview = {
     id: string; name: string; slug: string; createdAt: string;
     members: number; clients: number; projects: number; openTasks: number;
   }>;
+  maintenance: { id: string; ready: boolean; members: number; projects: number; openTasks: number; lastEntryAt: number | null };
 };
 type Invitation = {
   id: string; organizationId: string; organizationName: string; email: string; role: string;
@@ -182,6 +184,24 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
   return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-hoikos-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-hoikos-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
 }
 
+function MaintenancePanel({ maintenance }: { maintenance: Overview["maintenance"] }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState("");
+
+  async function open() {
+    setOpening(true); setError("");
+    try {
+      await api("/api/superadmin/maintenance", { method: "POST" });
+      window.location.assign("/");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível abrir o ambiente de manutenção.");
+      setOpening(false);
+    }
+  }
+
+  return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Wrench className="size-5 text-hoikos-600" />Ambiente de manutenção</CardTitle><p className="text-sm leading-6 text-hoikos-500">O administrador de manutenção continua com login próprio em <span className="whitespace-nowrap">/manutencao</span>, confinado a este ambiente. Você entra aqui pela sessão da plataforma, sem a senha dele, e mantém os recursos que só o superadmin tem: cadastrar empresas, controlar acessos, assinaturas e trocar de empresa sem sair.</p></CardHeader><CardContent className="space-y-4">{maintenance.ready ? <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt className="text-hoikos-500">Membros</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.members}</dd></div><div><dt className="text-hoikos-500">Trabalhos</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.projects}</dd></div><div><dt className="text-hoikos-500">Tarefas abertas</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.openTasks}</dd></div></dl> : <p className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900">O ambiente ainda não foi criado. Ele nasce vazio no primeiro acesso, seu ou do administrador de manutenção.</p>}<p className="text-sm text-hoikos-500">{maintenance.lastEntryAt ? `Última entrada da plataforma em ${new Date(maintenance.lastEntryAt).toLocaleString("pt-BR")}.` : "Nenhuma entrada da plataforma registrada."}</p>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="button" onClick={() => void open()} disabled={opening} className="h-11 w-full">{opening ? <LoaderCircle className="animate-spin" /> : <Wrench />}Abrir ambiente de manutenção</Button></CardContent></Card>;
+}
+
 function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
@@ -223,9 +243,9 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
         <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-hoikos-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-hoikos-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-hoikos-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
         {error ? <Card className="border-hoikos-200 bg-hoikos-50 p-5 text-hoikos-700">{error}</Card> : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></Card> : <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric icon={Building2} label="Empresas" value={overview.totals.organizations} /><Metric icon={Users} label="Membros ativos" value={overview.totals.members} /><Metric icon={Target} label="Clientes" value={overview.totals.clients} /><Metric icon={FolderKanban} label="Projetos e obras" value={overview.totals.projects} /><Metric icon={ListChecks} label="Tarefas abertas" value={overview.totals.open_tasks} /></div>
-          <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-hoikos-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card></div>
+          <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><div className="grid gap-6"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-hoikos-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card><MaintenancePanel maintenance={overview.maintenance} /></div></div>
           <InvitationsPanel organizations={overview.organizations} />
-          <PlatformControl organizations={overview.organizations} />
+          <PlatformControl organizations={overview.organizations} maintenanceId={overview.maintenance.ready ? overview.maintenance.id : undefined} />
           <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-hoikos-900">{organization.name}</p><p className="text-xs text-hoikos-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-hoikos-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
         </>}
       </div>

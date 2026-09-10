@@ -51,6 +51,9 @@ const onboarding = await vite.ssrLoadModule("/app/api/onboarding/route.ts");
 const terms = await vite.ssrLoadModule("/app/api/terms/accept/route.ts");
 const portal = await vite.ssrLoadModule("/lib/server/portal.ts");
 const acceptInvitation = await vite.ssrLoadModule("/app/api/invitations/[token]/accept/route.ts");
+const maintenanceEntry = await vite.ssrLoadModule("/app/api/superadmin/maintenance/route.ts");
+const maintenance = await vite.ssrLoadModule("/lib/server/maintenance.ts");
+const { MAINTENANCE_ORGANIZATION_ID } = maintenance;
 
 const orgA = "11111111-1111-4111-8111-111111111111";
 const orgB = "22222222-2222-4222-8222-222222222222";
@@ -178,4 +181,84 @@ test("a plataforma não assina termos, não aceita convites nem vira cliente do 
   );
   assert.equal(invited.status, 403);
   assert.equal((await invited.json()).code, "superadmin_scope");
+});
+
+test("o superadministrador entra na manutenção sem a senha dela e a cria se ainda não existe", async () => {
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM organizations WHERE id=?").get(MAINTENANCE_ORGANIZATION_ID).n, 0);
+  const opened = await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers: { cookie } }));
+  assert.equal(opened.status, 200, await opened.clone().text());
+  assert.match(opened.headers.get("set-cookie") ?? "", new RegExp(`__Host-nexo-organization=${MAINTENANCE_ORGANIZATION_ID}`));
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM organizations WHERE id=?").get(MAINTENANCE_ORGANIZATION_ID).n, 1);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM platform_audit_events WHERE action='platform.maintenance_opened'").get().n, 1);
+
+  const context = await backend.requireOrganizationContext(asSuperAdmin(undefined, MAINTENANCE_ORGANIZATION_ID));
+  assert.equal(context.organization.id, MAINTENANCE_ORGANIZATION_ID);
+  assert.equal(context.member.role, "superadmin");
+  assert.equal(context.member.permissions.team.edit, true);
+
+  // Segunda entrada não duplica o ambiente nem perde o histórico.
+  assert.equal((await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers: { cookie } }))).status, 200);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM organizations WHERE id=?").get(MAINTENANCE_ORGANIZATION_ID).n, 1);
+  assert.equal((await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST" }))).status, 401);
+});
+
+test("a manutenção não é empresa contratante e não é o destino padrão do superadmin", async () => {
+  await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers: { cookie } }));
+  const body = await (await overview.GET(new Request("https://platform.test/api/superadmin/overview", { headers: { cookie } }))).json();
+  assert.equal(body.totals.organizations, 2);
+  assert.equal(body.organizations.some((organization) => organization.id === MAINTENANCE_ORGANIZATION_ID), false);
+  assert.equal(body.maintenance.ready, true);
+  assert.equal(body.maintenance.id, MAINTENANCE_ORGANIZATION_ID);
+
+  // Sem seleção, o superadmin cai numa empresa contratante, nunca no ambiente interno.
+  const semEscolha = new Request("https://platform.test/api/clients", { headers: { cookie } });
+  assert.notEqual((await backend.requireOrganizationContext(semEscolha)).organization.id, MAINTENANCE_ORGANIZATION_ID);
+});
+
+test("na manutenção o superadmin controla acesso e histórico; assinatura e parceiro seguem recusados", async () => {
+  await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers: { cookie } }));
+  const platformReq = (body) => new Request("https://platform.test/api/superadmin/platform", { method: "POST",
+    headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ organizationId: MAINTENANCE_ORGANIZATION_ID, ...body }) });
+
+  const blocked = await platform.POST(platformReq({ action: "access", subject: "*", state: "blocked", until: null, reason: "Manutenção pausada", revision: 0 }));
+  assert.equal(blocked.status, 200, await blocked.clone().text());
+  for (const body of [{ action: "partner", email: "p@example.test" }, { action: "enroll", companyId: "e", planId: "p", confirmed: true }, { action: "send" }]) {
+    assert.equal((await platform.POST(platformReq(body))).status, 403);
+  }
+  const read = await platform.GET(new Request(`https://platform.test/?organizationId=${MAINTENANCE_ORGANIZATION_ID}`, { headers: { cookie } }));
+  assert.equal(read.status, 200);
+  assert.equal((await read.json()).history.some((event) => event.action === "platform.maintenance_opened"), true);
+
+  // A regra vale para o administrador de manutenção, e não para a plataforma.
+  const context = await backend.requireOrganizationContext(asSuperAdmin(undefined, MAINTENANCE_ORGANIZATION_ID));
+  assert.equal(context.organization.id, MAINTENANCE_ORGANIZATION_ID);
+});
+
+test("o administrador de manutenção segue confinado e sem os recursos extras da plataforma", async () => {
+  runtime.MAINTENANCE_ADMIN_EMAIL = "manutencao@example.test";
+  runtime.MAINTENANCE_ADMIN_PASSWORD_HASH = "test-only";
+  runtime.MAINTENANCE_ADMIN_SESSION_SECRET = secret;
+  await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers: { cookie } }));
+  db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role,permissions_json) VALUES ('m','" + MAINTENANCE_ORGANIZATION_ID + "','nexo-maintenance-admin','Manutenção',?,'admin',?)")
+    .run("manutencao@example.test", JSON.stringify({}));
+  db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES ('t',?,'nexo-maintenance-admin',?,?,'','',1)")
+    .run(MAINTENANCE_ORGANIZATION_ID, "manutencao@example.test", CURRENT_TERMS_VERSION);
+  const maintenanceCookie = (await maintenance.createMaintenanceSessionCookie()).cookie.split(";")[0];
+  const asMaintenance = (organizationId) => new Request("https://platform.test/api/clients", { headers: { cookie: `${maintenanceCookie}; __Host-nexo-organization=${organizationId}` } });
+
+  // Continua entrando no seu ambiente...
+  const own = await backend.requireOrganizationContext(asMaintenance(MAINTENANCE_ORGANIZATION_ID));
+  assert.equal(own.organization.id, MAINTENANCE_ORGANIZATION_ID);
+  assert.equal(own.member.role, "admin");
+
+  // ...e continua sem alcançar as empresas contratantes, mesmo escolhendo uma.
+  assert.equal((await backend.requireOrganizationContext(asMaintenance(orgA))).organization.id, MAINTENANCE_ORGANIZATION_ID);
+
+  // Os recursos exclusivos do superadmin seguem fechados para ele.
+  const headers = { cookie: maintenanceCookie, "content-type": "application/json" };
+  assert.equal((await maintenanceEntry.POST(new Request("https://platform.test/api/superadmin/maintenance", { method: "POST", headers }))).status, 401);
+  assert.equal((await organizations.POST(new Request("https://platform.test/api/superadmin/organizations", { method: "POST", headers, body: JSON.stringify({ name: "Empresa da manutenção" }) }))).status, 401);
+  assert.equal((await overview.GET(new Request("https://platform.test/api/superadmin/overview", { headers }))).status, 401);
+  assert.equal((await platform.POST(new Request("https://platform.test/api/superadmin/platform", { method: "POST", headers,
+    body: JSON.stringify({ action: "access", organizationId: orgA, subject: "*", state: "blocked", until: null, reason: "Tentativa", revision: 0 }) }))).status, 401);
 });

@@ -7,6 +7,7 @@ import {
   clearMaintenanceSessionCookie,
   createMaintenanceSessionCookie,
   readMaintenanceIdentity,
+  maintenanceOrganizationStatement,
   MAINTENANCE_ORGANIZATION_ID,
   verifyMaintenanceCredentials,
 } from "@/lib/server/maintenance";
@@ -59,8 +60,7 @@ export async function POST(request: Request) {
     await db.batch([
       db.prepare("INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)")
         .bind(userId, normalizedEmail, "Administrador de manutenção", now),
-      db.prepare("INSERT OR IGNORE INTO organizations (id, name, slug, timezone, created_at, updated_at) VALUES (?1, 'Ambiente de manutenção', 'ambiente-de-manutencao', 'America/Sao_Paulo', ?2, ?2)")
-        .bind(MAINTENANCE_ORGANIZATION_ID, now),
+      maintenanceOrganizationStatement(db, now),
       db.prepare("INSERT OR IGNORE INTO organization_members (id, organization_id, user_id, role, created_at) VALUES (?1, ?2, ?3, 'admin', ?4)")
         .bind(MEMBER_ID, MAINTENANCE_ORGANIZATION_ID, userId, now),
       db.prepare(
