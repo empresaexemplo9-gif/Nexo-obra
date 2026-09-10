@@ -111,8 +111,11 @@ Comandos úteis:
 npm run dev
 npm run build
 npm run lint
+npm test
 npm run db:generate
 ```
+
+Os testes cobrem regra de negócio, autorização, cálculo e interface. Consulte [Testes de interface](docs/TESTES-DE-INTERFACE.md).
 
 ## Repositório e publicação
 
