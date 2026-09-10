@@ -18,6 +18,7 @@ export const analysisSettingsSchema = z.object({
     "custo_colaborador", "horas", "quantidade", "preco_unitario",
   ])).default({}),
   targetMarginPercent: z.number().min(0).max(95).default(20),
+  ignoreRows: z.array(z.number().int().min(0).max(499)).max(50).default([]),
 }).strict();
 
 export const contentSchema = z.object({
@@ -26,12 +27,14 @@ export const contentSchema = z.object({
   widths: z.record(z.string(), z.number().int().min(60).max(600)).default({}),
   formats: z.record(columnLetter, z.enum(["texto", "numero", "moeda", "percentual"])).default({}),
   bold: z.array(z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,3}$/)).max(5000).default([]),
-  analysis: analysisSettingsSchema.default({ headerRow: 0, roles: {}, targetMarginPercent: 20 }),
+  analysis: analysisSettingsSchema.default({ headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] }),
 }).strict();
 
 export const worksheetSchema = z.object({
   name: z.string().trim().min(1).max(120),
   kind: z.enum(worksheetKinds).default("sheet"),
+  // O modelo é montado no servidor: o navegador escolhe qual, nunca o conteúdo dele.
+  templateId: z.string().trim().max(60).optional(),
   columns: z.number().int().min(1).max(SHEET_MAX_COLUMNS).default(12),
   rows: z.number().int().min(1).max(SHEET_MAX_ROWS).default(60),
   content: contentSchema.default({ cells: {}, body: "", widths: {} }),
@@ -65,7 +68,7 @@ export function worksheetAccess(
 export function worksheetResponse(row: WorksheetRow) {
   let content = {
     cells: {}, body: "", widths: {}, formats: {}, bold: [],
-    analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20 },
+    analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] },
   };
   try { content = { ...content, ...JSON.parse(row.content_json) }; } catch { /* conteúdo inválido volta vazio */ }
   return {

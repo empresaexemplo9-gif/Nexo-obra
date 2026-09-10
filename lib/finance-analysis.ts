@@ -24,9 +24,14 @@ export type AnalysisSettings = {
   headerRow: number;
   roles: Record<string, ColumnRole>;
   targetMarginPercent: number;
+  // Linhas de total, base zero. Sem isso a linha de soma entraria como mais um
+  // lançamento e dobraria receita, custo e horas da leitura inteira.
+  ignoreRows: number[];
 };
 
-export const defaultAnalysisSettings: AnalysisSettings = { headerRow: 0, roles: {}, targetMarginPercent: 20 };
+export const defaultAnalysisSettings: AnalysisSettings = {
+  headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [],
+};
 
 export type SectorAnalysis = {
   name: string;
@@ -147,7 +152,9 @@ export function analyzeSheet(
   const totalsBucket = empty();
   const sectorBuckets = new Map<string, Bucket>();
 
+  const ignored = new Set(settings.ignoreRows ?? []);
   for (let row = settings.headerRow + 1; row < rows; row += 1) {
+    if (ignored.has(row)) continue;
     const direct = revenueColumns.reduce((sum, letter) => sum + numberAt(letter, row), 0);
     const derived = quantityColumns.length && unitPriceColumns.length
       ? quantityColumns.reduce((sum, letter) => sum + numberAt(letter, row), 0)

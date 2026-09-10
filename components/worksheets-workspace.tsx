@@ -20,6 +20,7 @@ import {
 } from "@/lib/spreadsheet";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
+import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
@@ -245,11 +246,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setDirty(true);
   }
 
-  async function create(kind: WorksheetKind) {
+  async function create(kind: WorksheetKind, templateId?: string) {
     try {
-      const label = kind === "sheet" ? "Planilha" : kind === "document" ? "Documento" : "Saúde financeira";
-      const name = `${label} ${list.filter((item) => item.kind === kind).length + 1}`;
-      const result = await api<{ worksheet: Worksheet }>("/api/worksheets", { method: "POST", body: JSON.stringify({ name, kind }) });
+      const template = templateId ? worksheetTemplates.find((item) => item.id === templateId) : null;
+      const label = template ? template.name
+        : kind === "sheet" ? "Planilha" : kind === "document" ? "Documento" : "Saúde financeira";
+      const existing = list.filter((item) => item.name === label || item.name.startsWith(`${label} `)).length;
+      const name = existing ? `${label} ${existing + 1}` : label;
+      const result = await api<{ worksheet: Worksheet }>("/api/worksheets", { method: "POST", body: JSON.stringify({ name, kind, templateId }) });
       await loadList();
       setCurrent(result.worksheet);
       setAccess({ canView: true, canEdit: true, canGovern: kind === "analysis", level: "superadmin" });
@@ -353,12 +357,43 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     {error ? <Card className="border-hoikos-200"><CardContent className="flex items-center gap-3 p-4 text-sm text-hoikos-800"><CircleAlert className="size-5 shrink-0" />{error}</CardContent></Card> : null}
 
     {!current ? (
-      <Card><CardContent className="grid min-h-56 place-items-center p-6 text-center"><div>
-        <FileSpreadsheet className="mx-auto size-7 text-hoikos-500" />
-        <p className="mt-3 font-medium text-hoikos-900">Nenhuma planilha ainda</p>
-        <p className="mt-1 text-sm text-hoikos-500">Crie uma planilha e traga os itens de orçamento, projetos, clientes ou tarefas já somados.</p>
-        <Button className="mt-4" onClick={() => void create("sheet")}><Plus />Nova planilha</Button>
-      </div></CardContent></Card>
+      <div className="space-y-5">
+        <Card><CardHeader className="gap-2">
+          <CardTitle className="text-base">Comece por um modelo</CardTitle>
+          <p className="text-sm leading-6 text-hoikos-500">
+            Cada modelo já vem com o cabeçalho, as fórmulas e o papel de cada coluna marcado, então a leitura
+            financeira funciona desde a primeira linha digitada. Nenhum traz dado de exemplo: a estrutura ajuda,
+            número inventado atrapalha.
+          </p>
+        </CardHeader></Card>
+        {(Object.keys(templateCategories) as TemplateCategory[]).map((category) => (
+          <section key={category} className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-hoikos-600">{templateCategories[category]}</h3>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {worksheetTemplates.filter((template) => template.category === category).map((template) => (
+                <Card key={template.id} className="flex flex-col">
+                  <CardHeader className="gap-1.5 pb-3">
+                    <CardTitle className="text-base">{template.name}</CardTitle>
+                    <p className="text-sm leading-6 text-hoikos-600">{template.purpose}</p>
+                  </CardHeader>
+                  <CardContent className="mt-auto space-y-3 pt-0">
+                    <p className="text-xs leading-5 text-hoikos-500">{template.note}</p>
+                    <p className="text-xs text-hoikos-500">{template.headers.filter(Boolean).join(" · ")}</p>
+                    <Button size="sm" variant="outline" className="w-full" onClick={() => void create("sheet", template.id)}>
+                      <Plus />Usar este modelo
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </section>
+        ))}
+        <Card><CardContent className="flex flex-wrap items-center gap-3 p-5">
+          <FileSpreadsheet className="size-6 text-hoikos-500" />
+          <p className="min-w-0 flex-1 text-sm text-hoikos-600">Prefere começar do zero? A planilha em branco aceita qualquer dado e você marca os papéis depois.</p>
+          <Button variant="outline" onClick={() => void create("sheet")}><Plus />Planilha em branco</Button>
+        </CardContent></Card>
+      </div>
     ) : <Card className="overflow-hidden">
       <CardHeader className="gap-3 border-b">
         <div className="flex flex-wrap items-center gap-2">

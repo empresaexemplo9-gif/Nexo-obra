@@ -116,7 +116,20 @@ export function AnalysisPanel({
               onChange={(event) => onChange({ ...settings, targetMarginPercent: Math.min(95, Math.max(0, Number(event.target.value))) })}
               className="mt-1 h-9 w-28" />
           </label>
-          <p className="text-sm text-hoikos-500">{analysis.rowsCounted} linha(s) com valor entram na conta.</p>
+          <label className="text-sm">Linha de totais, fora da conta
+            <Input type="number" min={0} max={500} disabled={!canEdit}
+              value={settings.ignoreRows?.[0] !== undefined ? settings.ignoreRows[0] + 1 : ""}
+              placeholder="nenhuma"
+              onChange={(event) => {
+                const line = Number(event.target.value);
+                onChange({ ...settings, ignoreRows: line > 0 ? [line - 1] : [] });
+              }}
+              className="mt-1 h-9 w-28" />
+          </label>
+          <p className="text-sm text-hoikos-500">
+            {analysis.rowsCounted} linha(s) com valor entram na conta.
+            {settings.ignoreRows?.length ? " A linha de totais fica de fora para não contar duas vezes." : ""}
+          </p>
         </div>
       </CardContent>
     </Card>

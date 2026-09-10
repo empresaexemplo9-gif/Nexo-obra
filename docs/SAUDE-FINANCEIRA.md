@@ -79,6 +79,12 @@ Ordenar move linhas inteiras. Quando há fórmula nas linhas a ordenar, a opera�
 **recusada com aviso** — mover referências para o lugar errado seria pior do que não
 ordenar.
 
+## Linha de totais
+
+Uma linha de soma no rodapé entraria como mais um lançamento e dobraria a leitura inteira.
+Por isso ela é marcada como ignorada — os [modelos](MODELOS-DE-PLANILHA.md) já nascem
+assim, e numa planilha em branco o campo *Linha de totais, fora da conta* resolve.
+
 ## Limite conhecido
 
 São 52 colunas e 500 linhas. Não há gráfico, tabela dinâmica, macro nem formatação

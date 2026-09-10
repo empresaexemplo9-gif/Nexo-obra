@@ -285,3 +285,33 @@ test("a planilha comum continua aberta à empresa como antes", async () => {
   assert.equal(doColaborador.status, 200);
   assert.equal((await doColaborador.json()).access.canEdit, true);
 });
+
+test("criar por modelo monta o conteúdo no servidor, com fórmulas e papéis prontos", async () => {
+  const response = await list.POST(owner("/api/worksheets", { method: "POST",
+    body: JSON.stringify({ name: "Orçamento da Casa Alfa", kind: "sheet", templateId: "orcamento-obra" }) }));
+  assert.equal(response.status, 201, await response.clone().text());
+  const { worksheet } = await response.json();
+
+  assert.equal(worksheet.content.cells.A1, "Etapa");
+  assert.equal(worksheet.content.cells.F2, '=SE(D2="";"";D2*E2)');
+  assert.equal(worksheet.content.analysis.roles.H, "receita");
+  assert.equal(worksheet.content.analysis.roles.F, "custo");
+  assert.equal(worksheet.content.analysis.targetMarginPercent, 25);
+  assert.equal(worksheet.content.analysis.ignoreRows.length, 1, "a linha de totais já nasce fora da leitura");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='worksheet.created'").get().n, 1);
+});
+
+test("um modelo que não existe é recusado e o conteúdo nunca vem do navegador", async () => {
+  const inexistente = await list.POST(owner("/api/worksheets", { method: "POST",
+    body: JSON.stringify({ name: "X", kind: "sheet", templateId: "nao-existe" }) }));
+  assert.equal(inexistente.status, 404);
+  assert.equal((await inexistente.json()).code, "template_not_found");
+
+  // Mesmo mandando conteúdo junto, o modelo do servidor é o que vale.
+  const forjada = await list.POST(owner("/api/worksheets", { method: "POST",
+    body: JSON.stringify({ name: "Forjada", kind: "sheet", templateId: "fluxo-de-caixa",
+      content: { cells: { A1: "invadido" }, body: "", widths: {}, formats: {}, bold: [],
+        analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }) }));
+  assert.equal(forjada.status, 201);
+  assert.equal((await forjada.json()).worksheet.content.cells.A1, "Data");
+});

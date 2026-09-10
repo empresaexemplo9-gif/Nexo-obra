@@ -8,6 +8,7 @@ import {
   validationError,
 } from "@/lib/server/backend";
 import { worksheetResponse, worksheetSchema, type WorksheetRow } from "@/lib/worksheets";
+import { buildTemplateContent, templateById } from "@/lib/worksheet-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,16 @@ export async function POST(request: Request) {
       throw new ApiError(403, "analysis_superadmin_only", "Somente o superadministrador cria planilhas de saúde financeira.");
     }
     const visibility = data.kind === "analysis" ? "restricted" : "organization";
+
+    let { content, columns, rows } = data;
+    if (data.templateId) {
+      const template = templateById(data.templateId);
+      if (!template) throw new ApiError(404, "template_not_found", "Modelo não encontrado.");
+      const built = buildTemplateContent(template);
+      content = { cells: built.cells, body: built.body, widths: built.widths, formats: built.formats, bold: built.bold, analysis: built.analysis };
+      columns = built.columns;
+      rows = built.rows;
+    }
     const id = crypto.randomUUID();
     const now = Date.now();
     await context.db.batch([
@@ -57,8 +68,8 @@ export async function POST(request: Request) {
           id, organization_id, kind, name, content_json, columns, rows,
           created_by_member_id, created_by_name, visibility, revision, created_at, updated_at
         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 1, ?11, ?11)`,
-      ).bind(id, context.organization.id, data.kind, data.name, JSON.stringify(data.content),
-        data.columns, data.rows, context.member.id, context.user.displayName, visibility, now),
+      ).bind(id, context.organization.id, data.kind, data.name, JSON.stringify(content),
+        columns, rows, context.member.id, context.user.displayName, visibility, now),
       auditStatement(context, "worksheet.created", "worksheet", id, { kind: data.kind, name: data.name }),
     ]);
     const row = await context.db.prepare("SELECT * FROM worksheets WHERE id = ?1 AND organization_id = ?2")
