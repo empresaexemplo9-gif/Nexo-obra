@@ -2,6 +2,8 @@ import "server-only";
 
 import { headers } from "next/headers";
 
+import { chatGPTSignInPath, chatGPTSignOutPath } from "@/app/chatgpt-auth";
+
 /**
  * Fronteira de identidade.
  *
@@ -102,3 +104,12 @@ export function resolveIdentityFrom(
 export async function resolveIdentity(): Promise<Identity | null> {
   return resolveIdentityFrom(await headers(), process.env);
 }
+
+/**
+ * Caminhos de entrada e saída do provedor atual.
+ *
+ * Reexportados daqui para que as telas importem a fronteira de identidade, e não
+ * o detalhe da plataforma. Ao trocar de provedor, troque estas duas linhas junto
+ * com `fromPlatformHeaders` — nenhum componente precisa mudar.
+ */
+export { chatGPTSignInPath as signInPath, chatGPTSignOutPath as signOutPath };

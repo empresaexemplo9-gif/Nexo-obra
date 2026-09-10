@@ -53,24 +53,37 @@ function toRole(value: string): Role {
   return isRole(value) ? value : "client";
 }
 
+/**
+ * Carrega as associações do usuário, ou `null` quando o banco não responde.
+ *
+ * O binding existir não significa que o schema esteja aplicado: em um ambiente
+ * novo as tabelas podem não existir ainda. Por isso a consulta é protegida — a
+ * falha vira o estado "indisponível", que a tela explica, em vez de um 500 sem
+ * sentido para o usuário.
+ */
 async function loadMemberships(identity: Identity): Promise<Membership[] | null> {
   const db = getDbOrNull();
   if (!db) return null;
 
-  const rows = await db
-    .select({
-      memberId: members.id,
-      organizationId: organizations.id,
-      organizationName: organizations.name,
-      organizationSlug: organizations.slug,
-      role: members.role,
-    })
-    .from(members)
-    .innerJoin(organizations, eq(members.organizationId, organizations.id))
-    .where(and(eq(members.externalUserId, identity.subject), eq(members.active, true)))
-    .orderBy(asc(organizations.name));
+  try {
+    const rows = await db
+      .select({
+        memberId: members.id,
+        organizationId: organizations.id,
+        organizationName: organizations.name,
+        organizationSlug: organizations.slug,
+        role: members.role,
+      })
+      .from(members)
+      .innerJoin(organizations, eq(members.organizationId, organizations.id))
+      .where(and(eq(members.externalUserId, identity.subject), eq(members.active, true)))
+      .orderBy(asc(organizations.name));
 
-  return rows.map((row) => ({ ...row, role: toRole(row.role) }));
+    return rows.map((row) => ({ ...row, role: toRole(row.role) }));
+  } catch (error) {
+    console.error("[auth] não foi possível ler as associações do usuário", error);
+    return null;
+  }
 }
 
 export async function getAuthState(): Promise<AuthState> {
