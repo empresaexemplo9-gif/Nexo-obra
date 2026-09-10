@@ -9,6 +9,7 @@ import {
   Building2,
   Check,
   Copy,
+  Database,
   DoorOpen,
   Eye,
   EyeOff,
@@ -89,7 +90,7 @@ function Login({ onAuthenticated }: { onAuthenticated: (session: Session) => voi
       <Card className="relative w-full max-w-md overflow-hidden border-white/10 bg-primary text-white shadow-none ">
         <div className="h-px bg-border" />
         <CardContent className="p-7 sm:p-9">
-          <BrandLogo dark stacked className="h-auto w-full max-w-[240px]" />
+          <BrandLogo variant="stacked" dark className="h-auto w-full max-w-[240px]" />
           <div className="mt-8 flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-md bg-hoikos-400/10 text-hoikos-300 ring-1 ring-hoikos-300/20"><ShieldCheck className="size-5" /></span>
             <div><h1 className="display-heading text-3xl">Controle da plataforma</h1><p className="mt-1 text-sm text-hoikos-500">Acesso exclusivo do superadministrador.</p></div>
@@ -185,6 +186,55 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
   return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-hoikos-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-hoikos-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
 }
 
+type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number };
+
+// O banco desatualizado derruba o resto do painel, então este bloco é carregado por
+// conta própria e aparece mesmo quando os indicadores falham.
+function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onApplied: () => Promise<void> }) {
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(0);
+
+  async function apply() {
+    setApplying(true); setError("");
+    try {
+      const result = await api<{ applied: Array<{ id: string }> }>("/api/superadmin/migrations", { method: "POST" });
+      setDone(result.applied.length);
+      await onApplied();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível atualizar o banco.");
+    } finally { setApplying(false); }
+  }
+
+  if (!status.pending.length) {
+    return <Card className="workspace-card"><CardContent className="flex flex-wrap items-center gap-3 p-4">
+      <Database className="size-5 text-hoikos-600" />
+      <p className="min-w-0 flex-1 text-sm text-hoikos-600">
+        Banco de dados em dia: {status.applied.length} de {status.total} atualizações aplicadas.
+        {done ? ` ${done} aplicada(s) agora.` : ""}
+      </p>
+    </CardContent></Card>;
+  }
+
+  return <Card className="border-hoikos-400 bg-hoikos-50">
+    <CardHeader className="gap-2">
+      <CardTitle className="flex items-center gap-2 text-lg"><Database className="size-5 text-hoikos-700" />Banco de dados desatualizado</CardTitle>
+      <p className="text-sm leading-6 text-hoikos-800">
+        Faltam {status.pending.length} de {status.total} atualizações de esquema. Enquanto isso, as áreas que
+        dependem das tabelas novas — planilhas, lembretes, metas e tempo de uso — respondem erro. Aplicar é seguro:
+        o que já existe é reconhecido e nada é recriado.
+      </p>
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <p className="break-all text-xs text-hoikos-600">{status.pending.join(", ")}</p>
+      {error ? <p role="alert" className="text-sm font-medium text-hoikos-800">{error}</p> : null}
+      <Button onClick={() => void apply()} disabled={applying} className="h-11 w-full sm:w-auto">
+        {applying ? <LoaderCircle className="animate-spin" /> : <Database />}Atualizar banco de dados
+      </Button>
+    </CardContent>
+  </Card>;
+}
+
 function MaintenancePanel({ maintenance }: { maintenance: Overview["maintenance"] }) {
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState("");
@@ -205,6 +255,7 @@ function MaintenancePanel({ maintenance }: { maintenance: Overview["maintenance"
 
 function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [database, setDatabase] = useState<MigrationStatus | null>(null);
   const [error, setError] = useState("");
   const [entering, setEntering] = useState("");
 
@@ -212,12 +263,25 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
     setOverview(await api<Overview>("/api/superadmin/overview"));
   }, []);
 
+  const loadDatabase = useCallback(async () => {
+    try { setDatabase(await api<MigrationStatus>("/api/superadmin/migrations")); }
+    catch { setDatabase(null); }
+  }, []);
+
+  const reload = useCallback(async () => {
+    // Sem limpar, o erro da carga anterior sobreviveria à correção do banco.
+    setError("");
+    await loadDatabase();
+    await loadOverview().catch((cause) => setError(cause instanceof Error ? cause.message : "Falha ao carregar."));
+  }, [loadDatabase, loadOverview]);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      void loadDatabase();
       void loadOverview().catch((cause) => setError(cause instanceof Error ? cause.message : "Falha ao carregar."));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadOverview]);
+  }, [loadDatabase, loadOverview]);
 
   async function openCompany(organizationId: string) {
     setEntering(organizationId); setError("");
@@ -242,7 +306,10 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
       </header>
       <div className=" mx-auto max-w-[1480px] px-5 py-7 sm:px-8 sm:py-10">
         <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-hoikos-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-hoikos-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-hoikos-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
-        {error ? <Card className="border-hoikos-200 bg-hoikos-50 p-5 text-hoikos-700">{error}</Card> : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></Card> : <>
+        {database ? <div className="mb-6"><DatabasePanel status={database} onApplied={reload} /></div> : null}
+        {error && !database?.pending.length ? <Card className="border-hoikos-200 bg-hoikos-50 p-5 text-hoikos-700">{error}</Card>
+          : error ? null
+          : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></Card> : <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric icon={Building2} label="Empresas" value={overview.totals.organizations} /><Metric icon={Users} label="Membros ativos" value={overview.totals.members} /><Metric icon={Target} label="Clientes" value={overview.totals.clients} /><Metric icon={FolderKanban} label="Projetos e obras" value={overview.totals.projects} /><Metric icon={ListChecks} label="Tarefas abertas" value={overview.totals.open_tasks} /></div>
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><div className="grid gap-6"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-hoikos-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card><MaintenancePanel maintenance={overview.maintenance} /></div></div>
           <InvitationsPanel organizations={overview.organizations} />

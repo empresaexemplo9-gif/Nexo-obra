@@ -111,11 +111,23 @@ Comandos úteis:
 npm run dev
 npm run build
 npm run lint
+npm run typecheck
 npm test
 npm run db:generate
 ```
 
 Os testes cobrem regra de negócio, autorização, cálculo e interface. Consulte [Testes de interface](docs/TESTES-DE-INTERFACE.md).
+
+## Primeiro acesso e atualização do banco
+
+O `db:generate` apenas escreve as migrações em `drizzle/`; **nada no deploy as aplica**. Ao
+publicar uma versão com migração nova, entre em `/superadmin` e use **Atualizar banco de
+dados** — o aviso aparece no topo do painel, com o que falta aplicar, e continua visível
+mesmo quando o resto do painel falha por causa das tabelas ausentes. Consulte
+[Atualizar o banco de dados](docs/ATUALIZAR-BANCO.md).
+
+Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
+`database_not_migrated`.
 
 ## Repositório e publicação
 

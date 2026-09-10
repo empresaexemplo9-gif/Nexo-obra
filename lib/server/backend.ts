@@ -263,6 +263,16 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     if (error instanceof ApiError) {
       return Response.json({ error: error.message, code: error.code, details: error.details }, { status: error.status });
     }
+    // Banco sem as migrações aplicadas era a falha mais confusa da plataforma: toda
+    // funcionalidade nova respondia "não foi possível concluir", sem dizer o motivo.
+    const message = String(error).toLowerCase();
+    if (message.includes("no such table") || message.includes("no such column")) {
+      console.error("H.OIKOS banco desatualizado", error);
+      return Response.json({
+        error: "O banco de dados está desatualizado: falta aplicar as migrações. Entre em /superadmin e use “Atualizar banco de dados”.",
+        code: "database_not_migrated",
+      }, { status: 503 });
+    }
     console.error("H.OIKOS API failure", error);
     return Response.json({ error: "Não foi possível concluir a operação.", code: "internal_error" }, { status: 500 });
   }

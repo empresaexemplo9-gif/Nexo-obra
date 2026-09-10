@@ -182,7 +182,7 @@ export function analyzeSheet(
   const totalMargin = exact(totalsBucket.revenue - totalCost);
   const marginPercent = totalsBucket.revenue > 0 ? exact((totalMargin / totalsBucket.revenue) * 100) : null;
 
-  const sectors: SectorAnalysis[] = [...sectorBuckets.entries()].map(([name, bucket]) => {
+  const sectors: SectorAnalysis[] = [...sectorBuckets.entries()].map(([name, bucket]): SectorAnalysis => {
     const cost = exact(bucket.cost + bucket.collaboratorCost);
     const margin = exact(bucket.revenue - cost);
     const sectorMarginPercent = bucket.revenue > 0 ? exact((margin / bucket.revenue) * 100) : null;
