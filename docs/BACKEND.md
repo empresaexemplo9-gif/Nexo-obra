@@ -11,7 +11,7 @@ O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.a
 - `owner`, `admin`, `manager` e `member` operam o núcleo. Exclusões exigem `owner`, `admin` ou `manager`.
 - Todas as criações, alterações e exclusões geram evento em `audit_events`.
 
-O superadmin usa uma sessão separada das contas das empresas. O e-mail configurado e o hash PBKDF2 da senha ficam exclusivamente no ambiente de produção. O cookie administrativo é assinado, `HttpOnly`, `Secure` e `SameSite=Strict`; cinco falhas dentro de 15 minutos bloqueiam novas tentativas temporariamente.
+O superadmin usa uma sessão separada das contas das empresas. Enquanto ela existe, a resolução de identidade devolve o escopo `superadmin` e o contexto é montado com permissão total na empresa selecionada, sem exigir papel, bloqueio de acesso, assinatura confirmada ou aceite de termos; veja [Superadministrador](SUPERADMIN.md). O e-mail configurado e o hash PBKDF2 da senha ficam exclusivamente no ambiente de produção. O cookie administrativo é assinado, `HttpOnly`, `Secure` e `SameSite=Strict`; cinco falhas dentro de 15 minutos bloqueiam novas tentativas temporariamente.
 
 ## Convites e criação de acesso
 
@@ -38,6 +38,7 @@ O superadmin usa uma sessão separada das contas das empresas. O e-mail configur
 | `GET`, `PATCH`, `DELETE` | `/api/tasks/:taskId` | Consulta, altera e exclui uma tarefa |
 | `GET`, `POST`, `DELETE` | `/api/superadmin/session` | Consulta, cria ou encerra a sessão administrativa |
 | `GET` | `/api/superadmin/overview` | Retorna os indicadores globais da plataforma |
+| `POST` | `/api/superadmin/organizations` | Cadastra uma empresa contratante vazia |
 | `GET`, `POST` | `/api/superadmin/invitations` | Lista e cria convites individuais |
 | `DELETE` | `/api/superadmin/invitations/:invitationId` | Revoga um convite pendente |
 | `GET` | `/api/invitations/:token` | Valida e apresenta os dados públicos mínimos do convite |

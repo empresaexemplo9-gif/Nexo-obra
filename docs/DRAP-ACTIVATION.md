@@ -20,7 +20,7 @@ Em `/superadmin`, use **Assinaturas, parceiros e acessos**, selecione a empresa 
 4. Adicione parceiros pelo e-mail. O convite dura sete dias, usa o perfil existente de parceiro (leitura dos módulos permitidos) e exige aceite dos termos. O link é copiado pelo administrador; não há envio automático de mensagens.
 5. Bloqueie a empresa inteira ou um e-mail de membro, cliente do portal ou convite. Bloqueio temporário expira na data informada; bloqueio permanente não expira. Excluir acesso conserva um registro de exclusão lógica e impede reutilização de convites. Restaurar remove a restrição administrativa, mas não substitui a confirmação da assinatura.
 
-Bloquear ou excluir acesso não cancela a cobrança. Alterações de assinatura e cancelamento financeiro são feitos no Empresa. Não são apagados projetos, documentos, registros financeiros ou autoria histórica. O superadmin vê metadados e histórico administrativo; não recebe conteúdo privado das obras. O ambiente de manutenção é reservado.
+Bloquear ou excluir acesso não cancela a cobrança. Alterações de assinatura e cancelamento financeiro são feitos no Empresa. Não são apagados projetos, documentos, registros financeiros ou autoria histórica. O superadmin vê metadados e histórico administrativo neste painel e pode abrir a empresa para operar o conteúdo dela com permissão total, sempre sob auditoria. O ambiente de manutenção é reservado.
 
 As regras são consultadas no servidor a cada requisição, incluindo portal, fotos privadas e decisões. Regras de usuário ficam limitadas à empresa selecionada. Mudança de e-mail não remove restrições vinculadas ao e-mail já associado ao ID autenticado de membro/cliente. Ativação financeira nunca limpa bloqueio manual.
 

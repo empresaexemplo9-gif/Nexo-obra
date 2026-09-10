@@ -16,7 +16,7 @@ Cada colaborador que mantém a tela aberta recebe atualizações por consulta au
 
 `diary.view` libera leitura, fotos e relatórios. `diary.edit` libera criação, correção e envio de fotos (edição implica leitura). O contratante configura essas caixinhas em **Equipe**. Proprietários têm acesso; o modelo de administrador inclui o módulo. Matrizes secundárias já personalizadas não recebem automaticamente acesso a esse novo módulo. Gestores, colaboradores, parceiros, prestadores, financeiro e contabilidade precisam da liberação explícita do administrador.
 
-O administrador de manutenção acessa apenas sua organização interna; se já estava conectado antes desta atualização, deve sair e entrar novamente para atualizar sua matriz de administrador. O superadmin não recebe acesso aos diários das empresas contratantes.
+O administrador de manutenção acessa apenas sua organização interna; se já estava conectado antes desta atualização, deve sair e entrar novamente para atualizar sua matriz de administrador. O superadmin abre qualquer empresa com leitura e edição do diário; a entrada na empresa e cada escrita ficam registradas na auditoria. Consulte [Superadministrador](SUPERADMIN.md).
 
 O escopo desta entrega é a empresa: quem recebe permissão de Diário pode consultar os diários das obras dessa empresa. Não há ACL por obra ou acesso do cliente final nesta entrega. A lista de seleção do diário retorna somente ID, código e nome dos projetos, sem liberar orçamento, clientes ou dados financeiros para quem não possui essas permissões.
 
