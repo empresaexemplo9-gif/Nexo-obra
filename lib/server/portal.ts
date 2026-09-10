@@ -48,6 +48,7 @@ export async function managerAccess(context: OrganizationContext, id: string) {
 export async function portalIdentity(request: Request) {
   const identity = await authenticatedIdentity(request);
   if (identity.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "A manutenção não pode assumir a identidade de um cliente. Use os controles internos do portal.");
+  if (identity.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "O superadministrador não assume a identidade de um cliente. Abra a empresa e use o portal do cliente por lá.");
   return identity;
 }
 export async function clientAccess(request: Request, id: string, allowUnaccepted = false) {

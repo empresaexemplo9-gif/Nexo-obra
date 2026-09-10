@@ -34,6 +34,7 @@ export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const identity = await authenticatedIdentity(request);
     if (identity.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção permanece isolado do ambiente dos clientes.");
+    if (identity.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "O superadministrador já opera todas as empresas. Saia do painel para aceitar um convite com sua conta pessoal.");
     const parsed = acceptanceSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const { token } = await route.params;

@@ -48,6 +48,9 @@ const clients = await vite.ssrLoadModule("/app/api/clients/route.ts");
 const members = await vite.ssrLoadModule("/app/api/members/route.ts");
 const session = await vite.ssrLoadModule("/app/api/session/route.ts");
 const onboarding = await vite.ssrLoadModule("/app/api/onboarding/route.ts");
+const terms = await vite.ssrLoadModule("/app/api/terms/accept/route.ts");
+const portal = await vite.ssrLoadModule("/lib/server/portal.ts");
+const acceptInvitation = await vite.ssrLoadModule("/app/api/invitations/[token]/accept/route.ts");
 
 const orgA = "11111111-1111-4111-8111-111111111111";
 const orgB = "22222222-2222-4222-8222-222222222222";
@@ -158,4 +161,21 @@ test("sem empresas cadastradas, a plataforma responde vazia em vez de fabricar c
   const body = await (await session.GET(asSuperAdmin("https://platform.test/api/session"))).json();
   assert.equal(body.platformEmpty, true);
   assert.equal(body.needsOrganization, false);
+});
+
+test("a plataforma não assina termos, não aceita convites nem vira cliente do portal", async () => {
+  const accepted = await terms.POST(asSuperAdmin("https://platform.test/api/terms/accept", orgA, { method: "POST", body: JSON.stringify({ accepted: true, version: CURRENT_TERMS_VERSION }) }));
+  assert.equal(accepted.status, 403);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM terms_acceptances WHERE external_user_id='platform-superadmin'").get().n, 0);
+
+  await assert.rejects(portal.portalAccessesForUser(asSuperAdmin("https://platform.test/api/portal", orgA)), { code: "superadmin_scope" });
+
+  db.sqlite.prepare("INSERT INTO organization_invitations(id,organization_id,email,role,permissions_json,token_hash,invited_by_email,expires_at,created_at) VALUES ('convite',?,?,'admin','{}','hash','quem',?,0)")
+    .run(orgA, adminEmail, Date.now() + 86400000);
+  const invited = await acceptInvitation.POST(
+    asSuperAdmin("https://platform.test/api/invitations/token/accept", orgA, { method: "POST", body: JSON.stringify({ acceptTerms: true }) }),
+    { params: Promise.resolve({ token: "x".repeat(40) }) },
+  );
+  assert.equal(invited.status, 403);
+  assert.equal((await invited.json()).code, "superadmin_scope");
 });

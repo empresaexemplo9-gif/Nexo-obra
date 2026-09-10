@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { apiRoute, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, isPlatformSuperAdmin, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { requestEvidenceHashes } from "@/lib/server/terms";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 
@@ -14,6 +14,10 @@ const acceptanceSchema = z.object({
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
+    // O aceite é uma evidência jurídica do contratante. A plataforma não assina por ele.
+    if (isPlatformSuperAdmin(context)) {
+      throw new ApiError(403, "superadmin_scope", "O aceite dos termos pertence ao contratante da empresa.");
+    }
     const parsed = acceptanceSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const evidence = await requestEvidenceHashes(request);
