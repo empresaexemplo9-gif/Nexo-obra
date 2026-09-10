@@ -1,68 +1,86 @@
-import { desc, eq } from "drizzle-orm";
-import { z } from "zod";
-
 import { getDb } from "@/db";
-import { projects } from "@/db/schema";
+import { assertCan } from "@/lib/auth/roles";
+import { requireAuth } from "@/lib/auth/session";
+import {
+  assertRelationsBelongToOrganization,
+  createProject,
+  isCodeTaken,
+  listProjects,
+} from "@/lib/data/projects";
+import { createProjectSchema, listProjectsQuerySchema } from "@/lib/domain/schemas";
+import { apiError, handleRoute, parseJsonBody, parseSearchParams } from "@/lib/server/api";
+import { recordAudit } from "@/lib/server/audit";
 
-const createProjectSchema = z.object({
-  clientId: z.string().min(1).nullable().optional(),
-  code: z.string().trim().min(2).max(24),
-  name: z.string().trim().min(3).max(160),
-  kind: z.enum(["project", "work"]),
-  phase: z.string().trim().min(2).max(80).default("briefing"),
-  ownerMemberId: z.string().min(1).nullable().optional(),
-  startDate: z.string().date().nullable().optional(),
-  targetDate: z.string().date().nullable().optional(),
-  budgetCents: z.number().int().nonnegative().default(0),
-});
+export const dynamic = "force-dynamic";
 
-function organizationId(request: Request) {
-  return request.headers.get("x-organization-id")?.trim() ?? "";
-}
-
+/**
+ * Projetos e obras.
+ *
+ * O header `x-organization-id` que esta rota usava foi removido: a organização
+ * agora vem de `requireAuth()`, que a resolve pela sessão e confere o vínculo
+ * do usuário no banco. Não reintroduza um caminho em que o cliente escolha a
+ * empresa — era exatamente o furo que a Fase 1 fechou.
+ */
 export async function GET(request: Request) {
-  const orgId = organizationId(request);
-  if (!orgId) {
-    return Response.json({ error: "Missing organization context" }, { status: 401 });
-  }
+  return handleRoute(async () => {
+    const auth = await requireAuth();
+    assertCan(auth.active.role, "project:read");
 
-  try {
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.organizationId, orgId))
-      .orderBy(desc(projects.updatedAt))
-      .limit(100);
-    return Response.json({ projects: rows });
-  } catch {
-    return Response.json({ error: "Projects are temporarily unavailable" }, { status: 503 });
-  }
+    const query = parseSearchParams(request, listProjectsQuerySchema);
+    if (!query.ok) return query.response;
+
+    const result = await listProjects(getDb(), auth.active.organizationId, query.data);
+    return Response.json(result);
+  });
 }
 
 export async function POST(request: Request) {
-  const orgId = organizationId(request);
-  if (!orgId) {
-    return Response.json({ error: "Missing organization context" }, { status: 401 });
-  }
+  return handleRoute(async () => {
+    const auth = await requireAuth();
+    assertCan(auth.active.role, "project:write");
 
-  const parsed = createProjectSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) {
-    return Response.json(
-      { error: "Invalid project", fields: parsed.error.flatten().fieldErrors },
-      { status: 400 },
-    );
-  }
+    const body = await parseJsonBody(request, createProjectSchema);
+    if (!body.ok) return body.response;
 
-  try {
     const db = getDb();
-    const [project] = await db.insert(projects).values({
-      id: crypto.randomUUID(),
-      organizationId: orgId,
-      ...parsed.data,
-    }).returning();
-    return Response.json({ project }, { status: 201 });
-  } catch {
-    return Response.json({ error: "Project could not be created" }, { status: 503 });
-  }
+    const organizationId = auth.active.organizationId;
+
+    // Cliente e responsável precisam ser desta empresa. A FK do banco só exige
+    // que a linha exista em algum lugar — o recorte por empresa é aqui.
+    const relations = await assertRelationsBelongToOrganization(db, organizationId, body.data);
+    if (!relations.ok) {
+      return apiError(422, "invalid_input", "Referência inválida para esta empresa.", {
+        fields: [
+          {
+            field: relations.field,
+            message:
+              relations.field === "clientId"
+                ? "Cliente não encontrado nesta empresa."
+                : "Responsável não encontrado nesta empresa.",
+          },
+        ],
+      });
+    }
+
+    if (await isCodeTaken(db, organizationId, body.data.code)) {
+      return apiError(409, "conflict", `Já existe um trabalho com o código ${body.data.code}.`);
+    }
+
+    const created = await createProject(db, organizationId, body.data);
+
+    await recordAudit(db, {
+      organizationId,
+      actorMemberId: auth.active.memberId,
+      entity: "project",
+      entityId: created.id,
+      action: "create",
+      changes: {
+        code: { from: null, to: created.code },
+        name: { from: null, to: created.name },
+        kind: { from: null, to: created.kind },
+      },
+    });
+
+    return Response.json({ project: created }, { status: 201 });
+  });
 }

@@ -224,3 +224,24 @@ export const integrationEvents = sqliteTable("integration_events", {
   index("idx_integration_events_org_status").on(table.organizationId, table.status),
   index("idx_integration_events_provider_type").on(table.provider, table.eventType),
 ]);
+
+/**
+ * Trilha de auditoria.
+ *
+ * Registra criação, edição, exclusão e mudança de status dos dados operacionais.
+ * `changes` guarda apenas os campos que mudaram, em JSON — nunca o registro
+ * inteiro e nunca dado sensível que não seja necessário para explicar a ação.
+ */
+export const auditLogs = sqliteTable("audit_logs", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  actorMemberId: text("actor_member_id").references(() => members.id),
+  entity: text("entity").notNull(),
+  entityId: text("entity_id").notNull(),
+  action: text("action").notNull(),
+  changes: text("changes").notNull().default("{}"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  index("idx_audit_logs_org_created").on(table.organizationId, table.createdAt),
+  index("idx_audit_logs_org_entity").on(table.organizationId, table.entity, table.entityId),
+]);
