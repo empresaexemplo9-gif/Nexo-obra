@@ -41,11 +41,13 @@ class D1Local {
 const list = await vite.ssrLoadModule("/app/api/worksheets/route.ts");
 const item = await vite.ssrLoadModule("/app/api/worksheets/[worksheetId]/route.ts");
 const data = await vite.ssrLoadModule("/app/api/worksheets/data/route.ts");
+const grants = await vite.ssrLoadModule("/app/api/worksheets/[worksheetId]/grants/route.ts");
+const superadmin = await vite.ssrLoadModule("/lib/server/superadmin.ts");
 const sheet = await vite.ssrLoadModule("/lib/spreadsheet.ts");
 
 const orgA = "11111111-1111-4111-8111-111111111111";
 const orgB = "22222222-2222-4222-8222-222222222222";
-let db;
+let db; let adminCookie;
 
 const permissions = (overrides = {}) => JSON.stringify({
   overview: { view: true, edit: true }, projects: { view: true, edit: true }, budgets: { view: true, edit: true },
@@ -69,7 +71,8 @@ beforeEach(async () => {
   db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role,permissions_json) VALUES ('colab',?,'colab','Colaborador','colab@example.test','member',?)")
     .run(orgA, permissions({ budgets: { view: false, edit: false } }));
   db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES ('tc',?,'colab','colab@example.test',?,'','',1)").run(orgA, CURRENT_TERMS_VERSION);
-  Object.assign(runtime, { DB: db });
+  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: "admin@example.test", SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: "test-only-shared-secret-at-least-32-characters" });
+  adminCookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
 
@@ -174,4 +177,111 @@ test("recusa conteúdo fora do formato e endereços de célula inválidos", asyn
     body: JSON.stringify({ name: "Ruim", content: { cells: {}, body: "", widths: {}, script: "alert(1)" } }) }));
   assert.equal(extra.status, 400);
   assert.equal((await item.GET(owner("/api/worksheets/nao-e-uuid"), params("nao-e-uuid"))).status, 404);
+});
+
+function asAdmin(path = "/api/worksheets", init = {}) {
+  return new Request(`https://platform.test${path}`, { ...init, headers: {
+    cookie: `${adminCookie}; __Host-nexo-organization=${orgA}`, "content-type": "application/json", ...init.headers } });
+}
+async function analysisSheet() {
+  const response = await list.POST(asAdmin("/api/worksheets", { method: "POST",
+    body: JSON.stringify({ name: "Saúde financeira", kind: "analysis" }) }));
+  assert.equal(response.status, 201, await response.clone().text());
+  return (await response.json()).worksheet;
+}
+
+test("a planilha de saúde financeira nasce restrita e só o superadmin cria", async () => {
+  const doContratante = await list.POST(owner("/api/worksheets", { method: "POST",
+    body: JSON.stringify({ name: "Tentativa", kind: "analysis" }) }));
+  assert.equal(doContratante.status, 403);
+  assert.equal((await doContratante.json()).code, "analysis_superadmin_only");
+
+  const criada = await analysisSheet();
+  assert.equal(criada.visibility, "restricted");
+  assert.equal(db.sqlite.prepare("SELECT visibility FROM worksheets WHERE id = ?").get(criada.id).visibility, "restricted");
+});
+
+test("sem liberação a planilha restrita não aparece na lista nem abre", async () => {
+  const criada = await analysisSheet();
+  const listadaPeloDono = await (await list.GET(owner("/api/worksheets"))).json();
+  assert.equal(listadaPeloDono.worksheets.some((item) => item.id === criada.id), false,
+    "nem o contratante da empresa vê antes de ser liberado");
+  const aberta = await item.GET(owner(`/api/worksheets/${criada.id}`), params(criada.id));
+  assert.equal(aberta.status, 404, "responde como inexistente, sem revelar que existe");
+
+  const listadaPeloAdmin = await (await list.GET(asAdmin())).json();
+  assert.equal(listadaPeloAdmin.worksheets.some((item) => item.id === criada.id), true);
+  assert.equal(listadaPeloAdmin.canGovern, true);
+});
+
+test("liberação de leitura deixa ver mas não salvar", async () => {
+  const criada = await analysisSheet();
+  const liberada = await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "view" }) }), params(criada.id));
+  assert.equal(liberada.status, 200, await liberada.clone().text());
+
+  const colaborador = as("colab", "colab@example.test", orgA, `/api/worksheets/${criada.id}`);
+  const aberta = await item.GET(colaborador, params(criada.id));
+  assert.equal(aberta.status, 200);
+  assert.equal((await aberta.json()).access.canEdit, false);
+
+  const salvar = await item.PATCH(as("colab", "colab@example.test", orgA, `/api/worksheets/${criada.id}`, { method: "PATCH",
+    body: JSON.stringify({ content: { cells: { A1: "1" }, body: "", widths: {}, formats: {}, bold: [], analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20 } }, revision: 1 }) }), params(criada.id));
+  assert.equal(salvar.status, 403);
+  assert.equal((await salvar.json()).code, "worksheet_read_only");
+});
+
+test("liberação de edição deixa salvar, e revogar fecha de novo", async () => {
+  const criada = await analysisSheet();
+  await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "edit" }) }), params(criada.id));
+
+  const salvar = await item.PATCH(as("colab", "colab@example.test", orgA, `/api/worksheets/${criada.id}`, { method: "PATCH",
+    body: JSON.stringify({ content: { cells: { A1: "10" }, body: "", widths: {}, formats: {}, bold: [], analysis: { headerRow: 0, roles: { A: "receita" }, targetMarginPercent: 25 } }, revision: 1 }) }), params(criada.id));
+  assert.equal(salvar.status, 200, await salvar.clone().text());
+  const guardada = JSON.parse(db.sqlite.prepare("SELECT content_json FROM worksheets WHERE id = ?").get(criada.id).content_json);
+  assert.equal(guardada.analysis.targetMarginPercent, 25, "a meta de margem é guardada com a planilha");
+  assert.equal(guardada.analysis.roles.A, "receita");
+
+  await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "none" }) }), params(criada.id));
+  assert.equal((await item.GET(as("colab", "colab@example.test", orgA, `/api/worksheets/${criada.id}`), params(criada.id))).status, 404);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM worksheet_grants").get().n, 0);
+});
+
+test("só o superadmin lê e altera a lista de liberações, e cada mudança fica na auditoria", async () => {
+  const criada = await analysisSheet();
+  assert.equal((await grants.GET(owner(`/api/worksheets/${criada.id}/grants`), params(criada.id))).status, 403);
+  assert.equal((await grants.POST(owner(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "edit" }) }), params(criada.id))).status, 403);
+
+  const lista = await (await grants.GET(asAdmin(`/api/worksheets/${criada.id}/grants`), params(criada.id))).json();
+  assert.equal(lista.members.every((member) => member.level === "none"), true);
+  assert.equal(lista.members.some((member) => member.role === "superadmin"), false);
+
+  await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "view" }) }), params(criada.id));
+  await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: "colab", level: "none" }) }), params(criada.id));
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='worksheet.access_granted'").get().n, 1);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='worksheet.access_revoked'").get().n, 1);
+});
+
+test("nem o contratante exclui uma planilha de saúde financeira", async () => {
+  const criada = await analysisSheet();
+  await grants.POST(asAdmin(`/api/worksheets/${criada.id}/grants`, { method: "POST",
+    body: JSON.stringify({ memberId: orgA, level: "edit" }) }), params(criada.id));
+  const negado = await item.DELETE(owner(`/api/worksheets/${criada.id}`, { method: "DELETE" }), params(criada.id));
+  assert.equal(negado.status, 403);
+  assert.equal((await negado.json()).code, "analysis_superadmin_only");
+  assert.equal((await item.DELETE(asAdmin(`/api/worksheets/${criada.id}`, { method: "DELETE" }), params(criada.id))).status, 200);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM worksheet_grants").get().n, 0, "as liberações saem junto");
+});
+
+test("a planilha comum continua aberta à empresa como antes", async () => {
+  const comum = await createSheet({ A1: "1" });
+  assert.equal(comum.visibility, "organization");
+  const doColaborador = await item.GET(as("colab", "colab@example.test", orgA, `/api/worksheets/${comum.id}`), params(comum.id));
+  assert.equal(doColaborador.status, 200);
+  assert.equal((await doColaborador.json()).access.canEdit, true);
 });

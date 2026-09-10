@@ -112,3 +112,65 @@ test("endereços de célula e colunas seguem a convenção da planilha", () => {
   assert.deepEqual(sheet.parseCellKey("C7"), { column: 2, row: 6 });
   assert.equal(sheet.parseCellKey("7C"), null);
 });
+
+test("inserir linha empurra os dados e conserta as fórmulas", () => {
+  const cells = { A1: "10", A2: "20", A3: "=SOMA(A1:A2)", B3: "=A1*2" };
+  const next = sheet.insertRow(cells, 1);
+  assert.equal(next.A1, "10");
+  assert.equal(next.A3, "20", "o que estava na linha 2 desce para a 3");
+  assert.equal(next.A4, "=SOMA(A1:A3)", "a faixa acompanha a linha inserida");
+  assert.equal(next.B4, "=A1*2", "referência acima do ponto de inserção não muda");
+  assert.equal(sheet.evaluateSheet(next).A4.value, 30);
+});
+
+test("remover linha reajusta as fórmulas e marca o que apontava para ela", () => {
+  const cells = { A1: "10", A2: "20", A3: "30", A4: "=SOMA(A1:A3)", B1: "=A2+1" };
+  const next = sheet.deleteRow(cells, 1);
+  assert.equal(next.A2, "30");
+  assert.equal(next.A3, "=SOMA(A1:A2)");
+  assert.equal(next.B1, "=#REF!+1", "a fórmula que apontava para a linha removida avisa em vez de somar errado");
+  assert.equal(sheet.evaluateSheet(next).A3.value, 40);
+});
+
+test("inserir e remover coluna seguem a mesma regra", () => {
+  const inserida = sheet.insertColumn({ A1: "5", B1: "=A1*2" }, 1);
+  assert.equal(inserida.A1, "5");
+  assert.equal(inserida.C1, "=A1*2");
+  const removida = sheet.deleteColumn({ A1: "5", B1: "7", C1: "=A1+B1" }, 1);
+  assert.equal(removida.B1, "=A1+#REF!");
+});
+
+test("preencher para baixo desloca a referência relativa", () => {
+  const cells = { A1: "2", A2: "3", A3: "4", B1: "=A1*10" };
+  const next = sheet.fillDown(cells, "B1", 2);
+  assert.equal(next.B2, "=A2*10");
+  assert.equal(next.B3, "=A3*10");
+  const computed = sheet.evaluateSheet(next);
+  assert.equal(computed.B3.value, 40);
+});
+
+test("ordenar reorganiza as linhas e recusa quando há fórmula na faixa", () => {
+  const cells = {
+    A1: "Setor", B1: "Valor",
+    A2: "Obra", B2: "300",
+    A3: "Projeto", B3: "100",
+    A4: "Consultoria", B4: "200",
+  };
+  const crescente = sheet.sortRows(cells, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "asc" });
+  assert.equal(crescente.blocked, false);
+  assert.equal(crescente.cells.A1, "Setor", "o cabeçalho fica onde está");
+  assert.deepEqual([crescente.cells.B2, crescente.cells.B3, crescente.cells.B4], ["100", "200", "300"]);
+  assert.equal(crescente.cells.A2, "Projeto", "a linha inteira anda junto com o valor");
+
+  const decrescente = sheet.sortRows(cells, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "desc" });
+  assert.deepEqual([decrescente.cells.B2, decrescente.cells.B3, decrescente.cells.B4], ["300", "200", "100"]);
+
+  const comFormula = sheet.sortRows({ ...cells, B4: "=100+100" }, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "asc" });
+  assert.equal(comFormula.blocked, true, "recusa em vez de embaralhar o cálculo");
+  assert.equal(comFormula.cells.B4, "=100+100", "e não altera nada");
+});
+
+test("texto entre aspas não é confundido com endereço ao reajustar", () => {
+  const next = sheet.insertRow({ A5: '=SE(A1>0;"B2 aprovado";A2)' }, 1);
+  assert.equal(next.A6, '=SE(A1>0;"B2 aprovado";A3)');
+});

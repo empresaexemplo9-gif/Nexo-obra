@@ -490,3 +490,131 @@ export function sheetToCsv(cells: SheetCells, columns: number, rows: number) {
   }
   return lines.join("\n");
 }
+
+// ---------------------------------------------------------------------------
+// Edição estrutural. Inserir ou remover linha e coluna reescreve as referências
+// das fórmulas: sem isso, a planilha continuaria somando a célula errada em
+// silêncio, que é pior do que recusar a operação.
+// ---------------------------------------------------------------------------
+
+type Axis = "row" | "column";
+
+// Reescreve os endereços de um texto de fórmula, sem tocar no que estiver entre aspas.
+function rewriteReferences(formula: string, rewrite: (address: CellAddress) => string | null) {
+  let result = "";
+  let index = 0;
+  while (index < formula.length) {
+    const character = formula[index];
+    if (character === '"' || character === "'") {
+      const end = formula.indexOf(character, index + 1);
+      const stop = end < 0 ? formula.length : end + 1;
+      result += formula.slice(index, stop);
+      index = stop;
+      continue;
+    }
+    const match = /^([A-Za-z]{1,2})(\d{1,4})(?![A-Za-z0-9_.])/.exec(formula.slice(index));
+    if (match) {
+      const address = parseCellKey(match[0]);
+      const replaced = address ? rewrite(address) : null;
+      result += replaced ?? "#REF!";
+      index += match[0].length;
+      continue;
+    }
+    result += character;
+    index += 1;
+  }
+  return result;
+}
+
+function shiftFormula(raw: string, axis: Axis, at: number, delta: number) {
+  if (!raw.startsWith("=")) return raw;
+  return `=${rewriteReferences(raw.slice(1), (address) => {
+    const position = axis === "row" ? address.row : address.column;
+    if (delta < 0 && position === at) return null;
+    if (position < at) return cellKey(address);
+    const moved = { ...address, [axis]: position + delta } as CellAddress;
+    return moved.row < 0 || moved.column < 0 ? null : cellKey(moved);
+  })}`;
+}
+
+function moveCells(cells: SheetCells, axis: Axis, at: number, delta: number): SheetCells {
+  const next: SheetCells = {};
+  for (const [key, raw] of Object.entries(cells)) {
+    const address = parseCellKey(key);
+    if (!address) continue;
+    const position = axis === "row" ? address.row : address.column;
+    if (delta < 0 && position === at) continue;
+    const target = position < at ? address : { ...address, [axis]: position + delta } as CellAddress;
+    if (target.row < 0 || target.column < 0) continue;
+    next[cellKey(target)] = shiftFormula(raw, axis, at, delta);
+  }
+  return next;
+}
+
+export function insertRow(cells: SheetCells, at: number) { return moveCells(cells, "row", at, 1); }
+export function deleteRow(cells: SheetCells, at: number) { return moveCells(cells, "row", at, -1); }
+export function insertColumn(cells: SheetCells, at: number) { return moveCells(cells, "column", at, 1); }
+export function deleteColumn(cells: SheetCells, at: number) { return moveCells(cells, "column", at, -1); }
+
+// Copia a célula para baixo deslocando as referências relativas, como ao arrastar a alça.
+export function fillDown(cells: SheetCells, fromKey: string, untilRow: number): SheetCells {
+  const origin = parseCellKey(fromKey);
+  const raw = cells[fromKey.toUpperCase()];
+  if (!origin || raw === undefined || untilRow <= origin.row) return cells;
+  const next = { ...cells };
+  for (let row = origin.row + 1; row <= untilRow; row += 1) {
+    const offset = row - origin.row;
+    next[cellKey({ column: origin.column, row })] = raw.startsWith("=")
+      ? `=${rewriteReferences(raw.slice(1), (address) => {
+        const moved = { column: address.column, row: address.row + offset };
+        return moved.row < 0 ? null : cellKey(moved);
+      })}`
+      : raw;
+  }
+  return next;
+}
+
+// Ordenar move linhas inteiras. Uma fórmula que aponta para outra linha passaria a
+// apontar para o lugar errado, então a ordenação é recusada quando existe fórmula na
+// faixa — recusar é melhor do que embaralhar o cálculo sem avisar.
+export function sortRows(
+  cells: SheetCells,
+  options: { columns: number; rows: number; headerRow: number; column: number; direction: "asc" | "desc" },
+): { cells: SheetCells; blocked: boolean } {
+  const { columns, rows, headerRow, column, direction } = options;
+  const body: Array<{ values: Array<string | undefined>; sortKey: string | number }> = [];
+  const computed = evaluateSheet(cells);
+
+  for (let row = headerRow + 1; row < rows; row += 1) {
+    const values: Array<string | undefined> = [];
+    let empty = true;
+    for (let index = 0; index < columns; index += 1) {
+      const raw = cells[cellKey({ column: index, row })];
+      if (raw !== undefined && raw !== "") empty = false;
+      if (raw?.startsWith("=")) return { cells, blocked: true };
+      values.push(raw);
+    }
+    if (empty) continue;
+    const value = computed[cellKey({ column, row })]?.value;
+    body.push({ values, sortKey: typeof value === "number" ? value : String(value ?? "") });
+  }
+
+  body.sort((left, right) => {
+    if (typeof left.sortKey === "number" && typeof right.sortKey === "number") return left.sortKey - right.sortKey;
+    return String(left.sortKey).localeCompare(String(right.sortKey), "pt-BR");
+  });
+  if (direction === "desc") body.reverse();
+
+  const next: SheetCells = {};
+  for (const [key, raw] of Object.entries(cells)) {
+    const address = parseCellKey(key);
+    if (address && address.row > headerRow) continue;
+    next[key] = raw;
+  }
+  body.forEach((entry, index) => {
+    entry.values.forEach((raw, columnIndex) => {
+      if (raw !== undefined && raw !== "") next[cellKey({ column: columnIndex, row: headerRow + 1 + index })] = raw;
+    });
+  });
+  return { cells: next, blocked: false };
+}

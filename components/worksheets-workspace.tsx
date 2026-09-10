@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CircleAlert, Download, FileSpreadsheet, FileText, LoaderCircle, Plus, Save, Sigma, Table2, Trash2 } from "lucide-react";
+import {
+  ArrowDownAZ, ArrowDownWideNarrow, ChartNoAxesCombined, CircleAlert, Columns3, Download, FileSpreadsheet,
+  FileText, LoaderCircle, Plus, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -11,15 +14,25 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  cellKey, columnName, displayValue, evaluateSheet, parseCellKey, sheetToCsv,
+  cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
+  insertColumn, insertRow, parseCellKey, sheetToCsv, sortRows,
   SHEET_FUNCTIONS, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
+import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
+import type { AnalysisSettings } from "@/lib/finance-analysis";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+type WorksheetKind = "sheet" | "document" | "analysis";
 type WorksheetSummary = {
-  id: string; kind: "sheet" | "document"; name: string; columns: number; rows: number;
-  createdByName: string; revision: number; updatedAt: number;
+  id: string; kind: WorksheetKind; name: string; columns: number; rows: number;
+  createdByName: string; revision: number; updatedAt: number; visibility: string; access?: string | null;
 };
-type Worksheet = WorksheetSummary & { content: { cells: SheetCells; body: string; widths: Record<string, number> } };
+type WorksheetContent = {
+  cells: SheetCells; body: string; widths: Record<string, number>;
+  formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
+};
+type Worksheet = WorksheetSummary & { content: WorksheetContent };
+type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; level: string };
 type DataSource = { id: string; label: string; headers: string[] };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -125,6 +138,8 @@ function Grid({
 export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [list, setList] = useState<WorksheetSummary[]>([]);
   const [current, setCurrent] = useState<Worksheet | null>(null);
+  const [access, setAccess] = useState<Access | null>(null);
+  const [canGovern, setCanGovern] = useState(false);
   const [sources, setSources] = useState<DataSource[]>([]);
   const [active, setActive] = useState("A1");
   const [loading, setLoading] = useState(true);
@@ -134,18 +149,22 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const formulaRef = useRef<HTMLInputElement>(null);
 
   const loadList = useCallback(async () => {
-    const result = await api<{ worksheets: WorksheetSummary[] }>("/api/worksheets");
+    const result = await api<{ worksheets: WorksheetSummary[]; canGovern: boolean }>("/api/worksheets");
     setList(result.worksheets);
+    setCanGovern(result.canGovern);
     return result.worksheets;
   }, []);
 
   const open = useCallback(async (id: string) => {
     setError("");
-    const result = await api<{ worksheet: Worksheet }>(`/api/worksheets/${id}`);
+    const result = await api<{ worksheet: Worksheet; access: Access }>(`/api/worksheets/${id}`);
     setCurrent(result.worksheet);
+    setAccess(result.access);
     setActive("A1");
     setDirty(false);
   }, []);
+
+  const readOnly = access ? !access.canEdit : false;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -172,7 +191,51 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return { raw: current.content.cells[active] ?? "", result };
   }, [computed, current, active]);
 
+  function updateContent(change: (content: WorksheetContent) => WorksheetContent) {
+    setCurrent((sheet) => (sheet ? { ...sheet, content: change(sheet.content) } : sheet));
+    setDirty(true);
+  }
+
+  // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
+  function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column" | "fill-down") {
+    const address = parseCellKey(active);
+    if (!current || !address || readOnly) return;
+    setCurrent((sheet) => {
+      if (!sheet) return sheet;
+      const cells = sheet.content.cells;
+      const next =
+        operation === "insert-row" ? insertRow(cells, address.row)
+        : operation === "delete-row" ? deleteRow(cells, address.row)
+        : operation === "insert-column" ? insertColumn(cells, address.column)
+        : operation === "delete-column" ? deleteColumn(cells, address.column)
+        : fillDown(cells, active, sheet.rows - 1);
+      return {
+        ...sheet,
+        rows: operation === "insert-row" ? Math.min(500, sheet.rows + 1) : sheet.rows,
+        columns: operation === "insert-column" ? Math.min(52, sheet.columns + 1) : sheet.columns,
+        content: { ...sheet.content, cells: next },
+      };
+    });
+    setDirty(true);
+  }
+
+  function sort(direction: "asc" | "desc") {
+    const address = parseCellKey(active);
+    if (!current || !address || readOnly) return;
+    const result = sortRows(current.content.cells, {
+      columns: current.columns, rows: current.rows,
+      headerRow: current.content.analysis.headerRow, column: address.column, direction,
+    });
+    if (result.blocked) {
+      toast.error("Há fórmula nas linhas a ordenar. Ordenar moveria as referências para o lugar errado.");
+      return;
+    }
+    updateContent((content) => ({ ...content, cells: result.cells }));
+    toast.success("Linhas reordenadas");
+  }
+
   function updateCell(key: string, value: string) {
+    if (readOnly) return;
     setCurrent((sheet) => {
       if (!sheet) return sheet;
       const cells = { ...sheet.content.cells };
@@ -182,12 +245,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setDirty(true);
   }
 
-  async function create(kind: "sheet" | "document") {
+  async function create(kind: WorksheetKind) {
     try {
-      const name = kind === "sheet" ? `Planilha ${list.filter((item) => item.kind === "sheet").length + 1}` : `Documento ${list.filter((item) => item.kind === "document").length + 1}`;
+      const label = kind === "sheet" ? "Planilha" : kind === "document" ? "Documento" : "Saúde financeira";
+      const name = `${label} ${list.filter((item) => item.kind === kind).length + 1}`;
       const result = await api<{ worksheet: Worksheet }>("/api/worksheets", { method: "POST", body: JSON.stringify({ name, kind }) });
       await loadList();
       setCurrent(result.worksheet);
+      setAccess({ canView: true, canEdit: true, canGovern: kind === "analysis", level: "superadmin" });
       setDirty(false);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível criar."); }
   }
@@ -278,6 +343,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       <CardContent className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => void create("sheet")}><Plus />Nova planilha</Button>
         <Button size="sm" variant="outline" onClick={() => void create("document")}><FileText />Novo documento</Button>
+        {canGovern ? <Button size="sm" variant="outline" onClick={() => void create("analysis")}><ChartNoAxesCombined />Nova planilha de saúde financeira</Button> : null}
         {list.length ? <NativeSelect aria-label="Abrir" value={current?.id ?? ""} onChange={(event) => void open(event.target.value)} className="h-9 max-w-[16rem]">
           {filtered.map((item) => <option key={item.id} value={item.id}>{item.kind === "sheet" ? "▦" : "▤"} {item.name}</option>)}
         </NativeSelect> : null}
@@ -296,8 +362,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     ) : <Card className="overflow-hidden">
       <CardHeader className="gap-3 border-b">
         <div className="flex flex-wrap items-center gap-2">
-          <Input aria-label="Nome" value={current.name} onChange={(event) => { setCurrent({ ...current, name: event.target.value }); setDirty(true); }} className="h-9 max-w-xs font-medium" />
-          <Badge variant="outline">{current.kind === "sheet" ? "Planilha" : "Documento"}</Badge>
+          <Input aria-label="Nome" value={current.name} readOnly={readOnly} onChange={(event) => { setCurrent({ ...current, name: event.target.value }); setDirty(true); }} className="h-9 max-w-xs font-medium" />
+          <Badge variant="outline">{current.kind === "sheet" ? "Planilha" : current.kind === "document" ? "Documento" : "Saúde financeira"}</Badge>
+          {current.visibility === "restricted" ? <Badge variant="outline" className="gap-1 border-hoikos-300"><ShieldCheck className="size-3" />Acesso liberado pelo superadmin</Badge> : null}
           {dirty ? <Badge variant="outline" className="border-hoikos-300">Não salvo</Badge> : <span className="text-xs text-hoikos-500">Revisão {current.revision}</span>}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {sources.length ? <NativeSelect aria-label="Inserir dados reais" value="" onChange={(event) => { void insertSource(event.target.value); event.target.value = ""; }} className="h-9">
@@ -305,15 +372,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               {sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
             </NativeSelect> : null}
             <Button size="sm" variant="outline" onClick={() => download(`${current.name}.csv`, sheetToCsv(current.content.cells, current.columns, current.rows), "text/csv;charset=utf-8")}><Download />CSV</Button>
-            <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>{saving ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>
-            <Button size="sm" variant="ghost" onClick={() => void remove()} aria-label="Excluir"><Trash2 /></Button>
+            {readOnly ? null : <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>{saving ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>}
+            {readOnly || (current.visibility === "restricted" && !access?.canGovern) ? null
+              : <Button size="sm" variant="ghost" onClick={() => void remove()} aria-label="Excluir"><Trash2 /></Button>}
           </div>
         </div>
-        {current.kind === "sheet" ? <div className="flex flex-wrap items-center gap-2">
+        {current.kind !== "document" ? <div className="flex flex-wrap items-center gap-2">
           <span className="w-14 rounded-md border border-hoikos-200 bg-hoikos-50 px-2 py-1 text-center font-mono text-xs">{active}</span>
           <Input
             ref={formulaRef} aria-label="Conteúdo da célula" value={selection?.raw ?? ""}
-            onChange={(event) => updateCell(active, event.target.value)}
+            readOnly={readOnly} onChange={(event) => updateCell(active, event.target.value)}
             placeholder="Digite um valor ou uma fórmula começando por ="
             className="h-9 flex-1 font-mono text-[13px]"
           />
@@ -327,20 +395,56 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         </div> : null}
       </CardHeader>
       <CardContent className="p-3 sm:p-4">
-        {current.kind === "sheet" ? <>
-          <Grid
-            cells={current.content.cells} columns={current.columns} rows={current.rows}
-            computed={computed} active={active} onActive={setActive} onChange={updateCell}
-          />
-          <p className="mt-3 text-xs leading-5 text-hoikos-500">
-            Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Total da coluna do cursor:{" "}
-            <strong className="tabular-nums">{displayValue(sumOfColumn(current.content.cells, active))}</strong>
-          </p>
-        </> : <DocumentEditor
+        {current.kind === "document" ? <DocumentEditor
           body={current.content.body}
           cells={current.content.cells}
-          onChange={(body) => { setCurrent({ ...current, content: { ...current.content, body } }); setDirty(true); }}
-        />}
+          onChange={(body) => { updateContent((content) => ({ ...content, body })); }}
+        /> : (
+          <Tabs defaultValue="grade">
+            <TabsList>
+              <TabsTrigger value="grade">Planilha</TabsTrigger>
+              <TabsTrigger value="leitura">Leitura financeira</TabsTrigger>
+              {access?.canGovern ? <TabsTrigger value="acesso">Acesso</TabsTrigger> : null}
+            </TabsList>
+
+            <TabsContent value="grade" className="mt-4 space-y-3">
+              {readOnly ? <p className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">
+                Seu acesso a esta planilha é somente de leitura.
+              </p> : (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-hoikos-50 p-2">
+                  <Button size="sm" variant="ghost" onClick={() => structural("insert-row")}><Rows3 />Inserir linha</Button>
+                  <Button size="sm" variant="ghost" onClick={() => structural("delete-row")}>Remover linha</Button>
+                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
+                  <Button size="sm" variant="ghost" onClick={() => structural("insert-column")}><Columns3 />Inserir coluna</Button>
+                  <Button size="sm" variant="ghost" onClick={() => structural("delete-column")}>Remover coluna</Button>
+                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
+                  <Button size="sm" variant="ghost" onClick={() => structural("fill-down")}>Preencher para baixo</Button>
+                  <Button size="sm" variant="ghost" onClick={() => sort("asc")}><ArrowDownAZ />Ordenar ↑</Button>
+                  <Button size="sm" variant="ghost" onClick={() => sort("desc")}><ArrowDownWideNarrow />Ordenar ↓</Button>
+                </div>
+              )}
+              <Grid
+                cells={current.content.cells} columns={current.columns} rows={current.rows}
+                computed={computed} active={active} onActive={setActive} onChange={updateCell}
+              />
+              <p className="text-xs leading-5 text-hoikos-500">
+                Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Inserir e remover linha ou coluna
+                reajusta as fórmulas. Total da coluna do cursor:{" "}
+                <strong className="tabular-nums">{displayValue(sumOfColumn(current.content.cells, active))}</strong>
+              </p>
+            </TabsContent>
+
+            <TabsContent value="leitura" className="mt-4">
+              <AnalysisPanel
+                cells={current.content.cells} columns={current.columns} rows={current.rows}
+                settings={current.content.analysis} canEdit={!readOnly}
+                onChange={(analysis) => updateContent((content) => ({ ...content, analysis }))}
+              />
+            </TabsContent>
+
+            {access?.canGovern ? <TabsContent value="acesso" className="mt-4"><GrantsPanel worksheetId={current.id} /></TabsContent> : null}
+          </Tabs>
+        )}
       </CardContent>
     </Card>}
   </div>;

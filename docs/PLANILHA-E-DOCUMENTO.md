@@ -61,6 +61,18 @@ sobrescrever em silêncio o trabalho de outra pessoa.
   Orçamentos, a origem nem é oferecida, e pedir direto responde `403`.
 - Criação, alteração e exclusão entram na auditoria da empresa.
 
+## Edição estrutural
+
+Inserir e remover linha ou coluna **reajusta as referências das fórmulas**: `SOMA(A1:A2)`
+vira `SOMA(A1:A3)` quando entra uma linha no meio, e o que apontava para a linha removida
+passa a `#REF!` em vez de somar a célula errada. Preencher para baixo desloca as
+referências relativas. Ordenar é recusado quando há fórmula nas linhas a mover.
+
+## Saúde financeira
+
+A planilha de análise, com leitura de margem e preço, tem regras próprias de acesso e está
+descrita em [Saúde financeira](SAUDE-FINANCEIRA.md).
+
 ## Limites
 
 São 52 colunas e 500 linhas por planilha, e no máximo 20 mil células preenchidas. Isso não

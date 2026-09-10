@@ -509,10 +509,23 @@ export const worksheets = sqliteTable("worksheets", {
   rows: integer("rows").notNull().default(60),
   createdByMemberId: text("created_by_member_id"),
   createdByName: text("created_by_name").notNull(),
+  // "organization" segue aberta à empresa; "restricted" só abre para quem o
+  // superadministrador liberar em worksheet_grants.
+  visibility: text("visibility").notNull().default("organization"),
   revision: integer("revision").notNull().default(1),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [index("idx_worksheets_org_updated").on(t.organizationId, t.updatedAt)]);
+
+// Liberações dadas pelo superadministrador: leitura, ou leitura e edição.
+export const worksheetGrants = sqliteTable("worksheet_grants", {
+  worksheetId: text("worksheet_id").notNull().references(() => worksheets.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  memberId: text("member_id").notNull(),
+  level: text("level").notNull(),
+  grantedByEmail: text("granted_by_email").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [uniqueIndex("uidx_worksheet_grants_sheet_member").on(t.worksheetId, t.memberId)]);
 
 // Metas da empresa. O alvo é digitado; o realizado nunca é: sai sempre da fonte oficial
 // do dado (tarefas concluídas, orçamentos aprovados, clientes cadastrados e assim por
