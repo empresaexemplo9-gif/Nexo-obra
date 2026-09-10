@@ -1,8 +1,19 @@
 import { getDatabase } from "@/db";
+import { ApiError } from "@/lib/server/api-error";
 import { assertPlatformAccess } from "@/lib/server/platform-access";
-import { parseStoredPermissions, type PermissionAction, type PermissionModule, type PermissionSet } from "@/lib/permissions";
+import {
+  parseStoredPermissions,
+  permissionsForRole,
+  PLATFORM_SUPERADMIN_ROLE,
+  type PermissionAction,
+  type PermissionModule,
+  type PermissionSet,
+} from "@/lib/permissions";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { MAINTENANCE_ORGANIZATION_ID, readMaintenanceIdentity } from "@/lib/server/maintenance";
+import { readSuperAdminIdentity, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
+
+export { ApiError };
 
 export type OrganizationContext = {
   db: D1Database;
@@ -25,14 +36,10 @@ type MembershipRow = {
   timezone: string;
 };
 
-export type AuthenticatedIdentity = { id: string; email: string; displayName: string; scope?: "maintenance" };
+export type AuthenticatedIdentity = { id: string; email: string; displayName: string; scope?: "maintenance" | "superadmin" };
 const ORGANIZATION_COOKIE = "__Host-nexo-organization";
 
-export class ApiError extends Error {
-  constructor(public status: number, public code: string, message: string, public details?: unknown) {
-    super(message);
-  }
-}
+type OrganizationRow = { id: string; name: string; slug: string; timezone: string };
 
 export async function requireOrganizationContext(
   request: Request,
@@ -41,6 +48,9 @@ export async function requireOrganizationContext(
 ): Promise<OrganizationContext> {
   const identity = await authenticatedIdentity(request);
   const db = getDatabase();
+  // O superadministrador opera qualquer empresa com poder total: sem papel exigido,
+  // sem bloqueio de acesso e sem aceite de termos, que pertencem ao contratante.
+  if (identity.scope === "superadmin") return superAdminContext(db, identity, request);
   const memberships = await findMemberships(db, identity);
   if (memberships.length === 0) {
     throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa na H.OIKOS.");
@@ -59,6 +69,8 @@ export async function requireOrganizationContext(
 }
 
 export async function authenticatedIdentity(request: Request): Promise<AuthenticatedIdentity> {
+  const superAdmin = await readSuperAdminIdentity(request);
+  if (superAdmin) return { id: superAdmin.id, email: superAdmin.email, displayName: superAdmin.displayName, scope: "superadmin" };
   const userId = request.headers.get("oai-authenticated-user-id")?.trim();
   const email = request.headers.get("oai-authenticated-user-email")?.trim();
   if (!userId || !email) {
@@ -74,7 +86,95 @@ export async function authenticatedIdentity(request: Request): Promise<Authentic
 
 export async function listOrganizationMemberships(request: Request) {
   const identity = await authenticatedIdentity(request);
-  return findMemberships(getDatabase(), identity);
+  const db = getDatabase();
+  if (identity.scope === "superadmin") {
+    const result = await db.prepare(
+      "SELECT id, name, slug, timezone FROM organizations ORDER BY name",
+    ).all<OrganizationRow>();
+    return result.results.map((organization) => ({
+      member_id: "",
+      external_user_id: SUPERADMIN_USER_ID,
+      member_name: SUPERADMIN_DISPLAY_NAME,
+      email: identity.email,
+      role: PLATFORM_SUPERADMIN_ROLE,
+      permissions_json: "",
+      organization_id: organization.id,
+      organization_name: organization.name,
+      organization_slug: organization.slug,
+      timezone: organization.timezone,
+    })) satisfies MembershipRow[];
+  }
+  return findMemberships(db, identity);
+}
+
+// A empresa aberta pelo superadministrador vem do mesmo cookie de seleção. Sem escolha
+// válida, cai na empresa mais recente para que o painel abra com contexto real.
+async function superAdminOrganization(db: D1Database, request: Request) {
+  const requested = selectedOrganizationId(request);
+  const columns = "SELECT id, name, slug, timezone FROM organizations";
+  const selected = requested
+    ? await db.prepare(`${columns} WHERE id = ?1`).bind(requested).first<OrganizationRow>()
+    : null;
+  if (selected) return selected;
+  const latest = await db.prepare(`${columns} ORDER BY created_at DESC LIMIT 1`).first<OrganizationRow>();
+  if (!latest) throw new ApiError(404, "no_organization", "Nenhuma empresa cadastrada na plataforma.");
+  return latest;
+}
+
+// O superadministrador recebe um membro reservado em cada empresa que abre. Isso mantém
+// a integridade das escritas que apontam para members e registra quem operou.
+async function superAdminMember(db: D1Database, organizationId: string, email: string) {
+  const permissions = JSON.stringify(permissionsForRole(PLATFORM_SUPERADMIN_ROLE));
+  const existing = await db.prepare(
+    "SELECT id, role, active FROM members WHERE organization_id = ?1 AND external_user_id = ?2",
+  ).bind(organizationId, SUPERADMIN_USER_ID).first<{ id: string; role: string; active: number }>();
+  const actor = await db.prepare("SELECT id FROM users WHERE id = ?1 OR lower(email) = lower(?2) LIMIT 1")
+    .bind(SUPERADMIN_USER_ID, email).first<{ id: string }>();
+  const actorUserId = actor?.id ?? SUPERADMIN_USER_ID;
+  if (existing && existing.role === PLATFORM_SUPERADMIN_ROLE && existing.active === 1) {
+    return { id: existing.id, actorUserId };
+  }
+  const memberId = existing?.id ?? crypto.randomUUID();
+  const now = Date.now();
+  await db.batch([
+    db.prepare("INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?4)")
+      .bind(actorUserId, email, SUPERADMIN_DISPLAY_NAME, now),
+    db.prepare(
+      `INSERT INTO members (
+        id, organization_id, external_user_id, name, email, role,
+        permissions_json, weekly_capacity_minutes, active, created_at, updated_at
+      ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT(organization_id, external_user_id) DO UPDATE SET
+        name = excluded.name, email = excluded.email, role = excluded.role,
+        permissions_json = excluded.permissions_json, active = 1, updated_at = CURRENT_TIMESTAMP`,
+    ).bind(memberId, organizationId, SUPERADMIN_USER_ID, SUPERADMIN_DISPLAY_NAME, email, PLATFORM_SUPERADMIN_ROLE, permissions),
+    db.prepare(
+      `INSERT INTO platform_audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
+       VALUES (?1, ?2, ?3, 'platform.superadmin_entered', 'organization', ?2, '{}', ?4)`,
+    ).bind(crypto.randomUUID(), organizationId, email, now),
+  ]);
+  return { id: memberId, actorUserId };
+}
+
+async function superAdminContext(
+  db: D1Database,
+  identity: AuthenticatedIdentity,
+  request: Request,
+): Promise<OrganizationContext> {
+  const organization = await superAdminOrganization(db, request);
+  const member = await superAdminMember(db, organization.id, identity.email);
+  return {
+    db,
+    user: { id: identity.id, email: identity.email, displayName: identity.displayName },
+    member: {
+      id: member.id,
+      externalUserId: member.actorUserId,
+      role: PLATFORM_SUPERADMIN_ROLE,
+      permissions: permissionsForRole(PLATFORM_SUPERADMIN_ROLE),
+    },
+    organization,
+    termsAccepted: true,
+  };
 }
 
 async function findMemberships(db: D1Database, identity: AuthenticatedIdentity) {
@@ -84,7 +184,8 @@ async function findMemberships(db: D1Database, identity: AuthenticatedIdentity) 
       m.role, m.permissions_json, o.id AS organization_id, o.name AS organization_name,
       o.slug AS organization_slug, o.timezone
      FROM members m INNER JOIN organizations o ON o.id = m.organization_id
-     WHERE m.active = 1 AND (m.external_user_id = ?1 OR lower(m.email) = lower(?2))${maintenanceFilter}
+     WHERE m.active = 1 AND m.role != '${PLATFORM_SUPERADMIN_ROLE}'
+       AND (m.external_user_id = ?1 OR lower(m.email) = lower(?2))${maintenanceFilter}
      ORDER BY CASE m.role WHEN 'owner' THEN 1 WHEN 'admin' THEN 2 WHEN 'manager' THEN 3 WHEN 'member' THEN 4 ELSE 5 END, o.name`,
   ).bind(...(identity.scope === "maintenance" ? [identity.id, identity.email, MAINTENANCE_ORGANIZATION_ID] : [identity.id, identity.email])).all<MembershipRow>();
   return result.results;
@@ -114,14 +215,19 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
   };
 }
 
+export function isPlatformSuperAdmin(context: OrganizationContext) {
+  return context.member.role === PLATFORM_SUPERADMIN_ROLE;
+}
+
 export function requireModulePermission(context: OrganizationContext, module: PermissionModule, action: PermissionAction) {
-  if (!context.member.permissions[module][action]) {
+  if (!isPlatformSuperAdmin(context) && !context.member.permissions[module][action]) {
     throw new ApiError(403, "module_permission_denied", "Seu acesso não permite esta operação.");
   }
 }
 
 export function canManageOrganizationAccess(context: OrganizationContext) {
-  return context.member.role === "owner" || (context.member.role === "admin" && context.member.permissions.team.edit);
+  return isPlatformSuperAdmin(context) || context.member.role === "owner"
+    || (context.member.role === "admin" && context.member.permissions.team.edit);
 }
 
 function selectedOrganizationId(request: Request) {

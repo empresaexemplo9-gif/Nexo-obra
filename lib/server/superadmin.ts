@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-import { ApiError } from "@/lib/server/backend";
+import { ApiError } from "@/lib/server/api-error";
 
 type SuperAdminRuntimeEnv = {
   SUPERADMIN_EMAIL?: string;
@@ -15,6 +15,10 @@ type PasswordHash = {
 };
 
 const SESSION_COOKIE = "__Host-nexo-superadmin";
+// Identidade reservada do superadministrador dentro das empresas. Nunca corresponde
+// a um usuário autenticado pela plataforma, então só a sessão assinada a alcança.
+export const SUPERADMIN_USER_ID = "platform-superadmin";
+export const SUPERADMIN_DISPLAY_NAME = "Superadministrador da plataforma";
 const SESSION_DURATION_SECONDS = 8 * 60 * 60;
 const encoder = new TextEncoder();
 
@@ -97,23 +101,44 @@ export function clearSuperAdminSessionCookie() {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
 }
 
-export async function requireSuperAdmin(request: Request) {
-  const config = requiredConfig();
+async function readSession(request: Request, config: { email: string; sessionSecret: string }) {
   const token = readCookie(request, SESSION_COOKIE);
-  if (!token) throw new ApiError(401, "superadmin_sign_in_required", "Entre como superadministrador.");
+  if (!token) return null;
   const [payload, signature, ...extra] = token.split(".");
-  if (!payload || !signature || extra.length || !await verifySignature(payload, signature, config.sessionSecret)) {
-    throw new ApiError(401, "invalid_superadmin_session", "Sua sessão administrativa é inválida.");
-  }
+  if (!payload || !signature || extra.length || !await verifySignature(payload, signature, config.sessionSecret)) return null;
   try {
     const parsed = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as { sub?: unknown; exp?: unknown };
-    if (parsed.sub !== config.email || typeof parsed.exp !== "number" || parsed.exp <= Math.floor(Date.now() / 1000)) {
-      throw new Error("expired");
-    }
+    if (parsed.sub !== config.email || typeof parsed.exp !== "number" || parsed.exp <= Math.floor(Date.now() / 1000)) return null;
     return { email: config.email, expiresAt: parsed.exp };
   } catch {
-    throw new ApiError(401, "invalid_superadmin_session", "Sua sessão administrativa expirou.");
+    return null;
   }
+}
+
+export async function requireSuperAdmin(request: Request) {
+  const config = requiredConfig();
+  if (!readCookie(request, SESSION_COOKIE)) {
+    throw new ApiError(401, "superadmin_sign_in_required", "Entre como superadministrador.");
+  }
+  const session = await readSession(request, config);
+  if (!session) throw new ApiError(401, "invalid_superadmin_session", "Sua sessão administrativa é inválida ou expirou.");
+  return session;
+}
+
+// Leitura silenciosa usada pela resolução de identidade: sem sessão válida, o pedido
+// segue como um acesso comum da empresa.
+export async function readSuperAdminIdentity(request: Request) {
+  let config;
+  try { config = requiredConfig(); } catch { return null; }
+  const session = await readSession(request, config);
+  if (!session) return null;
+  return {
+    id: SUPERADMIN_USER_ID,
+    email: session.email,
+    displayName: SUPERADMIN_DISPLAY_NAME,
+    expiresAt: session.expiresAt,
+    scope: "superadmin" as const,
+  };
 }
 
 export function rejectCrossSiteMutation(request: Request) {

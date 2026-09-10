@@ -26,7 +26,7 @@ export async function GET(request: Request) {
           o.name,
           o.slug,
           o.created_at,
-          (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id AND m.active = 1) AS members,
+          (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id AND m.active = 1 AND m.role != 'superadmin') AS members,
           (SELECT COUNT(*) FROM clients c WHERE c.organization_id = o.id) AS clients,
           (SELECT COUNT(*) FROM projects p WHERE p.organization_id = o.id) AS projects,
           (SELECT COUNT(*) FROM tasks t WHERE t.organization_id = o.id AND t.status != 'done') AS open_tasks
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       db.prepare(
         `SELECT
           (SELECT COUNT(*) FROM organizations) AS organizations,
-          (SELECT COUNT(*) FROM members WHERE active = 1) AS members,
+          (SELECT COUNT(*) FROM members WHERE active = 1 AND role != 'superadmin') AS members,
           (SELECT COUNT(*) FROM clients) AS clients,
           (SELECT COUNT(*) FROM projects) AS projects,
           (SELECT COUNT(*) FROM tasks WHERE status != 'done') AS open_tasks`,

@@ -57,7 +57,8 @@ export async function POST(request: Request, route: RouteContext) {
     const userId = legacyUser?.id ?? identity.id;
     const existingMember = await db.prepare(
       `SELECT id, role FROM members
-       WHERE organization_id = ?1 AND (external_user_id = ?2 OR lower(email) = lower(?3)) LIMIT 1`,
+       WHERE organization_id = ?1 AND role != 'superadmin'
+         AND (external_user_id = ?2 OR lower(email) = lower(?3)) LIMIT 1`,
     ).bind(invitation.organization_id, identity.id, identity.email).first<{ id: string; role: string }>();
     const memberId = existingMember?.id ?? crypto.randomUUID();
     const role = existingMember?.role === "owner" ? "owner" : invitation.role;

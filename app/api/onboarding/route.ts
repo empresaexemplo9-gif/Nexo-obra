@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   return apiRoute(async () => {
     const user = await authenticatedIdentity(request);
     if (user.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção não cria empresas contratantes.");
+    if (user.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "Cadastre a empresa pelo painel do superadministrador.");
     const parsed = onboardingSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const db = getDatabase();

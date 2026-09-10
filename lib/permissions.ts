@@ -21,7 +21,11 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
   files: "Arquivos",
 };
 
+// Perfil da plataforma, fora da matriz das empresas: leitura e edição total em todos os módulos.
+export const PLATFORM_SUPERADMIN_ROLE = "superadmin";
+
 export const accessProfileLabels: Record<string, string> = {
+  superadmin: "Superadministrador da plataforma",
   owner: "Contratante · proprietário",
   admin: "Administrador",
   manager: "Gestor",
@@ -41,7 +45,7 @@ const full = (): PermissionSet => Object.fromEntries(
 ) as PermissionSet;
 
 export function permissionsForRole(role: string): PermissionSet {
-  if (role === "owner" || role === "admin") return full();
+  if (role === PLATFORM_SUPERADMIN_ROLE || role === "owner" || role === "admin") return full();
   const permissions = none();
   const set = (area: PermissionModule, view: boolean, edit = false) => {
     permissions[area] = { view: view || edit, edit };
@@ -67,7 +71,7 @@ export function permissionsForRole(role: string): PermissionSet {
 }
 
 export function normalizePermissions(value: unknown, role: string): PermissionSet {
-  if (role === "owner") return full();
+  if (role === PLATFORM_SUPERADMIN_ROLE || role === "owner") return full();
   const defaults = permissionsForRole(role);
   if (!value || typeof value !== "object" || Array.isArray(value)) return defaults;
   const input = value as Record<string, unknown>;

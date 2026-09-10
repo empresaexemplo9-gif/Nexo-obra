@@ -23,8 +23,9 @@ const sections = [
     title: "3. Superadmin e separação dos dados",
     body: [
       "O superadmin é exclusivo do titular da plataforma e administra disponibilidade, empresas cadastradas, acessos, segurança, planos, integrações, suporte e indicadores técnicos ou agregados.",
-      "O painel de superadmin não concede acesso comum ao conteúdo sigiloso dos ambientes contratantes, incluindo cadastros de clientes, projetos, arquivos, documentos e valores financeiros. Cada empresa permanece isolada por organização e suas consultas são filtradas no servidor.",
-      "Qualquer suporte que exija contato com conteúdo de uma empresa dependerá de solicitação ou autorização do Contratante, necessidade comprovada de segurança ou obrigação legal, aplicando-se acesso mínimo, finalidade determinada e registro de auditoria quando tecnicamente disponível.",
+      "O superadmin pode abrir qualquer empresa contratante com permissão de leitura e edição em todos os módulos, incluindo clientes, projetos, obras, orçamentos, arquivos, diário e informações financeiras, para operação, suporte, correção de dados e obrigações legais ou de segurança.",
+      "Cada empresa continua isolada por organização e todas as consultas são filtradas no servidor: o superadmin opera uma empresa por vez, na empresa que selecionar. A entrada em uma empresa e cada escrita realizada ficam registradas na auditoria daquela empresa, com identificação do responsável e do horário.",
+      "O titular da plataforma se compromete a usar esse acesso com finalidade determinada, mínimo necessário e sigilo, sem transferir conteúdo do Contratante a terceiros fora das hipóteses previstas em lei ou autorizadas pelo próprio Contratante.",
     ],
   },
   {

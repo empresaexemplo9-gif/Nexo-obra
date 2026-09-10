@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     const result = await context.db.prepare(
       `SELECT id, name, email, role, permissions_json, weekly_capacity_minutes, active
        FROM members
-       WHERE organization_id = ?1 AND active = 1
+       WHERE organization_id = ?1 AND active = 1 AND role != 'superadmin'
        ORDER BY name`,
     ).bind(context.organization.id).all<MemberRow>();
 

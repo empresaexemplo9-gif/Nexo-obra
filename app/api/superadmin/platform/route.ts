@@ -31,12 +31,12 @@ export async function GET(request: Request) {
     const organizationId = new URL(request.url).searchParams.get("organizationId") ?? ""; await organization(organizationId);
     const db = getDatabase();
     const [members, rules, activation, history, targets] = await Promise.all([
-      db.prepare("SELECT id, name, email, role, active FROM members WHERE organization_id = ?1 ORDER BY name").bind(organizationId).all(),
+      db.prepare("SELECT id, name, email, role, active FROM members WHERE organization_id = ?1 AND role != 'superadmin' ORDER BY name").bind(organizationId).all(),
       db.prepare("SELECT subject, state, until, reason, revision FROM platform_access_rules WHERE organization_id = ?1").bind(organizationId).all(),
       activationFor(organizationId),
       db.prepare(`SELECT action, entity_id, actor_user_id, metadata_json, created_at FROM platform_audit_events
         WHERE organization_id = ?1 AND (action LIKE 'platform.%' OR action LIKE 'drap.activation%') ORDER BY created_at DESC LIMIT 50`).bind(organizationId).all(),
-      db.prepare(`SELECT lower(email) email FROM members WHERE organization_id = ?1
+      db.prepare(`SELECT lower(email) email FROM members WHERE organization_id = ?1 AND role != 'superadmin'
         UNION SELECT lower(email) FROM client_portal_access WHERE organization_id = ?1
         UNION SELECT lower(email) FROM organization_invitations WHERE organization_id = ?1`).bind(organizationId).all(),
     ]);

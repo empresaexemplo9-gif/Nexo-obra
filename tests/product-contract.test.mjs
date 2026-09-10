@@ -222,12 +222,18 @@ test("records versioned terms before tenant data access", async () => {
   assert.match(terms, /Superadmin e separação dos dados/);
 });
 
-test("keeps the superadmin overview out of tenant content", async () => {
+test("gives the superadmin full power over any company, under audit", async () => {
   const overview = await source("app/api/superadmin/overview/route.ts");
+  const backend = await source("lib/server/backend.ts");
   const ui = await source("components/superadmin-app.tsx");
+  const terms = await source("components/terms-page.tsx");
 
+  // O painel continua agregado: o conteúdo da empresa é lido no contexto dela, não aqui.
   assert.doesNotMatch(overview, /c\.name|p\.name|t\.title|budget_cents|financial/);
-  assert.match(ui, /conteúdo confidencial de cada empresa não é exibido/);
+  assert.match(backend, /identity\.scope === "superadmin"/);
+  assert.match(backend, /platform\.superadmin_entered/);
+  assert.match(ui, /leitura e edição totais/);
+  assert.match(terms, /leitura e edição em todos os módulos/);
 });
 
 test("provides an isolated maintenance administrator without storing its password", async () => {

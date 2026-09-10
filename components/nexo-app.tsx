@@ -99,9 +99,10 @@ type CreateKind = "client" | "project" | "task";
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
 type SessionData = {
   authenticated: boolean;
-  authMethod?: "chatgpt" | "maintenance";
+  authMethod?: "chatgpt" | "maintenance" | "superadmin";
   needsOrganization: boolean;
   portalOnly?: boolean;
+  platformEmpty?: boolean;
   signInPath?: string;
   user?: { id: string; email: string; displayName: string };
   member?: { id: string; role: string; permissions: PermissionSet };
@@ -161,6 +162,10 @@ const roleLabels: Record<string, string> = {
 };
 function Brand({ variant = "lockup", dark = false, className }: { variant?: BrandVariant; dark?: boolean; className?: string }) {
   return <BrandLogo variant={variant} dark={dark} className={className} />;
+}
+
+function PlatformEmptyScreen() {
+  return <main className="grid min-h-svh place-items-center bg-primary p-5"><Card className="w-full max-w-md border-white/10 bg-primary text-white shadow-none"><CardContent className="p-7 sm:p-9"><Brand variant="stacked" dark className="mx-auto w-[200px]" /><h1 className="display-heading mt-8 text-3xl">Nenhuma empresa cadastrada</h1><p className="mt-3 text-sm leading-6 text-hoikos-300">Cadastre a primeira empresa no painel da plataforma e libere o acesso do contratante.</p><Button asChild className="mt-6 h-11 w-full bg-hoikos-400 text-hoikos-950 hover:bg-hoikos-200"><a href="/superadmin"><ShieldCheck />Abrir painel da plataforma</a></Button></CardContent></Card></main>;
 }
 
 function LoadingScreen() {
@@ -416,10 +421,10 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
       <SidebarFooter className="p-3"><SidebarMenu>
         {session.member?.role === "owner" ? <SidebarMenuItem><SidebarMenuButton onClick={() => setCompanyOpen(true)} tooltip="Nova empresa" className="text-hoikos-300 hover:text-white"><Building2 /><span>Nova empresa</span></SidebarMenuButton></SidebarMenuItem> : null}
         <SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Conta" className="text-hoikos-300 hover:text-white"><span className="grid size-9 place-items-center rounded-full bg-hoikos-300 text-xs font-semibold text-hoikos-950">{session.user?.displayName.slice(0, 2).toUpperCase()}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{session.user?.displayName}</span><span className="block truncate text-xs text-hoikos-500">{roleLabels[session.member?.role ?? ""] ?? session.member?.role}</span></span></SidebarMenuButton></SidebarMenuItem>
-        <SidebarMenuItem>{session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton asChild tooltip="Sair" className="text-hoikos-500 hover:text-white"><a href="/signout-with-chatgpt?return_to=%2F" target="_top"><LogOut /><span>Sair</span></a></SidebarMenuButton>}</SidebarMenuItem>
+        <SidebarMenuItem>{session.authMethod === "superadmin" ? <SidebarMenuButton asChild tooltip="Painel da plataforma" className="text-hoikos-300 hover:text-white"><a href="/superadmin"><ShieldCheck /><span>Painel da plataforma</span></a></SidebarMenuButton> : session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton asChild tooltip="Sair" className="text-hoikos-500 hover:text-white"><a href="/signout-with-chatgpt?return_to=%2F" target="_top"><LogOut /><span>Sair</span></a></SidebarMenuButton>}</SidebarMenuItem>
       </SidebarMenu></SidebarFooter><SidebarRail />
     </Sidebar>
-    <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4  sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{session.authMethod === "maintenance" ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><Button variant="ghost" size="icon" aria-label="Notificações"><Bell /></Button>{canCreateAny ? <Button size="sm" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
+    <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4  sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{session.authMethod === "maintenance" ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}{session.authMethod === "superadmin" ? <Badge className="border-hoikos-800 bg-hoikos-900 text-white">Superadmin · acesso total</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><Button variant="ghost" size="icon" aria-label="Notificações"><Bell /></Button>{canCreateAny ? <Button size="sm" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
     <QuickCreate key={`${quickKind}-${quickOpen}`} open={quickOpen} onOpenChange={setQuickOpen} projects={projects} clients={clients} initialKind={quickKind} allowedKinds={allowedKinds} onCreated={loadData} />
     <Dialog open={companyOpen} onOpenChange={setCompanyOpen}><DialogContent><DialogHeader><DialogTitle>Nova empresa</DialogTitle><DialogDescription>Crie outro ambiente totalmente separado dos dados atuais.</DialogDescription></DialogHeader><OrganizationForm embedded onCreated={async () => { setCompanyOpen(false); await reloadSession(); }} /></DialogContent></Dialog><Toaster position="bottom-right" />
   </SidebarProvider>;
@@ -443,6 +448,7 @@ export function NexoApp() {
   if (loading || !session) return <LoadingScreen />;
   if (!session.authenticated) return <AccessScreen signInPath={session.signInPath} />;
   if (session.portalOnly) return <ClientPortalApp />;
+  if (session.platformEmpty) return <PlatformEmptyScreen />;
   if (session.needsOrganization) return <OrganizationForm onCreated={loadSession} />;
   if (!ready) return <LoadingScreen />;
   if (session.terms && !session.terms.accepted) return <TermsGate version={session.terms.version} onAccepted={loadSession} />;

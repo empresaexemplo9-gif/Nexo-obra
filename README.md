@@ -33,10 +33,11 @@ flowchart TD
 - Esquema relacional multiempresa em `db/schema.ts`.
 - Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
 - Acesso superadmin próprio, protegido por hash, sessão assinada e bloqueio de tentativas repetidas.
+- Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).
 - Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
 - Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
-- Painel do superadmin limitado a metadados e indicadores agregados, sem abrir o conteúdo sigiloso dos ambientes contratantes.
+- Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
 - Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
@@ -177,6 +178,7 @@ O backend inicial está documentado em [`docs/BACKEND.md`](docs/BACKEND.md).
 
 Papéis mínimos recomendados:
 
+- `superadmin`: titular da plataforma, com leitura e edição totais em qualquer empresa; não ocupa vaga de equipe e só é alcançado pela sessão assinada de `/superadmin`;
 - `owner`: cobrança, integrações, segurança e acesso total;
 - `admin`: equipe, configurações e operação total, sem propriedade da assinatura;
 - `manager`: projetos, obras, orçamentos e relatórios;
@@ -187,7 +189,7 @@ Papéis mínimos recomendados:
 - `accounting`: prestação de contas com leitura ou edição explicitamente liberada;
 - `client`: portal externo somente para leitura/aprovação/comentário.
 
-Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
+Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. O papel `superadmin` é a única exceção: sua matriz é sempre total e é resolvida no servidor a partir da sessão administrativa, nunca do navegador. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
 
 O texto público vigente fica em `/termos`. Cada aceite grava a versão, data e evidências técnicas transformadas em hash, sem armazenar IP ou agente do navegador em formato bruto. Antes da cobrança comercial, o documento deve receber revisão jurídica e os dados legais do fornecedor, canal de privacidade e condições comerciais do plano.
 
@@ -208,7 +210,7 @@ app/
     onboarding/         # criação segura da primeira empresa
     projects/           # CRUD de projetos e obras
     session/            # identidade e organização ativas
-    superadmin/         # sessão, visão global e geração de convites
+    superadmin/         # sessão, visão global, cadastro de empresas e convites
     tasks/              # CRUD de tarefas
     terms/              # aceite eletrônico da versão vigente
   layout.tsx
@@ -251,6 +253,7 @@ CLAUDE.md
 
 - Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
 - Superadmin, convite do contratante e convites secundários com permissões granulares. **Concluído.**
+- Operação completa da plataforma pelo superadmin, com auditoria por empresa. **Concluído.**
 - CRUD de clientes, projetos e tarefas. **Concluído no backend.**
 - Permissões de leitura/edição por módulo no servidor e auditoria de escritas. **Concluído no backend.**
 - Termos versionados e aceite eletrônico obrigatório. **Concluído; revisão jurídica pendente antes da monetização.**

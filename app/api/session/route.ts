@@ -22,8 +22,19 @@ export async function GET(request: Request) {
   return apiRoute(async () => {
     try {
       const identity = await authenticatedIdentity(request);
-      const maintenanceIdentity = await readMaintenanceIdentity(request);
+      const maintenanceIdentity = identity.scope === "maintenance" ? await readMaintenanceIdentity(request) : null;
       const memberships = await listOrganizationMemberships(request);
+      if (memberships.length === 0 && identity.scope === "superadmin") {
+        // Plataforma ainda sem empresas: o superadministrador cadastra a primeira no painel.
+        return Response.json({
+          authenticated: true,
+          authMethod: "superadmin",
+          needsOrganization: false,
+          platformEmpty: true,
+          user: identity,
+          organizations: [],
+        });
+      }
       if (memberships.length === 0) {
         const { accesses } = await portalAccessesForUser(request);
         return Response.json({
@@ -38,7 +49,7 @@ export async function GET(request: Request) {
       const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
       return Response.json({
         authenticated: true,
-        authMethod: maintenanceIdentity ? "maintenance" : "chatgpt",
+        authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "chatgpt",
         needsOrganization: false,
         user: context.user,
         member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },
