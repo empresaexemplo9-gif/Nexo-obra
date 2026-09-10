@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { PortalError, PortalItemCard } from "@/components/portal-shared";
+import { useUsageHeartbeat } from "@/components/usage-workspace";
 import { resourceJson, resourceMessage, useLiveResource } from "@/hooks/use-live-resource";
 import type { PortalAccess, PortalItem, PortalPage, PortalProgress } from "@/lib/portal";
 import { diaryDate } from "@/lib/diary";
@@ -28,6 +29,8 @@ export function ClientPortalApp() {
   const session = useLiveResource<PortalSession>("/api/portal");
   const [selected, setSelected] = useState("");
   const access = session.data?.accesses.find((item) => item.id === selected) ?? session.data?.accesses[0];
+  // O cliente do portal também é um acesso: o tempo dele conta na empresa da obra.
+  useUsageHeartbeat(Boolean(access?.termsAccepted), access?.id);
   return <PortalFrame>{session.error && <PortalError message={session.error} retry={session.refresh} />}{session.loading ? <Skeleton className="h-64 rounded-md" /> : session.data && !session.data.authenticated ? <SignInCard returnTo="/portal" /> : session.data?.authenticated ? <>
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm text-hoikos-500">Bem-vindo, {session.data.userName}</p><h1 className="display-heading mt-1 text-4xl">Suas obras e decisões</h1></div><Button variant="outline" onClick={session.refresh}><RefreshCw className="size-4" />Atualizar</Button></div>
     {access ? <><div className="space-y-2"><Label htmlFor="client-portal-project">Obra / projeto</Label><Select value={access.id} onValueChange={setSelected}><SelectTrigger id="client-portal-project" className="h-auto min-h-11 w-full bg-white"><SelectValue /></SelectTrigger><SelectContent>{session.data.accesses.map((item) => <SelectItem key={item.id} value={item.id}>{item.organizationName} · {item.projectName}</SelectItem>)}</SelectContent></Select></div>{access.termsAccepted ? <ClientProject key={access.id} access={access} onAccessChanged={session.refresh} /> : <PortalTerms endpoint={`/api/portal/access/${access.id}`} version={session.data.termsVersion} onAccepted={session.refresh} />}</> : <Card><Empty><EmptyHeader><EmptyTitle>Nenhuma obra liberada</EmptyTitle><EmptyDescription>Abra o convite enviado pela empresa. Um acesso revogado deixa de aparecer aqui.</EmptyDescription></EmptyHeader></Empty></Card>}

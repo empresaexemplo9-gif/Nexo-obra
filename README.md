@@ -27,6 +27,7 @@ flowchart TD
 - Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
 - Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
 - Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
+- Contador de tempo online por dia para todos os acessos, medido no servidor, com histórico próprio para cada pessoa, visão da empresa para o contratante e visão de toda a plataforma para o superadmin. Consulte [Tempo de uso](docs/TEMPO-DE-USO.md).
 - Interface responsiva, com menu recolhível e busca.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
@@ -70,6 +71,7 @@ flowchart TD
 | Tarefas | Executar sem perder contexto | Prioridade, checklist, dependência, prazo e apontamento |
 | Equipe | Distribuir capacidade | Papéis, permissões, carga e horas planejadas x realizadas |
 | Arquivos | Encontrar a versão certa | Pastas por projeto, revisão, metadados e acesso do cliente |
+| Tempo de uso | Saber quanto tempo cada acesso ficou online | Total por dia, sessões, ações e histórico por pessoa |
 | Financeiro | Ver resultado no contexto | Saldo, contas, caixa e resultado por projeto vindos da Drap |
 
 ## Stack escolhida

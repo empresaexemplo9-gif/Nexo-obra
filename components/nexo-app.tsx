@@ -12,6 +12,7 @@ import {
   CalendarRange,
   Check,
   CircleAlert,
+  Clock,
   Eye,
   EyeOff,
   Files,
@@ -34,6 +35,7 @@ import { Badge } from "@/components/ui/badge";
 import { BudgetsWorkspace } from "@/components/budgets-workspace";
 import { FinanceWorkspace } from "@/components/finance-workspace";
 import { DiaryWorkspace } from "@/components/diary-workspace";
+import { UsageWorkspace, useUsageHeartbeat } from "@/components/usage-workspace";
 import { PortalManager } from "@/components/portal-manager";
 import { ClientPortalApp } from "@/components/client-portal-app";
 import { Button } from "@/components/ui/button";
@@ -93,7 +95,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -151,12 +153,16 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   team: { title: "Equipe", description: "Pessoas com acesso a esta empresa." },
   tasks: { title: "Tarefas", description: "Execução organizada por prioridade e projeto." },
   files: { title: "Arquivos", description: "Documentos vinculados aos trabalhos." },
+  usage: { title: "Tempo de uso", description: "Tempo online por dia, medido no servidor." },
 };
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
   schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
+  // Tempo de uso não é um módulo de permissão: todo acesso enxerga ao menos o próprio.
+  usage: "overview",
 };
+const alwaysVisibleModules: ModuleId[] = ["usage"];
 
 const roleLabels: Record<string, string> = {
   ...accessProfileLabels, client: "Cliente",
@@ -333,7 +339,8 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickKind, setQuickKind] = useState<CreateKind>("project");
   const [companyOpen, setCompanyOpen] = useState(false);
-  const canView = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].view), [session.member]);
+  const canView = useCallback((module: ModuleId) => alwaysVisibleModules.includes(module)
+    || Boolean(session.member?.permissions[modulePermissionMap[module]].view), [session.member]);
   const canEdit = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].edit), [session.member]);
 
   useEffect(() => {
@@ -367,7 +374,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   }, [loadData, session.organization?.id]);
   useEffect(() => {
     if (!canView(activeModule)) {
-      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files"] as ModuleId[]).find(canView);
+      const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "usage"] as ModuleId[]).find(canView);
       const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0);
       return () => window.clearTimeout(timer);
     }
@@ -393,7 +400,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const navSections = ([
     { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
     { label: "Negócio", items: [{ id: "crm", label: "Clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
-    { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }] },
+    { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[])
     .map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) }))
     .filter((section) => section.items.length);
@@ -407,6 +414,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
+    if (activeModule === "usage") return <div className="space-y-5"><PageIntro module="usage" /><UsageWorkspace query={query} /></div>;
     if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
     const future = activeModule === "schedule" ? { icon: CalendarRange, title: "Cronograma ainda não conectado", description: "Os prazos serão montados com projetos e tarefas reais." } : { icon: Files, title: "Arquivos ainda não conectados", description: "Os documentos serão armazenados por empresa e projeto no R2." };
     return <div className="space-y-5"><PageIntro module={activeModule} /><HonestEmpty {...future} /></div>;
@@ -446,6 +454,8 @@ export function NexoApp() {
     return () => window.clearTimeout(timer);
   }, [loadSession]);
   const ready = useMemo(() => session?.authenticated && !session.needsOrganization && session.organization, [session]);
+  // Conta desde que existe empresa aberta, inclusive na tela de termos.
+  useUsageHeartbeat(Boolean(session?.authenticated && session.organization && !session.portalOnly));
   if (loading || !session) return <LoadingScreen />;
   if (!session.authenticated) return <AccessScreen signInPath={session.signInPath} />;
   if (session.portalOnly) return <ClientPortalApp />;

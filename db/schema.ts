@@ -456,3 +456,43 @@ export const termsAcceptances = sqliteTable("terms_acceptances", {
   uniqueIndex("uidx_terms_acceptance_org_user_version").on(table.organizationId, table.externalUserId, table.termsVersion),
   index("idx_terms_acceptance_org_version").on(table.organizationId, table.termsVersion),
 ]);
+
+// Tempo online. O servidor só credita o intervalo entre dois sinais observados, com o
+// próprio relógio, e nunca mais do que USAGE_GAP_LIMIT_MS por intervalo. Sessões abertas
+// ficam em usage_sessions; o total por dia, no fuso da empresa, em usage_days.
+export const usageSessions = sqliteTable("usage_sessions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  subjectKind: text("subject_kind").notNull(),
+  email: text("email").notNull(),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull(),
+  memberId: text("member_id"),
+  startedAt: integer("started_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+  endedAt: integer("ended_at"),
+  activeMs: integer("active_ms").notNull().default(0),
+  beats: integer("beats").notNull().default(1),
+}, (t) => [
+  index("idx_usage_sessions_open").on(t.organizationId, t.subjectId, t.endedAt),
+  index("idx_usage_sessions_org_started").on(t.organizationId, t.startedAt),
+]);
+
+export const usageDays = sqliteTable("usage_days", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  day: text("day").notNull(),
+  subjectKind: text("subject_kind").notNull(),
+  email: text("email").notNull(),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull(),
+  activeMs: integer("active_ms").notNull().default(0),
+  sessions: integer("sessions").notNull().default(0),
+  firstSeenAt: integer("first_seen_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_usage_days_org_subject_day").on(t.organizationId, t.subjectId, t.day),
+  index("idx_usage_days_org_day").on(t.organizationId, t.day),
+  index("idx_usage_days_day").on(t.day),
+]);
