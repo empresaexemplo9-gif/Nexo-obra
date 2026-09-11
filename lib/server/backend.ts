@@ -303,7 +303,15 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
       }, { status: 503 });
     }
     console.error("H.OIKOS API failure", error);
-    return Response.json({ error: "Não foi possível concluir a operação.", code: "internal_error" }, { status: 500 });
+    // O nome da classe da exceção vai junto. Só o nome: a mensagem do driver pode conter
+    // endereço ou token, o nome nunca contém. Sem isso, "não foi possível concluir a
+    // operação" é um beco sem saída para quem não tem acesso ao log do servidor — foi
+    // exatamente o que travou o diagnóstico desta plataforma em produção.
+    const falha = error instanceof Error ? error.constructor.name : typeof error;
+    return Response.json(
+      { error: "Não foi possível concluir a operação.", code: "internal_error", falha },
+      { status: 500 },
+    );
   }
 }
 

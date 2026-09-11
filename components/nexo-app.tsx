@@ -137,8 +137,8 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
     cache: "no-store",
   });
-  const body = await response.json().catch(() => ({})) as { error?: string; code?: string };
-  if (!response.ok) throw new RequestError(body.error ?? "Não foi possível concluir a operação.", body.code);
+  const body = await response.json().catch(() => ({})) as { error?: string; code?: string; falha?: string };
+  if (!response.ok) throw new RequestError(body.error ? (body.falha ? `${body.error} (${body.falha})` : body.error) : "Não foi possível concluir a operação.", body.code);
   return body as T;
 }
 
