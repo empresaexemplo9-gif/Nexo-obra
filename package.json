@@ -8,13 +8,16 @@
   },
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh",
-    "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
+    "dev": "bash scripts/sites-env.sh -- next dev",
+    "build": "bash scripts/sites-env.sh -- next build",
+    "start": "bash scripts/sites-env.sh -- next start",
+    "build:sites": "bash scripts/build-verified.sh",
+    "dev:sites": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "test": "npm run typecheck && npm run build && node --test tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "bash scripts/sites-env.sh -- tsc --noEmit",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate && node scripts/build-migrations-manifest.mjs",
+    "db:manifest": "node scripts/build-migrations-manifest.mjs",
     "superadmin:hash": "node scripts/superadmin-hash.mjs"
   },
   "dependencies": {
@@ -22,6 +25,7 @@
     "@hookform/resolvers": "^5.7.1",
     "@libsql/client": "^0.18.0",
     "@shadcn/react": "^0.3.0",
+    "@vercel/blob": "^2.8.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",

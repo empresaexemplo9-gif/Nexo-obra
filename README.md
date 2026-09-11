@@ -132,9 +132,9 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 ## Repositório e publicação
 
 - O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
-- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app). **Ele não compila o repositório**: o `vercel.json` tem `buildCommand` vazio e reescreve todas as rotas para o alvo do OpenAI Sites, que é onde a aplicação roda.
-- **Enviar commit para `main` não publica nada.** Depois do envio é preciso republicar o projeto no OpenAI Sites e confirmar em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
-- O projeto também preserva o vínculo com o OpenAI Sites por meio do `project_id` em `.openai/hosting.json`.
+- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app) e agora **compila o repositório**: o `vercel.json` declara `framework: nextjs` e `buildCommand: npm run build` (`next build`). Enviar commit para `main` publica.
+- Antes não era assim: o `buildCommand` era vazio e todas as rotas eram reescritas para o alvo do OpenAI Sites. Isso fez uma sequência inteira de funcionalidades parecer não existir. Confirme em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
+- Sair daquele alvo exigiu trocar D1 por libSQL/Turso, `cloudflare:workers` por `process.env`, o bucket R2 pelo Vercel Blob e `import.meta.glob` por um manifesto gerado. O build antigo segue em `npm run build:sites` até a publicação nova estar confirmada.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
 ## Configuração da Drap

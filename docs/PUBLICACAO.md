@@ -1,19 +1,30 @@
 # Publicação: onde o código roda de verdade
 
-## Existem dois endereços, e só um compila o repositório
+## O que mudou
 
-| Endereço | O que faz |
+Até agora existiam dois endereços e só um compilava o repositório:
+`nexo-obra-jet.vercel.app` tinha `buildCommand` vazio e reescrevia todas as rotas para
+`nexo-obra.thiagohcarvalho09.chatgpt.site`, que era onde a aplicação de fato rodava. Enviar
+commit para `main` não colocava nada no ar. Esse foi o motivo real de uma sequência inteira
+de funcionalidades parecer não existir: o código estava no GitHub e o site continuava
+servindo um build anterior a todas elas, sem nenhum sintoma além de "não mudou nada".
+
+Agora o `vercel.json` declara `framework: nextjs` e `buildCommand: npm run build`, que é
+`next build`. O Vercel compila o repositório: **enviar commit para `main` publica**.
+
+Isso exigiu sair de três dependências do runtime da Cloudflare, que só existem dentro do
+alvo do OpenAI Sites:
+
+| Antes | Agora |
 | --- | --- |
-| `nexo-obra-jet.vercel.app` | **Não compila nada.** O `vercel.json` tem `buildCommand` vazio e reescreve todas as rotas para o endereço abaixo. É um redirecionador de domínio. |
-| `nexo-obra.thiagohcarvalho09.chatgpt.site` | É onde a aplicação roda: o alvo do OpenAI Sites, identificado por `project_id` em `.openai/hosting.json`. |
+| Banco pelo binding D1 | `@libsql/client` sobre Turso, com a mesma interface (`db/index.ts`) |
+| Segredos por `cloudflare:workers` | `lib/server/runtime.ts` sobre `process.env` |
+| Fotos num bucket R2 | `@vercel/blob` (`lib/server/storage.ts`) |
+| SQL das migrações por `import.meta.glob` (Vite) | `drizzle/manifest.ts`, gerado e conferido por teste |
+| Identidade pelos cabeçalhos `oai-authenticated-user-*` | senha e cookie assinado próprios ([Acesso e senha](ACESSO-E-SENHA.md)) |
 
-Consequência: **enviar commit para a branch `main` do GitHub não coloca nada no ar.** O
-repositório é a fonte do código, mas quem serve o site é a publicação do OpenAI Sites, que
-precisa ser refeita a cada alteração.
-
-Esse foi o motivo real de uma sequência inteira de funcionalidades parecer não existir: o
-código estava publicado no GitHub e o site continuava servindo um build anterior a todas
-elas, sem nenhum sintoma além de "não mudou nada".
+O build antigo continua disponível em `npm run build:sites` e `npm run dev:sites` enquanto
+a publicação nova não estiver confirmada. Depois disso ele sai.
 
 ## Como saber qual versão está no ar
 
@@ -21,25 +32,41 @@ Entre em `/superadmin`. No topo aparece **Versão no ar**, com o identificador c
 commit e a data em que aquele bundle foi compilado. O selo é gravado dentro do bundle no
 momento do build, então ele descreve o que está servindo — não o que está no repositório.
 
-Se a data tiver dois dias ou mais, o painel avisa que alterações posteriores não estão
-naquele build e lembra que o domínio público não compila o repositório.
+O selo vem de `env` no `next.config.ts`, preenchido com `VERCEL_GIT_COMMIT_SHA` no build do
+Vercel. Se a data tiver dois dias ou mais, o painel avisa que alterações posteriores não
+estão naquele build.
 
 ## Sequência para colocar uma alteração no ar
 
-1. Commit e envio para `main` (guarda o código, não publica).
-2. **Republicar o projeto no OpenAI Sites** — é este passo que gera o bundle novo.
-3. Abrir `/superadmin` e confirmar que **Versão no ar** mostra o commit esperado.
-4. Se a alteração incluiu migração, usar **Atualizar banco de dados** no mesmo painel.
+1. Commit e envio para `main`. O Vercel compila e publica.
+2. Abrir `/superadmin` e confirmar que **Versão no ar** mostra o commit esperado.
+3. Se a alteração incluiu migração, usar **Atualizar banco de dados** no mesmo painel.
    Consulte [Atualizar o banco de dados](ATUALIZAR-BANCO.md).
 
-Os passos 3 e 4 são o que transforma "publiquei" em "está funcionando". Sem o 3, o código
-não está lá; sem o 4, está lá mas sem as tabelas.
+O passo 3 é o que transforma "publiquei" em "está funcionando": o build novo está lá, mas
+sem as tabelas as áreas novas respondem `503 database_not_migrated`.
 
 ## Variáveis de ambiente
 
-Ficam no ambiente de publicação, nunca no repositório. Sem `SUPERADMIN_EMAIL`,
-`SUPERADMIN_PASSWORD_HASH` e `SUPERADMIN_SESSION_SECRET`, o painel responde
-`superadmin_not_configured` e nenhuma sessão administrativa é emitida.
+Ficam no painel do Vercel, nunca no repositório. Nunca envie um segredo por conversa: quem
+configura é quem tem acesso ao painel.
+
+| Variável | Sem ela |
+| --- | --- |
+| `DATABASE_URL`, `DATABASE_AUTH_TOKEN` | nada que toque no banco funciona |
+| `SESSION_SECRET` | nenhum login de empresa funciona (`503 session_secret_missing`) |
+| `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_SESSION_SECRET` | `superadmin_not_configured`: nenhuma sessão administrativa é emitida |
+| `BLOB_READ_WRITE_TOKEN` | as fotos do diário respondem `503 storage_unavailable`; o texto do registro continua salvo |
+| `TRUST_IDENTITY_HEADERS` | (deixe vazio) os cabeçalhos `oai-authenticated-user-*` são ignorados, que é o correto fora da borda do ChatGPT |
+
+### Fotos do diário
+
+O bucket R2 saiu junto com o runtime da Cloudflare. As fotos vão para o Vercel Blob, que
+publica cada objeto numa URL aleatória. A autorização continua nas rotas — empresa,
+registro e permissão são conferidos antes de devolver os bytes — e a URL nunca sai do
+servidor. É uma garantia mais fraca que a do R2, onde o objeto era inalcançável sem
+credencial: quem descobrir a URL exata alcança o arquivo. Por isso a chave é tratada como
+segredo e não aparece em resposta, log nem auditoria.
 
 ### Banco de dados
 

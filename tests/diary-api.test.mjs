@@ -80,7 +80,8 @@ beforeEach(() => {
   for (const [id, org, name] of [[projectA, orgA, "Obra A"], [projectB, orgB, "Obra B"]]) db.sqlite.prepare("INSERT INTO projects(id, organization_id, code, name, type, created_at, updated_at) VALUES (?, ?, ?, ?, 'work', 0, 0)").run(id, org, name, name);
   bytes = new Map();
   runtime.DB = db;
-  runtime.FILES = { async put(key, value) { bytes.set(key, value); }, async get(key) { return bytes.has(key) ? { body: new Response(bytes.get(key)).body } : null; }, async delete(key) { bytes.delete(key); } };
+  runtime.FILES = { // O armazenamento devolve a chave do objeto gravado; o caminho já vem único do handler.
+  async put(path, value) { bytes.set(path, value); return path; }, async get(key) { return bytes.has(key) ? { body: new Response(bytes.get(key)).body } : null; }, async delete(key) { bytes.delete(key); } };
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
@@ -222,7 +223,7 @@ test("photo count remains bounded and simultaneous uploads cannot claim the same
   let arrived = 0;
   let release;
   const barrier = new Promise((resolve) => { release = resolve; });
-  runtime.FILES.put = async (...args) => { await put(...args); if (++arrived === 2) release(); await barrier; };
+  runtime.FILES.put = async (...args) => { const key = await put(...args); if (++arrived === 2) release(); await barrier; return key; };
   const pair = await Promise.all([1, 2].map(() => upload.POST(request("/api/diary/x/photos", { method: "POST", body: photoForm() }), parameters(entry.id))));
   runtime.FILES.put = put;
   assert.deepEqual(pair.map((response) => response.status).sort(), [201, 409]); assert.equal(bytes.size, 1);

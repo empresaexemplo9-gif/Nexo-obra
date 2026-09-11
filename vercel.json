@@ -1,16 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "buildCommand": "",
-  "outputDirectory": "public",
-  "rewrites": [
-    {
-      "source": "/",
-      "destination": "https://nexo-obra.thiagohcarvalho09.chatgpt.site/"
-    },
-    {
-      "source": "/:path*",
-      "destination": "https://nexo-obra.thiagohcarvalho09.chatgpt.site/:path*"
-    }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci",
+  "regions": ["gru1"]
 }

@@ -216,9 +216,9 @@ function BuildPanel() {
         {stale ? ` · há ${days} dia(s)` : ""}
       </p>
       {stale ? <p className="w-full text-sm leading-6 text-hoikos-800">
-        Se você publicou alterações depois dessa data, elas não estão neste build. O domínio público apenas
-        reescreve as rotas para o alvo de publicação; ele não compila o repositório. Republique o projeto para
-        o código novo entrar no ar.
+        Se você publicou alterações depois dessa data, elas não estão neste build. Confira se o último envio
+        para o repositório terminou de compilar no provedor de publicação; enquanto o build novo não sobe, o
+        anterior continua servindo.
       </p> : null}
     </CardContent>
   </Card>;

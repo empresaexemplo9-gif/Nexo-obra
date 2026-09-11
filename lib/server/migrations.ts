@@ -3,14 +3,17 @@
 // O `db:generate` só escreve os arquivos em `drizzle/`. Nada no deploy os aplica, então
 // um banco sem eles derruba toda funcionalidade nova com "no such table". Este módulo
 // embute o SQL no bundle, registra o que já foi aplicado e aplica o que falta.
+//
+// O SQL vem de `drizzle/manifest.ts`, gerado por `scripts/build-migrations-manifest.mjs`.
+// Antes vinha de `import.meta.glob`, que é do Vite e não existe no `next build`.
 
-const files = import.meta.glob("../../drizzle/*.sql", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+import { migrationSources } from "@/drizzle/manifest";
 
 export type MigrationFile = { id: string; statements: string[] };
 
-export const migrations: MigrationFile[] = Object.entries(files)
-  .map(([path, sql]) => ({
-    id: path.split("/").pop()!.replace(/\.sql$/, ""),
+export const migrations: MigrationFile[] = migrationSources
+  .map(([id, sql]) => ({
+    id,
     statements: sql.split("--> statement-breakpoint").map((statement) => statement.trim()).filter(Boolean),
   }))
   .sort((left, right) => left.id.localeCompare(right.id));
