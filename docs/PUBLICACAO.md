@@ -41,6 +41,17 @@ Ficam no ambiente de publicação, nunca no repositório. Sem `SUPERADMIN_EMAIL`
 `SUPERADMIN_PASSWORD_HASH` e `SUPERADMIN_SESSION_SECRET`, o painel responde
 `superadmin_not_configured` e nenhuma sessão administrativa é emitida.
 
+### Banco de dados
+
+`DATABASE_URL` e `DATABASE_AUTH_TOKEN` vêm do banco libSQL/Turso e ficam nas variáveis do
+provedor de publicação. Em desenvolvimento, `DATABASE_URL=file:./local.db` resolve sem
+conta nenhuma e sem token.
+
+O adaptador em `db/index.ts` expõe a mesma interface que as 52 rotas e bibliotecas já
+usavam, então trocar o provedor de banco não toca no código do produto. Os testes em
+`tests/db-adapter.test.mjs` aplicam as 15 migrações num banco libSQL real e verificam
+marcadores posicionais, `first`, `all`, `run` e o comportamento transacional do `batch`.
+
 ### O hash da senha e a armadilha do `$`
 
 Gere o hash com:
