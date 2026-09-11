@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 
 export type SinapiItem = {
   code: string;
@@ -18,7 +18,7 @@ type SinapiRuntimeEnv = {
 };
 
 function runtimeEnv() {
-  return env as unknown as SinapiRuntimeEnv;
+  return platformEnv() as unknown as SinapiRuntimeEnv;
 }
 
 export function isSinapiConfigured() {

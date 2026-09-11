@@ -9,9 +9,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__platformTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0mig-runtime"; }, load(id) { if (id === "\0mig-runtime") return "export const env = globalThis.__platformTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0mig-runtime"; }, load(id) { if (id === "\0mig-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 
 class D1Local {
   sqlite = new DatabaseSync(":memory:");
@@ -52,7 +52,7 @@ beforeEach(async () => {
   Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: "admin@plataforma.test", SUPERADMIN_PASSWORD_HASH: "x", SUPERADMIN_SESSION_SECRET: secret });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
 const admin = (init = {}) => new Request("https://platform.test/api/superadmin/migrations", { ...init,
   headers: { cookie, "content-type": "application/json", ...init.headers } });

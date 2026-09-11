@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 
 import { ApiError } from "@/lib/server/api-error";
 
@@ -23,7 +23,7 @@ const SESSION_DURATION_SECONDS = 8 * 60 * 60;
 const encoder = new TextEncoder();
 
 function runtimeEnv() {
-  return env as unknown as SuperAdminRuntimeEnv;
+  return platformEnv() as unknown as SuperAdminRuntimeEnv;
 }
 
 function requiredConfig() {

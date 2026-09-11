@@ -7,9 +7,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__platformTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0reminder-test-runtime"; }, load(id) { if (id === "\0reminder-test-runtime") return "export const env = globalThis.__platformTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0reminder-test-runtime"; }, load(id) { if (id === "\0reminder-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const { CURRENT_TERMS_VERSION } = await vite.ssrLoadModule("/lib/terms.ts");
 const migrations = await Promise.all((await readdir(`${root}/drizzle`)).filter((file) => file.endsWith(".sql")).sort().map((file) => readFile(`${root}/drizzle/${file}`, "utf8")));
 
@@ -59,7 +59,10 @@ const none = permissions({
   tasks: { view: false, edit: false }, files: { view: false, edit: false },
 });
 
-const day = (offset) => { const date = new Date(); date.setDate(date.getDate() + offset); return date.toISOString().slice(0, 10); };
+// O dia é calculado no mesmo fuso que o servidor usa. Com toISOString() o teste passava
+// a depender da hora em que rodasse: perto da meia-noite UTC, "hoje" divergia.
+const day = (offset) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" })
+  .format(new Date(Date.now() + offset * 86_400_000));
 const ms = (offset) => Date.now() + offset * 86_400_000;
 
 beforeEach(async () => {
@@ -79,7 +82,7 @@ beforeEach(async () => {
   db.sqlite.prepare("INSERT INTO projects(id,organization_id,code,name,type,kind,status,created_at,updated_at) VALUES ('p',?,'ARQ-1','Casa Alfa','work','work','active',0,0)").run(orgA);
   Object.assign(runtime, { DB: db });
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
 function as(id, email, org = orgA, path = "/api/reminders", init = {}) {
   return new Request(`https://platform.test${path}`, { ...init, headers: {

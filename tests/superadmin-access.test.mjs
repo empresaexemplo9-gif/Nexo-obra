@@ -7,9 +7,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__platformTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0superadmin-test-runtime"; }, load(id) { if (id === "\0superadmin-test-runtime") return "export const env = globalThis.__platformTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0superadmin-test-runtime"; }, load(id) { if (id === "\0superadmin-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const { CURRENT_TERMS_VERSION } = await vite.ssrLoadModule("/lib/terms.ts");
 const migrations = await Promise.all((await readdir(`${root}/drizzle`)).filter((file) => file.endsWith(".sql")).sort().map((file) => readFile(`${root}/drizzle/${file}`, "utf8")));
 
@@ -75,7 +75,7 @@ beforeEach(async () => {
   Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: adminEmail, SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
 function asSuperAdmin(url = "https://platform.test/api/clients", organizationId = orgA, init = {}) {
   return new Request(url, { ...init, headers: { cookie: `${cookie}; __Host-nexo-organization=${organizationId}`, "content-type": "application/json", ...init.headers } });

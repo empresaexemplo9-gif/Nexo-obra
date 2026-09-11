@@ -34,7 +34,10 @@ test("keeps the Drap secret behind a server route", async () => {
   assert.doesNotMatch(app, /DRAP_API_TOKEN/);
   assert.doesNotMatch(env, /NEXT_PUBLIC_.*DRAP/);
   assert.match(adapter, /Authorization/);
-  assert.match(adapter, /cloudflare:workers/);
+  // O segredo vem do ambiente resolvido no servidor, nunca do navegador. O nome do
+  // provedor não faz parte do contrato: antes era cloudflare:workers, hoje é process.env.
+  assert.match(adapter, /@\/lib\/server\/runtime/);
+  assert.doesNotMatch(adapter, /"use client"/);
 });
 
 test("models operational records with organization ownership", async () => {

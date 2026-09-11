@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 
 type RuntimeEnv = {
   MAINTENANCE_ADMIN_EMAIL?: string;
@@ -22,7 +22,7 @@ const DURATION_SECONDS = 8 * 60 * 60;
 const encoder = new TextEncoder();
 
 function config() {
-  const runtime = env as unknown as RuntimeEnv;
+  const runtime = platformEnv() as unknown as RuntimeEnv;
   if (!runtime.MAINTENANCE_ADMIN_EMAIL || !runtime.MAINTENANCE_ADMIN_PASSWORD_HASH || !runtime.MAINTENANCE_ADMIN_SESSION_SECRET) return null;
   return {
     email: runtime.MAINTENANCE_ADMIN_EMAIL.trim().toLowerCase(),

@@ -30,6 +30,13 @@ beforeEach(() => {
 });
 
 const render = async (element) => { await act(async () => { reactRoot.render(element); }); };
+// Alguns painéis buscam na API dentro de um efeito. Sem esperar, a asserção cai no
+// estado "Carregando…" e o teste passa a depender da velocidade da máquina.
+const settle = async () => {
+  for (let ciclo = 0; ciclo < 5; ciclo += 1) {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+  }
+};
 const click = async (node) => { assert.ok(node, "elemento não encontrado na tela"); await act(async () => { node.click(); }); };
 
 const planilha = {
@@ -142,6 +149,7 @@ test("o quadro de liberações lista a equipe e grava a mudança de nível", asy
           ] },
   });
   await render(React.createElement(GrantsPanel, { worksheetId: "abc" }));
+  await settle();
   const texto = textOf(container);
   assert.match(texto, /Ana Arquiteta/);
   assert.match(texto, /Bruno Financeiro/);

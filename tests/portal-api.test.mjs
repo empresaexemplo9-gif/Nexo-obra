@@ -7,9 +7,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__portalTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__portalTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const list = await vite.ssrLoadModule("/app/api/diary/route.ts");
 const upload = await vite.ssrLoadModule("/app/api/diary/[entryId]/photos/route.ts");
 const { CURRENT_TERMS_VERSION } = await vite.ssrLoadModule("/lib/terms.ts");
@@ -73,7 +73,7 @@ beforeEach(() => {
   runtime.DB = db;
   runtime.FILES = { async put(key, value) { bytes.set(key, value); }, async get(key) { return bytes.has(key) ? { body: new Response(bytes.get(key)).body } : null; }, async delete(key) { bytes.delete(key); } };
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__portalTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
 function request(path = "/api/diary", { user = "owner", method = "GET", json, body, headers = {} } = {}) {
   const identity = user ? users[user] : null;

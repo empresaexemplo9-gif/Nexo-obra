@@ -10,9 +10,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__platformTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0access-runtime"; }, load(id) { if (id === "\0access-runtime") return "export const env = globalThis.__platformTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0access-runtime"; }, load(id) { if (id === "\0access-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const migrations = await Promise.all((await readdir(`${root}/drizzle`)).filter((file) => file.endsWith(".sql")).sort().map((file) => readFile(`${root}/drizzle/${file}`, "utf8")));
 
 class D1Local {
@@ -67,7 +67,7 @@ beforeEach(async () => {
   hash ??= await passwordHash(SENHA);
   Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: EMAIL, SUPERADMIN_PASSWORD_HASH: hash, SUPERADMIN_SESSION_SECRET: secret });
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
 const login = (body, headers = {}) => new Request("https://platform.test/api/superadmin/session", { method: "POST",
   headers: { "content-type": "application/json", "user-agent": "teste", "cf-connecting-ip": "203.0.113.10", ...headers },

@@ -1,10 +1,10 @@
-import { env } from "cloudflare:workers";
+import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 import { z } from "zod";
 import { getDatabase } from "@/db";
 import { ApiError, validationError } from "@/lib/server/backend";
 
 type Config = { DRAP_ACTIVATION_URL?: string; DRAP_ACTIVATION_TOKEN?: string; DRAP_ACTIVATION_WEBHOOK_SECRET?: string };
-const config = () => env as unknown as Config;
+const config = () => platformEnv() as unknown as Config;
 export function activationConfigured() { const c = config(); return Boolean(c.DRAP_ACTIVATION_URL && c.DRAP_ACTIVATION_TOKEN && c.DRAP_ACTIVATION_WEBHOOK_SECRET && c.DRAP_ACTIVATION_WEBHOOK_SECRET.length >= 32); }
 export function architectorMonthlyCents(base: number) {
   if (!Number.isSafeInteger(base) || base < 0 || base > 100_000_000) throw new ApiError(400, "invalid_price", "Valor mensal inválido.");

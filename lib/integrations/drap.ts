@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers";
+import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 
 export type FinancialSummary = {
   currentBalance: number;
@@ -39,7 +39,7 @@ type DrapRuntimeEnv = {
 };
 
 function runtimeEnv() {
-  return env as unknown as DrapRuntimeEnv;
+  return platformEnv() as unknown as DrapRuntimeEnv;
 }
 
 export function isDrapConfigured() {

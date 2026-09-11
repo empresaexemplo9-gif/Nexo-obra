@@ -7,9 +7,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
-globalThis.__platformTestRuntime = runtime;
+globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__platformTestRuntime;"; } }], server: { middlewareMode: true } });
+  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const { CURRENT_TERMS_VERSION } = await vite.ssrLoadModule("/lib/terms.ts");
 const migrations = await Promise.all((await readdir(`${root}/drizzle`)).filter((file) => file.endsWith(".sql")).sort().map((file) => readFile(`${root}/drizzle/${file}`, "utf8")));
 
@@ -66,7 +66,7 @@ beforeEach(async () => {
     DRAP_ACTIVATION_WEBHOOK_SECRET: secret, DRAP_ACTIVATION_URL: 'https://empresa.drap.app.br/test-contract/activation', DRAP_ACTIVATION_TOKEN: 'test-only-token' });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(';')[0];
 });
-after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformTestRuntime; });
+after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 function req(body, headers = {}) { return new Request('https://platform.test/api/superadmin/platform', { method: 'POST', headers: { cookie, 'content-type': 'application/json', ...headers }, body: JSON.stringify({ organizationId: orgA, ...body }) }); }
 async function action(body) { const response = await platform.POST(req(body)); assert.ok(response.ok, await response.clone().text()); return response.json(); }
 function user(org = orgA) { return new Request('https://platform.test/api/projects', { headers: { 'oai-authenticated-user-id': 'owner', 'oai-authenticated-user-email': 'owner@example.test', cookie: `__Host-nexo-organization=${org}` } }); }
