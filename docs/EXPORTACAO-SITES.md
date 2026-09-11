@@ -13,29 +13,27 @@ feita.**
 ## Conclusão
 
 Nada da exportação precisa ser aplicado. O código do Sites já está inteiro neste
-repositório e o banco exportado não tem registro de negócio nenhum. O que falta não é
-recuperar aquele ambiente: é publicar este, que ainda não chegou ao `main`.
+repositório e o banco exportado não tem registro de negócio nenhum. O ambiente do Sites
+está superado de fato, não só de intenção: o `main` já compila este repositório.
 
-## Onde a aplicação ainda está rodando
+## Onde a aplicação está rodando
 
-A exportação avisa para não confundir código no GitHub com publicação. O aviso procede, e
-a resposta está no próprio repositório: **o `main` ainda não recebeu nada disto.**
+A exportação avisa para não confundir código no GitHub com publicação, e o aviso já foi
+atendido antes desta conferência. O `vercel.json` do `main` declara `framework: nextjs` e
+`buildCommand: npm run build`: **a Vercel compila este repositório**, e o encaminhamento
+para `nexo-obra.thiagohcarvalho09.chatgpt.site` que existia no `main` antigo saiu junto com
+o commit `5603576`. O alvo do OpenAI Sites, e com ele o D1 que a exportação leu, deixou de
+ser o que serve o endereço oficial.
 
-O `vercel.json` do `main` tem `framework: null`, `buildCommand` vazio e reescreve `/` e
-`/:path*` para `nexo-obra.thiagohcarvalho09.chatgpt.site`. Quer dizer que
-`nexo-obra-jet.vercel.app` não compila o repositório: ele encaminha para o alvo do Sites,
-que roda sobre Cloudflare Workers e lê o D1 — o mesmo banco de 40 linhas que a exportação
-leu. O Turso está ligado ao projeto na Vercel, mas nada o consulta ainda, porque o código
-que fala libSQL não está no `main`.
+A prova de que o build funciona fora da máquina de desenvolvimento é a publicação de
+pré-visualização que a Vercel gerou para o ramo desta conferência: ela compilou e chegou a
+**Ready**.
 
-Este ramo está 34 commits à frente do `main`, e esses commits são o produto inteiro:
-a troca de D1 por libSQL, o login próprio, as planilhas, os lembretes, o diário cifrado e
-o `vercel.json` que manda a Vercel compilar. Enquanto a mesclagem não acontece, nenhuma
-dessas funcionalidades existe para quem abre o endereço oficial, e trocar de banco não
-muda nada — os dois ambientes seguem no D1 do Sites.
-
-Mesclar este ramo no `main` é, portanto, o passo que publica. Depois dele vale conferir em
-`/superadmin` qual commit está no ar e aplicar as migrações, na sequência descrita em
+O que continua sem confirmação de dentro desta sessão é o estado do ambiente de produção em
+si — qual commit está servindo, quais variáveis estão configuradas e quantas migrações o
+banco já recebeu. A saída de rede para `vercel.app` está bloqueada aqui e o conector da
+Vercel responde `403` para este escopo. Quem tem o painel confere isso em `/superadmin`, no
+selo **Versão no ar**, e em **Atualizar banco de dados**, na sequência descrita em
 [Publicação](PUBLICACAO.md).
 
 ## Código: o Sites não tinha nada que o repositório não tenha
@@ -49,7 +47,7 @@ deste repositório. As duas árvores têm o mesmo hash:
 ```
 
 Árvore igual quer dizer conteúdo igual, arquivo por arquivo. `8f82b3e` é ancestral do
-ramo atual, que está 18 commits à frente dele. Conferindo os 298 arquivos do pacote contra
+`main`, que está 18 commits à frente dele. Conferindo os 298 arquivos do pacote contra
 o repositório:
 
 | Resultado | Arquivos | Leitura |
