@@ -49,6 +49,7 @@ function routes(session, extra = {}) {
     "/api/usage": { range: { from: "2026-09-01", to: "2026-09-10" }, today: "2026-09-10", scope: "self", beatMs: 30000, gapLimitMs: 90000, viewer: { subjectId: "u1", role: "member", displayName: "Pessoa" }, days: [], actions: [] },
     "/api/worksheets": { worksheets: [], canGovern: false },
     "/api/goals": { goals: [], metrics: [], canManage: false },
+    "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
     ...extra,
   };
 }
@@ -140,8 +141,37 @@ test("plataforma sem empresa manda para o painel em vez de mostrar tela vazia", 
   assert.ok(findByText(container, /Abrir painel da plataforma/, "a"));
 });
 
+test("a tela de acesso mostra o que falta na instalação, em vez de deixar o botão falhar", async () => {
+  // Uma variável faltando aparecia como "Não foi possível concluir a operação." no botão
+  // de entrar. Sem log de servidor, não havia como descobrir a causa. Agora a primeira
+  // tela diz o que está errado antes de a pessoa tentar.
+  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+    "/api/health": { pronto: false, banco: "nao_configurado", sessao: "ok", superadmin: "ok", armazenamento: "nao_configurado" },
+  });
+  const texto = textOf(container);
+  assert.match(texto, /Instalação incompleta/);
+  assert.match(texto, /Banco de dados não configurado/);
+  assert.match(texto, /Armazenamento de fotos não configurado/);
+  assert.doesNotMatch(texto, /SESSION_SECRET/, "área saudável não vira ruído");
+
+  // Conectado mas sem tabelas é outro diagnóstico, com outro conserto.
+  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+    "/api/health": { pronto: false, banco: "falta_migrar", sessao: "ok", superadmin: "ok", armazenamento: "ok",
+      migracoes: { aplicadas: 0, pendentes: 16 } },
+  });
+  assert.match(textOf(container), /sem as tabelas.*Atualizar banco de dados/s);
+
+  // Instalação sadia não mostra painel nenhum.
+  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+    "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
+  });
+  assert.doesNotMatch(textOf(container), /Instalação incompleta/);
+});
+
 test("sem sessão, a tela pede e-mail e senha e não vaza nada da empresa", async () => {
-  await abrir({ authenticated: false, needsOrganization: false, organizations: [] });
+  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+    "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
+  });
   const texto = textOf(container);
   assert.doesNotMatch(texto, /Escritório Exemplo/);
   // A entrada é da própria plataforma: senha guardada aqui, sem depender de borda externa.

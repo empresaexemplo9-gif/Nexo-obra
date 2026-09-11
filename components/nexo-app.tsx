@@ -183,6 +183,66 @@ function LoadingScreen() {
   return <main className="grid min-h-svh place-items-center bg-hoikos-950"><div className="flex flex-col items-center gap-6"><Brand variant="stacked" dark className="w-[220px]" /><LoaderCircle className="size-5 animate-spin text-hoikos-300" /><p className="text-sm text-hoikos-500">Abrindo sua empresa…</p></div></main>;
 }
 
+// Diagnóstico da instalação, lido de /api/health.
+//
+// Uma plataforma que não consegue operar precisa dizer por quê na primeira tela. Sem
+// isso, uma variável faltando aparecia como "Não foi possível concluir a operação." no
+// botão de entrar, e a única forma de descobrir a causa era ler log de servidor — que
+// nem sempre existe. Este painel troca horas de tentativa por uma frase.
+type Saude = {
+  pronto: boolean;
+  banco: string; sessao: string; superadmin: string; armazenamento: string;
+  migracoes?: { aplicadas: number; pendentes: number };
+};
+
+const DIAGNOSTICO: Record<string, Record<string, string>> = {
+  banco: {
+    nao_configurado: "Banco de dados não configurado nesta publicação. Defina a URL do banco (ou conecte a integração Turso) nas variáveis de ambiente.",
+    inalcancavel: "O banco de dados não respondeu. A URL ou o token estão errados, vencidos, ou o servidor está fora.",
+    falta_migrar: "O banco está conectado, mas sem as tabelas. Entre como superadministrador e use “Atualizar banco de dados”.",
+  },
+  sessao: {
+    nao_configurado: "A assinatura de sessão não está configurada: defina SESSION_SECRET.",
+    configuracao_invalida: "A assinatura de sessão é curta demais: SESSION_SECRET precisa de pelo menos 32 caracteres.",
+  },
+  superadmin: {
+    nao_configurado: "O acesso administrativo não está configurado: faltam e-mail, hash da senha ou segredo de sessão.",
+    configuracao_invalida: "O hash da senha administrativa chegou ilegível. Painéis de publicação expandem “$”: gere o hash com separador “:”.",
+  },
+  armazenamento: {
+    nao_configurado: "Armazenamento de fotos não configurado. O diário funciona em texto; as fotos ficam indisponíveis.",
+    configuracao_invalida: "A chave de cifra das fotos é inválida: precisa de 32 bytes em base64.",
+  },
+};
+
+function InstallationHealth() {
+  const [saude, setSaude] = useState<Saude | null>(null);
+  useEffect(() => {
+    let ativo = true;
+    fetch("/api/health", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((corpo: Saude) => { if (ativo) setSaude(corpo); })
+      .catch(() => undefined);
+    return () => { ativo = false; };
+  }, []);
+
+  if (!saude || saude.pronto) return null;
+  const problemas = (["banco", "sessao", "superadmin", "armazenamento"] as const)
+    .map((area) => DIAGNOSTICO[area]?.[saude[area]])
+    .filter(Boolean);
+  if (!problemas.length) return null;
+
+  return (
+    <div role="status" className="mt-7 rounded-md border border-hoikos-400/25 bg-hoikos-400/10 p-4 text-sm leading-6 text-hoikos-100">
+      <p className="flex items-center gap-2 font-medium"><CircleAlert className="size-4" />Instalação incompleta</p>
+      <ul className="mt-2 list-disc space-y-1 pl-5 text-hoikos-200">
+        {problemas.map((texto) => <li key={texto}>{texto}</li>)}
+      </ul>
+      <p className="mt-3 text-xs text-hoikos-300">Entrar não vai funcionar enquanto isso não for resolvido na configuração da publicação.</p>
+    </div>
+  );
+}
+
 function AccessScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -238,6 +298,7 @@ function AccessScreen() {
           <Brand variant="stacked" dark className="mx-auto w-[210px]" />
           <h1 className="sr-only">Acesso à plataforma</h1>
           <p className="mt-8 text-base leading-7 text-hoikos-300">Escolha o tipo de acesso para continuar.</p>
+          <InstallationHealth />
           <p className="mt-7 text-sm font-medium text-hoikos-200">Conta da empresa</p>
           <form onSubmit={submitAccount} className="mt-3 space-y-4">
             <div><label htmlFor="account-email" className="mb-2 block text-sm font-medium text-hoikos-200">E-mail</label><Input id="account-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required className="h-11 border-white/10 bg-white/[0.06] text-white placeholder:text-hoikos-500" /></div>
