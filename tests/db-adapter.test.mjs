@@ -12,7 +12,8 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const arquivo = `${root}/.sites-runtime/tmp/adaptador-teste.db`;
 
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true } });
-const { getDatabase } = await vite.ssrLoadModule("/db/index.ts");
+const { getDatabase, databaseSettings } = await vite.ssrLoadModule("/db/index.ts");
+const { apiRoute } = await vite.ssrLoadModule("/lib/server/backend.ts");
 const { applyMigrations, migrationStatus } = await vite.ssrLoadModule("/lib/server/migrations.ts");
 
 before(async () => {
@@ -94,11 +95,54 @@ test("batch bem-sucedido grava tudo e devolve um resultado por instrução", asy
   assert.equal((await db.prepare("SELECT COUNT(*) AS n FROM clients").first()).n, 2);
 });
 
-test("sem DATABASE_URL o adaptador diz o que falta, em vez de falhar de forma obscura", async () => {
+test("banco não configurado responde 503 com código próprio, e a mensagem chega à tela", async () => {
+  // Este é o teste que faltava. O anterior só conferia que a exceção mencionava
+  // DATABASE_URL — e passava enquanto, em produção, `apiRoute` engolia aquele `Error`
+  // comum e devolvia "Não foi possível concluir a operação." O usuário via falha
+  // genérica num problema de configuração, sem nenhuma pista. O que importa não é o
+  // texto da exceção: é o que sai na resposta HTTP.
   globalThis.__platformEnvOverride = {};
   try {
-    await assert.rejects(getDatabase().prepare("SELECT 1").all(), /DATABASE_URL não está configurada/);
+    await assert.rejects(getDatabase().prepare("SELECT 1").all(), (error) => {
+      assert.equal(error.status, 503);
+      assert.equal(error.code, "database_not_configured");
+      return true;
+    });
+
+    const resposta = await apiRoute(async () => {
+      await getDatabase().prepare("SELECT 1").all();
+      return Response.json({ ok: true });
+    });
+    assert.equal(resposta.status, 503, "precisa atravessar apiRoute como 503");
+    const corpo = await resposta.json();
+    assert.equal(corpo.code, "database_not_configured");
+    assert.match(corpo.error, /DATABASE_URL/, "a tela precisa dizer o que falta configurar");
+    assert.doesNotMatch(corpo.error, /Não foi possível concluir a operação/);
   } finally {
     globalThis.__platformEnvOverride = { DATABASE_URL: `file:${arquivo}` };
   }
+});
+
+test("a URL é encontrada mesmo quando a integração prefixa o nome da variável", async () => {
+  // Integração do marketplace pode prefixar tudo o que cria
+  // (`vercel integration resource connect --prefix`). Nome fixo não basta.
+  const casos = [
+    [{ DATABASE_URL: "libsql://a.turso.io", DATABASE_AUTH_TOKEN: "t1" }, "libsql://a.turso.io", "t1"],
+    [{ TURSO_DATABASE_URL: "libsql://b.turso.io", TURSO_AUTH_TOKEN: "t2" }, "libsql://b.turso.io", "t2"],
+    [{ TURSO_CONNECTION_URL: "libsql://c.turso.io", TURSO_AUTH_TOKEN: "t3" }, "libsql://c.turso.io", "t3"],
+    [{ NEON2_DATABASE_URL: "libsql://d.turso.io", NEON2_AUTH_TOKEN: "t4" }, "libsql://d.turso.io", "t4"],
+    [{ MEU_PREFIXO_CONNECTION_URL: "libsql://e.turso.io", TURSO_AUTH_TOKEN: "t5" }, "libsql://e.turso.io", "t5"],
+  ];
+  for (const [env, url, token] of casos) {
+    const resolvido = databaseSettings(env);
+    assert.equal(resolvido?.url, url, JSON.stringify(env));
+    assert.equal(resolvido?.authToken, token, JSON.stringify(env));
+  }
+
+  // Precedência: o nome explícito vence o prefixado.
+  assert.equal(databaseSettings({ DATABASE_URL: "libsql://direto", OUTRO_DATABASE_URL: "libsql://prefixado" })?.url,
+    "libsql://direto");
+  // Uma variável com nome parecido mas valor que não é URL de banco não confunde.
+  assert.equal(databaseSettings({ APP_DATABASE_URL: "sim", OUTRA: "libsql://x" }), null);
+  assert.equal(databaseSettings({}), null);
 });

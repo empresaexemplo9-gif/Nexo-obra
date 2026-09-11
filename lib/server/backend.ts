@@ -291,6 +291,17 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
         code: "database_not_migrated",
       }, { status: 503 });
     }
+    // Banco configurado mas inalcançável — URL errada, token vencido, servidor fora.
+    // Sem este caso a falha caía no genérico abaixo e a tela dizia "não foi possível
+    // concluir a operação": o usuário não tinha como saber que o problema era a conexão,
+    // muito menos qual das duas variáveis conferir.
+    if (/unauthorized|url_invalid|url_scheme|hrana|websocket|fetch failed|econnrefused|enotfound|certificate|timed out/i.test(message)) {
+      console.error("H.OIKOS banco inalcançável", error);
+      return Response.json({
+        error: "O banco de dados não respondeu. Confira a URL e o token do banco na configuração da publicação.",
+        code: "database_unreachable",
+      }, { status: 503 });
+    }
     console.error("H.OIKOS API failure", error);
     return Response.json({ error: "Não foi possível concluir a operação.", code: "internal_error" }, { status: 500 });
   }
