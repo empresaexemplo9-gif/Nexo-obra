@@ -11,6 +11,9 @@ import {
 import { invitationTokenHash, validateInvitationState } from "@/lib/server/invitations";
 import { parseStoredPermissions } from "@/lib/permissions";
 import { requestEvidenceHashes } from "@/lib/server/terms";
+import {
+  assertPasswordStrength, createSessionCookie, hashPassword, saveCredentialStatement,
+} from "@/lib/server/auth";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { z } from "zod";
 
@@ -28,15 +31,36 @@ type InvitationRow = {
   revoked_at: number | null;
 };
 
-const acceptanceSchema = z.object({ acceptTerms: z.literal(true) });
+// Sem a borda autenticada externa, o convite é o lugar onde a pessoa passa a existir:
+// ela confirma o próprio e-mail e escolhe a senha. Quem já tem sessão aberta só aceita.
+const acceptanceSchema = z.object({
+  acceptTerms: z.literal(true),
+  password: z.string().min(1).max(200).optional(),
+}).strict();
+
+// A identidade já existente, se houver: sessão própria, borda confiável ou acesso
+// reservado. Devolve nulo quando ninguém está autenticado — que é o caso do primeiro
+// acesso, em que o convite é a única coisa que sabe quem foi convidado.
+async function currentIdentity(request: Request) {
+  try {
+    return await authenticatedIdentity(request);
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
-    const identity = await authenticatedIdentity(request);
-    if (identity.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção permanece isolado do ambiente dos clientes.");
-    if (identity.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "O superadministrador já opera todas as empresas. Saia do painel para aceitar um convite com sua conta pessoal.");
+    const existing = await currentIdentity(request);
+    if (existing?.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção permanece isolado do ambiente dos clientes.");
+    if (existing?.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "O superadministrador já opera todas as empresas. Saia do painel para aceitar um convite com sua conta pessoal.");
     const parsed = acceptanceSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
+    // Quem ainda não tem identidade nenhuma cria a senha agora; é o primeiro acesso.
+    if (!existing && !parsed.data.password) {
+      throw new ApiError(400, "password_required", "Crie uma senha para o seu acesso.");
+    }
+    if (parsed.data.password) assertPasswordStrength(parsed.data.password);
     const { token } = await route.params;
     if (token.length < 32 || token.length > 100) throw new ApiError(404, "invitation_not_found", "Convite não encontrado.");
     const db = getDatabase();
@@ -47,10 +71,16 @@ export async function POST(request: Request, route: RouteContext) {
     ).bind(tokenHash).first<InvitationRow>();
     if (!invitation) throw new ApiError(404, "invitation_not_found", "Convite não encontrado.");
     validateInvitationState(invitation);
-    await assertPlatformAccess(invitation.organization_id, identity.email, identity.id, false);
-    if (identity.email.trim().toLowerCase() !== invitation.email.trim().toLowerCase()) {
+    // Quem já está autenticado precisa ser a pessoa convidada. Quem não está passa a ser.
+    if (existing && existing.email.trim().toLowerCase() !== invitation.email.trim().toLowerCase()) {
       throw new ApiError(403, "invitation_email_mismatch", `Entre com o e-mail ${invitation.email} para aceitar este convite.`);
     }
+    const identity = existing ?? {
+      id: crypto.randomUUID(),
+      email: invitation.email,
+      displayName: invitation.email.split("@")[0],
+    };
+    await assertPlatformAccess(invitation.organization_id, identity.email, identity.id, false);
 
     const now = Date.now();
     const legacyUser = await db.prepare("SELECT id FROM users WHERE id = ?1 OR lower(email) = lower(?2) LIMIT 1")
@@ -66,11 +96,16 @@ export async function POST(request: Request, route: RouteContext) {
     const permissions = parseStoredPermissions(invitation.permissions_json, role);
     const evidence = await requestEvidenceHashes(request);
 
+    const passwordHash = parsed.data.password ? await hashPassword(parsed.data.password) : null;
+
     await db.batch([
       db.prepare(
         `INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?4)`,
       ).bind(userId, identity.email, identity.displayName, now),
+      ...(passwordHash
+        ? [saveCredentialStatement(db, { id: userId, email: identity.email, displayName: identity.displayName }, passwordHash, now)]
+        : []),
       existingMember
         ? db.prepare(
           `UPDATE members SET external_user_id = ?1, name = ?2, email = ?3, role = ?4,
@@ -111,9 +146,13 @@ export async function POST(request: Request, route: RouteContext) {
       ).bind(crypto.randomUUID(), invitation.organization_id, userId, invitation.id, JSON.stringify({ role }), now),
     ]);
 
-    return Response.json(
-      { accepted: true, organizationId: invitation.organization_id, role },
-      { headers: { "Set-Cookie": organizationSelectionCookie(invitation.organization_id) } },
-    );
+    // Aceitar já abre a sessão: sem isso a pessoa criaria a senha e continuaria de fora.
+    const headers = new Headers();
+    headers.append("Set-Cookie", organizationSelectionCookie(invitation.organization_id));
+    if (passwordHash) {
+      const opened = await createSessionCookie({ id: userId, email: identity.email, displayName: identity.displayName });
+      headers.append("Set-Cookie", opened.cookie);
+    }
+    return Response.json({ accepted: true, organizationId: invitation.organization_id, role }, { headers });
   });
 }

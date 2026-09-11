@@ -69,7 +69,7 @@ beforeEach(async () => {
   db.sqlite.prepare("INSERT INTO users(id,email,display_name,created_at,updated_at) VALUES ('colab','colab@example.test','Colaborador',0,0)").run();
   db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role,permissions_json) VALUES ('colab',?,'colab','Colaborador','colab@example.test','member','{}')").run(orgA);
   db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES ('tc',?,'colab','colab@example.test',?,'','',1)").run(orgA, CURRENT_TERMS_VERSION);
-  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: "admin@example.test", SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true", SUPERADMIN_EMAIL: "admin@example.test", SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
   adminCookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });

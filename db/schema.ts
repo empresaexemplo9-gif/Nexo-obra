@@ -556,3 +556,19 @@ export const reminderStates = sqliteTable("reminder_states", {
   state: text("state").notNull(),
   updatedAt: integer("updated_at").notNull(),
 }, (t) => [uniqueIndex("uidx_reminder_states_subject_day_item").on(t.organizationId, t.subjectId, t.day, t.itemKey)]);
+
+// Credencial própria da plataforma, no lugar da identidade vinda de cabeçalhos HTTP.
+//
+// Antes, quem era o usuário vinha de `oai-authenticated-user-*`, injetado por uma borda
+// autenticada externa. Fora dela, qualquer visitante podia enviar esses cabeçalhos e se
+// passar por outra pessoa. A senha usa o mesmo PBKDF2-SHA256 já aplicado ao
+// superadministrador, e o hash nunca sai daqui.
+export const userCredentials = sqliteTable("user_credentials", {
+  userId: text("user_id").primaryKey(),
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name").notNull(),
+  active: integer("active").notNull().default(1),
+  passwordUpdatedAt: integer("password_updated_at").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [uniqueIndex("uidx_user_credentials_email").on(t.email)]);

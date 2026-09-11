@@ -66,7 +66,7 @@ beforeEach(async () => {
   db?.sqlite.close(); db = new D1Local(); db.sqlite.exec("PRAGMA foreign_keys = ON");
   for (const migration of migrations) db.sqlite.exec(migration);
   db.sqlite.prepare("INSERT INTO organizations(id,name,slug,timezone,created_at,updated_at) VALUES (?,?,?,'America/Sao_Paulo',0,0)").run(org, org, org);
-  Object.assign(runtime, { DB: db });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true" });
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 
@@ -162,9 +162,19 @@ test("a permissão do convite é a que vale no aceite, não a que o convidado pe
       permissions: { ...full(), finance: { view: false, edit: false }, crm: { view: false, edit: false } } }) }))).json();
   const token = criado.invitationPath.split("/").at(-1);
 
-  const aceite = await accept.POST(new Request("https://platform.test/accept", { method: "POST",
+  // Pedir papel e permissões no corpo do aceite não é negociação: o formato é fechado,
+  // então a tentativa para em cima da validação, antes de qualquer gravação.
+  const tentativa = await accept.POST(new Request("https://platform.test/accept", { method: "POST",
     headers: { "content-type": "application/json", "oai-authenticated-user-id": "restrito", "oai-authenticated-user-email": "restrito@example.test" },
     body: JSON.stringify({ acceptTerms: true, permissions: full(), role: "owner" }) }),
+    { params: Promise.resolve({ token }) });
+  assert.equal(tentativa.status, 400, "campos fora do formato do aceite são recusados");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) AS total FROM members WHERE email = 'restrito@example.test'").get().total, 0,
+    "a tentativa recusada não cria vínculo nenhum");
+
+  const aceite = await accept.POST(new Request("https://platform.test/accept", { method: "POST",
+    headers: { "content-type": "application/json", "oai-authenticated-user-id": "restrito", "oai-authenticated-user-email": "restrito@example.test" },
+    body: JSON.stringify({ acceptTerms: true }) }),
     { params: Promise.resolve({ token }) });
   assert.equal(aceite.status, 200, await aceite.clone().text());
 

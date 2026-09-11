@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
       return Response.json({
         authenticated: true,
-        authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "chatgpt",
+        authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "password",
         maintenanceEnvironment: isMaintenanceOrganization(context),
         needsOrganization: false,
         user: context.user,
@@ -70,7 +70,7 @@ export async function GET(request: Request) {
         return Response.json({
           authenticated: false,
           needsOrganization: false,
-          signInPath: "/signin-with-chatgpt?return_to=%2F",
+          signInPath: "/entrar?return_to=%2F",
           organizations: [],
         });
       }

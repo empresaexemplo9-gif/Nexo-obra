@@ -188,6 +188,19 @@ Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 | Cobranças, PIX, boleto e nota | Drap | Acionamento remoto após confirmação |
 | DRE e conciliação | Drap | Leitura e contextualização por projeto |
 
+## Acesso e senha
+
+A autenticação é da própria plataforma: senha com PBKDF2-SHA256 (100.000 iterações, sal por
+senha) e sessão em cookie `__Host-nexo-session` assinado com HMAC-SHA256. O cadastro
+acontece no link de convite — a pessoa escolhe a senha ali, e o aceite já devolve a sessão
+aberta. A volta é por `/entrar`.
+
+Os cabeçalhos `oai-authenticated-user-*` deixaram de ser identidade por padrão. Eles só
+valem quando a hospedagem declara `TRUST_IDENTITY_HEADERS=true`, porque fora de uma borda
+que os sobrescreva qualquer visitante pode enviá-los e se passar por outra pessoa.
+Configure `SESSION_SECRET` com pelo menos 32 caracteres. Consulte
+[Acesso e senha](docs/ACESSO-E-SENHA.md).
+
 ## Modelo multiempresa
 
 Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.
@@ -344,7 +357,7 @@ Essas páginas servem apenas como pesquisa de necessidades. O código, a arquite
 
 Na empresa, abra **Portal do cliente** ou a aba correspondente na central da obra. O administrador autorizado cria um convite para o e-mail do cliente, escolhe a obra e libera separadamente avanço/datas e aprovações. O convite expira em sete dias; renovar substitui o link anterior e exige nova ativação. Revogar bloqueia imediatamente o acesso.
 
-O cliente abre `/portal/convite/[token]`, autentica com a conta ChatGPT do e-mail convidado e aceita os termos vigentes. A partir da ativação, a autorização usa seu ID estável e o acesso específico da obra. Não é criado um membro da empresa. Superadmin e manutenção não assumem a identidade do cliente.
+O cliente abre `/portal/convite/[token]`, entra com a conta da plataforma do e-mail convidado — ou cria a senha ali mesmo, se for o primeiro acesso — e aceita os termos vigentes. A partir da ativação, a autorização usa seu ID estável e o acesso específico da obra. Não é criado um membro da empresa. Superadmin e manutenção não assumem a identidade do cliente.
 
 A equipe com permissão de edição do portal publica textos e solicitações imutáveis. Fotos são selecionadas explicitamente de um diário da mesma obra, exigindo também leitura do diário. O cliente não recebe acesso genérico a tarefas, arquivos, orçamento ou financeiro. Pode aprovar ou solicitar ajustes quando autorizado. A decisão registra identidade, data, comentário e evidências técnicas transformadas em hash. Publicações abertas podem ser retiradas com motivo; respostas já registradas permanecem preservadas.
 

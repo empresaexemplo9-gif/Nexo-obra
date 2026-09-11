@@ -80,7 +80,7 @@ beforeEach(async () => {
   db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role,permissions_json) VALUES ('colab',?,'colab','Colaborador','colab@example.test','member',?)").run(orgA, none);
   db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES ('tc',?,'colab','colab@example.test',?,'','',1)").run(orgA, CURRENT_TERMS_VERSION);
   db.sqlite.prepare("INSERT INTO projects(id,organization_id,code,name,type,kind,status,created_at,updated_at) VALUES ('p',?,'ARQ-1','Casa Alfa','work','work','active',0,0)").run(orgA);
-  Object.assign(runtime, { DB: db });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true" });
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 

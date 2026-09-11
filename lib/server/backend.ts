@@ -12,6 +12,8 @@ import {
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMaintenanceIdentity } from "@/lib/server/maintenance";
 import { readSuperAdminIdentity, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
+import { readSessionUser } from "@/lib/server/auth";
+import { runtimeEnv } from "@/lib/server/runtime";
 
 export { ApiError };
 
@@ -68,20 +70,36 @@ export async function requireOrganizationContext(
   return context;
 }
 
+// Os cabeçalhos `oai-authenticated-user-*` só são seguros atrás de uma borda que os
+// sobrescreva. Em qualquer outra hospedagem, um visitante pode enviá-los e se passar por
+// outra pessoa — por isso eles são ignorados a menos que a hospedagem declare, de forma
+// explícita, que remove os que vêm do cliente.
+function identityHeadersTrusted() {
+  return runtimeEnv().TRUST_IDENTITY_HEADERS === "true";
+}
+
 export async function authenticatedIdentity(request: Request): Promise<AuthenticatedIdentity> {
   const superAdmin = await readSuperAdminIdentity(request);
   if (superAdmin) return { id: superAdmin.id, email: superAdmin.email, displayName: superAdmin.displayName, scope: "superadmin" };
-  const userId = request.headers.get("oai-authenticated-user-id")?.trim();
-  const email = request.headers.get("oai-authenticated-user-email")?.trim();
-  if (!userId || !email) {
-    const maintenance = await readMaintenanceIdentity(request);
-    if (maintenance) return maintenance;
-    throw new ApiError(401, "sign_in_required", "Entre com sua conta para acessar os dados da empresa.");
+
+  // Sessão própria da plataforma: cookie assinado, emitido só depois de conferir a senha.
+  const session = await readSessionUser(request);
+  if (session) return { id: session.id, email: session.email, displayName: session.displayName };
+
+  if (identityHeadersTrusted()) {
+    const userId = request.headers.get("oai-authenticated-user-id")?.trim();
+    const email = request.headers.get("oai-authenticated-user-email")?.trim();
+    if (userId && email) {
+      const encodedName = request.headers.get("oai-authenticated-user-full-name");
+      const displayName = encodedName && request.headers.get("oai-authenticated-user-full-name-encoding") === "percent-encoded-utf-8"
+        ? safeDecode(encodedName) ?? email : email;
+      return { id: userId, email, displayName };
+    }
   }
-  const encodedName = request.headers.get("oai-authenticated-user-full-name");
-  const displayName = encodedName && request.headers.get("oai-authenticated-user-full-name-encoding") === "percent-encoded-utf-8"
-    ? safeDecode(encodedName) ?? email : email;
-  return { id: userId, email, displayName };
+
+  const maintenance = await readMaintenanceIdentity(request);
+  if (maintenance) return maintenance;
+  throw new ApiError(401, "sign_in_required", "Entre com sua conta para acessar os dados da empresa.");
 }
 
 export async function listOrganizationMemberships(request: Request) {

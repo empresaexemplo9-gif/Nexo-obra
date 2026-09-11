@@ -65,7 +65,7 @@ beforeEach(async () => {
   db?.sqlite.close(); db = new D1Local(); db.sqlite.exec("PRAGMA foreign_keys = ON");
   for (const migration of migrations) db.sqlite.exec(migration);
   hash ??= await passwordHash(SENHA);
-  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: EMAIL, SUPERADMIN_PASSWORD_HASH: hash, SUPERADMIN_SESSION_SECRET: secret });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true", SUPERADMIN_EMAIL: EMAIL, SUPERADMIN_PASSWORD_HASH: hash, SUPERADMIN_SESSION_SECRET: secret });
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
 

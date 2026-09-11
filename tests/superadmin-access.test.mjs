@@ -72,7 +72,7 @@ beforeEach(async () => {
     db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES (?,?,?,?,?,'','',1)")
       .run(org, org, `owner-${org}`, `owner-${org}@example.test`, CURRENT_TERMS_VERSION);
   }
-  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: adminEmail, SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true", SUPERADMIN_EMAIL: adminEmail, SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });

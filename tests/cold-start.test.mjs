@@ -61,7 +61,7 @@ beforeEach(async () => {
   db?.sqlite.close(); db = new D1Local(); db.sqlite.exec("PRAGMA foreign_keys = ON");
   // Banco recém-migrado, sem nenhuma linha: é assim que a plataforma nasce.
   for (const migration of migrations) db.sqlite.exec(migration);
-  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: "admin@plataforma.test", SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true", SUPERADMIN_EMAIL: "admin@plataforma.test", SUPERADMIN_PASSWORD_HASH: "test-only", SUPERADMIN_SESSION_SECRET: secret });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });

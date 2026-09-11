@@ -8,6 +8,9 @@ import { createServer } from "vite";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {};
 globalThis.__platformEnvOverride = runtime;
+// Estes testes autenticam pelos cabeçalhos da borda; o modo precisa ser declarado,
+// porque fora de uma borda que os sobrescreva eles são ignorados por padrão.
+runtime.TRUST_IDENTITY_HEADERS = "true";
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
   plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
 const list = await vite.ssrLoadModule("/app/api/diary/route.ts");

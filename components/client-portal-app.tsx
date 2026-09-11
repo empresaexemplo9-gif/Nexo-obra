@@ -19,11 +19,16 @@ import type { PortalAccess, PortalItem, PortalPage, PortalProgress } from "@/lib
 import { diaryDate } from "@/lib/diary";
 
 type PortalSession = { authenticated: boolean; accesses: PortalAccess[]; userName?: string; termsVersion: string };
+// Sair do portal encerra a sessão da própria plataforma; não há mais borda externa.
+async function leavePortal() {
+  await fetch("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+  window.location.assign("/portal");
+}
 function PortalFrame({ children }: { children: React.ReactNode }) {
-  return <main className="min-h-svh bg-background"><header className="border-b border-white/10 bg-primary text-white"><div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6"><BrandLogo variant="lockup" dark className="w-[190px]" /><span className="ml-auto text-sm text-hoikos-200">Portal do cliente</span><Button asChild variant="ghost" size="icon" aria-label="Sair do portal"><a href="/signout-with-chatgpt?return_to=%2Fportal" target="_top"><LogOut className="size-4" /></a></Button></div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-7 sm:px-6">{children}</div></main>;
+  return <main className="min-h-svh bg-background"><header className="border-b border-white/10 bg-primary text-white"><div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6"><BrandLogo variant="lockup" dark className="w-[190px]" /><span className="ml-auto text-sm text-hoikos-200">Portal do cliente</span><Button variant="ghost" size="icon" aria-label="Sair do portal" onClick={() => void leavePortal()}><LogOut className="size-4" /></Button></div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-7 sm:px-6">{children}</div></main>;
 }
 function SignInCard({ returnTo }: { returnTo: string }) {
-  return <Card className="mx-auto mt-10 max-w-lg"><CardContent className="space-y-5 p-7"><ClipboardCheck className="size-10 text-hoikos-600" /><h1 className="display-heading text-3xl">Acompanhe sua obra</h1><p className="text-base leading-7 text-hoikos-600">Entre com a conta ChatGPT do mesmo e-mail que recebeu o convite da empresa. O convite não libera acesso para outra pessoa.</p><Button asChild className="w-full"><a href={`/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`} target="_top">Entrar com ChatGPT</a></Button><p className="text-sm text-hoikos-500">Ainda não recebeu um convite? Solicite à empresa responsável pela obra.</p></CardContent></Card>;
+  return <Card className="mx-auto mt-10 max-w-lg"><CardContent className="space-y-5 p-7"><ClipboardCheck className="size-10 text-hoikos-600" /><h1 className="display-heading text-3xl">Acompanhe sua obra</h1><p className="text-base leading-7 text-hoikos-600">Entre com o mesmo e-mail que recebeu o convite da empresa. A senha é criada no link do convite, e ele não libera acesso para outra pessoa.</p><Button asChild className="w-full"><a href={`/entrar?return_to=${encodeURIComponent(returnTo)}`}>Entrar</a></Button><p className="text-sm text-hoikos-500">Ainda não recebeu um convite? Solicite à empresa responsável pela obra.</p></CardContent></Card>;
 }
 export function ClientPortalApp() {
   const session = useLiveResource<PortalSession>("/api/portal");

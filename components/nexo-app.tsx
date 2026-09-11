@@ -104,12 +104,11 @@ type CreateKind = "client" | "project" | "task";
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
 type SessionData = {
   authenticated: boolean;
-  authMethod?: "chatgpt" | "maintenance" | "superadmin";
+  authMethod?: "password" | "maintenance" | "superadmin";
   needsOrganization: boolean;
   portalOnly?: boolean;
   platformEmpty?: boolean;
   maintenanceEnvironment?: boolean;
-  signInPath?: string;
   user?: { id: string; email: string; displayName: string };
   member?: { id: string; role: string; permissions: PermissionSet };
   terms?: { version: string; accepted: boolean };
@@ -184,12 +183,35 @@ function LoadingScreen() {
   return <main className="grid min-h-svh place-items-center bg-hoikos-950"><div className="flex flex-col items-center gap-6"><Brand variant="stacked" dark className="w-[220px]" /><LoaderCircle className="size-5 animate-spin text-hoikos-300" /><p className="text-sm text-hoikos-500">Abrindo sua empresa…</p></div></main>;
 }
 
-function AccessScreen({ signInPath = "/signin-with-chatgpt?return_to=%2F" }: { signInPath?: string }) {
+function AccessScreen() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState("");
+
+  // Conta da empresa: e-mail e senha da própria plataforma. A senha é criada no link de
+  // convite, então quem chega aqui sem convite não tem o que entrar.
+  async function submitAccount(event: FormEvent) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    try {
+      await requestJson("/api/auth/session", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      window.location.assign("/");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
+      setLoading(false);
+    }
+  }
 
   async function submitSuperadmin(event: FormEvent) {
     event.preventDefault();
@@ -217,9 +239,13 @@ function AccessScreen({ signInPath = "/signin-with-chatgpt?return_to=%2F" }: { s
           <h1 className="sr-only">Acesso à plataforma</h1>
           <p className="mt-8 text-base leading-7 text-hoikos-300">Escolha o tipo de acesso para continuar.</p>
           <p className="mt-7 text-sm font-medium text-hoikos-200">Conta da empresa</p>
-          <Button asChild className="mt-3 h-11 w-full rounded-md bg-hoikos-500 text-hoikos-950 hover:bg-hoikos-400">
-            <a href={signInPath} target="_top">Entrar com ChatGPT</a>
-          </Button>
+          <form onSubmit={submitAccount} className="mt-3 space-y-4">
+            <div><label htmlFor="account-email" className="mb-2 block text-sm font-medium text-hoikos-200">E-mail</label><Input id="account-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="username" required className="h-11 border-white/10 bg-white/[0.06] text-white placeholder:text-hoikos-500" /></div>
+            <div><label htmlFor="account-password" className="mb-2 block text-sm font-medium text-hoikos-200">Senha</label><div className="relative"><Input id="account-password" type={showPassword ? "text" : "password"} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" required className="h-11 border-white/10 bg-white/[0.06] pr-11 text-white placeholder:text-hoikos-500" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"} className="absolute right-3 top-1/2 -translate-y-1/2 text-hoikos-500 hover:text-white">{showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div></div>
+            {error ? <p role="alert" className="rounded-md border border-hoikos-400/20 bg-hoikos-400/10 px-3 py-2 text-sm text-hoikos-200">{error}</p> : null}
+            <Button type="submit" disabled={loading} className="h-11 w-full rounded-md bg-hoikos-500 text-hoikos-950 hover:bg-hoikos-400">{loading ? <LoaderCircle className="animate-spin" /> : <KeyRound />}Entrar</Button>
+          </form>
+          <p className="mt-3 text-center text-xs leading-5 text-hoikos-500">Sua senha é criada no link de convite enviado pela empresa.</p>
           <a href="/portal" className="mt-4 block text-center text-sm text-hoikos-300 hover:text-hoikos-200">Sou cliente: acompanhar minha obra</a>
           <div className="eyebrow my-7 flex items-center gap-3 text-hoikos-300"><span className="h-px flex-1 bg-white/10" />Superadmin<span className="h-px flex-1 bg-white/10" /></div>
           <form onSubmit={submitSuperadmin} className="space-y-4">
@@ -399,6 +425,10 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     await requestJson("/api/maintenance/session", { method: "DELETE" }).catch(() => undefined);
     window.location.assign("/manutencao");
   }
+  async function logoutAccount() {
+    await requestJson("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
+    window.location.assign("/");
+  }
 
   const overdue = tasks.filter((task) => task.status !== "done" && task.dueAt && new Date(task.dueAt) < new Date());
   const activeProjects = projects.filter((project) => project.status === "active");
@@ -438,7 +468,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
       <SidebarFooter className="p-3"><SidebarMenu>
         {session.member?.role === "owner" ? <SidebarMenuItem><SidebarMenuButton onClick={() => setCompanyOpen(true)} tooltip="Nova empresa" className="text-hoikos-300 hover:text-white"><Building2 /><span>Nova empresa</span></SidebarMenuButton></SidebarMenuItem> : null}
         <SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Conta" className="text-hoikos-300 hover:text-white"><span className="grid size-9 place-items-center rounded-full bg-hoikos-300 text-xs font-semibold text-hoikos-950">{session.user?.displayName.slice(0, 2).toUpperCase()}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{session.user?.displayName}</span><span className="block truncate text-xs text-hoikos-500">{roleLabels[session.member?.role ?? ""] ?? session.member?.role}</span></span></SidebarMenuButton></SidebarMenuItem>
-        <SidebarMenuItem>{session.authMethod === "superadmin" ? <SidebarMenuButton asChild tooltip="Painel da plataforma" className="text-hoikos-300 hover:text-white"><a href="/superadmin"><ShieldCheck /><span>Painel da plataforma</span></a></SidebarMenuButton> : session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton asChild tooltip="Sair" className="text-hoikos-500 hover:text-white"><a href="/signout-with-chatgpt?return_to=%2F" target="_top"><LogOut /><span>Sair</span></a></SidebarMenuButton>}</SidebarMenuItem>
+        <SidebarMenuItem>{session.authMethod === "superadmin" ? <SidebarMenuButton asChild tooltip="Painel da plataforma" className="text-hoikos-300 hover:text-white"><a href="/superadmin"><ShieldCheck /><span>Painel da plataforma</span></a></SidebarMenuButton> : session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton onClick={() => void logoutAccount()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton>}</SidebarMenuItem>
       </SidebarMenu></SidebarFooter><SidebarRail />
     </Sidebar>
     <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4  sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{(session.maintenanceEnvironment ?? session.authMethod === "maintenance") ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}{session.authMethod === "superadmin" ? <Badge className="border-hoikos-800 bg-hoikos-900 text-white">Superadmin · acesso total</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><ReminderBell pending={pending} onOpen={() => setActiveModule("reminders")} />{canCreateAny ? <Button size="sm" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
@@ -465,7 +495,7 @@ export function NexoApp() {
   // Conta desde que existe empresa aberta, inclusive na tela de termos.
   useUsageHeartbeat(Boolean(session?.authenticated && session.organization && !session.portalOnly));
   if (loading || !session) return <LoadingScreen />;
-  if (!session.authenticated) return <AccessScreen signInPath={session.signInPath} />;
+  if (!session.authenticated) return <AccessScreen />;
   if (session.portalOnly) return <ClientPortalApp />;
   if (session.platformEmpty) return <PlatformEmptyScreen />;
   if (session.needsOrganization) return <OrganizationForm onCreated={loadSession} />;

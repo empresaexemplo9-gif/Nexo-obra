@@ -28,7 +28,7 @@ beforeEach(() => { container = null; reactRoot = null; });
 const vazio = { clients: [], projects: [], tasks: [], members: [] };
 function sessionFor(role, overrides = {}) {
   return {
-    authenticated: true, authMethod: "chatgpt", needsOrganization: false,
+    authenticated: true, authMethod: "password", needsOrganization: false,
     user: { id: "u1", email: "pessoa@example.test", displayName: "Pessoa" },
     member: { id: "m1", role, permissions: permissionsForRole(role) },
     terms: { version: "2026-09-10", accepted: true },
@@ -140,11 +140,16 @@ test("plataforma sem empresa manda para o painel em vez de mostrar tela vazia", 
   assert.ok(findByText(container, /Abrir painel da plataforma/, "a"));
 });
 
-test("sem sessão, a tela pede login e não vaza nada da empresa", async () => {
-  await abrir({ authenticated: false, needsOrganization: false, signInPath: "/signin-with-chatgpt?return_to=%2F", organizations: [] });
+test("sem sessão, a tela pede e-mail e senha e não vaza nada da empresa", async () => {
+  await abrir({ authenticated: false, needsOrganization: false, organizations: [] });
   const texto = textOf(container);
   assert.doesNotMatch(texto, /Escritório Exemplo/);
-  assert.ok(container.querySelector('a[href*="signin"]'), "oferece o caminho de entrada");
+  // A entrada é da própria plataforma: senha guardada aqui, sem depender de borda externa.
+  assert.ok(container.querySelector("#account-email"), "pede o e-mail da conta");
+  assert.ok(container.querySelector("#account-password"), "pede a senha da conta");
+  assert.doesNotMatch(texto, /ChatGPT/, "nada do produto depende de conta de terceiro");
+  // O portão do superadministrador continua separado na mesma tela.
+  assert.ok(container.querySelector("#initial-superadmin-email"));
 });
 
 test("os termos pendentes bloqueiam o produto até o aceite", async () => {

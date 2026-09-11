@@ -49,7 +49,7 @@ let db; let cookie;
 
 beforeEach(async () => {
   db?.sqlite.close(); db = new D1Local();
-  Object.assign(runtime, { DB: db, SUPERADMIN_EMAIL: "admin@plataforma.test", SUPERADMIN_PASSWORD_HASH: "x", SUPERADMIN_SESSION_SECRET: secret });
+  Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true", SUPERADMIN_EMAIL: "admin@plataforma.test", SUPERADMIN_PASSWORD_HASH: "x", SUPERADMIN_SESSION_SECRET: secret });
   cookie = (await superadmin.createSuperAdminSessionCookie()).cookie.split(";")[0];
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
