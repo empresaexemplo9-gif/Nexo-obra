@@ -10,20 +10,32 @@ import { runtimeEnv } from "@/lib/server/runtime";
 // mesma superfície mínima que o produto usava: gravar, ler e apagar por chave.
 //
 // Dependência nova (`@vercel/blob`): depois de sair do R2 a plataforma não tem
-// armazenamento de objeto nenhum, e nem o banco libSQL nem o sistema de arquivos da
-// função serverless servem — o disco é efêmero e o banco não é lugar de binário de 5 MB.
+// armazenamento de objeto nenhum, e nem o banco libSQL nem o disco da função serverless
+// servem — o disco é efêmero e o banco não é lugar de binário de 5 MB.
 //
-// Sobre privacidade: o Vercel Blob publica cada objeto numa URL aleatória. A autorização
-// continua sendo feita pelas rotas, que conferem empresa, registro e permissão antes de
-// devolver os bytes, e a URL nunca sai do servidor. É uma garantia mais fraca que a do
-// R2, onde o objeto era inalcançável sem credencial: quem descobrir a URL exata alcança
-// o arquivo. Por isso a chave é tratada como segredo e nunca aparece em resposta, log
-// ou auditoria.
+// ## Por que o conteúdo vai cifrado
+//
+// O R2 tornava o objeto inalcançável sem credencial. O Vercel Blob publica cada objeto
+// numa URL aleatória, e não existe leitura assinada com expiração: quem tiver a URL
+// exata busca o arquivo, sem passar pela autorização das rotas. Guardar a foto em claro
+// ali seria trocar uma garantia criptográfica por "ninguém vai descobrir o endereço".
+//
+// Então o que sobe é AES-256-GCM: cabeçalho `NXO1`, vetor de inicialização de 12 bytes
+// sorteado por objeto, e o texto cifrado com a etiqueta de autenticação. A chave fica em
+// `MEDIA_ENCRYPTION_KEY`, no ambiente de publicação, e nunca no armazenamento. Uma URL
+// vazada devolve bytes inúteis; um objeto adulterado falha na verificação da etiqueta em
+// vez de ser servido como imagem.
+//
+// A autorização continua nas rotas — empresa, registro e permissão são conferidos antes
+// de devolver os bytes. A cifra é a segunda tranca, não a primeira.
 
 export type StoredObject = { body: ReadableStream | null };
 
+const MAGIC = new Uint8Array([0x4e, 0x58, 0x4f, 0x31]); // "NXO1"
+const IV_BYTES = 12;
+
 // Armazenamento injetado. Em teste, os bytes ficam em memória e nada sai pela rede;
-// autorização, permissão, consultas e handlers continuam sendo os reais.
+// autorização, permissão, consultas, handlers e a cifra continuam sendo os reais.
 type ObjectStore = {
   put(path: string, bytes: ArrayBuffer, contentType: string): Promise<string>;
   get(key: string): Promise<StoredObject | null>;
@@ -34,26 +46,69 @@ function injected(): ObjectStore | null {
   return (runtimeEnv() as unknown as { FILES?: ObjectStore }).FILES ?? null;
 }
 
+function unavailable(detail: string): never {
+  // A mensagem para o usuário não muda com o motivo: ele não configura nada disso, e o
+  // registro em texto continua salvo. O motivo vai no código do erro, para o diagnóstico.
+  throw new ApiError(503, "storage_unavailable", "O armazenamento de fotos está indisponível. O registro em texto continua salvo.", detail);
+}
+
 function token() {
   const value = runtimeEnv().BLOB_READ_WRITE_TOKEN;
-  if (!value) {
-    throw new ApiError(
-      503,
-      "storage_unavailable",
-      "O armazenamento de fotos está indisponível. O registro em texto continua salvo.",
-    );
-  }
+  if (!value) unavailable("BLOB_READ_WRITE_TOKEN não está configurada.");
   return value;
 }
 
-// Devolve a chave a guardar no banco: a URL do objeto. É o que `getObject` e
-// `deleteObject` recebem de volta.
+async function encryptionKey() {
+  const configured = runtimeEnv().MEDIA_ENCRYPTION_KEY?.trim();
+  // Sem chave não se grava foto nenhuma. O caminho alternativo seria subir em claro,
+  // e um armazenamento de URL pública em claro não é algo para acontecer por omissão.
+  if (!configured) unavailable("MEDIA_ENCRYPTION_KEY não está configurada.");
+  const raw = fromBase64(configured);
+  if (raw.byteLength !== 32) unavailable("MEDIA_ENCRYPTION_KEY precisa ter 32 bytes em base64.");
+  return crypto.subtle.importKey("raw", ownedBuffer(raw), { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function seal(bytes: ArrayBuffer) {
+  const key = await encryptionKey();
+  const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: ownedBuffer(iv) }, key, bytes));
+  const envelope = new Uint8Array(MAGIC.byteLength + IV_BYTES + cipher.byteLength);
+  envelope.set(MAGIC, 0);
+  envelope.set(iv, MAGIC.byteLength);
+  envelope.set(cipher, MAGIC.byteLength + IV_BYTES);
+  return envelope;
+}
+
+async function open(envelope: Uint8Array) {
+  if (envelope.byteLength <= MAGIC.byteLength + IV_BYTES) return null;
+  if (!MAGIC.every((byte, index) => envelope[index] === byte)) return null;
+  const key = await encryptionKey();
+  const iv = envelope.subarray(MAGIC.byteLength, MAGIC.byteLength + IV_BYTES);
+  const cipher = envelope.subarray(MAGIC.byteLength + IV_BYTES);
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: ownedBuffer(iv) }, key, ownedBuffer(cipher),
+    ));
+  } catch {
+    // Etiqueta inválida: o objeto foi trocado, truncado ou é de outra chave. Não se
+    // devolve conteúdo não verificado como se fosse a foto original.
+    return null;
+  }
+}
+
+// Devolve a chave a guardar no banco. É o que `getObject` e `deleteObject` recebem.
 export async function putObject(path: string, bytes: ArrayBuffer, contentType: string) {
+  const envelope = await seal(bytes);
   const store = injected();
-  if (store) return store.put(path, bytes, contentType);
-  const result = await put(path, bytes, {
+  // O que é gravado é sempre o envelope cifrado, inclusive no armazenamento em memória
+  // dos testes: é assim que a volta inteira fica coberta.
+  if (store) return store.put(path, ownedBuffer(envelope), contentType);
+  // `Blob` porque o cliente do Vercel Blob não aceita `Uint8Array` direto.
+  const result = await put(path, new Blob([ownedBuffer(envelope)]), {
     access: "public",
-    contentType,
+    // O tipo real nunca é anunciado: o objeto é um envelope opaco, e o tipo da imagem
+    // vem do banco na hora de servir.
+    contentType: "application/octet-stream",
     token: token(),
     // Sufixo aleatório: duas fotos com o mesmo caminho não se sobrescrevem, e a chave
     // não é dedutível a partir dos identificadores da empresa.
@@ -64,8 +119,20 @@ export async function putObject(path: string, bytes: ArrayBuffer, contentType: s
 }
 
 export async function getObject(key: string): Promise<StoredObject | null> {
+  const envelope = await readEnvelope(key);
+  if (!envelope) return null;
+  const plain = await open(envelope);
+  if (!plain) return null;
+  return { body: new Response(ownedBuffer(plain)).body };
+}
+
+async function readEnvelope(key: string) {
   const store = injected();
-  if (store) return store.get(key);
+  if (store) {
+    const stored = await store.get(key);
+    if (!stored?.body) return null;
+    return new Uint8Array(await new Response(stored.body).arrayBuffer());
+  }
   const configured = token();
   try {
     // `head` confirma que o objeto existe neste armazenamento antes de buscar os bytes.
@@ -75,11 +142,21 @@ export async function getObject(key: string): Promise<StoredObject | null> {
   }
   const response = await fetch(key, { cache: "no-store" });
   if (!response.ok) return null;
-  return { body: response.body };
+  return new Uint8Array(await response.arrayBuffer());
 }
 
 export async function deleteObject(key: string) {
   const store = injected();
   if (store) { await store.delete(key); return; }
   await del(key, { token: token() });
+}
+
+function ownedBuffer(value: Uint8Array) { return Uint8Array.from(value).buffer; }
+
+function fromBase64(value: string) {
+  try {
+    return Uint8Array.from(atob(value.replaceAll("-", "+").replaceAll("_", "/")), (character) => character.charCodeAt(0));
+  } catch {
+    return new Uint8Array();
+  }
 }

@@ -35,8 +35,13 @@ async function readCssTree(directory) {
   return contents.join("\n");
 }
 
+// O CSS compilado sai do `next build`, em `.next`. Antes esta leitura era em `dist/`, a
+// saída do build do Vite: o teste só passava porque uma pasta antiga tinha ficado no
+// disco, e passou a falhar no instante em que ela foi apagada. `npm test` roda o build
+// antes dos testes, então `.next` é a saída que de fato corresponde ao código atual.
 test("emits the catalog's animation and scrolling utilities", async () => {
-  const css = await readCssTree(path.join(root, "dist"));
+  const css = await readCssTree(path.join(root, ".next"));
+  assert.ok(css.length > 0, "nenhum CSS compilado em .next: rode `npm run build` antes");
 
   assert.match(css, /--tw-enter-opacity/);
   assert.match(css, /scrollbar-width:\s*thin/);

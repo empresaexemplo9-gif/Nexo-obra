@@ -134,7 +134,8 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 - O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
 - O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app) e agora **compila o repositório**: o `vercel.json` declara `framework: nextjs` e `buildCommand: npm run build` (`next build`). Enviar commit para `main` publica.
 - Antes não era assim: o `buildCommand` era vazio e todas as rotas eram reescritas para o alvo do OpenAI Sites. Isso fez uma sequência inteira de funcionalidades parecer não existir. Confirme em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
-- Sair daquele alvo exigiu trocar D1 por libSQL/Turso, `cloudflare:workers` por `process.env`, o bucket R2 pelo Vercel Blob e `import.meta.glob` por um manifesto gerado. O build antigo segue em `npm run build:sites` até a publicação nova estar confirmada.
+- Sair daquele alvo exigiu trocar D1 por libSQL/Turso, `cloudflare:workers` por `process.env`, o bucket R2 pelo Vercel Blob e `import.meta.glob` por um manifesto gerado. `vinext`, `wrangler` e `@cloudflare/vite-plugin` saíram do projeto.
+- As fotos do diário sobem cifradas em AES-256-GCM: o Vercel Blob publica cada objeto numa URL aleatória e não tem leitura assinada, então uma URL vazada devolve bytes inúteis. Gere a chave com `npm run media:key`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
 ## Configuração da Drap
@@ -267,18 +268,13 @@ docs/
 lib/
   integrations/drap.ts
   server/backend.ts       # identidade, organização, permissões e auditoria
-build/
-  sites-vite-plugin.ts
 drizzle/
+  manifest.ts          # SQL das migrações embutido no bundle (gerado)
 hooks/
 public/
 scripts/
 tests/
 vendor/
-worker/
-  index.ts
-.openai/
-  hosting.json
 CLAUDE.md
 ```
 

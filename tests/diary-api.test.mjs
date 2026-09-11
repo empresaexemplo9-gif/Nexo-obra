@@ -11,8 +11,8 @@ globalThis.__platformEnvOverride = runtime;
 // Estes testes autenticam pelos cabeçalhos da borda; o modo precisa ser declarado,
 // porque fora de uma borda que os sobrescreva eles são ignorados por padrão.
 runtime.TRUST_IDENTITY_HEADERS = "true";
-const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } },
-  plugins: [{ name: "test-cloudflare-bindings", resolveId(id) { if (id === "cloudflare:workers") return "\0diary-test-runtime"; }, load(id) { if (id === "\0diary-test-runtime") return "export const env = globalThis.__platformEnvOverride;"; } }], server: { middlewareMode: true } });
+runtime.MEDIA_ENCRYPTION_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="; // 32 bytes de teste
+const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true } });
 const list = await vite.ssrLoadModule("/app/api/diary/route.ts");
 const record = await vite.ssrLoadModule("/app/api/diary/[entryId]/route.ts");
 const upload = await vite.ssrLoadModule("/app/api/diary/[entryId]/photos/route.ts");
@@ -81,6 +81,7 @@ beforeEach(() => {
   bytes = new Map();
   runtime.DB = db;
   runtime.FILES = { // O armazenamento devolve a chave do objeto gravado; o caminho já vem único do handler.
+  // O que chega aqui já é o envelope cifrado: a volta inteira passa pela cifra real.
   async put(path, value) { bytes.set(path, value); return path; }, async get(key) { return bytes.has(key) ? { body: new Response(bytes.get(key)).body } : null; }, async delete(key) { bytes.delete(key); } };
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });

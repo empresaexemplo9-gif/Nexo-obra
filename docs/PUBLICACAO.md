@@ -23,8 +23,14 @@ alvo do OpenAI Sites:
 | SQL das migrações por `import.meta.glob` (Vite) | `drizzle/manifest.ts`, gerado e conferido por teste |
 | Identidade pelos cabeçalhos `oai-authenticated-user-*` | senha e cookie assinado próprios ([Acesso e senha](ACESSO-E-SENHA.md)) |
 
-O build antigo continua disponível em `npm run build:sites` e `npm run dev:sites` enquanto
-a publicação nova não estiver confirmada. Depois disso ele sai.
+O build antigo saiu. `vinext`, `wrangler` e `@cloudflare/vite-plugin` foram desinstalados,
+e `worker/`, `vite.config.ts`, `build/sites-vite-plugin.ts`, `scripts/build-verified.sh` e
+`.openai/hosting.json` foram removidos. O caminho de volta é o histórico do Git, não um
+arquivo esquecido no repositório.
+
+`scripts/install-ci.sh` também encolheu: ele baixava e conferia à mão o tarball do vinext
+antes de instalar, porque aquele pacote vinha de fora do registro. Agora é `npm ci` com
+uma trava para não sobrepor instalações.
 
 ## Como saber qual versão está no ar
 
@@ -57,16 +63,35 @@ configura é quem tem acesso ao painel.
 | `SESSION_SECRET` | nenhum login de empresa funciona (`503 session_secret_missing`) |
 | `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD_HASH`, `SUPERADMIN_SESSION_SECRET` | `superadmin_not_configured`: nenhuma sessão administrativa é emitida |
 | `BLOB_READ_WRITE_TOKEN` | as fotos do diário respondem `503 storage_unavailable`; o texto do registro continua salvo |
+| `MEDIA_ENCRYPTION_KEY` | nenhuma foto é gravada (`503 storage_unavailable`): subir em claro não acontece por omissão. Gere com `npm run media:key` |
 | `TRUST_IDENTITY_HEADERS` | (deixe vazio) os cabeçalhos `oai-authenticated-user-*` são ignorados, que é o correto fora da borda do ChatGPT |
 
-### Fotos do diário
+### Fotos do diário: por que vão cifradas
 
-O bucket R2 saiu junto com o runtime da Cloudflare. As fotos vão para o Vercel Blob, que
-publica cada objeto numa URL aleatória. A autorização continua nas rotas — empresa,
-registro e permissão são conferidos antes de devolver os bytes — e a URL nunca sai do
-servidor. É uma garantia mais fraca que a do R2, onde o objeto era inalcançável sem
-credencial: quem descobrir a URL exata alcança o arquivo. Por isso a chave é tratada como
-segredo e não aparece em resposta, log nem auditoria.
+O bucket R2 saiu junto com o runtime da Cloudflare, e com ele a garantia de que o objeto
+era inalcançável sem credencial. O Vercel Blob publica cada objeto numa URL aleatória e
+**não oferece leitura assinada com expiração**: quem tiver a URL exata busca o arquivo sem
+passar pela autorização das rotas. Guardar a foto em claro ali seria trocar garantia
+criptográfica por "ninguém vai descobrir o endereço".
+
+Então o que sobe é um envelope AES-256-GCM: cabeçalho `NXO1`, vetor de inicialização de 12
+bytes sorteado por objeto, texto cifrado e etiqueta de autenticação. A chave fica em
+`MEDIA_ENCRYPTION_KEY` e nunca no armazenamento. Consequências práticas:
+
+- uma URL vazada devolve bytes inúteis;
+- um objeto adulterado, truncado ou de outra chave falha na verificação e **não é servido**
+  como se fosse a foto, em vez de virar imagem corrompida na tela;
+- o objeto sobe como `application/octet-stream`: nem o tipo da imagem é anunciado. O tipo
+  real vem do banco na hora de servir;
+- cifrar a mesma foto duas vezes dá texto cifrado diferente, então o armazenamento não
+  revela que dois objetos são iguais.
+
+A autorização continua nas rotas — empresa, registro e permissão são conferidos antes de
+devolver os bytes. A cifra é a segunda tranca, não a primeira.
+
+Gere a chave com `npm run media:key` e configure no painel. **Trocá-la torna ilegíveis as
+fotos já gravadas**; o texto dos registros continua intacto. `tests/photo-encryption.test.mjs`
+verifica o que fica no armazenamento, não só o que volta.
 
 ### Banco de dados
 
