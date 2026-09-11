@@ -13,7 +13,30 @@ feita.**
 ## Conclusão
 
 Nada da exportação precisa ser aplicado. O código do Sites já está inteiro neste
-repositório e o banco exportado não tem registro de negócio nenhum.
+repositório e o banco exportado não tem registro de negócio nenhum. O que falta não é
+recuperar aquele ambiente: é publicar este, que ainda não chegou ao `main`.
+
+## Onde a aplicação ainda está rodando
+
+A exportação avisa para não confundir código no GitHub com publicação. O aviso procede, e
+a resposta está no próprio repositório: **o `main` ainda não recebeu nada disto.**
+
+O `vercel.json` do `main` tem `framework: null`, `buildCommand` vazio e reescreve `/` e
+`/:path*` para `nexo-obra.thiagohcarvalho09.chatgpt.site`. Quer dizer que
+`nexo-obra-jet.vercel.app` não compila o repositório: ele encaminha para o alvo do Sites,
+que roda sobre Cloudflare Workers e lê o D1 — o mesmo banco de 40 linhas que a exportação
+leu. O Turso está ligado ao projeto na Vercel, mas nada o consulta ainda, porque o código
+que fala libSQL não está no `main`.
+
+Este ramo está 34 commits à frente do `main`, e esses commits são o produto inteiro:
+a troca de D1 por libSQL, o login próprio, as planilhas, os lembretes, o diário cifrado e
+o `vercel.json` que manda a Vercel compilar. Enquanto a mesclagem não acontece, nenhuma
+dessas funcionalidades existe para quem abre o endereço oficial, e trocar de banco não
+muda nada — os dois ambientes seguem no D1 do Sites.
+
+Mesclar este ramo no `main` é, portanto, o passo que publica. Depois dele vale conferir em
+`/superadmin` qual commit está no ar e aplicar as migrações, na sequência descrita em
+[Publicação](PUBLICACAO.md).
 
 ## Código: o Sites não tinha nada que o repositório não tenha
 
