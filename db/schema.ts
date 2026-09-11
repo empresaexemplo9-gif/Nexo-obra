@@ -21,6 +21,50 @@ export const organizations = sqliteTable("organizations", {
   ...timestamps,
 }, (table) => [uniqueIndex("uidx_organizations_slug").on(table.slug)]);
 
+export const platformAccessRules = sqliteTable("platform_access_rules", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subject: text("subject").notNull(), // '*' means the company; otherwise a normalized email.
+  state: text("state").notNull(),
+  until: integer("until"),
+  reason: text("reason").notNull(),
+  revision: integer("revision").notNull().default(1),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_platform_access_subject").on(t.organizationId, t.subject)]);
+
+export const drapActivations = sqliteTable("drap_activations", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id),
+  companyId: text("company_id").notNull(),
+  planId: text("plan_id").notNull(),
+  requestKey: text("request_key").notNull(),
+  status: text("status").notNull().default("pending"),
+  subscriptionId: text("subscription_id"),
+  baseCents: integer("base_cents"),
+  monthlyCents: integer("monthly_cents"),
+  remoteRevision: integer("remote_revision").notNull().default(0),
+  lastRequestedAt: integer("last_requested_at").notNull().default(0),
+  lastError: text("last_error"),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_drap_activation_company").on(t.companyId), uniqueIndex("uidx_drap_activation_request").on(t.requestKey), uniqueIndex("uidx_drap_activation_subscription").on(t.subscriptionId)]);
+
+export const drapActivationEvents = sqliteTable("drap_activation_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  digest: text("digest").notNull(),
+  receivedAt: integer("received_at").notNull(),
+});
+
+// Administrators and service actors are not tenant members or customer users.
+export const platformAuditEvents = sqliteTable("platform_audit_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  actorUserId: text("actor_user_id").notNull(),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  metadataJson: text("metadata_json").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [index("idx_platform_audit_org_created").on(t.organizationId, t.createdAt)]);
+
 export const members = sqliteTable("members", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
@@ -28,6 +72,7 @@ export const members = sqliteTable("members", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   role: text("role").notNull().default("member"),
+  permissionsJson: text("permissions_json").notNull().default("{}"),
   weeklyCapacityMinutes: integer("weekly_capacity_minutes").notNull().default(2400),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   ...timestamps,
@@ -122,10 +167,115 @@ export const siteDiaryEntries = sqliteTable("site_diary_entries", {
   blockers: text("blockers").notNull().default(""),
   authorMemberId: text("author_member_id").references(() => members.id),
   clientSignedAt: text("client_signed_at"),
+  revision: integer("revision").notNull().default(1),
+  authorName: text("author_name").notNull().default(""),
+  occurrenceType: text("occurrence_type").notNull().default("none"),
   ...timestamps,
 }, (table) => [
   index("idx_site_diary_project_date").on(table.projectId, table.entryDate),
+  index("idx_site_diary_org_date").on(table.organizationId, table.entryDate, table.id),
 ]);
+
+export const diaryRevisions = sqliteTable("diary_revisions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  entryId: text("entry_id").notNull().references(() => siteDiaryEntries.id),
+  revision: integer("revision").notNull(),
+  snapshotJson: text("snapshot_json").notNull(),
+  editorMemberId: text("editor_member_id").references(() => members.id),
+  editorName: text("editor_name").notNull(),
+  reason: text("reason").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("uidx_diary_revisions_entry_revision").on(table.entryId, table.revision)]);
+
+export const diaryPhotos = sqliteTable("diary_photos", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  entryId: text("entry_id").notNull().references(() => siteDiaryEntries.id),
+  slot: integer("slot").notNull(),
+  storageKey: text("storage_key").notNull(),
+  name: text("name").notNull(),
+  caption: text("caption").notNull().default(""),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  uploadedByMemberId: text("uploaded_by_member_id").references(() => members.id),
+  uploadedByName: text("uploaded_by_name").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("uidx_diary_photos_entry_slot").on(table.entryId, table.slot),
+  uniqueIndex("uidx_diary_photos_storage_key").on(table.storageKey),
+]);
+
+export const clientPortalAccess = sqliteTable("client_portal_access", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  externalUserId: text("external_user_id"),
+  tokenHash: text("token_hash").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  status: text("status").notNull().default("pending"),
+  viewProgress: integer("view_progress", { mode: "boolean" }).notNull().default(true),
+  canApprove: integer("can_approve", { mode: "boolean" }).notNull().default(false),
+  revision: integer("revision").notNull().default(1),
+  createdByMemberId: text("created_by_member_id").notNull().references(() => members.id),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_client_portal_access_token").on(table.tokenHash),
+  uniqueIndex("uidx_client_portal_access_project_email").on(table.organizationId, table.projectId, table.email),
+  index("idx_client_portal_access_identity_status").on(table.externalUserId, table.status),
+]);
+
+export const clientPortalAcceptances = sqliteTable("client_portal_acceptances", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  externalUserId: text("external_user_id").notNull(),
+  termsVersion: text("terms_version").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: integer("accepted_at").notNull(),
+}, (table) => [uniqueIndex("uidx_client_portal_acceptance_version").on(table.accessId, table.externalUserId, table.termsVersion)]);
+
+export const clientPortalItems = sqliteTable("client_portal_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  kind: text("kind").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  dueDate: text("due_date"),
+  sourceDiaryId: text("source_diary_id").references(() => siteDiaryEntries.id),
+  sourceDiaryRevision: integer("source_diary_revision"),
+  photoIdsJson: text("photo_ids_json").notNull().default("[]"),
+  status: text("status").notNull().default("open"),
+  createdByMemberId: text("created_by_member_id").notNull().references(() => members.id),
+  authorName: text("author_name").notNull(),
+  withdrawalReason: text("withdrawal_reason").notNull().default(""),
+  withdrawnByName: text("withdrawn_by_name").notNull().default(""),
+  ...timestamps,
+}, (table) => [
+  index("idx_client_portal_items_access_created").on(table.accessId, table.createdAt, table.id),
+  index("idx_client_portal_items_org_project").on(table.organizationId, table.projectId, table.createdAt),
+]);
+
+export const clientPortalDecisions = sqliteTable("client_portal_decisions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  accessId: text("access_id").notNull().references(() => clientPortalAccess.id),
+  itemId: text("item_id").notNull().references(() => clientPortalItems.id),
+  choice: text("choice").notNull(),
+  comment: text("comment").notNull(),
+  actorUserId: text("actor_user_id").notNull(),
+  actorName: text("actor_name").notNull(),
+  actorEmail: text("actor_email").notNull(),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [uniqueIndex("uidx_client_portal_decision_item").on(table.itemId)]);
 
 export const budgetVersions = sqliteTable("budget_versions", {
   id: text("id").primaryKey(),
@@ -160,6 +310,25 @@ export const budgetItems = sqliteTable("budget_items", {
   source: text("source").notNull().default("manual"),
   sourceReference: text("source_reference"),
 }, (table) => [index("idx_budget_items_version_order").on(table.budgetVersionId, table.sortOrder)]);
+
+export const budgetCatalogItems = sqliteTable("budget_catalog_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  code: text("code").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull().default("Geral"),
+  unit: text("unit").notNull().default("un"),
+  unitCostCents: integer("unit_cost_cents").notNull().default(0),
+  defaultUnitPriceCents: integer("default_unit_price_cents"),
+  source: text("source").notNull().default("manual"),
+  sourceReference: text("source_reference"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_budget_catalog_org_source_code").on(table.organizationId, table.source, table.code),
+  index("idx_budget_catalog_org_category").on(table.organizationId, table.category),
+  index("idx_budget_catalog_org_description").on(table.organizationId, table.description),
+]);
 
 export const crmOpportunities = sqliteTable("crm_opportunities", {
   id: text("id").primaryKey(),
@@ -225,23 +394,181 @@ export const integrationEvents = sqliteTable("integration_events", {
   index("idx_integration_events_provider_type").on(table.provider, table.eventType),
 ]);
 
-/**
- * Trilha de auditoria.
- *
- * Registra criação, edição, exclusão e mudança de status dos dados operacionais.
- * `changes` guarda apenas os campos que mudaram, em JSON — nunca o registro
- * inteiro e nunca dado sensível que não seja necessário para explicar a ação.
- */
-export const auditLogs = sqliteTable("audit_logs", {
+export const financialChargeRequests = sqliteTable("financial_charge_requests", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
-  actorMemberId: text("actor_member_id").references(() => members.id),
-  entity: text("entity").notNull(),
-  entityId: text("entity_id").notNull(),
-  action: text("action").notNull(),
-  changes: text("changes").notNull().default("{}"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  clientId: text("client_id").references(() => clients.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  dueDate: text("due_date").notNull(),
+  reminderPolicyJson: text("reminder_policy_json").notNull().default("{}"),
+  status: text("status").notNull().default("pending"),
+  externalChargeId: text("external_charge_id"),
+  shareUrl: text("share_url"),
+  lastError: text("last_error"),
+  ...timestamps,
 }, (table) => [
-  index("idx_audit_logs_org_created").on(table.organizationId, table.createdAt),
-  index("idx_audit_logs_org_entity").on(table.organizationId, table.entity, table.entityId),
+  uniqueIndex("uidx_financial_charge_org_idempotency").on(table.organizationId, table.idempotencyKey),
+  index("idx_financial_charge_org_project_created").on(table.organizationId, table.projectId, table.createdAt),
+  index("idx_financial_charge_org_status_due").on(table.organizationId, table.status, table.dueDate),
 ]);
+
+export const superadminLoginAttempts = sqliteTable("superadmin_login_attempts", {
+  fingerprint: text("fingerprint").primaryKey(),
+  failedCount: integer("failed_count").notNull().default(0),
+  windowStartedAt: integer("window_started_at").notNull(),
+  lockedUntil: integer("locked_until").notNull().default(0),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_superadmin_login_locked_until").on(table.lockedUntil)]);
+
+export const organizationInvitations = sqliteTable("organization_invitations", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("member"),
+  permissionsJson: text("permissions_json").notNull().default("{}"),
+  tokenHash: text("token_hash").notNull(),
+  invitedByEmail: text("invited_by_email").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  acceptedAt: integer("accepted_at"),
+  acceptedByUserId: text("accepted_by_user_id"),
+  revokedAt: integer("revoked_at"),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_organization_invitations_token_hash").on(table.tokenHash),
+  index("idx_organization_invitations_org_created").on(table.organizationId, table.createdAt),
+  index("idx_organization_invitations_email_status").on(table.email, table.acceptedAt, table.revokedAt),
+]);
+
+export const termsAcceptances = sqliteTable("terms_acceptances", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  externalUserId: text("external_user_id").notNull(),
+  email: text("email").notNull(),
+  termsVersion: text("terms_version").notNull(),
+  invitationId: text("invitation_id").references(() => organizationInvitations.id),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  acceptedAt: integer("accepted_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_terms_acceptance_org_user_version").on(table.organizationId, table.externalUserId, table.termsVersion),
+  index("idx_terms_acceptance_org_version").on(table.organizationId, table.termsVersion),
+]);
+
+// Tempo online. O servidor só credita o intervalo entre dois sinais observados, com o
+// próprio relógio, e nunca mais do que USAGE_GAP_LIMIT_MS por intervalo. Sessões abertas
+// ficam em usage_sessions; o total por dia, no fuso da empresa, em usage_days.
+export const usageSessions = sqliteTable("usage_sessions", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  subjectKind: text("subject_kind").notNull(),
+  email: text("email").notNull(),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull(),
+  memberId: text("member_id"),
+  startedAt: integer("started_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+  endedAt: integer("ended_at"),
+  activeMs: integer("active_ms").notNull().default(0),
+  beats: integer("beats").notNull().default(1),
+}, (t) => [
+  index("idx_usage_sessions_open").on(t.organizationId, t.subjectId, t.endedAt),
+  index("idx_usage_sessions_org_started").on(t.organizationId, t.startedAt),
+]);
+
+export const usageDays = sqliteTable("usage_days", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  day: text("day").notNull(),
+  subjectKind: text("subject_kind").notNull(),
+  email: text("email").notNull(),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull(),
+  activeMs: integer("active_ms").notNull().default(0),
+  sessions: integer("sessions").notNull().default(0),
+  firstSeenAt: integer("first_seen_at").notNull(),
+  lastSeenAt: integer("last_seen_at").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_usage_days_org_subject_day").on(t.organizationId, t.subjectId, t.day),
+  index("idx_usage_days_org_day").on(t.organizationId, t.day),
+  index("idx_usage_days_day").on(t.day),
+]);
+
+// Planilhas e documentos da empresa. O conteúdo é guardado como digitado; o cálculo é
+// refeito por lib/spreadsheet.ts, que roda igual no navegador e no servidor.
+export const worksheets = sqliteTable("worksheets", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  kind: text("kind").notNull().default("sheet"),
+  name: text("name").notNull(),
+  contentJson: text("content_json").notNull().default("{}"),
+  columns: integer("columns").notNull().default(12),
+  rows: integer("rows").notNull().default(60),
+  createdByMemberId: text("created_by_member_id"),
+  createdByName: text("created_by_name").notNull(),
+  // "organization" segue aberta à empresa; "restricted" só abre para quem o
+  // superadministrador liberar em worksheet_grants.
+  visibility: text("visibility").notNull().default("organization"),
+  revision: integer("revision").notNull().default(1),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("idx_worksheets_org_updated").on(t.organizationId, t.updatedAt)]);
+
+// Liberações dadas pelo superadministrador: leitura, ou leitura e edição.
+export const worksheetGrants = sqliteTable("worksheet_grants", {
+  worksheetId: text("worksheet_id").notNull().references(() => worksheets.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  memberId: text("member_id").notNull(),
+  level: text("level").notNull(),
+  grantedByEmail: text("granted_by_email").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [uniqueIndex("uidx_worksheet_grants_sheet_member").on(t.worksheetId, t.memberId)]);
+
+// Metas da empresa. O alvo é digitado; o realizado nunca é: sai sempre da fonte oficial
+// do dado (tarefas concluídas, orçamentos aprovados, clientes cadastrados e assim por
+// diante), recalculado a cada leitura.
+export const goals = sqliteTable("goals", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  metric: text("metric").notNull(),
+  targetValue: integer("target_value").notNull(),
+  periodStart: text("period_start").notNull(),
+  periodEnd: text("period_end").notNull(),
+  ownerMemberId: text("owner_member_id"),
+  createdByMemberId: text("created_by_member_id"),
+  createdByName: text("created_by_name").notNull(),
+  active: integer("active").notNull().default(1),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [index("idx_goals_org_period").on(t.organizationId, t.periodEnd)]);
+
+// Estado diário dos lembretes: o que cada acesso já viu e o que dispensou naquele dia.
+// Nada aqui muda o dado de origem — um lembrete dispensado continua pendente no módulo.
+export const reminderStates = sqliteTable("reminder_states", {
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  subjectId: text("subject_id").notNull(),
+  day: text("day").notNull(),
+  itemKey: text("item_key").notNull(),
+  state: text("state").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [uniqueIndex("uidx_reminder_states_subject_day_item").on(t.organizationId, t.subjectId, t.day, t.itemKey)]);
+
+// Credencial própria da plataforma, no lugar da identidade vinda de cabeçalhos HTTP.
+//
+// Antes, quem era o usuário vinha de `oai-authenticated-user-*`, injetado por uma borda
+// autenticada externa. Fora dela, qualquer visitante podia enviar esses cabeçalhos e se
+// passar por outra pessoa. A senha usa o mesmo PBKDF2-SHA256 já aplicado ao
+// superadministrador, e o hash nunca sai daqui.
+export const userCredentials = sqliteTable("user_credentials", {
+  userId: text("user_id").primaryKey(),
+  email: text("email").notNull(),
+  passwordHash: text("password_hash").notNull(),
+  displayName: text("display_name").notNull(),
+  active: integer("active").notNull().default(1),
+  passwordUpdatedAt: integer("password_updated_at").notNull(),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [uniqueIndex("uidx_user_credentials_email").on(t.email)]);

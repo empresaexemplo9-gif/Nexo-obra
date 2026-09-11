@@ -1,3 +1,5 @@
+import { execSync } from "node:child_process";
+
 import vinext from "vinext";
 import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
@@ -10,6 +12,37 @@ const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
+
+// Selo do build, gravado no bundle. O domínio público é um redirecionador para outro
+// alvo de publicação, então "meu código está no ar?" precisava de resposta na tela.
+function buildStamp() {
+  const fromEnvironment = process.env.VERCEL_GIT_COMMIT_SHA
+    ?? process.env.GITHUB_SHA
+    ?? process.env.CF_PAGES_COMMIT_SHA;
+  if (fromEnvironment) return fromEnvironment.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "desconhecido";
+  }
+}
+
+const localRuntimeVars = Object.fromEntries(
+  [
+    "DRAP_API_URL",
+    "DRAP_API_TOKEN",
+    "DRAP_API_KEY_HEADER",
+    "DRAP_SUMMARY_PATH",
+    "DRAP_TRANSACTIONS_PATH",
+    "DRAP_CHARGES_PATH",
+    "DRAP_WEBHOOK_SECRET",
+    "SUPERADMIN_EMAIL",
+    "SUPERADMIN_PASSWORD_HASH",
+    "SUPERADMIN_SESSION_SECRET",
+  ]
+    .map((key) => [key, process.env[key]])
+    .filter((entry): entry is [string, string] => Boolean(entry[1])),
+);
 
 const localBindingConfig = {
   main: "./worker/index.ts",
@@ -31,6 +64,7 @@ const localBindingConfig = {
         },
       ]
     : [],
+  vars: localRuntimeVars,
 };
 
 export default defineConfig(async () => {
@@ -44,6 +78,10 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    define: {
+      __PLATFORM_BUILD__: JSON.stringify(buildStamp()),
+      __PLATFORM_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+    },
     server: {
       host: "0.0.0.0",
       allowedHosts: ["terminal.local"],

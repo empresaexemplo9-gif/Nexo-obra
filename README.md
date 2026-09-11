@@ -1,8 +1,10 @@
-# Nexo Obra
+# H.OIKOS
 
-> Nome provisório. Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
+> **H.OIKOS — Ecossistema para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-Este repositório contém o núcleo operacional do produto em funcionamento: fluxo autenticado multiempresa, persistência real de clientes, projetos, obras e tarefas, permissões no servidor, trilha de auditoria e o limite técnico da integração financeira remota com a Drap. Os módulos comerciais e de obra seguem em demonstração, rotulados como tal na própria tela.
+A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta é preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E` e off-white `#F7F7F0`. A tipografia usa as substitutas livres de Barium e Ador Hairline, servidas de `public/fonts/`. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
+
+Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
 O objetivo não é copiar a Vobi. O objetivo é reunir o ciclo do negócio em um fluxo menor, mais claro e mais previsível:
 
@@ -17,41 +19,34 @@ flowchart TD
 
 ## O que já está no código
 
-A Fase 1 do roadmap está implementada: o produto tem autenticação, organização
-resolvida no servidor e persistência real para cliente, projeto/obra e tarefa.
-
-**Funcionando com dados reais**
-
-- Fluxo autenticado completo: entrar → criar empresa → cliente → projeto/obra → tarefa.
-- Organização resolvida na sessão do servidor e conferida contra as associações do
-  usuário a cada requisição. O navegador não escolhe a empresa.
-- Papéis por capacidade (`owner`, `admin`, `manager`, `member`, `partner`, `client`),
-  checados no servidor antes de qualquer escrita.
-- CRUD de clientes, projetos/obras e tarefas: `GET/POST` nas coleções e
-  `GET/PATCH/DELETE` por id, com validação Zod na borda.
-- Seletor de empresa para quem participa de mais de uma.
-- Trilha de auditoria com autor e diferença em criação, edição, exclusão e mudança
-  de situação.
-- Visão geral monta a fila de decisões dos dados reais: tarefa atrasada, bloqueada,
-  vencendo hoje e trabalho sem responsável.
-- Equipe mostra capacidade contra apontamentos reais.
-- 47 testes, incluindo isolamento entre duas empresas exercitando o SQL de verdade.
-
-**Ainda em demonstração, e rotulado como tal na tela**
-
-- Orçamentos, cronograma, arquivos e o funil comercial seguem sobre
-  `lib/demo-data.ts`, cada tela com aviso visível. As fases 2 e 3 os migram.
-- O financeiro mostra dados de demonstração enquanto as credenciais e o contrato
-  real da Drap não forem fornecidos.
-
-**Limites técnicos já estabelecidos**
-
-- Esquema relacional multiempresa em `db/schema.ts`: `organization_id` em toda
-  tabela operacional.
+- Ativador de assinatura por API e painel de parceiros/acessos no superadmin: mensalidade Empresa × 1,5, confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
+- Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
+- Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
+- Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
+- Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
+- Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
+- Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
+- Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
+- Contador de tempo online por dia para todos os acessos, medido no servidor, com histórico próprio para cada pessoa, visão da empresa para o contratante e visão de toda a plataforma para o superadmin. Consulte [Tempo de uso](docs/TEMPO-DE-USO.md).
+- Dez modelos de planilha com objetivo definido — orçamento de obra, cronograma físico-financeiro, medição, apropriação de horas, quantitativos, compras, fluxo de caixa, resultado por centro, funil comercial e honorários por etapa —, cada um com fórmulas e papéis de coluna prontos. Consulte [Modelos de planilha](docs/MODELOS-DE-PLANILHA.md).\n- Planilha de saúde financeira governada pelo superadmin: neutra até existir dado, depois aponta margem, preço a aumentar, peso dos colaboradores e em que setor a operação ganha ou perde. Consulte [Saúde financeira](docs/SAUDE-FINANCEIRA.md).\n- Planilha com fórmulas em português e documento com campos calculados, sobre os dados reais da empresa, com importação de orçamentos, projetos, clientes e tarefas. Consulte [Planilha e documento](docs/PLANILHA-E-DOCUMENTO.md).
+- Lembretes diários para todos os acessos — cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo e metas em aberto — com metas cujo realizado é calculado a partir dos dados reais. Consulte [Lembretes e metas](docs/LEMBRETES-E-METAS.md).\n- Interface responsiva, com menu recolhível e busca.
+- Fluxo de criação rápida preparado para virar formulários reais.
+- Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
+- Esquema relacional multiempresa em `db/schema.ts`.
+- Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
+- Acesso superadmin próprio, protegido por hash, sessão assinada e bloqueio de tentativas repetidas.
+- Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).
+- Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
+- Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
+- Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
+- Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
+- Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado. O superadmin opera o mesmo ambiente pela sessão da plataforma, com recursos que a manutenção não tem.
+- Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
+- Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
-- Webhook Drap com verificação HMAC SHA-256, identificação da empresa e
-  idempotência pelo ID do evento.
-- Interface responsiva, com menu recolhível e busca.
+- Endpoint financeiro sem fallback fictício: ausência ou falha da Drap aparece como indisponibilidade.
+- Adaptador SINAPI exclusivamente no servidor, sem preços demonstrativos quando a fonte oficial não está configurada.
+- Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 
 ## Princípios do produto
@@ -77,6 +72,8 @@ resolvida no servidor e persistência real para cliente, projeto/obra e tarefa.
 | Tarefas | Executar sem perder contexto | Prioridade, checklist, dependência, prazo e apontamento |
 | Equipe | Distribuir capacidade | Papéis, permissões, carga e horas planejadas x realizadas |
 | Arquivos | Encontrar a versão certa | Pastas por projeto, revisão, metadados e acesso do cliente |
+| Tempo de uso | Saber quanto tempo cada acesso ficou online | Total por dia, sessões, ações e histórico por pessoa |
+| Planilha e documento | Somar sem sair da plataforma | Fórmulas em português sobre dados reais, com exportação |\n| Lembretes do dia | Saber o que exige ação hoje | Cobranças, boletos, follow-ups, prazos e metas por acesso |
 | Financeiro | Ver resultado no contexto | Saldo, contas, caixa e resultado por projeto vindos da Drap |
 
 ## Stack escolhida
@@ -96,54 +93,65 @@ A arquitetura pode ser adaptada pelo Claude Code para Postgres, Supabase, Neon o
 Pré-requisitos: Node.js 22.13 ou superior e npm.
 
 ```bash
+cd nexo-obra
 npm ci
 cp .env.example .env
-npm run dev          # cria o banco D1 local na primeira execução
-npm run db:migrate:local
+npm run dev
 ```
 
-O banco local do Miniflare nasce vazio, então a primeira tela cai no estado
-“banco indisponível” até as migrações serem aplicadas. Rode `npm run dev` uma
-vez, aplique as migrações e recarregue.
+Depois, abra a pasta no Claude Code e use este primeiro comando:
 
-Para entrar sem o host autenticado, defina no `.env`:
-
-```dotenv
-NEXO_DEV_USER_EMAIL=voce@exemplo.test
-NEXO_DEV_USER_NAME=Seu Nome
+```text
+Leia CLAUDE.md e README.md por completo. Preserve a arquitetura multiempresa e o limite da integração Drap. Primeiro execute o build e corrija apenas erros reais. Depois implemente a Fase 1 do roadmap, começando pelo fluxo autenticado organização → cliente → projeto → tarefa. Faça mudanças pequenas, valide ao final de cada fatia e atualize o README quando o estado do produto mudar.
 ```
-
-Na primeira entrada a tela pede o nome da empresa e torna você `owner` dela.
 
 Comandos úteis:
 
 ```bash
-npm run dev               # servidor de desenvolvimento
-npm run build             # build verificado (é o que o CI roda)
+npm run dev
+npm run build
 npm run lint
-npm run typecheck         # tsc --noEmit
-npm test                  # build + testes
-npm run db:generate       # gera migração a partir de db/schema.ts
-npm run db:migrate:local  # aplica as migrações no D1 local
+npm run typecheck
+npm test
+npm run db:generate
 ```
+
+Os testes cobrem regra de negócio, autorização, cálculo e interface. Consulte [Testes de interface](docs/TESTES-DE-INTERFACE.md).
+
+## Primeiro acesso e atualização do banco
+
+O `db:generate` apenas escreve as migrações em `drizzle/`; **nada no deploy as aplica**. Ao
+publicar uma versão com migração nova, entre em `/superadmin` e use **Atualizar banco de
+dados** — o aviso aparece no topo do painel, com o que falta aplicar, e continua visível
+mesmo quando o resto do painel falha por causa das tabelas ausentes. Consulte
+[Atualizar o banco de dados](docs/ATUALIZAR-BANCO.md).
+
+Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
+`database_not_migrated`.
+
+## Repositório e publicação
+
+- O código-fonte oficial fica em [empresaexemplo9-gif/Nexo-obra](https://github.com/empresaexemplo9-gif/Nexo-obra).
+- O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app). **Ele não compila o repositório**: o `vercel.json` tem `buildCommand` vazio e reescreve todas as rotas para o alvo do OpenAI Sites, que é onde a aplicação roda.
+- **Enviar commit para `main` não publica nada.** Depois do envio é preciso republicar o projeto no OpenAI Sites e confirmar em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
+- O projeto também preserva o vínculo com o OpenAI Sites por meio do `project_id` em `.openai/hosting.json`.
+- Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 
 ## Configuração da Drap
 
 Crie `.env` a partir de `.env.example`:
 
+Gere o hash da senha administrativa com `npm run superadmin:hash -- "sua senha"`. Ele sai com **dois-pontos** como separador de propósito: painéis de publicação expandem `$` e mutilam o hash sem avisar, fazendo o login recusar a senha correta. Detalhes em [Publicação](docs/PUBLICACAO.md).
+
 ```dotenv
 DRAP_API_URL=https://empresa.drap.app.br
 DRAP_API_TOKEN=token_de_servico
-# Vazio usa "Authorization: Bearer <token>"; informe um header para o token cru.
 DRAP_API_KEY_HEADER=
 DRAP_SUMMARY_PATH=/api/v1/finance/summary
+DRAP_TRANSACTIONS_PATH=
+DRAP_CHARGES_PATH=
 DRAP_WEBHOOK_SECRET=segredo_compartilhado
 ```
-
-Nenhuma dessas variáveis pode ganhar o prefixo `NEXT_PUBLIC_`. O módulo
-`lib/integrations/drap.ts` lê as credenciais do ambiente do Worker e é importado
-apenas no servidor; o navegador fala com `/api/integrations/drap/summary`, nunca
-com a Drap.
 
 ### Importante
 
@@ -152,7 +160,7 @@ O site público da Drap informa suporte a API REST e webhooks assinados, mas nã
 - `/api/v1/finance/summary` é um contrato configurável de referência, não um endpoint confirmado;
 - o token nunca é enviado ao navegador;
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
-- até as credenciais e o contrato real serem fornecidos, a tela mostra dados marcados como demonstração;
+- até as credenciais e o contrato real serem fornecidos, a tela informa que a integração está indisponível, sem fabricar valores;
 - nenhuma escrita financeira deve ser liberada antes de testes em ambiente sandbox.
 
 Para concluir a conexão real, obtenha da Drap:
@@ -167,106 +175,58 @@ Para concluir a conexão real, obtenha da Drap:
 
 Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
 
-## API interna
-
-Todas as rotas resolvem a empresa pela sessão. Nenhuma aceita `organizationId` no
-corpo ou em header — o schema Zod recusa o campo com 422.
-
-| Rota | Métodos | Capacidade exigida |
-| --- | --- | --- |
-| `/api/session` | `GET` | — (devolve o estado da sessão) |
-| `/api/organizations` | `GET`, `POST` | autenticado; quem cria vira `owner` |
-| `/api/organizations/active` | `POST` | participar da empresa informada |
-| `/api/clients` | `GET`, `POST` | `client:read` / `client:write` |
-| `/api/clients/:id` | `GET`, `PATCH`, `DELETE` | `client:read` / `client:write` |
-| `/api/projects` | `GET`, `POST` | `project:read` / `project:write` |
-| `/api/projects/:id` | `GET`, `PATCH`, `DELETE` | `project:read` / `project:write` |
-| `/api/tasks` | `GET`, `POST` | `task:read` / `task:write` |
-| `/api/tasks/:id` | `GET`, `PATCH`, `DELETE` | `task:read` / `task:write` |
-| `/api/integrations/drap/summary` | `GET` | — (marca a origem em `source`) |
-| `/api/integrations/drap/webhook` | `POST` | assinatura HMAC SHA-256 |
-
-Respostas de erro têm formato único, para a interface reagir sem depender do texto:
-
-```json
-{ "error": { "code": "forbidden", "message": "...", "fields": [] } }
-```
-
-`code` assume `unauthorized`, `no_organization`, `forbidden`, `not_found`,
-`conflict`, `invalid_body`, `invalid_input`, `unavailable` ou `internal`. Em
-`invalid_input`, `fields` traz `{ field, message }` por campo recusado.
-
-Capacidades por papel:
-
-| Capacidade | owner | admin | manager | member | partner | client |
-| --- | --- | --- | --- | --- | --- | --- |
-| `organization:manage` | ✅ | | | | | |
-| `member:manage` | ✅ | ✅ | | | | |
-| `client:read` | ✅ | ✅ | ✅ | ✅ | | |
-| `client:write` | ✅ | ✅ | ✅ | | | |
-| `project:read` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `project:write` | ✅ | ✅ | ✅ | | | |
-| `task:read` | ✅ | ✅ | ✅ | ✅ | ✅ | |
-| `task:write` | ✅ | ✅ | ✅ | ✅ | | |
-| `finance:read` | ✅ | ✅ | ✅ | | | |
-| `audit:read` | ✅ | ✅ | | | | |
-
 ## Divisão de responsabilidade dos dados
 
-| Dado | Fonte oficial | Uso na Nexo Obra |
+| Dado | Fonte oficial | Uso na H.OIKOS |
 | --- | --- | --- |
-| Clientes | Nexo Obra, com ID remoto opcional | CRM, projeto, obra e proposta |
-| Projetos e obras | Nexo Obra | Contexto central de operação |
-| Tarefas, horas e cronograma | Nexo Obra | Planejamento e execução |
-| Orçamentos técnicos e versões | Nexo Obra | Composição, BDI, margem e aceite |
-| Arquivos e revisões | Nexo Obra | R2 + metadados no banco |
+| Clientes | H.OIKOS, com ID remoto opcional | CRM, projeto, obra e proposta |
+| Projetos e obras | H.OIKOS | Contexto central de operação |
+| Tarefas, horas e cronograma | H.OIKOS | Planejamento e execução |
+| Orçamentos técnicos e versões | H.OIKOS | Composição, BDI, margem e aceite |
+| Arquivos e revisões | H.OIKOS | R2 + metadados no banco |
 | Lançamentos, contas e saldo | Drap | Consulta remota e vínculo por centro de custo |
 | Cobranças, PIX, boleto e nota | Drap | Acionamento remoto após confirmação |
 | DRE e conciliação | Drap | Leitura e contextualização por projeto |
 
+## Acesso e senha
+
+A autenticação é da própria plataforma: senha com PBKDF2-SHA256 (100.000 iterações, sal por
+senha) e sessão em cookie `__Host-nexo-session` assinado com HMAC-SHA256. O cadastro
+acontece no link de convite — a pessoa escolhe a senha ali, e o aceite já devolve a sessão
+aberta. A volta é por `/entrar`.
+
+Os cabeçalhos `oai-authenticated-user-*` deixaram de ser identidade por padrão. Eles só
+valem quando a hospedagem declara `TRUST_IDENTITY_HEADERS=true`, porque fora de uma borda
+que os sobrescreva qualquer visitante pode enviá-los e se passar por outra pessoa.
+Configure `SESSION_SECRET` com pelo menos 32 caracteres. Consulte
+[Acesso e senha](docs/ACESSO-E-SENHA.md).
+
 ## Modelo multiempresa
 
-Toda tabela operacional carrega `organization_id`. O identificador de organização
-nunca vem do navegador: a API o deriva da sessão autenticada e confere a
-associação do usuário no servidor.
+Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.
 
-Como funciona hoje:
+As APIs não aceitam `organization_id` do navegador. A identidade autenticada é associada a um membro no servidor e todas as consultas recebem o `organization_id` dessa associação.
 
-1. `lib/auth/identity.ts` resolve QUEM é o usuário. É a única peça que conhece o
-   provedor de autenticação — hoje os headers da borda autenticada do host, com
-   uma identidade de desenvolvimento habilitada por variável de ambiente fora de
-   produção. Trocar de provedor é editar este arquivo.
-2. `lib/auth/session.ts` resolve QUAL empresa está ativa, carregando as
-   associações reais do usuário em `members`.
-3. O cookie `nexo_org` guarda apenas a *preferência* de qual empresa abrir. Ele é
-   reconferido contra as associações a cada requisição, então não concede nada —
-   um cookie apontando para empresa alheia é simplesmente ignorado. É por isso que
-   ele não precisa ser assinado.
-4. `lib/data/*` exige `organizationId` em toda função e o aplica em toda cláusula
-   `where`, inclusive nos joins, updates e deletes.
-5. Chave estrangeira de outra empresa é recusada com 422. A FK do banco só exige
-   que a linha exista; o recorte por empresa é da aplicação.
-6. Registro de outra empresa responde **404, nunca 403** — 403 confirmaria que ele
-   existe em algum lugar.
+O administrador de manutenção utiliza uma organização interna reservada, criada vazia no primeiro acesso, seja dele ou do superadmin. A resolução de sessão força esse acesso exclusivamente à organização de manutenção, mesmo que o mesmo e-mail participe legitimamente de outra empresa. Ele não pode aceitar convites de clientes, criar empresas contratantes nem alcançar o painel da plataforma. Esse ambiente não entra nas contagens de empresas do superadmin e nunca é o destino padrão dele.
 
-> **Atenção ao implantar.** O provedor de identidade atual confia em headers
-> injetados pela borda autenticada. O ambiente precisa remover esses headers
-> quando vierem do cliente; caso contrário qualquer visitante pode se passar por
-> outro usuário. Se o destino de implantação não fizer isso, troque
-> `lib/auth/identity.ts` por um provedor de sessão próprio antes de ir ao ar.
-
-O header `x-organization-id` que a API inicial usava foi removido. Não o
-reintroduza: era o furo que a Fase 1 fechou, e há teste de regressão para isso.
-
+O backend inicial está documentado em [`docs/BACKEND.md`](docs/BACKEND.md).
 
 Papéis mínimos recomendados:
 
+- `superadmin`: titular da plataforma, com leitura e edição totais em qualquer empresa; não ocupa vaga de equipe e só é alcançado pela sessão assinada de `/superadmin`;
 - `owner`: cobrança, integrações, segurança e acesso total;
 - `admin`: equipe, configurações e operação total, sem propriedade da assinatura;
 - `manager`: projetos, obras, orçamentos e relatórios;
 - `member`: itens atribuídos e módulos liberados;
 - `partner`: acesso limitado a projetos específicos;
+- `service_provider`: execução operacional com escopo definido pelo contratante;
+- `finance`: acesso financeiro configurável para a equipe responsável;
+- `accounting`: prestação de contas com leitura ou edição explicitamente liberada;
 - `client`: portal externo somente para leitura/aprovação/comentário.
+
+Os papéis são apenas modelos iniciais. A autorização efetiva é a matriz `permissions_json` do membro, validada nas rotas do servidor. Ninguém libera mais do que tem: um `admin` sem acesso ao Financeiro não consegue criar um convite com Financeiro liberado. Somente o `owner` e o superadmin, que já têm tudo, escapam dessa checagem. O papel `superadmin` é a única exceção: sua matriz é sempre total e é resolvida no servidor a partir da sessão administrativa, nunca do navegador. Marcar edição também concede a leitura necessária. Somente o `owner` ou um `admin` com permissão de edição em Equipe pode criar e revogar convites secundários.
+
+O texto público vigente fica em `/termos`. Cada aceite grava a versão, data e evidências técnicas transformadas em hash, sem armazenar IP ou agente do navegador em formato bruto. Antes da cobrança comercial, o documento deve receber revisão jurídica e os dados legais do fornecedor, canal de privacidade e condições comerciais do plano.
 
 ## Estrutura do projeto
 
@@ -274,88 +234,92 @@ Papéis mínimos recomendados:
 app/
   api/
     clients/            # CRUD de clientes
+    budget-library/     # produtos e serviços padronizados da empresa
+    budgets/            # versões, composições e importação em lote
+    diary/              # diário, revisões, fotos privadas e relatórios
     integrations/drap/  # proxy financeiro e webhook
-    organizations/      # criação, listagem e troca de empresa ativa
+    members/            # equipe da empresa atual
+    maintenance/        # sessão do administrador em ambiente isolado
+    invitations/        # leitura e aceite de convite individual
+    organization-invitations/ # convites secundários e permissões da empresa atual
+    onboarding/         # criação segura da primeira empresa
     projects/           # CRUD de projetos e obras
-    session/            # estado da sessão para a interface
+    session/            # identidade e organização ativas
+    superadmin/         # sessão, visão global, cadastro de empresas e convites
     tasks/              # CRUD de tarefas
-  chatgpt-auth.ts       # detalhe do provedor de identidade do host
+    terms/              # aceite eletrônico da versão vigente
   layout.tsx
-  page.tsx              # resolve a sessão e escolhe a tela de acesso
+  page.tsx
+  projetos/[projectId]/ # central contextual de cada projeto ou obra
+  superadmin/           # painel global protegido
+  convite/              # criação de acesso por link
+  termos/               # Termos de Uso públicos e versionados
 components/
-  access-screens.tsx    # anônimo, sem empresa, banco indisponível
-  nexo-app.tsx          # casca dos módulos, já sobre dados reais
-  quick-create.tsx      # formulários de cliente, trabalho e tarefa
-  ui/                   # primitivas acessíveis do catálogo Shadcn
+  nexo-app.tsx          # protótipo funcional dos módulos
+  ui/                   # primitivas acessíveis
 db/
   index.ts              # acesso centralizado ao banco
   schema.ts             # modelo relacional multiempresa
-drizzle/                # migrações geradas
 docs/
   DRAP-INTEGRATION.md
+  SINAPI-INTEGRATION.md
+  DIARIO-DE-OBRA.md
 lib/
-  auth/
-    identity.ts         # QUEM é o usuário (fronteira do provedor)
-    roles.ts            # papéis e capacidades
-    session.ts          # QUAL empresa está ativa
-  data/                 # consultas, sempre recortadas por organização
-  domain/               # vocabulário e schemas Zod compartilhados
-  integrations/drap.ts  # adaptador financeiro, só servidor
-  server/               # helpers de API e trilha de auditoria
-  view/workspace.ts     # retrato que a interface recebe
-  demo-data.ts          # módulos ainda não migrados
+  integrations/drap.ts
+  server/backend.ts       # identidade, organização, permissões e auditoria
+build/
+  sites-vite-plugin.ts
+drizzle/
+hooks/
+public/
 scripts/
-  migrate-local.mjs     # aplica migrações no D1 local
 tests/
-  authorization.test.mjs
-  tenant-isolation.test.mjs
-  product-contract.test.mjs
+vendor/
+worker/
+  index.ts
+.openai/
+  hosting.json
 CLAUDE.md
 ```
 
 ## Roadmap de implementação
 
-### Fase 1 — núcleo operacional ✅ concluída
+### Fase 1 — núcleo operacional
 
-- [x] Autenticação e seleção segura da organização.
-- [x] CRUD de clientes, projetos e tarefas.
-- [x] Permissões no servidor.
-- [x] Substituição dos dados demonstrativos por queries reais nesses três domínios.
-- [x] Log de auditoria para criação, edição, exclusão e mudança de status.
-- [x] Testes de isolamento entre duas organizações.
-
-Pendências conhecidas, que a Fase 2 absorve:
-
-- Convite e gestão de integrantes ainda não têm interface; o papel é gravado
-  direto no banco.
-- `partner` e `client` já existem como papéis de leitura, mas o recorte por
-  projeto específico só entra na Fase 3, junto com o portal do cliente.
-- Falta limitação de taxa em autenticação, criação e webhooks (ver critérios
-  mínimos antes de produção).
+- Autenticação da plataforma e resolução segura da organização. **Concluído no backend.**
+- Superadmin, convite do contratante e convites secundários com permissões granulares. **Concluído.**
+- Operação completa da plataforma pelo superadmin, com auditoria por empresa. **Concluído.**
+- CRUD de clientes, projetos e tarefas. **Concluído no backend.**
+- Permissões de leitura/edição por módulo no servidor e auditoria de escritas. **Concluído no backend.**
+- Termos versionados e aceite eletrônico obrigatório. **Concluído; revisão jurídica pendente antes da monetização.**
+- Interface conectada às queries reais. **Concluído.**
+- Central do ciclo de cada projeto/obra. **Concluída para dados-base, tarefas e resumo financeiro da empresa; conexões detalhadas seguem nas fases seguintes.**
+- Versões de orçamento, itens, cálculo, biblioteca e inclusão em lote. **Concluído.**
+- Testes de isolamento entre duas organizações.
 
 ### Fase 2 — comercial e orçamento
 
 - Funil configurável e histórico de atividades.
 - Conversão de oportunidade em cliente e projeto sem recadastro.
-- Biblioteca de serviços, insumos e composições.
-- BDI separado por produto/serviço, margem mínima e versões imutáveis.
+- Biblioteca de serviços, insumos e composições. **Concluída para cadastro próprio.**
+- BDI, margem e versões numeradas. **Concluído no núcleo; bloqueio imutável após envio ainda pendente.**
 - PDF de proposta e aprovação digital.
-- Importação SINAPI condicionada à licença/fonte oficial escolhida.
+- Importação SINAPI com adaptador pronto, condicionada à licença e às credenciais da fonte oficial escolhida.
 
 ### Fase 3 — planejamento e obra
 
 - Etapas, dependências e recálculo do cronograma.
-- Diário de obra com fotos, clima, equipe, ocorrências e assinatura.
+- Diário de obra com fotos, clima, equipe, ocorrências, histórico e relatórios. **Concluído; assinatura do cliente permanece pendente.**
 - Medições, compras, fornecedores e previsto x realizado.
 - Cronograma físico-financeiro e curva S.
-- Portal enxuto do cliente.
+- Portal enxuto do cliente. **Implementado: acesso por obra, convites, avanços autorizados, publicações e fotos selecionadas, aprovações e ajustes.**
 
 ### Fase 4 — financeiro remoto e automações
 
 - Conector Drap homologado em sandbox.
-- Vínculo de projeto com centro de custo remoto.
-- Leitura de saldos, contas e DRE por projeto.
-- Criação remota de cobrança/conta somente com idempotência.
+- Vínculo de projeto com centro de custo remoto. **Concluído no produto; homologação Drap pendente.**
+- Leitura de saldos e contas por projeto, com relatório CSV. **Concluída no produto; endpoint Drap pendente.**
+- Criação remota de cobrança com idempotência e política de lembretes. **Concluída no produto; endpoint Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.
 - Alertas úteis: atraso, caixa negativo, margem baixa e tarefa bloqueadora.
 
@@ -388,3 +352,15 @@ O recorte funcional foi elaborado a partir das páginas públicas informadas no 
 - [Drap Empresa](https://empresa.drap.app.br/)
 
 Essas páginas servem apenas como pesquisa de necessidades. O código, a arquitetura, os textos e a interface deste repositório são originais.
+
+## Portal do cliente
+
+Na empresa, abra **Portal do cliente** ou a aba correspondente na central da obra. O administrador autorizado cria um convite para o e-mail do cliente, escolhe a obra e libera separadamente avanço/datas e aprovações. O convite expira em sete dias; renovar substitui o link anterior e exige nova ativação. Revogar bloqueia imediatamente o acesso.
+
+O cliente abre `/portal/convite/[token]`, entra com a conta da plataforma do e-mail convidado — ou cria a senha ali mesmo, se for o primeiro acesso — e aceita os termos vigentes. A partir da ativação, a autorização usa seu ID estável e o acesso específico da obra. Não é criado um membro da empresa. Superadmin e manutenção não assumem a identidade do cliente.
+
+A equipe com permissão de edição do portal publica textos e solicitações imutáveis. Fotos são selecionadas explicitamente de um diário da mesma obra, exigindo também leitura do diário. O cliente não recebe acesso genérico a tarefas, arquivos, orçamento ou financeiro. Pode aprovar ou solicitar ajustes quando autorizado. A decisão registra identidade, data, comentário e evidências técnicas transformadas em hash. Publicações abertas podem ser retiradas com motivo; respostas já registradas permanecem preservadas.
+
+Esta entrega não inclui disparo automático de e-mail/WhatsApp, documentos arbitrários ou sincronização automática de aprovações com orçamentos. Os links de convite são copiados para envio pelo administrador.
+
+Validação: testes de API executam as migrações e SQL reais em SQLite, substituindo apenas o transporte D1 e o armazenamento R2 em memória. Cobrem isolamento, convite expirado, aceite obrigatório, revogação, permissões, decisão idempotente e fotos privadas.

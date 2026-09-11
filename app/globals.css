@@ -2,55 +2,91 @@
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
-@utility scrollbar-thin {
-  scrollbar-width: thin;
+/* H.OIKOS — tipografia da marca.
+   O manual define Barium (sans geométrica) e Ador Hairline (serifada de traço fino).
+   Nenhuma das duas tem licença web disponível para o produto, então usamos as
+   equivalentes livres mais próximas em desenho e peso, servidas do próprio domínio:
+   Jost no lugar de Barium e Cormorant no lugar de Ador Hairline (ambas SIL OFL 1.1).
+   Ao receber os arquivos licenciados, basta trocar os src abaixo. */
+@font-face {
+  font-family: "Hoikos Sans";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/jost-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Hoikos Sans";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("/fonts/jost-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Hoikos Display";
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url("/fonts/cormorant-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Hoikos Display";
+  font-style: normal;
+  font-weight: 300 600;
+  font-display: swap;
+  src: url("/fonts/cormorant-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+@utility scrollbar-thin { scrollbar-width: thin; }
 @utility scrollbar-none {
   scrollbar-width: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  &::-webkit-scrollbar { display: none; }
 }
+@utility scrollbar-gutter-stable { scrollbar-gutter: stable; }
 
-@utility scrollbar-gutter-stable {
-  scrollbar-gutter: stable;
-}
-
+/* H.OIKOS: master colors from page 15 of the supplied identity guide.
+   Interface tints mix only these colors; no decorative gradients. */
 :root {
-  --background: #f4f6f8;
-  --foreground: #172033;
-  --card: #ffffff;
-  --card-foreground: #172033;
-  --popover: #ffffff;
-  --popover-foreground: #172033;
-  --primary: #2458d6;
-  --primary-foreground: #ffffff;
-  --secondary: #eef2f7;
-  --secondary-foreground: #25324a;
-  --muted: #eef2f7;
-  --muted-foreground: #68748a;
-  --accent: #e8efff;
-  --accent-foreground: #1f4cb8;
-  --destructive: #c53a3a;
-  --border: #dfe4eb;
-  --input: #d6dce5;
-  --ring: #2458d6;
-  --chart-1: #2458d6;
-  --chart-2: #1b9476;
-  --chart-3: #dc8c24;
-  --chart-4: #6b5cc7;
-  --chart-5: #c74d70;
-  --radius: 0.75rem;
-  --sidebar: #151b26;
-  --sidebar-foreground: #dce3ee;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #151b26;
-  --sidebar-accent: #242d3d;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #2c3545;
-  --sidebar-ring: #6f96ff;
+  --hoikos-black: #000000;
+  --hoikos-earth: #38301B;
+  --hoikos-stone: #B5B19E;
+  --hoikos-paper: #F7F7F0;
+  --background: var(--hoikos-paper);
+  --foreground: var(--hoikos-earth);
+  --card: var(--hoikos-paper);
+  --card-foreground: var(--hoikos-earth);
+  --popover: var(--hoikos-paper);
+  --popover-foreground: var(--hoikos-earth);
+  --primary: var(--hoikos-earth);
+  --primary-foreground: var(--hoikos-paper);
+  --secondary: color-mix(in srgb, var(--hoikos-stone) 25%, var(--hoikos-paper));
+  --secondary-foreground: var(--hoikos-earth);
+  --muted: var(--secondary);
+  --muted-foreground: color-mix(in srgb, var(--hoikos-earth) 75%, var(--hoikos-paper));
+  --accent: color-mix(in srgb, var(--hoikos-stone) 35%, var(--hoikos-paper));
+  --accent-foreground: var(--hoikos-earth);
+  --destructive: var(--hoikos-black);
+  --border: color-mix(in srgb, var(--hoikos-stone) 65%, var(--hoikos-paper));
+  --input: var(--hoikos-stone);
+  --ring: var(--hoikos-earth);
+  --chart-1: var(--hoikos-earth);
+  --chart-2: var(--hoikos-stone);
+  --chart-3: var(--hoikos-black);
+  --chart-4: var(--muted-foreground);
+  --chart-5: var(--secondary);
+  --radius: 0.25rem;
+  --sidebar: var(--hoikos-earth);
+  --sidebar-foreground: var(--hoikos-paper);
+  --sidebar-primary: var(--hoikos-paper);
+  --sidebar-primary-foreground: var(--hoikos-earth);
+  --sidebar-accent: var(--hoikos-stone);
+  --sidebar-accent-foreground: var(--hoikos-earth);
+  --sidebar-border: color-mix(in srgb, var(--hoikos-stone) 30%, var(--hoikos-earth));
+  --sidebar-ring: var(--hoikos-paper);
 }
 
 @theme inline {
@@ -85,22 +121,30 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --color-white: var(--hoikos-paper);
+  --color-black: var(--hoikos-black);
+  --color-hoikos-50: var(--hoikos-paper);
+  --color-hoikos-100: var(--secondary);
+  --color-hoikos-200: var(--border);
+  --color-hoikos-300: var(--hoikos-stone);
+  --color-hoikos-400: var(--hoikos-stone);
+  --color-hoikos-500: var(--muted-foreground);
+  --color-hoikos-600: var(--hoikos-earth);
+  --color-hoikos-700: var(--hoikos-earth);
+  --color-hoikos-800: var(--hoikos-earth);
+  --color-hoikos-900: var(--hoikos-earth);
+  --color-hoikos-950: var(--hoikos-black);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Aptos", "Inter", "Segoe UI", Arial, sans-serif;
+  --font-sans: "Hoikos Sans", "Barium", "Segoe UI", Arial, sans-serif;
+  --font-display: "Hoikos Display", "Ador Hairline", Georgia, "Times New Roman", serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-* {
-  border-color: var(--border);
-}
-
-html {
-  background: var(--background);
-}
-
+* { border-color: var(--border); }
+html { background: var(--background); color-scheme: light; }
 body {
   min-width: 320px;
   background: var(--background);
@@ -108,32 +152,54 @@ body {
   font-family: var(--font-sans);
   font-size: 16px;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
+::selection { background: var(--hoikos-stone); color: var(--hoikos-earth); }
+button, a, input, select, textarea { font: inherit; }
 
-button,
-a,
-input,
-select,
-textarea {
-  font: inherit;
+/* Escala tipográfica da marca.
+   Serifada fina para títulos, sans geométrica para o resto, caixa alta
+   com entrelinha larga nos rótulos — o mesmo ritmo das páginas do manual. */
+.display-heading {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.12;
 }
-
-.blueprint-grid {
-  background-image:
-    linear-gradient(rgba(36, 88, 214, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(36, 88, 214, 0.045) 1px, transparent 1px);
-  background-size: 22px 22px;
+@utility eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: var(--muted-foreground);
 }
+h1, h2, h3, h4 { letter-spacing: -0.01em; }
+label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
+.metric-number { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-.metric-number {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.035em;
+.nexo-shell, .nexo-canvas { background: var(--hoikos-paper); }
+.nexo-sidebar [data-sidebar="sidebar"] { background: var(--hoikos-earth); box-shadow: none; }
+.nexo-sidebar [data-sidebar="group-label"] {
+  color: var(--hoikos-stone);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+.nexo-header { background: var(--hoikos-paper); border-color: var(--border); box-shadow: none; }
+.workspace-card { border-color: var(--border); box-shadow: none; }
+.workspace-card:hover { border-color: var(--hoikos-stone); }
+
+/* O manual proíbe achatar ou esticar a marca; a proporção fica travada aqui. */
+.hoikos-brand { object-fit: contain; }
+/* Dark entry surfaces retain readable metadata and keyboard focus. */
+.bg-primary, .nexo-sidebar, main.bg-hoikos-950 {
+  --muted-foreground: var(--hoikos-stone);
+  --ring: var(--hoikos-paper);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

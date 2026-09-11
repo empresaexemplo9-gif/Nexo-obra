@@ -1,10 +1,10 @@
 # Contrato recomendado para integração remota com a Drap
 
-Este documento separa a experiência da Nexo Obra do sistema financeiro. Ele é uma proposta técnica a ser alinhada com a API oficial da Drap; não afirma que os caminhos abaixo já existem.
+Este documento separa a experiência da H.OIKOS do sistema financeiro. Ele é uma proposta técnica a ser alinhada com a API oficial da Drap; não afirma que os caminhos abaixo já existem.
 
 ## Objetivo
 
-O usuário trabalha na Nexo Obra. Quando precisa de informação financeira, o backend consulta a Drap. Quando uma ação operacional deve produzir efeito financeiro, o backend cria a operação na Drap e guarda apenas o vínculo, o estado de sincronização e um snapshot para leitura resiliente.
+O usuário trabalha na H.OIKOS. Quando precisa de informação financeira, o backend consulta a Drap. Quando uma ação operacional deve produzir efeito financeiro, o backend cria a operação na Drap e guarda apenas o vínculo, o estado de sincronização e um snapshot para leitura resiliente.
 
 ## Fluxos
 
@@ -13,7 +13,7 @@ O usuário trabalha na Nexo Obra. Quando precisa de informação financeira, o b
 ```mermaid
 sequenceDiagram
     participant U as Usuário
-    participant N as Nexo Obra
+    participant N as H.OIKOS
     participant D as Drap API
     U->>N: Abre financeiro do projeto
     N->>N: Autoriza organização e projeto
@@ -27,7 +27,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as Usuário
-    participant N as Nexo Obra
+    participant N as H.OIKOS
     participant D as Drap API
     U->>N: Confirma cobrança
     N->>N: Valida permissão e gera chave
@@ -50,7 +50,7 @@ sequenceDiagram
     Q->>Q: Atualiza vínculo/snapshot
 ```
 
-## Endpoints que a Nexo Obra precisa
+## Endpoints que a H.OIKOS precisa
 
 Os nomes são semânticos. Substitua pelos caminhos oficiais no adaptador.
 
@@ -76,6 +76,18 @@ X-Correlation-Id: <uuid-da-requisicao>
 ```
 
 O nome do header de autenticação pode ser configurado por `DRAP_API_KEY_HEADER` quando a API não usa Bearer.
+
+Os caminhos efetivamente usados pelo adaptador são configurados sem alterar o código:
+
+```dotenv
+DRAP_SUMMARY_PATH=/api/v1/finance/summary
+DRAP_TRANSACTIONS_PATH=
+DRAP_CHARGES_PATH=
+```
+
+Enquanto `DRAP_TRANSACTIONS_PATH` ou `DRAP_CHARGES_PATH` estiverem vazios, as respectivas ações permanecem bloqueadas na interface. Isso impede que um caminho de API ainda não confirmado produza efeito financeiro.
+
+Na criação da cobrança, a H.OIKOS envia a política de lembretes junto à operação remota: dias antes do vencimento, envio no vencimento e intervalo após atraso. A automação só deve ser marcada como homologada quando a Drap confirmar que executa essa política.
 
 ## Mapeamentos persistidos
 
@@ -128,6 +140,7 @@ Eventos úteis:
 - Payload de webhook limitado por tamanho antes de persistir.
 - Logs sem token, documento, dados bancários ou payload completo sensível.
 - Auditoria de quem iniciou cada escrita remota.
+- Chave de idempotência única por empresa, persistida antes da chamada de criação de cobrança.
 
 ## Checklist de homologação
 

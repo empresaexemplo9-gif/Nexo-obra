@@ -5,15 +5,113 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1788568452976,
-      "tag": "0000_condemned_medusa",
+      "when": 1788653525402,
+      "tag": "0000_amazing_exodus",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "6",
-      "when": 1788580618937,
-      "tag": "0001_minor_weapon_omega",
+      "when": 1788660000000,
+      "tag": "0001_nexo_schema_extension",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788668431282,
+      "tag": "0002_blue_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788669143333,
+      "tag": "0003_wise_carmella_unuscione",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788670513258,
+      "tag": "0004_tan_swordsman",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788725075146,
+      "tag": "0005_amusing_killraven",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788727863665,
+      "tag": "0006_colorful_talon",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788749443092,
+      "tag": "0007_magical_wonder_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788751774774,
+      "tag": "0008_mixed_franklin_richards",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1788839259503,
+      "tag": "0009_blue_darkhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1788839727307,
+      "tag": "0010_cooing_bill_hollister",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1789005877737,
+      "tag": "0011_great_ravenous",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1789031838710,
+      "tag": "0012_famous_chimera",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1789032662886,
+      "tag": "0013_careful_johnny_blaze",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1789033675998,
+      "tag": "0014_robust_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1789095322036,
+      "tag": "0015_organic_machine_man",
       "breakpoints": true
     }
   ]

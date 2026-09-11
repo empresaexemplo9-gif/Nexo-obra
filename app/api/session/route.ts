@@ -1,48 +1,108 @@
-import { getAuthState } from "@/lib/auth/session";
-import { handleRoute } from "@/lib/server/api";
+import { z } from "zod";
+import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { readMaintenanceIdentity } from "@/lib/server/maintenance";
+import { portalAccessesForUser } from "@/lib/server/portal";
+
+import {
+  ApiError,
+  apiRoute,
+  authenticatedIdentity,
+  isMaintenanceOrganization,
+  jsonBody,
+  listOrganizationMemberships,
+  organizationSelectionCookie,
+  requireOrganizationContext,
+  validationError,
+} from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Estado da sessão para a interface.
- *
- * Devolve identidade, empresas do usuário e a empresa ativa — nada de token e
- * nada que o cliente possa usar para escolher a empresa por conta própria: a
- * troca passa por `POST /api/organizations/active`, que reconfere o vínculo.
- */
-export async function GET() {
-  return handleRoute(async () => {
-    const state = await getAuthState();
+const selectOrganizationSchema = z.object({ organizationId: z.string().uuid() });
 
-    if (state.status === "anonymous") {
-      return Response.json({ status: "anonymous" as const });
+export async function GET(request: Request) {
+  return apiRoute(async () => {
+    try {
+      const identity = await authenticatedIdentity(request);
+      const maintenanceIdentity = identity.scope === "maintenance" ? await readMaintenanceIdentity(request) : null;
+      const memberships = await listOrganizationMemberships(request);
+      if (memberships.length === 0 && identity.scope === "superadmin") {
+        // Plataforma ainda sem empresas: o superadministrador cadastra a primeira no painel.
+        return Response.json({
+          authenticated: true,
+          authMethod: "superadmin",
+          needsOrganization: false,
+          platformEmpty: true,
+          user: identity,
+          organizations: [],
+        });
+      }
+      if (memberships.length === 0) {
+        const { accesses } = await portalAccessesForUser(request);
+        return Response.json({
+          authenticated: true,
+          needsOrganization: accesses.length === 0,
+          portalOnly: accesses.length > 0,
+          user: identity,
+          organizations: [],
+        });
+      }
+
+      const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
+      return Response.json({
+        authenticated: true,
+        authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "password",
+        maintenanceEnvironment: isMaintenanceOrganization(context),
+        needsOrganization: false,
+        user: context.user,
+        member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },
+        terms: { version: CURRENT_TERMS_VERSION, accepted: context.termsAccepted },
+        organization: context.organization,
+        organizations: memberships.map((membership) => ({
+          id: membership.organization_id,
+          name: membership.organization_name,
+          slug: membership.organization_slug,
+          timezone: membership.timezone,
+          role: membership.role,
+        })),
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        return Response.json({
+          authenticated: false,
+          needsOrganization: false,
+          signInPath: "/entrar?return_to=%2F",
+          organizations: [],
+        });
+      }
+      throw error;
+    }
+  });
+}
+
+export async function POST(request: Request) {
+  return apiRoute(async () => {
+    await authenticatedIdentity(request);
+    const parsed = selectOrganizationSchema.safeParse(await jsonBody(request));
+    if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
+    const memberships = await listOrganizationMemberships(request);
+    const selected = memberships.find(
+      (membership) => membership.organization_id === parsed.data.organizationId,
+    );
+    if (!selected) {
+      throw new ApiError(403, "organization_forbidden", "Você não participa desta empresa.");
     }
 
-    const user = {
-      email: state.identity.email,
-      displayName: state.identity.displayName,
-      provider: state.identity.provider,
-    };
-
-    if (state.status !== "authenticated") {
-      return Response.json({ status: state.status, user });
-    }
-
-    return Response.json({
-      status: "authenticated" as const,
-      user,
-      memberships: state.memberships.map((membership) => ({
-        organizationId: membership.organizationId,
-        organizationName: membership.organizationName,
-        organizationSlug: membership.organizationSlug,
-        role: membership.role,
-      })),
-      active: {
-        organizationId: state.active.organizationId,
-        organizationName: state.active.organizationName,
-        role: state.active.role,
-        memberId: state.active.memberId,
+    return Response.json(
+      {
+        organization: {
+          id: selected.organization_id,
+          name: selected.organization_name,
+          slug: selected.organization_slug,
+          timezone: selected.timezone,
+          role: selected.role,
+        },
       },
-    });
+      { headers: { "Set-Cookie": organizationSelectionCookie(selected.organization_id) } },
+    );
   });
 }
