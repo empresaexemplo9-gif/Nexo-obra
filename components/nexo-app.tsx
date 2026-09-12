@@ -188,6 +188,8 @@ type Saude = {
   pronto: boolean;
   banco: string; sessao: string; superadmin: string; armazenamento: string;
   migracoes?: { aplicadas: number; pendentes: number };
+  // Descrição estrutural do que o servidor recebeu — nunca o valor do segredo.
+  detalhes?: Partial<Record<"superadmin" | "armazenamento", string>>;
 };
 
 const DIAGNOSTICO: Record<string, Record<string, string>> = {
@@ -202,7 +204,7 @@ const DIAGNOSTICO: Record<string, Record<string, string>> = {
   },
   superadmin: {
     nao_configurado: "O acesso administrativo não está configurado: faltam e-mail, hash da senha ou segredo de sessão.",
-    configuracao_invalida: "O hash da senha administrativa chegou ilegível. Painéis de publicação expandem “$”: gere o hash com separador “:”.",
+    configuracao_invalida: "O hash da senha administrativa não está no formato esperado.",
   },
   armazenamento: {
     nao_configurado: "Armazenamento de arquivos não configurado. Cadastros em texto continuam disponíveis; fotos e documentos ficam indisponíveis.",
@@ -218,7 +220,16 @@ function InstallationHealth() {
     return () => { ativo = false; };
   }, []);
   if (!saude || saude.pronto) return null;
-  const problemas = (["banco", "sessao", "superadmin", "armazenamento"] as const).map((area) => DIAGNOSTICO[area]?.[saude[area]]).filter(Boolean);
+  const problemas = (["banco", "sessao", "superadmin", "armazenamento"] as const)
+    .map((area) => {
+      const texto = DIAGNOSTICO[area]?.[saude[area]];
+      if (!texto) return null;
+      // O detalhe é o que transforma "está inválido" em "confira isto": sem ele, a tela
+      // já mandou gerar o hash com ":" para quem tinha acabado de gerar com ":".
+      const detalhe = saude.detalhes?.[area as "superadmin" | "armazenamento"];
+      return detalhe ? `${texto} O servidor ${detalhe}.` : texto;
+    })
+    .filter(Boolean);
   if (!problemas.length) return null;
   return <div role="status" className="mt-7 rounded-md border border-hoikos-400/25 bg-hoikos-400/10 p-4 text-sm leading-6 text-hoikos-100"><p className="flex items-center gap-2 font-medium"><CircleAlert className="size-4" />Instalação incompleta</p><ul className="mt-2 list-disc space-y-1 pl-5 text-hoikos-200">{problemas.map((texto) => <li key={texto}>{texto}</li>)}</ul><p className="mt-3 text-xs text-hoikos-300">Entrar não vai funcionar enquanto isso não for resolvido na configuração da publicação.</p></div>;
 }

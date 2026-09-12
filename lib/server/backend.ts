@@ -275,6 +275,28 @@ export function organizationSelectionCookie(organizationId: string) {
   return `${ORGANIZATION_COOKIE}=${encodeURIComponent(organizationId)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=31536000`;
 }
 
+// Percorre `cause` até o fim, com limite para não girar em cadeia circular.
+function cadeiaDeErros(error: unknown): string[] {
+  const textos: string[] = [];
+  let atual: unknown = error;
+  for (let passo = 0; atual && passo < 5; passo += 1) {
+    textos.push(String(atual));
+    atual = atual instanceof Error ? atual.cause : undefined;
+  }
+  return textos;
+}
+
+// Só o código fechado do driver, e só se tiver a forma de um: letras maiúsculas,
+// dígitos e sublinhado. Assim nenhuma mensagem livre escapa por aqui.
+function codigoDoDriver(error: unknown): string | null {
+  for (let atual: unknown = error, passo = 0; atual && passo < 5; passo += 1) {
+    const codigo = (atual as { code?: unknown }).code;
+    if (typeof codigo === "string" && /^[A-Z][A-Z0-9_]{2,40}$/.test(codigo)) return codigo;
+    atual = atual instanceof Error ? atual.cause : undefined;
+  }
+  return null;
+}
+
 export async function apiRoute(operation: () => Promise<Response>): Promise<Response> {
   try { return await operation(); }
   catch (error) {
@@ -283,7 +305,10 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     }
     // Banco sem as migrações aplicadas era a falha mais confusa da plataforma: toda
     // funcionalidade nova respondia "não foi possível concluir", sem dizer o motivo.
-    const message = String(error).toLowerCase();
+    // O driver embrulha a causa real: um "no such table" pode chegar como LibsqlError
+    // com o SQLite original em `cause`. Olhar só o topo classificava errado e a falha
+    // caía no genérico.
+    const message = cadeiaDeErros(error).join(" | ").toLowerCase();
     if (message.includes("no such table") || message.includes("no such column")) {
       console.error("H.OIKOS banco desatualizado", error);
       return Response.json({
@@ -308,8 +333,14 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     // operação" é um beco sem saída para quem não tem acesso ao log do servidor — foi
     // exatamente o que travou o diagnóstico desta plataforma em produção.
     const falha = error instanceof Error ? error.constructor.name : typeof error;
+    // O código do driver vai junto do nome da classe. "(LibsqlError)" sozinho não diz
+    // nada a quem não tem o log do servidor — foi exatamente o que travou o diagnóstico
+    // desta plataforma em produção. O `code` do libSQL é um token fechado
+    // (SQLITE_UNKNOWN, URL_INVALID, TRANSACTION_CLOSED…), nunca a mensagem do driver,
+    // que pode conter endereço ou token.
+    const codigo = codigoDoDriver(error);
     return Response.json(
-      { error: "Não foi possível concluir a operação.", code: "internal_error", falha },
+      { error: "Não foi possível concluir a operação.", code: "internal_error", falha: codigo ? `${falha}: ${codigo}` : falha },
       { status: 500 },
     );
   }
