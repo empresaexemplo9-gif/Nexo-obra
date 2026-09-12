@@ -24,7 +24,7 @@ function response(row: ItemRow) {
 }
 
 async function ownedBudget(db: D1Database, budgetId: string, organizationId: string) {
-  return db.prepare("SELECT id, bdi_percent, margin_percent FROM budget_versions WHERE id = ?1 AND organization_id = ?2").bind(budgetId, organizationId).first<{ id: string; bdi_percent: number; margin_percent: number }>();
+  return db.prepare("SELECT id, status, bdi_percent, margin_percent FROM budget_versions WHERE id = ?1 AND organization_id = ?2").bind(budgetId, organizationId).first<{ id: string; status: string; bdi_percent: number; margin_percent: number }>();
 }
 
 export async function GET(request: Request, route: RouteContext) {
@@ -45,6 +45,9 @@ export async function POST(request: Request, route: RouteContext) {
     const { budgetId } = await route.params;
     const budget = await ownedBudget(context.db, budgetId, context.organization.id);
     if (!budget) throw new ApiError(404, "not_found", "Orçamento não encontrado.");
+    if (budget.status !== "draft") {
+      throw new ApiError(409, "budget_locked", "O orçamento foi enviado e está imutável. Crie uma nova versão para alterar os itens.");
+    }
     const parsed = bulkSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const current = await context.db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM budget_items WHERE budget_version_id = ?1").bind(budgetId).first<{ max_order: number }>();
