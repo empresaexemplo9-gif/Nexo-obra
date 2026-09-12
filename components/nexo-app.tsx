@@ -227,7 +227,8 @@ function InstallationHealth() {
       // O detalhe é o que transforma "está inválido" em "confira isto": sem ele, a tela
       // já mandou gerar o hash com ":" para quem tinha acabado de gerar com ":".
       const detalhe = saude.detalhes?.[area as "superadmin" | "armazenamento"];
-      return detalhe ? `${texto} O servidor ${detalhe}.` : texto;
+      // O detalhe já vem como frase fechada, com a pontuação dele.
+      return detalhe ? `${texto} ${detalhe}` : texto;
     })
     .filter(Boolean);
   if (!problemas.length) return null;

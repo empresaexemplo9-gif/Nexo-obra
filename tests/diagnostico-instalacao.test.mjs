@@ -29,7 +29,7 @@ test("o hash mutilado pela expansão de $ é descrito pela forma, não por um pa
   });
   const corpo = await saude();
   assert.equal(corpo.superadmin, "configuracao_invalida");
-  assert.match(corpo.detalhes.superadmin, /caracteres em \d+ parte\(s\) separadas por "\$"/);
+  assert.match(corpo.detalhes.superadmin, /O servidor recebeu \d+ caracteres em \d+ parte\(s\) separadas por "\$"/);
   assert.match(corpo.detalhes.superadmin, /expandido pelo painel/);
 });
 
@@ -70,7 +70,7 @@ test("o armazenamento diz qual das duas variáveis falta", async () => {
   Object.assign(runtime, { BLOB_READ_WRITE_TOKEN: "token-qualquer" });
   const corpo = await saude();
   assert.equal(corpo.armazenamento, "nao_configurado");
-  assert.match(corpo.detalhes.armazenamento, /MEDIA_ENCRYPTION_KEY/);
+  assert.match(corpo.detalhes.armazenamento, /Falta configurar MEDIA_ENCRYPTION_KEY\./);
   assert.doesNotMatch(corpo.detalhes.armazenamento, /BLOB_READ_WRITE_TOKEN/, "essa está configurada");
 });
 
@@ -124,4 +124,27 @@ test("o motivo é higienizado: e-mail e URL não atravessam", async () => {
   const corpo = await resposta.json();
   assert.equal(corpo.falha.includes("@"), false, "arroba de e-mail não passa");
   assert.equal(corpo.falha.includes("/"), false, "barra de URL não passa");
+});
+
+test("a senha colada no lugar do hash é identificada como tal", async () => {
+  limpa();
+  Object.assign(runtime, {
+    SUPERADMIN_EMAIL: "a@b.test",
+    SUPERADMIN_SESSION_SECRET: "x".repeat(40),
+    SUPERADMIN_PASSWORD_HASH: "147532159St@",
+  });
+  const corpo = await saude();
+  assert.equal(corpo.superadmin, "configuracao_invalida");
+  assert.match(corpo.detalhes.superadmin, /12 caracteres sem nenhum separador/);
+  assert.match(corpo.detalhes.superadmin, /senha colada no lugar do hash/);
+});
+
+test("o detalhe é frase fechada: nada de concordância quebrada na tela", async () => {
+  limpa();
+  Object.assign(runtime, { BLOB_READ_WRITE_TOKEN: "t" });
+  const um = (await saude()).detalhes.armazenamento;
+  assert.equal(um, "Falta configurar MEDIA_ENCRYPTION_KEY.");
+  limpa();
+  const dois = (await saude()).detalhes.armazenamento;
+  assert.equal(dois, "Faltam configurar BLOB_READ_WRITE_TOKEN e MEDIA_ENCRYPTION_KEY.");
 });

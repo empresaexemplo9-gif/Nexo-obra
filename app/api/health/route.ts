@@ -21,16 +21,27 @@ async function estadoDoBanco(): Promise<{ estado: Estado; migracoes?: { aplicada
 // separadas por "$" é o hash mutilado pela expansão do painel; 4 partes com o prefixo
 // certo e comprimento curto é outra coisa. Nada disso revela sal ou digest.
 function formaDoHash(hash: string): string {
-  if (!hash) return "o valor chegou vazio";
+  if (!hash) return "O valor configurado está vazio.";
   const separador = hash.includes(":") ? ":" : hash.includes("$") ? "$" : null;
-  if (!separador) return `recebi ${hash.length} caracteres sem nenhum separador ":" ou "$"`;
+  if (!separador) {
+    // Sem separador nenhum e curto: quase sempre é a senha colada no lugar do hash.
+    const suspeita = hash.length <= 40 ? " Isso costuma ser a senha colada no lugar do hash." : "";
+    return `O servidor recebeu ${hash.length} caracteres sem nenhum separador ":" ou "$".${suspeita}`;
+  }
   const partes = hash.split(separador);
-  const detalhes = [`recebi ${hash.length} caracteres em ${partes.length} parte(s) separadas por "${separador}"`];
-  if (partes[0] !== "pbkdf2-sha256") detalhes.push(`a primeira parte deveria ser "pbkdf2-sha256" e veio "${partes[0]?.slice(0, 20) ?? ""}"`);
-  if (partes.length === 4 && partes[1] !== "100000") detalhes.push(`o número de iterações deveria ser 100000 e veio "${partes[1]?.slice(0, 12) ?? ""}"`);
-  if (partes.length !== 4) detalhes.push("o formato correto tem 4 partes: pbkdf2-sha256, iterações, sal e digest");
-  if (separador === "$") detalhes.push("o separador \"$\" costuma ser expandido pelo painel: gere de novo com \":\"");
-  return detalhes.join("; ");
+  const notas: string[] = [];
+  if (partes[0] !== "pbkdf2-sha256") notas.push(`a primeira parte deveria ser "pbkdf2-sha256" e veio "${partes[0]?.slice(0, 20) ?? ""}"`);
+  if (partes.length === 4 && partes[1] !== "100000") notas.push(`o número de iterações deveria ser 100000 e veio "${partes[1]?.slice(0, 12) ?? ""}"`);
+  if (partes.length !== 4) notas.push("o formato correto tem 4 partes: pbkdf2-sha256, iterações, sal e digest");
+  if (separador === "$") notas.push('o separador "$" costuma ser expandido pelo painel: gere de novo com ":"');
+  const cabeca = `O servidor recebeu ${hash.length} caracteres em ${partes.length} parte(s) separadas por "${separador}".`;
+  return notas.length ? `${cabeca} Além disso, ${notas.join("; ")}.` : cabeca;
+}
+
+// Frase fechada, com singular e plural certos: o texto é concatenado direto na tela.
+function listaQueFalta(nomes: string[]): string {
+  if (nomes.length === 1) return `Falta configurar ${nomes[0]}.`;
+  return `Faltam configurar ${nomes.slice(0, -1).join(", ")} e ${nomes[nomes.length - 1]}.`;
 }
 
 function estadoDoSuperadmin(): { estado: Estado; detalhe?: string } {
@@ -38,7 +49,7 @@ function estadoDoSuperadmin(): { estado: Estado; detalhe?: string } {
   if (!env.SUPERADMIN_EMAIL || !env.SUPERADMIN_PASSWORD_HASH || !env.SUPERADMIN_SESSION_SECRET) {
     const faltando = ["SUPERADMIN_EMAIL", "SUPERADMIN_PASSWORD_HASH", "SUPERADMIN_SESSION_SECRET"]
       .filter((nome) => !env[nome as keyof typeof env]);
-    return { estado: "nao_configurado", detalhe: `faltam: ${faltando.join(", ")}` };
+    return { estado: "nao_configurado", detalhe: listaQueFalta(faltando) };
   }
   const hash = env.SUPERADMIN_PASSWORD_HASH.trim().replace(/^['"]|['"]$/g, "");
   if (/^pbkdf2-sha256([:$])100000\1[A-Za-z0-9_-]{8,}\1[A-Za-z0-9_-]{16,}$/.test(hash)) return { estado: "ok" };
@@ -76,7 +87,7 @@ export async function GET() {
   if (superadmin.detalhe) detalhes.superadmin = superadmin.detalhe;
   if (areas.armazenamento === "nao_configurado") {
     const faltando = ["BLOB_READ_WRITE_TOKEN", "MEDIA_ENCRYPTION_KEY"].filter((nome) => !env[nome as keyof typeof env]);
-    detalhes.armazenamento = `faltam: ${faltando.join(", ")}`;
+    detalhes.armazenamento = listaQueFalta(faltando);
   }
   // Arquivos e fotos agora são parte do fluxo profissional. Por isso armazenamento deixa
   // de ser opcional para o selo `pronto`: publicação sem Blob/chave pode abrir telas, mas
