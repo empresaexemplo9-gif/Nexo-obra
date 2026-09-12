@@ -44,7 +44,10 @@ export function FilesWorkspace({ projects, query, canEdit }: { projects: Project
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar os arquivos."); }
     finally { setLoading(false); }
   }, [projectId]);
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void reload(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [reload]);
 
   const normalized = query.trim().toLocaleLowerCase("pt-BR");
   const filtered = useMemo(() => files.filter((item) => !normalized || `${item.name} ${item.projectName} ${item.projectCode}`.toLocaleLowerCase("pt-BR").includes(normalized)), [files, normalized]);
