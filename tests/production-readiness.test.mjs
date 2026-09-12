@@ -53,6 +53,8 @@ beforeEach(() => {
   db.sqlite.exec("PRAGMA foreign_keys = ON");
   for (const migration of migrations) db.sqlite.exec(migration);
   db.sqlite.prepare("INSERT INTO organizations(id,name,slug,created_at,updated_at) VALUES (?,?,?,0,0)").run(orgId, "Profissional", "profissional");
+  db.sqlite.prepare("INSERT INTO users(id,email,display_name,created_at,updated_at) VALUES ('owner','owner@example.test','Titular',0,0)").run();
+  db.sqlite.prepare("INSERT INTO organization_members(id,organization_id,user_id,role,created_at) VALUES (?,?,?,'owner',0)").run(memberId, orgId, "owner");
   db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role) VALUES (?,?,?,?,?,'owner')").run(memberId, orgId, "owner", "Titular", "owner@example.test");
   db.sqlite.prepare("INSERT INTO terms_acceptances(id,organization_id,external_user_id,email,terms_version,ip_hash,user_agent_hash,accepted_at) VALUES (?,?,'owner','owner@example.test',?,'','',1)").run(crypto.randomUUID(), orgId, CURRENT_TERMS_VERSION);
   db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,email,phone,document,created_at,updated_at) VALUES (?,?,?,'cliente@example.test',NULL,NULL,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)").run(clientId, orgId, "Cliente Real");
