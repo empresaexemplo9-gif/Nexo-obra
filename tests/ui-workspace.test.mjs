@@ -53,8 +53,6 @@ function routes(session, extra = {}) {
     ...extra,
   };
 }
-// Cada abertura monta do zero: reaproveitar a raiz não roda os efeitos de novo, e a
-// sessão anterior continuaria na tela.
 async function abrir(session, extra) {
   if (reactRoot) await act(async () => { reactRoot.unmount(); });
   container?.remove();
@@ -63,7 +61,6 @@ async function abrir(session, extra) {
   reactRoot = createRoot(container);
   const calls = stubFetch(routes(session, extra));
   await act(async () => { reactRoot.render(React.createElement(NexoApp)); });
-  // Vários ciclos: o efeito agenda com setTimeout(0) e só então busca na API.
   for (let ciclo = 0; ciclo < 5; ciclo += 1) {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
   }
@@ -119,7 +116,6 @@ test("o sino mostra a contagem do que está atrasado ou vence hoje", async () =>
   assert.ok(sino, "o sino está no cabeçalho");
   assert.match(sino.getAttribute("aria-label"), /3 para hoje ou atrasados/);
   assert.match(textOf(sino), /3/);
-
   await act(async () => { sino.click(); });
   assert.match(textOf(container), /Boleto vencido: Medição 3/, "o clique abre a lista");
 });
@@ -128,7 +124,6 @@ test("o selo de superadmin e o ambiente de manutenção aparecem quando é o cas
   await abrir(sessionFor("superadmin", { authMethod: "superadmin" }));
   assert.match(textOf(container), /Superadmin · acesso total/);
   assert.ok(findByText(container, /Painel da plataforma/, "a"), "há caminho de volta ao painel");
-
   await abrir(sessionFor("admin", { authMethod: "superadmin", maintenanceEnvironment: true }));
   assert.match(textOf(container), /Ambiente de manutenção/);
 });
@@ -142,26 +137,19 @@ test("plataforma sem empresa manda para o painel em vez de mostrar tela vazia", 
 });
 
 test("a tela de acesso mostra o que falta na instalação, em vez de deixar o botão falhar", async () => {
-  // Uma variável faltando aparecia como "Não foi possível concluir a operação." no botão
-  // de entrar. Sem log de servidor, não havia como descobrir a causa. Agora a primeira
-  // tela diz o que está errado antes de a pessoa tentar.
   await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: false, banco: "nao_configurado", sessao: "ok", superadmin: "ok", armazenamento: "nao_configurado" },
   });
   const texto = textOf(container);
   assert.match(texto, /Instalação incompleta/);
   assert.match(texto, /Banco de dados não configurado/);
-  assert.match(texto, /Armazenamento de fotos não configurado/);
+  assert.match(texto, /Armazenamento de arquivos não configurado/);
   assert.doesNotMatch(texto, /SESSION_SECRET/, "área saudável não vira ruído");
-
-  // Conectado mas sem tabelas é outro diagnóstico, com outro conserto.
   await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: false, banco: "falta_migrar", sessao: "ok", superadmin: "ok", armazenamento: "ok",
       migracoes: { aplicadas: 0, pendentes: 16 } },
   });
   assert.match(textOf(container), /sem as tabelas.*Atualizar banco de dados/s);
-
-  // Instalação sadia não mostra painel nenhum.
   await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
   });
@@ -174,11 +162,9 @@ test("sem sessão, a tela pede e-mail e senha e não vaza nada da empresa", asyn
   });
   const texto = textOf(container);
   assert.doesNotMatch(texto, /Escritório Exemplo/);
-  // A entrada é da própria plataforma: senha guardada aqui, sem depender de borda externa.
   assert.ok(container.querySelector("#account-email"), "pede o e-mail da conta");
   assert.ok(container.querySelector("#account-password"), "pede a senha da conta");
   assert.doesNotMatch(texto, /ChatGPT/, "nada do produto depende de conta de terceiro");
-  // O portão do superadministrador continua separado na mesma tela.
   assert.ok(container.querySelector("#initial-superadmin-email"));
 });
 
