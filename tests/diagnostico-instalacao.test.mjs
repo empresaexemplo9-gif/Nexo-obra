@@ -79,7 +79,8 @@ test("a falha 500 carrega o código do driver, não só o nome da classe", async
   const resposta = await apiRoute(async () => { throw new LibsqlError("SQLITE_UNKNOWN: deu ruim", "SQLITE_UNKNOWN"); });
   assert.equal(resposta.status, 500);
   const corpo = await resposta.json();
-  assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN");
+  // O código E o motivo: o código sozinho foi o que deixou o diagnóstico travado.
+  assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN — deu ruim");
 });
 
 test("a mensagem do driver nunca entra no lugar do código", async () => {
@@ -88,7 +89,8 @@ test("a mensagem do driver nunca entra no lugar do código", async () => {
   // com endereço ou credencial dentro.
   const resposta = await apiRoute(async () => { throw new LibsqlError("falhou", "libsql://banco-org.turso.io?authToken=segredo"); });
   const corpo = await resposta.json();
-  assert.equal(corpo.falha, "LibsqlError");
+  assert.equal(corpo.falha.includes("turso.io"), false, "a URL do banco não pode sair como código");
+  assert.equal(corpo.falha.includes("authToken"), false, "o token não pode sair como código");
 });
 
 test("uma causa aninhada ainda é classificada como banco desatualizado", async () => {
@@ -107,13 +109,15 @@ test("SQLITE_UNKNOWN carrega o motivo do SQLite, que é o que resolve", async ()
   assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN — UNIQUE constraint failed: members.email");
 });
 
-test("motivo desconhecido do SQLite não é repassado", async () => {
+test("motivo fora do previsto também aparece, higienizado", async () => {
   class LibsqlError extends Error { constructor(m, code) { super(m); this.code = code; } }
   const resposta = await apiRoute(async () => {
     throw new LibsqlError("SQLITE_UNKNOWN: SQLite error: algo inesperado com token=abc123", "SQLITE_UNKNOWN");
   });
   const corpo = await resposta.json();
-  assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN", "só motivos de uma lista conhecida atravessam");
+  // O motivo precisa chegar: filtrar por lista fechada deixou a tela muda no caso real.
+  assert.match(corpo.falha, /algo inesperado com token/);
+  assert.equal(corpo.falha.includes("="), false, "o sinal de igual de token não passa");
 });
 
 test("o motivo é higienizado: e-mail e URL não atravessam", async () => {

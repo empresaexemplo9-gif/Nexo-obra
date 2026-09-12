@@ -306,16 +306,20 @@ function codigoDoDriver(error: unknown): string | null {
 // revelam nada novo. Mesmo assim o motivo é higienizado: só letras, dígitos, ponto,
 // sublinhado, hífen, espaço, vírgula e dois-pontos passam. Um "@" ou uma "/" — e-mail,
 // URL de banco, token — não atravessam esse filtro, e o tamanho é limitado.
-const MOTIVOS_CONHECIDOS = /(no such table|no such column|table .* has no column named|UNIQUE constraint failed|NOT NULL constraint failed|FOREIGN KEY constraint failed|CHECK constraint failed|datatype mismatch|readonly database|database is locked)/i;
-
+// Antes isto só deixava passar motivos de uma lista fechada. O efeito foi o oposto do
+// pretendido: o primeiro SQLITE_UNKNOWN real em produção não casou com a lista, e a tela
+// mostrou o código sem motivo nenhum — muda justamente quando era necessária. A trava
+// que protege não é a lista, é a higienização: fora do conjunto de caracteres abaixo não
+// sobrevive "@" de e-mail, "/" de URL, aspas nem "=" de token. Então o motivo passa
+// sempre, higienizado, e a lista some.
 function motivoDoSqlite(error: unknown): string | null {
   for (let atual: unknown = error, passo = 0; atual && passo < 5; passo += 1) {
-    const texto = atual instanceof Error ? atual.message : "";
-    const bruto = /SQLite error:\s*(.+)/i.exec(texto)?.[1]?.trim();
-    if (bruto && MOTIVOS_CONHECIDOS.test(bruto)) {
-      const limpo = bruto.replace(/[^A-Za-z0-9_.,: -]/g, "").trim().slice(0, 120);
-      if (limpo) return limpo;
-    }
+    const texto = atual instanceof Error ? atual.message : String(atual ?? "");
+    const bruto = /SQLite error:\s*(.+)/i.exec(texto)?.[1]?.trim()
+      // Sem o prefixo "SQLite error:", vale o que vier depois do código do driver.
+      ?? /^[A-Z][A-Z0-9_]{2,40}:\s*(.+)/.exec(texto)?.[1]?.trim();
+    const limpo = bruto?.replace(/[^A-Za-z0-9_.,: -]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    if (limpo && limpo.length >= 3) return limpo;
     atual = atual instanceof Error ? atual.cause : undefined;
   }
   return null;
