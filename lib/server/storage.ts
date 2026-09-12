@@ -1,4 +1,4 @@
-import { del, head, put } from "@vercel/blob";
+import { del, get, put } from "@vercel/blob";
 
 import { ApiError } from "@/lib/server/api-error";
 import { runtimeEnv } from "@/lib/server/runtime";
@@ -15,16 +15,17 @@ import { runtimeEnv } from "@/lib/server/runtime";
 //
 // ## Por que o conteúdo vai cifrado
 //
-// O R2 tornava o objeto inalcançável sem credencial. O Vercel Blob publica cada objeto
-// numa URL aleatória, e não existe leitura assinada com expiração: quem tiver a URL
-// exata busca o arquivo, sem passar pela autorização das rotas. Guardar a foto em claro
-// ali seria trocar uma garantia criptográfica por "ninguém vai descobrir o endereço".
+// O R2 tornava o objeto inalcançável sem credencial. O objeto aqui sobe como privado
+// (`access: "private"`), então a URL sozinha não devolve nada: a leitura passa pelo token
+// do armazenamento. Isso recupera a garantia que o R2 dava — mas guardar a foto em claro
+// mesmo assim seria apostar tudo numa única tranca, do lado do fornecedor.
 //
 // Então o que sobe é AES-256-GCM: cabeçalho `NXO1`, vetor de inicialização de 12 bytes
 // sorteado por objeto, e o texto cifrado com a etiqueta de autenticação. A chave fica em
-// `MEDIA_ENCRYPTION_KEY`, no ambiente de publicação, e nunca no armazenamento. Uma URL
-// vazada devolve bytes inúteis; um objeto adulterado falha na verificação da etiqueta em
-// vez de ser servido como imagem.
+// `MEDIA_ENCRYPTION_KEY`, no ambiente de publicação, e nunca no armazenamento. Um objeto
+// que escape do armazenamento — token vazado, engano de configuração, cópia de backup —
+// devolve bytes inúteis; um objeto adulterado falha na verificação da etiqueta em vez de
+// ser servido como imagem.
 //
 // A autorização continua nas rotas — empresa, registro e permissão são conferidos antes
 // de devolver os bytes. A cifra é a segunda tranca, não a primeira.
@@ -105,7 +106,9 @@ export async function putObject(path: string, bytes: ArrayBuffer, contentType: s
   if (store) return store.put(path, ownedBuffer(envelope), contentType);
   // `Blob` porque o cliente do Vercel Blob não aceita `Uint8Array` direto.
   const result = await put(path, new Blob([ownedBuffer(envelope)]), {
-    access: "public",
+    // Objeto privado: sem o token do armazenamento a URL não devolve nada. A cifra
+    // continua sendo a segunda tranca, não a única.
+    access: "private",
     // O tipo real nunca é anunciado: o objeto é um envelope opaco, e o tipo da imagem
     // vem do banco na hora de servir.
     contentType: "application/octet-stream",
@@ -133,16 +136,16 @@ async function readEnvelope(key: string) {
     if (!stored?.body) return null;
     return new Uint8Array(await new Response(stored.body).arrayBuffer());
   }
-  const configured = token();
+  // Leitura autenticada: `get` usa o token do armazenamento e devolve `null` quando o
+  // objeto não existe, o que substitui a conferência por `head` e o `fetch` da URL.
+  let stored;
   try {
-    // `head` confirma que o objeto existe neste armazenamento antes de buscar os bytes.
-    await head(key, { token: configured });
+    stored = await get(key, { access: "private", token: token(), useCache: false });
   } catch {
     return null;
   }
-  const response = await fetch(key, { cache: "no-store" });
-  if (!response.ok) return null;
-  return new Uint8Array(await response.arrayBuffer());
+  if (!stored?.stream) return null;
+  return new Uint8Array(await new Response(stored.stream).arrayBuffer());
 }
 
 export async function deleteObject(key: string) {

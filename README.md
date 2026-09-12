@@ -135,7 +135,7 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 - O domínio oficial é [nexo-obra-jet.vercel.app](https://nexo-obra-jet.vercel.app) e agora **compila o repositório**: o `vercel.json` declara `framework: nextjs` e `buildCommand: npm run build` (`next build`). Enviar commit para `main` publica.
 - Antes não era assim: o `buildCommand` era vazio e todas as rotas eram reescritas para o alvo do OpenAI Sites. Isso fez uma sequência inteira de funcionalidades parecer não existir. Confirme em `/superadmin` que **Versão no ar** mostra o commit esperado. Consulte [Publicação](docs/PUBLICACAO.md).
 - Sair daquele alvo exigiu trocar D1 por libSQL/Turso, `cloudflare:workers` por `process.env`, o bucket R2 pelo Vercel Blob e `import.meta.glob` por um manifesto gerado. `vinext`, `wrangler` e `@cloudflare/vite-plugin` saíram do projeto.
-- As fotos do diário sobem cifradas em AES-256-GCM: o Vercel Blob publica cada objeto numa URL aleatória e não tem leitura assinada, então uma URL vazada devolve bytes inúteis. Gere a chave com `npm run media:key`.
+- As fotos e documentos sobem como objeto **privado** no Vercel Blob e ainda cifrados em AES-256-GCM: a URL sozinha não devolve nada sem o token, e um objeto que escape do armazenamento devolve bytes inúteis. Gere a chave com `npm run media:key`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
 - O ambiente antigo do OpenAI Sites foi exportado e conferido: o código publicado lá tem a mesma árvore do commit `8f82b3e` deste histórico, e o banco daquele ambiente não tinha registro de negócio nenhum. Não há nada a restaurar dele. Consulte [Exportação do Sites](docs/EXPORTACAO-SITES.md).
 

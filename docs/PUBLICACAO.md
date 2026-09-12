@@ -69,10 +69,10 @@ configura é quem tem acesso ao painel.
 ### Fotos do diário: por que vão cifradas
 
 O bucket R2 saiu junto com o runtime da Cloudflare, e com ele a garantia de que o objeto
-era inalcançável sem credencial. O Vercel Blob publica cada objeto numa URL aleatória e
-**não oferece leitura assinada com expiração**: quem tiver a URL exata busca o arquivo sem
-passar pela autorização das rotas. Guardar a foto em claro ali seria trocar garantia
-criptográfica por "ninguém vai descobrir o endereço".
+era inalcançável sem credencial. No Vercel Blob o objeto sobe como **privado**
+(`access: "private"`), e a leitura passa pelo token do armazenamento — a URL sozinha não
+devolve nada. Isso recupera a garantia que o R2 dava. Guardar a foto em claro mesmo assim
+seria apostar tudo numa única tranca, do lado do fornecedor.
 
 Então o que sobe é um envelope AES-256-GCM: cabeçalho `NXO1`, vetor de inicialização de 12
 bytes sorteado por objeto, texto cifrado e etiqueta de autenticação. A chave fica em
