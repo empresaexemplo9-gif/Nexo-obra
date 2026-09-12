@@ -137,6 +137,7 @@ Sem isso, as áreas que dependem das tabelas novas respondem `503` com o código
 - Sair daquele alvo exigiu trocar D1 por libSQL/Turso, `cloudflare:workers` por `process.env`, o bucket R2 pelo Vercel Blob e `import.meta.glob` por um manifesto gerado. `vinext`, `wrangler` e `@cloudflare/vite-plugin` saíram do projeto.
 - As fotos do diário sobem cifradas em AES-256-GCM: o Vercel Blob publica cada objeto numa URL aleatória e não tem leitura assinada, então uma URL vazada devolve bytes inúteis. Gere a chave com `npm run media:key`.
 - Tokens, chaves e segredos de produção devem ser configurados nos ambientes de publicação. Eles não pertencem ao Git nem ao arquivo de hosting.
+- O ambiente antigo do OpenAI Sites foi exportado e conferido: o código publicado lá tem a mesma árvore do commit `8f82b3e` deste histórico, e o banco daquele ambiente não tinha registro de negócio nenhum. Não há nada a restaurar dele. Consulte [Exportação do Sites](docs/EXPORTACAO-SITES.md).
 
 ## Configuração da Drap
 
@@ -265,6 +266,7 @@ docs/
   DRAP-INTEGRATION.md
   SINAPI-INTEGRATION.md
   DIARIO-DE-OBRA.md
+  EXPORTACAO-SITES.md
 lib/
   integrations/drap.ts
   server/backend.ts       # identidade, organização, permissões e auditoria
