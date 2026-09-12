@@ -297,6 +297,30 @@ function codigoDoDriver(error: unknown): string | null {
   return null;
 }
 
+// `SQLITE_UNKNOWN` é o embrulho genérico do libSQL: sozinho ele diz apenas "o SQLite
+// recusou", que é quase tão vago quanto "não foi possível concluir". O motivo real vem
+// depois de "SQLite error:" e é o que resolve o problema — "no such column: x",
+// "UNIQUE constraint failed: members.email", "datatype mismatch".
+//
+// Esses textos citam tabela e coluna, que já estão públicas em db/schema.ts, então não
+// revelam nada novo. Mesmo assim o motivo é higienizado: só letras, dígitos, ponto,
+// sublinhado, hífen, espaço, vírgula e dois-pontos passam. Um "@" ou uma "/" — e-mail,
+// URL de banco, token — não atravessam esse filtro, e o tamanho é limitado.
+const MOTIVOS_CONHECIDOS = /(no such table|no such column|table .* has no column named|UNIQUE constraint failed|NOT NULL constraint failed|FOREIGN KEY constraint failed|CHECK constraint failed|datatype mismatch|readonly database|database is locked)/i;
+
+function motivoDoSqlite(error: unknown): string | null {
+  for (let atual: unknown = error, passo = 0; atual && passo < 5; passo += 1) {
+    const texto = atual instanceof Error ? atual.message : "";
+    const bruto = /SQLite error:\s*(.+)/i.exec(texto)?.[1]?.trim();
+    if (bruto && MOTIVOS_CONHECIDOS.test(bruto)) {
+      const limpo = bruto.replace(/[^A-Za-z0-9_.,: -]/g, "").trim().slice(0, 120);
+      if (limpo) return limpo;
+    }
+    atual = atual instanceof Error ? atual.cause : undefined;
+  }
+  return null;
+}
+
 export async function apiRoute(operation: () => Promise<Response>): Promise<Response> {
   try { return await operation(); }
   catch (error) {
@@ -339,8 +363,11 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     // (SQLITE_UNKNOWN, URL_INVALID, TRANSACTION_CLOSED…), nunca a mensagem do driver,
     // que pode conter endereço ou token.
     const codigo = codigoDoDriver(error);
+    // O motivo do SQLite é o que transforma "SQLITE_UNKNOWN" em algo acionável.
+    const motivo = motivoDoSqlite(error);
+    const detalhe = [codigo, motivo].filter(Boolean).join(" — ");
     return Response.json(
-      { error: "Não foi possível concluir a operação.", code: "internal_error", falha: codigo ? `${falha}: ${codigo}` : falha },
+      { error: "Não foi possível concluir a operação.", code: "internal_error", falha: detalhe ? `${falha}: ${detalhe}` : falha },
       { status: 500 },
     );
   }

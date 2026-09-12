@@ -97,3 +97,31 @@ test("uma causa aninhada ainda é classificada como banco desatualizado", async 
   assert.equal(resposta.status, 503);
   assert.equal((await resposta.json()).code, "database_not_migrated");
 });
+
+test("SQLITE_UNKNOWN carrega o motivo do SQLite, que é o que resolve", async () => {
+  class LibsqlError extends Error { constructor(m, code) { super(m); this.code = code; } }
+  const resposta = await apiRoute(async () => {
+    throw new LibsqlError("SQLITE_UNKNOWN: SQLite error: UNIQUE constraint failed: members.email", "SQLITE_UNKNOWN");
+  });
+  const corpo = await resposta.json();
+  assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN — UNIQUE constraint failed: members.email");
+});
+
+test("motivo desconhecido do SQLite não é repassado", async () => {
+  class LibsqlError extends Error { constructor(m, code) { super(m); this.code = code; } }
+  const resposta = await apiRoute(async () => {
+    throw new LibsqlError("SQLITE_UNKNOWN: SQLite error: algo inesperado com token=abc123", "SQLITE_UNKNOWN");
+  });
+  const corpo = await resposta.json();
+  assert.equal(corpo.falha, "LibsqlError: SQLITE_UNKNOWN", "só motivos de uma lista conhecida atravessam");
+});
+
+test("o motivo é higienizado: e-mail e URL não atravessam", async () => {
+  class LibsqlError extends Error { constructor(m, code) { super(m); this.code = code; } }
+  const resposta = await apiRoute(async () => {
+    throw new LibsqlError("SQLITE_UNKNOWN: SQLite error: UNIQUE constraint failed: pessoa@empresa.com libsql://banco.turso.io", "SQLITE_UNKNOWN");
+  });
+  const corpo = await resposta.json();
+  assert.equal(corpo.falha.includes("@"), false, "arroba de e-mail não passa");
+  assert.equal(corpo.falha.includes("/"), false, "barra de URL não passa");
+});
