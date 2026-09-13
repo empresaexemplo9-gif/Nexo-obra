@@ -45,7 +45,7 @@ flowchart TD
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
 - Endpoint financeiro sem fallback fictício: ausência ou falha da Drap aparece como indisponibilidade.
-- Adaptador SINAPI exclusivamente no servidor, sem preços demonstrativos quando a fonte oficial não está configurada.
+- SINAPI com análise no superadmin, importação retomável, renovação mensal para a UF/regime configurados e descarte da referência anterior após a troca. Consulta local nos orçamentos, com regime explícito. **Homologação da planilha real ainda pendente (download da Caixa respondeu HTTP 429).** Consulte [Referência SINAPI](docs/SINAPI-INTEGRATION.md).
 - Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 
@@ -302,7 +302,7 @@ CLAUDE.md
 - Biblioteca de serviços, insumos e composições. **Concluída para cadastro próprio.**
 - BDI, margem e versões numeradas. **Concluído no núcleo; bloqueio imutável após envio ainda pendente.**
 - PDF de proposta e aprovação digital.
-- Importação SINAPI com adaptador pronto, condicionada à licença e às credenciais da fonte oficial escolhida.
+- Importação SINAPI dentro da plataforma e renovação automática implementadas para a UF/regime configurados; ativação inicial exige conferência do arquivo real no superadmin. Veja [SINAPI](docs/SINAPI-INTEGRATION.md).
 
 ### Fase 3 — planejamento e obra
 

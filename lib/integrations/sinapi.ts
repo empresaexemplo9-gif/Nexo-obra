@@ -47,13 +47,14 @@ function priceInCents(record: Record<string, unknown>) {
   return 0;
 }
 
-export async function searchSinapiItems(query: string, state: string, referenceMonth: string): Promise<SinapiItem[]> {
+export async function searchSinapiItems(query: string, state: string, referenceMonth: string, regime = "NaoDesonerado"): Promise<SinapiItem[]> {
   const config = runtimeEnv();
   if (!config.SINAPI_API_URL || !config.SINAPI_API_TOKEN) throw new Error("SINAPI integration is not configured");
   const url = new URL((config.SINAPI_SEARCH_PATH ?? "/items/search").replace(/^\//, ""), config.SINAPI_API_URL.endsWith("/") ? config.SINAPI_API_URL : `${config.SINAPI_API_URL}/`);
   url.searchParams.set("q", query);
   url.searchParams.set("uf", state);
   url.searchParams.set("reference_month", referenceMonth);
+  url.searchParams.set("regime", regime);
   const headers = new Headers({ Accept: "application/json" });
   headers.set(config.SINAPI_API_KEY_HEADER || "Authorization", config.SINAPI_API_KEY_HEADER ? config.SINAPI_API_TOKEN : `Bearer ${config.SINAPI_API_TOKEN}`);
   const response = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });

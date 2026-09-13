@@ -35,7 +35,7 @@ function lerTextosCompartilhados(zip: Zip): string[] {
   const xml = zip.extrair(entrada.nome).toString("utf8");
   // Cada <si> é um texto; ele pode vir partido em vários <t> (trechos com formatação
   // diferente), e nesse caso o texto da célula é a concatenação de todos.
-  return [...xml.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(([, corpo]) =>
+  return [...xml.matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map(([, corpo]) =>
     [...corpo.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(([, texto]) => textoDeXml(texto)).join(""),
   );
 }
@@ -46,10 +46,10 @@ export function abrirPlanilha(dados: Buffer): Planilha {
   const relacoes = zip.extrair("xl/_rels/workbook.xml.rels").toString("utf8");
 
   const alvoPorId = new Map(
-    [...relacoes.matchAll(/<Relationship[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"/g)]
-      .map(([, id, alvo]) => [id, alvo.replace(/^\/?xl\//, "").replace(/^\//, "")]),
+    [...relacoes.matchAll(/<Relationship\b[^>]*\/>/g)]
+      .map(([tag]) => [/\bId="([^"]+)"/.exec(tag)?.[1] ?? "", (/\bTarget="([^"]+)"/.exec(tag)?.[1] ?? "").replace(/^\/?xl\//, "").replace(/^\//, "")]),
   );
-  const abas = [...workbook.matchAll(/<sheet[^>]*\/>/g)].map((encontrado) => {
+  const abas = [...workbook.matchAll(/<sheet\b[^>]*\/>/g)].map((encontrado) => {
     const marca = encontrado[0];
     return {
       nome: textoDeXml(/name="([^"]*)"/.exec(marca)?.[1] ?? ""),
@@ -66,12 +66,17 @@ export function abrirPlanilha(dados: Buffer): Planilha {
       textos ??= lerTextosCompartilhados(zip);
       const xml = zip.extrair(`xl/${aba.alvo}`).toString("utf8");
       const linhas: string[][] = [];
-      for (const [, corpo] of xml.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+      for (const [, rowTag, corpo = ""] of xml.matchAll(/<row\b([^>]*?)(?:\/>|>([\s\S]*?)<\/row>)/g)) {
         if (linhas.length >= limite) break;
+        const rowNumber = Number(/\br="(\d+)"/.exec(rowTag)?.[1] ?? linhas.length + 1);
+        if (rowNumber > limite) break;
+        if (rowNumber > 200000 || rowNumber <= linhas.length) throw new Error("Endereço de linha XLSX inválido.");
+        while (linhas.length < rowNumber - 1) linhas.push([]);
         const linha: string[] = [];
-        for (const [, marca, conteudo] of corpo.matchAll(/<c([^>]*)>([\s\S]*?)<\/c>/g)) {
+        for (const [, marca, conteudo = ""] of corpo.matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
           const referencia = /r="([A-Z]+\d+)"/.exec(marca)?.[1];
           const coluna = referencia ? indiceDaColuna(referencia) : linha.length;
+          if (coluna < 0 || coluna > 16383) throw new Error("Endereço de coluna XLSX inválido.");
           const tipo = /t="([^"]+)"/.exec(marca)?.[1];
           const valor = /<v>([\s\S]*?)<\/v>/.exec(conteudo)?.[1];
           // `t="s"` é índice na tabela compartilhada; `t="inlineStr"` traz o texto junto.

@@ -580,11 +580,9 @@ export const userCredentials = sqliteTable("user_credentials", {
 //
 // Duas regras moldam o desenho:
 //
-// 1. Nada vira preço real sem revisão humana. Uma competência nasce `baixando`, passa por
-//    `conferindo` e só chega a `aprovada` quando um superadministrador olha o laudo e
-//    aceita. Orçamento é dinheiro do cliente: uma tabela errada entrando sozinha é pior do
-//    que uma tabela velha.
-// 2. Uma competência aprovada por vez. A anterior é descartada junto com seus itens,
+// 1. A primeira referência exige revisão humana. A renovação automática só usa o contrato
+//    homologado e para diante de mudanças de cabeçalho ou alertas de quantidade/preço.
+// 2. Uma competência aprovada por UF/regime. A anterior é descartada junto com seus itens,
 //    porque guardar histórico de todas as competências cresce sem limite e ninguém
 //    orçamenta com tabela de dois anos atrás.
 //
@@ -597,7 +595,7 @@ export const sinapiCompetencias = sqliteTable("sinapi_competencias", {
   competencia: text("competencia").notNull(),
   regime: text("regime").notNull(),
   uf: text("uf").notNull(),
-  // baixando | conferindo | pendente | aprovada | rejeitada | falhou
+  // baixando | conferindo | interpretando | importando | pendente | aprovada
   estado: text("estado").notNull(),
   origemUrl: text("origem_url").notNull(),
   arquivoSha256: text("arquivo_sha256"),
@@ -630,6 +628,18 @@ export const sinapiItens = sqliteTable("sinapi_itens", {
   // composicao | insumo: a Caixa separa os dois, e o orçamento os usa diferente.
   tipo: text("tipo").notNull(),
 }, (t) => [
-  uniqueIndex("uidx_sinapi_itens_competencia_codigo").on(t.competenciaId, t.codigo),
+  uniqueIndex("uidx_sinapi_itens_competencia_codigo").on(t.competenciaId, t.tipo, t.codigo),
   index("idx_sinapi_itens_descricao").on(t.competenciaId, t.descricao),
 ]);
+
+// Configuração global: os preços oficiais são compartilhados; somente superadmin escreve.
+// O lease serializa cron e ações manuais. O job persiste checkpoints no laudo da competência.
+export const sinapiSync = sqliteTable("sinapi_sync", {
+  id: integer("id").primaryKey(),
+  configJson: text("config_json"),
+  jobId: text("job_id"),
+  lockToken: text("lock_token"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+  lastChecked: integer("last_checked"),
+  lastError: text("last_error"),
+});
