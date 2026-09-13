@@ -135,7 +135,18 @@ export async function advanceSinapi(token: string, io = sinapiIO, budgetMs = 180
     await saveJob(job, report, token); return;
   }
   if (job.estado === "interpretando") {
-    const parsed = parseMapped(await io.read(xlsxKey), profile.mapas);
+    const reference = await io.read(xlsxKey);
+    let parsed: ReturnType<typeof parseMapped>;
+    try {
+      parsed = parseMapped(reference, profile.mapas);
+    } catch (error) {
+      // Uma coluna deslocada pode falhar antes da comparação de assinaturas.
+      // Devolver à conferência permite corrigir o mapa sem descartar o download.
+      job.estado = "conferindo";
+      report.alertas = [`Não foi possível interpretar as colunas selecionadas. Confira o mapeamento ou descarte a tentativa se o arquivo estiver inválido. ${error instanceof Error ? error.message : "Falha na leitura da planilha."}`];
+      await saveJob(job, report, token);
+      return;
+    }
     report.signatures = parsed.signatures; report.semPreco = parsed.semPreco; report.cursor = 0;
     report.amostra = [...parsed.itens.slice(0, 5), ...parsed.itens.slice(-5)]; report.alertas = [];
     const previous = await db.prepare("SELECT total_itens,laudo_json FROM sinapi_competencias WHERE uf=?1 AND regime=?2 AND estado='aprovada' ORDER BY competencia DESC LIMIT 1").bind(job.uf, job.regime).first<{ total_itens: number; laudo_json: string }>();

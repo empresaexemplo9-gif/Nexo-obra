@@ -96,6 +96,21 @@ test("anomalia de contagem exige aprovação mesmo com automático habilitado", 
   const status = await sync.sinapiStatus(); const job = status.jobs.find((j) => j.id === status.jobId);
   assert.equal(job.estado, "pendente"); assert.match(job.report.alertas[0], /20%/);
 });
+test("coluna deslocada devolve o job à conferência e aceita correção sem novo download", async () => {
+  await prepare(); await importAll(); await activate(); const config = (await sync.sinapiStatus()).config; config.automatico = true;
+  bytes = xlsx(Object.fromEntries(mappings.map((m) => [m.aba, [["SINAPI"], ["Código", "Descrição", "Unidade", "Observação", "SP"], ...Array.from({ length: 501 }, (_, i) => [String(i + 1), `Serviço ${i + 1}`, "M2", "Coluna nova", "1.234,56"])]])));
+  await prepare("2026-05", config);
+  let status = await sync.sinapiStatus(); const jobId = status.jobId;
+  assert.equal(status.jobs.find((j) => j.id === jobId).estado, "conferindo");
+  assert.match(status.jobs.find((j) => j.id === jobId).report.alertas[0], /Confira o mapeamento/);
+  assert.equal(db.sqlite.prepare("SELECT count(*) n FROM sinapi_itens WHERE competencia_id=?").get(jobId).n, 0);
+  assert.equal(status.jobs.find((j) => j.estado === "aprovada").competencia, "2026-04");
+  await locked((token) => sync.mapSinapi(mappings.map((m) => ({ ...m, preco: 4 })), token));
+  await locked((token) => sync.advanceSinapi(token, io)); await importAll();
+  status = await sync.sinapiStatus(); assert.equal(status.jobs.find((j) => j.id === jobId).estado, "pendente");
+  assert.equal(downloads, 2, "corrigir as colunas reutiliza o arquivo já baixado");
+  assert.equal(status.config.automatico, false, "novo mapeamento exige nova conferência humana");
+});
 test("variação ampla de preço exige revisão e não substitui a base vigente", async () => {
   await prepare(); await importAll(); await activate(); const config = (await sync.sinapiStatus()).config; config.automatico = true;
   bytes = workbook(501, "SP", "9.000,00"); await prepare("2026-05", config); await importAll();

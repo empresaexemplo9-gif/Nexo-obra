@@ -32,7 +32,11 @@ acesso. Não duplica um mês já ativo. A URL é construída no servidor sob
 `https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/` e não aceita destinos arbitrários.
 
 O job persiste as fases `baixando → conferindo → interpretando → importando → pendente → aprovada`.
-Depois da homologação, cabeçalhos idênticos permitem pular a seleção manual. A aprovação
+Depois da homologação, cabeçalhos idênticos permitem pular a seleção manual.
+Se a interpretação falhar por uma coluna deslocada, o job volta à conferência e permite
+corrigir o mapeamento usando o arquivo já baixado, sem tocar nos preços ativos.
+
+A aprovação
 automática exige ausência de alertas: variação de quantidade até 20%, aumento de itens sem
 preço de até 100 e no máximo 5% de itens com mudança de unidade ou variação de preço acima
 de 50%. Esses limites são alarmes operacionais, não prova de exatidão dos preços.
