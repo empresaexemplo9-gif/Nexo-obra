@@ -572,3 +572,64 @@ export const userCredentials = sqliteTable("user_credentials", {
   passwordUpdatedAt: integer("password_updated_at").notNull(),
   createdAt: integer("created_at").notNull(),
 }, (t) => [uniqueIndex("uidx_user_credentials_email").on(t.email)]);
+
+// Fonte própria da SINAPI: competência baixada da Caixa, conferida e só então publicada.
+//
+// A SINAPI é a referência oficial de custo da construção civil, publicada mensalmente pela
+// Caixa como planilha — não há API com token. Esta é a nossa ingestão dela.
+//
+// Duas regras moldam o desenho:
+//
+// 1. Nada vira preço real sem revisão humana. Uma competência nasce `baixando`, passa por
+//    `conferindo` e só chega a `aprovada` quando um superadministrador olha o laudo e
+//    aceita. Orçamento é dinheiro do cliente: uma tabela errada entrando sozinha é pior do
+//    que uma tabela velha.
+// 2. Uma competência aprovada por vez. A anterior é descartada junto com seus itens,
+//    porque guardar histórico de todas as competências cresce sem limite e ninguém
+//    orçamenta com tabela de dois anos atrás.
+//
+// A proveniência fica registrada: URL de origem, tamanho, SHA-256 do arquivo e contagens.
+// É o que permite responder "de onde veio este preço" sem depender de memória.
+export const sinapiCompetencias = sqliteTable("sinapi_competencias", {
+  id: text("id").primaryKey(),
+  // Competência no formato AAAA-MM, e o regime de desoneração da folha. A Caixa publica
+  // as duas tabelas; usar a errada deixa todo orçamento errado em silêncio.
+  competencia: text("competencia").notNull(),
+  regime: text("regime").notNull(),
+  uf: text("uf").notNull(),
+  // baixando | conferindo | pendente | aprovada | rejeitada | falhou
+  estado: text("estado").notNull(),
+  origemUrl: text("origem_url").notNull(),
+  arquivoSha256: text("arquivo_sha256"),
+  arquivoBytes: integer("arquivo_bytes"),
+  totalItens: integer("total_itens").notNull().default(0),
+  // Laudo da conferência em JSON: o que foi checado, o que passou e o que destoou da
+  // competência anterior. É o que o superadministrador lê antes de aprovar.
+  laudoJson: text("laudo_json"),
+  falha: text("falha"),
+  baixadoEm: integer("baixado_em"),
+  aprovadoEm: integer("aprovado_em"),
+  aprovadoPor: text("aprovado_por"),
+  criadoEm: integer("criado_em").notNull(),
+  atualizadoEm: integer("atualizado_em").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_sinapi_competencia_regime_uf").on(t.competencia, t.regime, t.uf),
+  index("idx_sinapi_competencias_estado").on(t.estado),
+]);
+
+// Itens normalizados da competência. O custo fica em centavos, como todo dinheiro no
+// projeto — a planilha traz reais com decimal, e arredondar na borda evita que a soma de
+// mil itens escorra.
+export const sinapiItens = sqliteTable("sinapi_itens", {
+  id: text("id").primaryKey(),
+  competenciaId: text("competencia_id").notNull().references(() => sinapiCompetencias.id),
+  codigo: text("codigo").notNull(),
+  descricao: text("descricao").notNull(),
+  unidade: text("unidade").notNull(),
+  custoUnitarioCentavos: integer("custo_unitario_centavos").notNull(),
+  // composicao | insumo: a Caixa separa os dois, e o orçamento os usa diferente.
+  tipo: text("tipo").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_sinapi_itens_competencia_codigo").on(t.competenciaId, t.codigo),
+  index("idx_sinapi_itens_descricao").on(t.competenciaId, t.descricao),
+]);
