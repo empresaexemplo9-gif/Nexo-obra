@@ -80,8 +80,12 @@ function statement(sql: string, args: InArgs = []) {
   const execute = async () => (await libsql()).execute({ sql, args: bound });
   return {
     bind(...values: unknown[]) {
-      // As consultas usam marcadores posicionais (?1, ?2…), que o libSQL recebe como objeto.
-      return statement(sql, Object.fromEntries(values.map((value, index) => [index + 1, value as never])) as InArgs);
+      // Array posicional, nunca objeto. Um objeto `{1: v, 2: v}` vira parâmetro NOMEADO:
+      // o cliente web empacota como `namedArgs: [{name: "1"}]` e o servidor responde
+      // "named parameter 1 at position 1 has no binding", porque `?1` é numerado, não
+      // nomeado. O cliente nativo resolvia o objeto sozinho, então o defeito só aparecia
+      // em produção — os testes rodam sobre `file:`, que usa o nativo.
+      return statement(sql, values as InArgs);
     },
     async all<T = Row>(): Promise<Result<T>> {
       const result = await execute();
