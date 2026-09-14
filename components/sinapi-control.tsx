@@ -38,12 +38,17 @@ function MappingForm({ sheets, busy, onSave }: { sheets: Sheet[]; busy: boolean;
 export function SinapiControl() {
   const [data, setData] = useState<Snapshot | null>(null); const [busy, setBusy] = useState(false);
   const [error, setError] = useState(""); const [message, setMessage] = useState(""); const [confirmed, setConfirmed] = useState(false);
-  const load = useCallback(async () => { const response = await fetch("/api/superadmin/sinapi", { cache: "no-store" }); const value = await response.json(); if (!response.ok) throw new Error(value.error); setData(value); }, []);
+  const load = useCallback(async () => { const response = await fetch("/api/superadmin/sinapi", { cache: "no-store" }); const value: Snapshot = await response.json(); if (!response.ok) throw new Error(value.error); setData(value); return value; }, []);
   useEffect(() => { const timer = setTimeout(() => { void load().catch((e: Error) => setError(e.message)); }, 0); return () => clearTimeout(timer); }, [load]);
   async function act(body: object) {
     setBusy(true); setError(""); setMessage(""); setConfirmed(false);
-    try { const response = await fetch("/api/superadmin/sinapi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const value = await response.json(); if (!response.ok) throw new Error(value.error); setData(value); setMessage("Etapa concluída."); }
-    catch (e) { setError(e instanceof Error ? e.message : "Não foi possível atualizar."); await load().catch(() => {}); }
+    let recoverSyncError = false;
+    try { const response = await fetch("/api/superadmin/sinapi", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const value = await response.json(); if (!response.ok) { recoverSyncError = value.code === "internal_error"; throw new Error(value.error); } setData(value); setMessage("Etapa concluída."); }
+    catch (e) {
+      const refreshed = await load().catch(() => null);
+      // O 500 genérico pode ocultar o motivo salvo pela sincronização; validações mantêm sua própria mensagem.
+      setError(recoverSyncError && refreshed?.error ? refreshed.error : e instanceof Error ? e.message : "Não foi possível atualizar.");
+    }
     finally { setBusy(false); }
   }
   const job = data?.jobs.find((j) => j.id === data.jobId);

@@ -38,3 +38,22 @@ test("falha de leitura fica visível e permite tentar carregar novamente", async
   assert.match(container.querySelector('[role="alert"]').textContent, /Banco precisa/);
   assert.ok(findByText(container, "Carregar referências"));
 });
+
+for (const scenario of [
+  { name: "falha interna mostra o motivo persistido sem recarregar a página", status: 500, code: "internal_error", error: "Não foi possível concluir a operação.", expected: "Caixa respondeu HTTP 403. A tabela vigente foi preservada." },
+  { name: "validação mantém sua mensagem mesmo com falha de sincronização anterior", status: 400, code: "validation_error", error: "Confira os dados enviados.", expected: "Confira os dados enviados.", stale: true },
+  { name: "falha ao atualizar o estado preserva o erro da ação", status: 500, code: "internal_error", error: "Não foi possível concluir a operação.", expected: "Não foi possível concluir a operação.", refreshFails: true },
+]) test(scenario.name, async () => {
+  const syncError = "Caixa respondeu HTTP 403. A tabela vigente foi preservada.";
+  const snapshot = { ...empty, jobId: "job", jobs: [{ id: "job", competencia: "2026-04", uf: "SP", regime: "NaoDesonerado", estado: "baixando", total_itens: 0, origem_url: "https://www.caixa.gov.br/Downloads/sinapi.zip", report: {} }] };
+  let failed = false;
+  const calls = await render(({ method }) => {
+    if (method === "POST") { failed = true; return { __status: scenario.status, code: scenario.code, error: scenario.error }; }
+    if (failed && scenario.refreshFails) return { __status: 503, error: "Estado indisponível." };
+    return { ...snapshot, error: failed || scenario.stale ? syncError : null };
+  });
+  await act(async () => findByText(container, "Processar próxima etapa").click()); await settle();
+  assert.deepEqual(calls.map(({ method }) => method), ["GET", "POST", "GET"]);
+  assert.equal(container.querySelector('[role="alert"]').textContent, scenario.expected);
+  assert.equal(findByText(container, "Processar próxima etapa").disabled, false);
+});

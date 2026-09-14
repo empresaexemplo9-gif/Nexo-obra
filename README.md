@@ -45,7 +45,7 @@ flowchart TD
 - Permissões por papel e trilha de auditoria para todas as escritas do núcleo operacional.
 - Adaptador financeiro exclusivamente no servidor em `lib/integrations/drap.ts`.
 - Endpoint financeiro sem fallback fictício: ausência ou falha da Drap aparece como indisponibilidade.
-- SINAPI com análise no superadmin, importação retomável, renovação mensal para a UF/regime configurados e descarte da referência anterior após a troca. Consulta local nos orçamentos, com regime explícito. **Homologação da planilha real ainda pendente (download da Caixa respondeu HTTP 429).** Consulte [Referência SINAPI](docs/SINAPI-INTEGRATION.md).
+- SINAPI com análise no superadmin, importação retomável, renovação mensal para a UF/regime configurados e descarte da referência anterior após a troca. Consulta local nos orçamentos, com regime explícito. **Homologação da planilha real ainda pendente: a Caixa respondeu HTTP 403 ao servidor publicado e HTTP 429 ao download local.** Consulte [Referência SINAPI](docs/SINAPI-INTEGRATION.md).
 - Webhook Drap com verificação HMAC SHA-256, identificação da empresa e idempotência pelo ID do evento.
 - Instruções permanentes para o Claude Code em `CLAUDE.md`.
 

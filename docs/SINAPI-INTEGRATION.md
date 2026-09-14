@@ -72,10 +72,14 @@ Os testes usam ZIP/XLSX válidos construídos em teste e SQLite com as migraçõ
 Cobrem retomada, permissões, concorrência, transação revertida, integridade CRC, mudança
 de cabeçalhos, alertas, preços em centavos, leitura pelos orçamentos e limpeza.
 
-**A publicação real da Caixa ainda não foi homologada nesta implementação.** As tentativas
-locais de download em 13/09/2026 receberam HTTP 429. O painel permite fazer essa conferência
-no ambiente publicado, mas um download que falha continua sendo falha: não existem preços
-de demonstração nem alegação de que fixtures sejam uma tabela oficial validada.
+**A publicação real da Caixa ainda não foi homologada nesta implementação.** Em 14/09/2026,
+o login do superadmin foi validado em produção e as duas migrações pendentes foram aplicadas
+(18 de 18; `/api/health` com `pronto: true`). O download da competência 2026-08 pelo servidor
+publicado recebeu HTTP 403; a tentativa local recebeu HTTP 429. O job permaneceu aguardando
+download, sem referência ativa. A hospedagem ainda não tinha `CRON_SECRET` configurado.
+O painel mostra a causa persistida da falha de processamento sem exigir recarregar a página.
+Um download que falha continua sendo falha: não existem preços de demonstração nem alegação
+de que fixtures sejam uma tabela oficial validada.
 Layouts que não ofereçam os quatro títulos na linha escolhida param para adaptação.
 
 A [página SINAPI da Caixa](https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx)
