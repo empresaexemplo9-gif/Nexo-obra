@@ -1,93 +1,76 @@
 # Referência SINAPI dentro da plataforma
 
 O superadmin prepara, analisa e ativa a referência em **/superadmin → Referência SINAPI**.
-Os orçamentos consultam os preços persistidos, sem depender de uma API paga. A integração
-externa anterior continua disponível quando não há referência local para os filtros.
+Os orçamentos consultam os preços persistidos localmente. A aquisição automática mensal usa
+a API do Orçamentador quando `SINAPI_API_TOKEN` está configurado; a planilha da Caixa e o
+envio manual continuam disponíveis como contingência.
 
-## Primeira conferência
+## Vínculo com o Orçamentador
 
-1. Aplique a migração `0017_medical_sir_ram` pelo botão **Atualizar banco de dados**.
-2. Configure `BLOB_READ_WRITE_TOKEN` (armazenamento privado já utilizado pelo projeto) e
-   `CRON_SECRET` na hospedagem. Não coloque os valores no Git.
-3. Selecione competência, UF e regime; use **Preparar referência** e **Processar próxima etapa**.
-4. A plataforma baixa o ZIP da Caixa e mostra as primeiras 30 linhas de cada aba da
-   planilha `SINAPI_Referência_AAAA_MM.xlsx`. Selecione as abas de insumos/composições,
-   linha de cabeçalho e colunas de código, descrição, unidade e preço da UF/regime.
-   O cabeçalho selecionado precisa identificar todas as quatro colunas.
-5. Processe a análise e a importação. Confira a amostra no arquivo original, incluindo
-   competência, UF, regime, unidade e valor; só então ative a referência.
-6. Habilite **Renovar automaticamente** para a UF e o regime conferidos.
+O contrato implementado segue o SDK `orcamentador/orcamentador-sdk` no commit
+`db5e9129446ec96c66341f0c323c20a8e52b265d`: base `https://orcamentador.com.br/api`,
+autenticação no header `X-API-Key`, insumos em `/insumos`, composições em `/composicoes`,
+encargos em `/encargos` e indicadores em `/indicadores`.
 
-A configuração automática desta entrega atende a **uma combinação de UF/regime por vez**,
-com uma ou duas tabelas (insumos/composições). É possível ativar referências de outras
-combinações manualmente, mas mudar a configuração não agenda todas as 54 combinações.
-Cada combinação conserva somente sua competência ativa. A seleção de colunas é explícita
-porque o layout nacional não deve ser confundido com os antigos arquivos por UF.
+Na hospedagem, configure apenas o segredo `SINAPI_API_TOKEN`. Os defaults de URL/header são:
 
-## Renovação e descarte
+```dotenv
+SINAPI_API_URL=https://orcamentador.com.br/api
+SINAPI_API_KEY_HEADER=X-API-Key
+SINAPI_SEARCH_PATH=/insumos
+SINAPI_API_TOKEN=
+```
 
-O cron `/api/cron/sinapi` verifica diariamente a competência do mês anterior. O download
-é repetido nos dias seguintes quando a publicação ainda não existe ou a Caixa recusa o
-acesso. Não duplica um mês já ativo. A URL é construída no servidor sob
-`https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/` e não aceita destinos arbitrários.
+A busca dos orçamentos usa a API como fallback quando não existe referência local ativa.
+Código numérico é enviado como `codigo`; texto é enviado como `nome`. UF, regime e
+competência são enviados nos parâmetros documentados pelo SDK.
 
-O job persiste as fases `baixando → conferindo → interpretando → importando → pendente → aprovada`.
-Depois da homologação, cabeçalhos idênticos permitem pular a seleção manual.
-Se a interpretação falhar por uma coluna deslocada, o job volta à conferência e permite
-corrigir o mapeamento usando o arquivo já baixado, sem tocar nos preços ativos.
+## Atualização mensal
 
-A aprovação
-automática exige ausência de alertas: variação de quantidade até 20%, aumento de itens sem
-preço de até 100 e no máximo 5% de itens com mudança de unidade ou variação de preço acima
-de 50%. Esses limites são alarmes operacionais, não prova de exatidão dos preços.
+`vercel.json` chama `/api/cron/sinapi` diariamente às 09:00 UTC. A chamada diária é apenas
+uma verificação: para a combinação configurada de UF/regime, a atualização efetiva acontece
+uma vez para a competência do mês anterior e não duplica um mês já ativo.
 
-A escrita acontece em lotes de 500 itens, com checkpoint na mesma transação do lote.
-Cron e ações manuais usam um lease global de 10 minutos; as funções têm duração máxima
-de 300 segundos. As etapas longas podem continuar na execução seguinte ou pelo painel.
-Um arquivo de 20 MB não é, por si só, incompatível com serverless: o que precisa caber é
-o trabalho total de download, descompressão, interpretação e persistência.
+Quando `SINAPI_API_TOKEN` existe, o cron:
+
+1. consulta insumos e composições do Orçamentador por páginas;
+2. registra também um snapshot de encargos e dos indicadores INCC, IPCA, IGP-M, Selic e dólar no laudo;
+3. normaliza código, descrição, unidade e preço em centavos;
+4. grava a nova competência nas mesmas tabelas `sinapi_competencias` e `sinapi_itens`;
+5. compara quantidade, itens sem preço, unidade e variação de preço com a referência ativa;
+6. mantém a referência anterior se houver falha ou inconsistência;
+7. na primeira troca de Caixa → Orçamentador exige aprovação humana, porque o contrato da fonte mudou;
+8. depois dessa primeira aprovação, se **Renovar automaticamente** estiver habilitado e não houver alertas, ativa a nova competência e remove a anterior na mesma transação.
+
+Os alarmes permanecem conservadores: quantidade com variação acima de 20%, mais de 100
+itens adicionais sem preço utilizável, ou mais de 5% dos itens coincidentes com mudança de
+unidade/variação de preço acima de 50% impedem a troca automática.
+
+Se o token do Orçamentador não estiver configurado, o cron mantém o caminho anterior da
+Caixa. Uma tentativa da Caixa parada em `baixando` pode ser descartada pelo sincronizador
+quando o Orçamentador passa a ser a fonte, sem remover uma referência já aprovada.
+
+## Primeira conferência e contingência da Caixa
+
+Aplique as migrações pelo botão **Atualizar banco de dados** e mantenha `BLOB_READ_WRITE_TOKEN`
+e `CRON_SECRET` na hospedagem. Para uma conferência manual, selecione competência, UF e
+regime no superadmin e use **Preparar referência**. O fluxo de ZIP/XLSX continua com as
+fases `baixando → conferindo → interpretando → importando → pendente → aprovada` e pode ser
+usado se a API estiver indisponível.
 
 A ativação confere a quantidade persistida e troca a referência na mesma transação que
-remove os itens e a competência anterior **da mesma UF e regime**. Não altera os valores
-copiados para orçamentos. A referência do item de orçamento inclui mês, UF, regime, tipo e código.
+remove os itens e a competência anterior **da mesma UF e regime**. Valores já copiados para
+orçamentos continuam como snapshots e não são alterados retroativamente.
 
-Os únicos binários temporários são o XLSX de referência e seu JSON normalizado, privados
-e com chaves determinísticas. São apagados após ativar ou descartar. Se a exclusão falhar,
-o job permanece rastreável para nova tentativa. O cron limpa tentativas sem progresso
-há sete dias, mesmo com renovação desabilitada. Não conserva ZIPs nem um histórico de
-planilhas; na referência vigente permanecem URL, SHA-256 do ZIP, tamanho, contagens,
-assinatura do cabeçalho, amostra e identidade/data da aprovação.
+## Segurança operacional
 
-## Hospedagem
+`CRON_SECRET` autentica o cron e nunca pertence ao Git. `SINAPI_API_TOKEN` também é somente
+server-side. O sincronizador usa o mesmo lease global do fluxo manual para impedir duas
+atualizações concorrentes.
 
-`vercel.json` agenda uma chamada diária às 09:00 UTC, autenticada por `CRON_SECRET`.
-O código e o agendamento só entram em produção após publicação. Configure a função para
-suportar 300 segundos; o limite depende da configuração do projeto, incluindo Fluid Compute.
-Consulte [duração das funções](https://vercel.com/docs/functions/configuring-functions/duration)
-e [limites do cron](https://vercel.com/docs/cron-jobs/usage-and-pricing).
+A primeira competência recebida pelo Orçamentador fica `pendente` mesmo que a renovação
+automática já estivesse ligada. A aprovação humana grava a assinatura do novo contrato;
+somente competências seguintes podem ser promovidas automaticamente.
 
-## Evidência e limites
-
-Os testes usam ZIP/XLSX válidos construídos em teste e SQLite com as migrações reais.
-Cobrem retomada, permissões, concorrência, transação revertida, integridade CRC, mudança
-de cabeçalhos, alertas, preços em centavos, leitura pelos orçamentos e limpeza.
-
-**A publicação real da Caixa ainda não foi homologada nesta implementação.** Em 14/09/2026,
-o login do superadmin foi validado em produção e as duas migrações pendentes foram aplicadas
-(18 de 18; `/api/health` com `pronto: true`). O download da competência 2026-08 pelo servidor
-publicado recebeu HTTP 403; a tentativa local recebeu HTTP 429. O job permaneceu aguardando
-download, sem referência ativa. A hospedagem ainda não tinha `CRON_SECRET` configurado.
-O painel mostra a causa persistida da falha de processamento sem exigir recarregar a página.
-Um download que falha continua sendo falha: não existem preços de demonstração nem alegação
-de que fixtures sejam uma tabela oficial validada.
-Layouts que não ofereçam os quatro títulos na linha escolhida param para adaptação.
-
-A [página SINAPI da Caixa](https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Paginas/default.aspx)
-informa que, desde 2025, o pacote XLSX inclui todas as UFs. O caminho antigo por UF/regime
-não é utilizado para as publicações novas.
-
-## Fonte externa existente
-
-`SINAPI_API_URL`, `SINAPI_API_TOKEN`, `SINAPI_API_KEY_HEADER` e `SINAPI_SEARCH_PATH` continuam
-restritos ao servidor. O adaptador envia busca, UF, competência e regime à fonte configurada.
-A homologação desse contrato externo continua responsabilidade da integração existente.
+Nenhum preço fictício é criado. Resposta curta demais, falha de autenticação, rate limit,
+erro de rede ou divergência de persistência preservam a referência que já estava ativa.
