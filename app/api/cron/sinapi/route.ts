@@ -11,7 +11,11 @@ export async function GET(request: Request) {
   return apiRoute(async () => {
     authorizeSinapiCron(request);
     const provider = isOrcamentadorConfigured() ? "orcamentador" : "caixa";
-    const result = await withSinapiLock((token) => provider === "orcamentador" ? monthlyOrcamentadorSinapi(token) : monthlySinapi(token));
+    let result: unknown = null;
+    await withSinapiLock(async (token) => {
+      if (provider === "orcamentador") result = await monthlyOrcamentadorSinapi(token);
+      else await monthlySinapi(token);
+    });
     return Response.json({ ok: true, provider, result }, { headers: { "Cache-Control": "no-store" } });
   });
 }
