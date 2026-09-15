@@ -163,3 +163,89 @@ test("XLSX mantém linhas omitidas, células autocontidas e ordem dos atributos"
   const value = montarZip({ "xl/workbook.xml": '<workbook><sheets><sheet name="Dados" r:id="rId1"/></sheets></workbook>', "xl/_rels/workbook.xml.rels": '<Relationships><Relationship Target="worksheets/sheet1.xml" Id="rId1"/></Relationships>', "xl/worksheets/sheet1.xml": '<worksheet><sheetData><row r="2"><c r="A2"/><c r="B2"><v>25</v></c></row><row r="4"/><row r="5"><c r="A5"><v>99</v></c></row></sheetData></worksheet>' });
   assert.deepEqual(abrirPlanilha(value).linhas("Dados"), [[], ["", "25"], [], [], ["99"]]);
 });
+
+// ---------------------------------------------------------------------------
+// Envio manual do ZIP.
+//
+// A Caixa recusa o download automático — HTTP 403 ao servidor publicado e 429 ao local.
+// Sem este caminho, toda a conferência fica pronta e inalcançável, porque trava no
+// primeiro passo. O que estes testes garantem é que vir à mão não afrouxa nada: o arquivo
+// enviado percorre o mesmo pipeline e passa pelas mesmas checagens.
+
+const envio = (arquivo, campos = { month: "2026-04", uf: "SP", regime: "NaoDesonerado" }, cookie) => {
+  const form = new FormData();
+  for (const [chave, valor] of Object.entries(campos)) form.set(chave, valor);
+  if (arquivo) form.set("arquivo", new File([arquivo], "sinapi.zip", { type: "application/zip" }));
+  return new Request("https://platform.test/api/superadmin/sinapi", {
+    method: "PUT", body: form, headers: cookie ? { cookie, origin: "https://platform.test" } : { origin: "https://platform.test" },
+  });
+};
+
+test("o ZIP enviado à mão percorre o mesmo pipeline, sem nenhum download", async () => {
+  const pacote = montarZip({ "SINAPI_Referência_2026_04.xlsx": workbook() });
+  await locked((token) => sync.uploadSinapi("2026-04", profile(), pacote, token, io));
+  await locked((token) => sync.advanceSinapi(token, io));
+  assert.equal(downloads, 0, "envio manual não pode disparar download");
+
+  await locked((token) => sync.mapSinapi(mappings, token));
+  await locked((token) => sync.advanceSinapi(token, io));
+  await importAll();
+
+  const status = await sync.sinapiStatus();
+  assert.equal(status.jobs[0].estado, "pendente", "termina em pendente: aprovação continua sendo humana");
+  assert.equal(status.jobs[0].total_itens, 1002);
+  assert.equal(db.sqlite.prepare("SELECT custo_unitario_centavos FROM sinapi_itens LIMIT 1").get().custo_unitario_centavos, 123456);
+});
+
+test("o envio manual é conferido contra a competência que já vale", async () => {
+  // Primeira competência por download, aprovada.
+  await prepare(); await importAll(); await activate();
+  // A seguinte vem à mão, com preço sete vezes maior — o erro clássico de coluna trocada.
+  bytes = workbook(501, "SP", "8.641,92");
+  const pacote = montarZip({ "SINAPI_Referência_2026_05.xlsx": bytes });
+  const config = (await sync.sinapiStatus()).config;
+  await locked((token) => sync.uploadSinapi("2026-05", config, pacote, token, io));
+  await locked((token) => sync.advanceSinapi(token, io));
+  // A importação é fatiada; avança até sair de "importando".
+  for (let volta = 0; volta < 10; volta += 1) {
+    const atual = (await sync.sinapiStatus()).jobs.find((j) => j.competencia === "2026-05");
+    if (atual.estado !== "importando" && atual.estado !== "interpretando") break;
+    await importAll();
+  }
+
+  const job = (await sync.sinapiStatus()).jobs.find((j) => j.competencia === "2026-05");
+  assert.equal(job.estado, "pendente", "não ativa sozinha");
+  assert.ok(job.report.alertas.some((a) => /varia/i.test(a)),
+    `a variação tinha que ser apontada; alertas: ${JSON.stringify(job.report.alertas)}`);
+});
+
+test("sem sessão de superadministrador o envio é recusado", async () => {
+  const pacote = montarZip({ "x.xlsx": workbook() });
+  assert.equal((await adminRoute.PUT(envio(pacote))).status, 401);
+  assert.equal(db.sqlite.prepare("SELECT count(*) n FROM sinapi_competencias").get().n, 0,
+    "nada pode ser criado por quem não está autenticado");
+});
+
+test("arquivo que não é ZIP é recusado antes de prender o job", async () => {
+  const cookie = (await adminSession.createSuperAdminSessionCookie()).cookie.split(";")[0];
+  const resposta = await adminRoute.PUT(envio(Buffer.from("<html>Erro 403 da Caixa</html>"), undefined, cookie));
+  assert.equal(resposta.status, 400);
+  assert.match(JSON.stringify(await resposta.json()), /não é um ZIP/);
+  assert.ok(!(await sync.sinapiStatus()).jobId, "o job não pode ficar preso por um arquivo inválido");
+});
+
+test("anexo ausente é recusado com mensagem, não com erro genérico", async () => {
+  const cookie = (await adminSession.createSuperAdminSessionCookie()).cookie.split(";")[0];
+  const resposta = await adminRoute.PUT(envio(null, undefined, cookie));
+  assert.equal(resposta.status, 400);
+  assert.match(JSON.stringify(await resposta.json()), /Anexe o arquivo ZIP/);
+});
+
+test("falha ao gravar os bytes não deixa competência presa em baixando", async () => {
+  const pacote = montarZip({ "x.xlsx": workbook() });
+  const ioQuebrado = { ...io, write: async () => { throw new Error("armazenamento fora"); } };
+  await assert.rejects(locked((token) => sync.uploadSinapi("2026-04", profile(), pacote, token, ioQuebrado)), /armazenamento fora/);
+  const status = await sync.sinapiStatus();
+  assert.equal(status.jobId, null, "sem isso, a trava de job único bloquearia toda tentativa seguinte");
+  assert.equal(db.sqlite.prepare("SELECT count(*) n FROM sinapi_competencias").get().n, 0);
+});

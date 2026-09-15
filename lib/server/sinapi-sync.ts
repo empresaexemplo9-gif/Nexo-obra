@@ -30,7 +30,16 @@ export const sinapiIO: SinapiIO = {
     return bounded(response);
   },
 };
-const keys = (id: string) => [`sinapi-temporario/${id}/referencia.xlsx`, `sinapi-temporario/${id}/itens.json`];
+const keys = (id: string) => [`sinapi-temporario/${id}/referencia.xlsx`, `sinapi-temporario/${id}/itens.json`, `sinapi-temporario/${id}/origem.zip`];
+
+// Marca de origem para a competência que não veio por download.
+//
+// A Caixa recusa o download automático: HTTP 403 ao servidor publicado e 429 ao local.
+// Sem um caminho manual, toda a conferência — assinatura de colunas, variação de preço,
+// portão de aprovação, descarte da anterior — fica pronta e inalcançável, porque trava no
+// primeiro passo. O envio manual entrega os mesmos bytes ao mesmo pipeline: só a aquisição
+// muda, e nenhuma verificação é pulada.
+export const ORIGEM_MANUAL = "envio-manual";
 const reportOf = (job: Job): Report => JSON.parse(job.laudo_json ?? "{}");
 const fail = (message: string) => new ApiError(409, "sinapi_state", message);
 async function settings() { return (await getDatabase().prepare("SELECT * FROM sinapi_sync WHERE id = 1").first<Sync>())!; }
@@ -60,16 +69,41 @@ async function saveJob(job: Job, report: Report, token: string) {
     WHERE id=?5 AND EXISTS(SELECT 1 FROM sinapi_sync WHERE id=1 AND lock_token=?6)`)
     .bind(job.estado, JSON.stringify(report), job.total_itens, Date.now(), job.id, token).run();
 }
-export async function startSinapi(month: string, profile: Profile, token: string) {
+async function abrirCompetencia(month: string, profile: Profile, token: string, origem: string) {
   const db = getDatabase(); const sync = await settings();
   if (sync.job_id) throw fail("Conclua ou descarte a conferência em andamento antes de iniciar outra.");
   const newer = await db.prepare("SELECT id FROM sinapi_competencias WHERE uf=?1 AND regime=?2 AND competencia>=?3 AND estado='aprovada'").bind(profile.uf, profile.regime, month).first();
   if (newer) throw fail("Essa competência ou uma mais recente já está ativa.");
   const id = crypto.randomUUID(); const now = Date.now();
   await db.batch([
-    db.prepare(`INSERT INTO sinapi_competencias(id,competencia,uf,regime,estado,origem_url,criado_em,atualizado_em) VALUES(?1,?2,?3,?4,'baixando',?5,?6,?6)`).bind(id, month, profile.uf, profile.regime, sourceUrl(month), now),
+    db.prepare(`INSERT INTO sinapi_competencias(id,competencia,uf,regime,estado,origem_url,criado_em,atualizado_em) VALUES(?1,?2,?3,?4,'baixando',?5,?6,?6)`).bind(id, month, profile.uf, profile.regime, origem, now),
     db.prepare("UPDATE sinapi_sync SET config_json=?1,job_id=?2,last_error=NULL WHERE id=1 AND lock_token=?3").bind(JSON.stringify(profile), id, token),
   ]);
+  return id;
+}
+
+export async function startSinapi(month: string, profile: Profile, token: string) {
+  await abrirCompetencia(month, profile, token, sourceUrl(month));
+}
+
+// Envio manual do ZIP da Caixa, para quando o download automático é recusado.
+//
+// Os bytes entram exatamente onde os baixados entrariam, e daí em diante o caminho é o
+// mesmo: extração do XLSX, assinatura de colunas, conferência, importação, aprovação
+// humana e descarte da competência anterior. Nenhuma checagem é pulada por ter vindo à
+// mão — o arquivo é do mesmo jeito conferido contra o que já está valendo.
+export async function uploadSinapi(month: string, profile: Profile, bytes: Buffer, token: string, io = sinapiIO) {
+  const id = await abrirCompetencia(month, profile, token, ORIGEM_MANUAL);
+  try {
+    await io.write(`sinapi-temporario/${id}/origem.zip`, bytes);
+  } catch (error) {
+    // Sem os bytes gravados a competência ficaria presa em "baixando" para sempre,
+    // bloqueando qualquer outra tentativa pela trava de job único.
+    await getDatabase().prepare("UPDATE sinapi_sync SET job_id=NULL WHERE id=1 AND lock_token=?1").bind(token).run();
+    await getDatabase().prepare("DELETE FROM sinapi_competencias WHERE id=?1").bind(id).run();
+    throw error;
+  }
+  return id;
 }
 export async function mapSinapi(maps: Mapping[], token: string) {
   const sync = await settings(); const job = await currentJob(sync);
@@ -126,7 +160,11 @@ export async function advanceSinapi(token: string, io = sinapiIO, budgetMs = 180
     await db.prepare("UPDATE sinapi_sync SET job_id=NULL,last_error=NULL WHERE id=1 AND lock_token=?1").bind(token).run(); return;
   }
   if (job.estado === "baixando") {
-    const bytes = await io.download(job.origem_url); const file = referenceFile(bytes, job.competencia);
+    // De onde vêm os bytes é a única diferença entre o download e o envio manual.
+    const bytes = job.origem_url === ORIGEM_MANUAL
+      ? await io.read(`sinapi-temporario/${job.id}/origem.zip`)
+      : await io.download(job.origem_url);
+    const file = referenceFile(bytes, job.competencia);
     report.arquivo = file.name; report.abas = inspectReference(file.bytes);
     // Chaves determinísticas registradas pelo ID antes do upload; crash não deixa órfãos.
     await io.write(xlsxKey, file.bytes);
