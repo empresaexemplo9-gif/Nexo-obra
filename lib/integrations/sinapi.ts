@@ -1,6 +1,9 @@
 import type { Profile } from "./sinapi-contract";
 import { isOrcamentadorConfigured, searchOrcamentadorItems } from "./orcamentador";
 
+// Contrato de compatibilidade: SINAPI_API_TOKEN continua sendo a credencial server-side.
+// O adaptador genérico anterior usava Authorization; o Orçamentador usa X-API-Key conforme o SDK oficial.
+
 export type SinapiItem = {
   code: string;
   description: string;
