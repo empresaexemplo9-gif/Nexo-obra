@@ -88,12 +88,12 @@ export async function POST(request: Request) {
     }
     if (data.action === "enroll") {
       const existing = await activationFor(data.organizationId);
-      if (existing) throw new ApiError(409, "activation_exists", "Esta empresa já possui um vínculo. Alterações de assinatura devem ser feitas no Empresa.");
+      if (existing) throw new ApiError(409, "activation_exists", "Esta empresa já possui um vínculo. Alterações de assinatura devem ser feitas pela integração DRAP.");
       try {
         await db.batch([
           db.prepare(`INSERT INTO drap_activations (organization_id, company_id, plan_id, request_key, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)`)
             .bind(data.organizationId, data.companyId, data.planId, crypto.randomUUID(), Date.now()),
-          platformAudit(db, data.organizationId, admin.email, "drap.activation_enrolled", data.organizationId, { companyId: data.companyId, planId: data.planId, multiplierBps: 15000 }),
+          platformAudit(db, data.organizationId, admin.email, "drap.activation_enrolled", data.organizationId, { companyId: data.companyId, planId: data.planId, multiplierBps: 10000 }),
         ]);
       } catch (error) {
         if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "company_already_linked", "A empresa Drap já está vinculada a uma ativação.");
