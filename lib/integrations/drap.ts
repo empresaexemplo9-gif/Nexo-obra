@@ -32,7 +32,6 @@ type DrapRuntimeEnv = {
   DRAP_API_URL?: string;
   DRAP_API_TOKEN?: string;
   DRAP_API_KEY_HEADER?: string;
-  DRAP_SUMMARY_PATH?: string;
   DRAP_TRANSACTIONS_PATH?: string;
   DRAP_CHARGES_PATH?: string;
   DRAP_WEBHOOK_SECRET?: string;
@@ -48,8 +47,7 @@ export function isDrapConfigured() {
 }
 
 export function isDrapTransactionsConfigured() {
-  const config = runtimeEnv();
-  return Boolean(config.DRAP_API_URL && config.DRAP_API_TOKEN && config.DRAP_TRANSACTIONS_PATH);
+  return isDrapConfigured();
 }
 
 export function isDrapChargesConfigured() {
@@ -63,13 +61,23 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function parseRemoteNumber(value: string) {
+  const cleaned = value.trim().replace(/\s|R\$/g, "");
+  if (!cleaned) return null;
+  const normalized = cleaned.includes(",")
+    ? cleaned.replace(/\./g, "").replace(",", ".")
+    : cleaned;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function readNumber(record: Record<string, unknown>, keys: string[]) {
   for (const key of keys) {
     const value = record[key];
     if (typeof value === "number" && Number.isFinite(value)) return value;
     if (typeof value === "string") {
-      const normalized = Number(value.replace(/\./g, "").replace(",", "."));
-      if (Number.isFinite(normalized)) return normalized;
+      const parsed = parseRemoteNumber(value);
+      if (parsed !== null) return parsed;
     }
   }
   return 0;
@@ -95,44 +103,6 @@ function drapUrl(path: string) {
   return new URL(path.replace(/^\//, ""), base.endsWith("/") ? base : `${base}/`);
 }
 
-function normalizeSummary(payload: unknown): FinancialSummary {
-  const root = asRecord(payload);
-  const data = asRecord(root.data ?? root.summary ?? root);
-
-  return {
-    currentBalance: readNumber(data, ["currentBalance", "current_balance", "saldoAtual", "saldo_atual"]),
-    receivables: readNumber(data, ["receivables", "accountsReceivable", "contasReceber", "contas_a_receber"]),
-    payables: readNumber(data, ["payables", "accountsPayable", "contasPagar", "contas_a_pagar"]),
-    projected30d: readNumber(data, ["projected30d", "projectedBalance30d", "saldoProjetado30d", "saldo_projetado_30d"]),
-    overdueReceivables: readNumber(data, ["overdueReceivables", "overdue", "recebiveisVencidos", "recebiveis_vencidos"]),
-    updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : new Date().toISOString(),
-    source: "drap",
-  };
-}
-
-export async function fetchDrapFinancialSummary(externalCompanyId: string) {
-  const config = runtimeEnv();
-  if (!config.DRAP_API_URL || !config.DRAP_API_TOKEN) {
-    throw new Error("DRAP integration is not configured");
-  }
-
-  const path = (config.DRAP_SUMMARY_PATH ?? "/api/v1/finance/summary").replace(/^\//, "");
-  const url = drapUrl(path);
-  url.searchParams.set("company_id", externalCompanyId);
-
-  const response = await fetch(url, {
-    method: "GET",
-    headers: requestHeaders(),
-    signal: AbortSignal.timeout(8000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`DRAP summary request failed with status ${response.status}`);
-  }
-
-  return normalizeSummary(await response.json());
-}
-
 function transactionStatus(value: string | null): FinancialTransaction["status"] {
   const status = value?.toLowerCase();
   if (status === "paid" || status === "pago" || status === "settled") return "paid";
@@ -141,34 +111,107 @@ function transactionStatus(value: string | null): FinancialTransaction["status"]
   return "open";
 }
 
-export async function fetchDrapTransactions(externalCompanyId: string, costCenterId?: string | null) {
+function normalizeTransaction(value: unknown): FinancialTransaction | null {
+  const item = asRecord(value);
+  const id = readString(item, ["id", "transactionId", "transaction_id", "externalId"]);
+  if (!id) return null;
+
+  const rawType = readString(item, ["type", "kind", "nature", "tipo"])?.toLowerCase();
+  const type = rawType === "payable" || rawType === "expense" || rawType === "pagar" || rawType === "despesa"
+    ? "payable"
+    : "receivable";
+
+  return {
+    id,
+    type,
+    description: readString(item, ["description", "descricao", "title", "name"]) ?? "Lançamento",
+    amount: Math.max(0, readNumber(item, ["amount", "value", "valor", "total"])),
+    dueDate: readString(item, ["dueDate", "due_date", "vencimento", "data_vencimento", "data"]),
+    paidAt: readString(item, ["paidAt", "paid_at", "paymentDate", "data_pagamento"]),
+    status: transactionStatus(readString(item, ["status", "situacao"])),
+    partyName: readString(item, ["partyName", "party_name", "customerName", "supplierName", "cliente", "fornecedor", "contraparte"]),
+    costCenterId: readString(item, ["costCenterId", "cost_center_id", "centro_custo_id"]),
+  };
+}
+
+export async function fetchDrapTransactions(_externalCompanyId: string, costCenterId?: string | null) {
   const config = runtimeEnv();
-  if (!isDrapTransactionsConfigured() || !config.DRAP_TRANSACTIONS_PATH) throw new Error("DRAP transactions are not configured");
-  const url = drapUrl(config.DRAP_TRANSACTIONS_PATH);
-  url.searchParams.set("company_id", externalCompanyId);
-  if (costCenterId) url.searchParams.set("cost_center_id", costCenterId);
-  const response = await fetch(url, { headers: requestHeaders(), signal: AbortSignal.timeout(8000) });
-  if (!response.ok) throw new Error(`DRAP transactions request failed with status ${response.status}`);
-  const root = asRecord(await response.json());
-  const records = [root.transactions, root.items, root.results, asRecord(root.data).items, root.data].find(Array.isArray) ?? [];
-  return (records as unknown[]).slice(0, 500).map((value): FinancialTransaction | null => {
-    const item = asRecord(value);
-    const id = readString(item, ["id", "transactionId", "transaction_id", "externalId"]);
-    const rawType = readString(item, ["type", "kind", "nature", "tipo"])?.toLowerCase();
-    const type = rawType === "payable" || rawType === "expense" || rawType === "pagar" || rawType === "despesa" ? "payable" : "receivable";
-    if (!id) return null;
-    return {
-      id,
-      type,
-      description: readString(item, ["description", "descricao", "title", "name"]) ?? "Lançamento",
-      amount: Math.max(0, readNumber(item, ["amount", "value", "valor", "total"])),
-      dueDate: readString(item, ["dueDate", "due_date", "vencimento"]),
-      paidAt: readString(item, ["paidAt", "paid_at", "paymentDate", "data_pagamento"]),
-      status: transactionStatus(readString(item, ["status", "situacao"])),
-      partyName: readString(item, ["partyName", "party_name", "customerName", "supplierName", "cliente", "fornecedor"]),
-      costCenterId: readString(item, ["costCenterId", "cost_center_id", "centro_custo_id"]),
-    };
-  }).filter((item): item is FinancialTransaction => item !== null);
+  if (!isDrapTransactionsConfigured()) throw new Error("DRAP transactions are not configured");
+
+  const records: unknown[] = [];
+  let offset = 0;
+  let total: number | null = null;
+
+  while (offset < 500 && (total === null || offset < total)) {
+    const url = drapUrl(config.DRAP_TRANSACTIONS_PATH ?? "/api/v1/lancamentos");
+    url.searchParams.set("limit", "100");
+    url.searchParams.set("offset", String(offset));
+
+    const response = await fetch(url, { headers: requestHeaders(), signal: AbortSignal.timeout(8000) });
+    if (!response.ok) {
+      const retryAfter = response.headers.get("retry-after");
+      const suffix = response.status === 429 && retryAfter ? `; retry after ${retryAfter}s` : "";
+      throw new Error(`DRAP transactions request failed with status ${response.status}${suffix}`);
+    }
+
+    const root = asRecord(await response.json());
+    const page = [root.items, root.transactions, root.results, asRecord(root.data).items, root.data].find(Array.isArray) ?? [];
+    const declaredTotal = root.total;
+    if (typeof declaredTotal === "number" && Number.isFinite(declaredTotal) && declaredTotal >= 0) total = declaredTotal;
+    if (typeof declaredTotal === "string") {
+      const parsedTotal = Number(declaredTotal);
+      if (Number.isFinite(parsedTotal) && parsedTotal >= 0) total = parsedTotal;
+    }
+
+    records.push(...page);
+    if (page.length === 0 || page.length < 100) break;
+    offset += page.length;
+  }
+
+  const normalized = records.slice(0, 500)
+    .map(normalizeTransaction)
+    .filter((item): item is FinancialTransaction => item !== null);
+
+  // O contrato informado não documenta filtro por centro de custo no endpoint de
+  // lançamentos. Quando a tela pede um projeto, filtramos somente pelo campo retornado;
+  // nunca ampliamos silenciosamente para os lançamentos da empresa inteira.
+  return costCenterId ? normalized.filter((item) => item.costCenterId === costCenterId) : normalized;
+}
+
+export async function fetchDrapFinancialSummary(externalCompanyId: string) {
+  const transactions = await fetchDrapTransactions(externalCompanyId);
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0, 10);
+  const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  let currentBalance = 0;
+  let receivables = 0;
+  let payables = 0;
+  let overdueReceivables = 0;
+  let projected30d = 0;
+
+  for (const item of transactions) {
+    if (item.status === "cancelled") continue;
+    const signed = item.type === "receivable" ? item.amount : -item.amount;
+    if (item.status === "paid") currentBalance += signed;
+    else if (item.type === "receivable") receivables += item.amount;
+    else payables += item.amount;
+
+    const overdue = item.status === "overdue" || (item.status === "open" && item.dueDate !== null && item.dueDate < todayKey);
+    if (overdue && item.type === "receivable") overdueReceivables += item.amount;
+    if (item.status !== "paid" && item.dueDate !== null && item.dueDate <= thirtyDays) projected30d += signed;
+  }
+
+  projected30d += currentBalance;
+  return {
+    currentBalance,
+    receivables,
+    payables,
+    projected30d,
+    overdueReceivables,
+    updatedAt: new Date().toISOString(),
+    source: "drap",
+  } satisfies FinancialSummary;
 }
 
 export async function createDrapCharge(input: {
@@ -189,7 +232,6 @@ export async function createDrapCharge(input: {
     method: "POST",
     headers,
     body: JSON.stringify({
-      company_id: input.externalCompanyId,
       customer_id: input.externalCustomerId,
       cost_center_id: input.costCenterId,
       description: input.description,
