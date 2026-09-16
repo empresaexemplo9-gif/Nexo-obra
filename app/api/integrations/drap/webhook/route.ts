@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import { getDatabase, getDb } from "@/db";
 import { integrationConnections, integrationEvents } from "@/db/schema";
-import { getDrapWebhookSecret } from "@/lib/integrations/drap";
+import { getDrapWebhookCandidates } from "@/lib/integrations/drap";
 import { processDrapEvent } from "@/lib/server/drap-events";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
@@ -64,8 +64,8 @@ async function boundedText(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const secret = getDrapWebhookSecret();
-  if (!secret) return Response.json({ error: "Webhook secret is not configured" }, { status: 503 });
+  const candidates = getDrapWebhookCandidates();
+  if (candidates.length === 0) return Response.json({ error: "Webhook secret is not configured" }, { status: 503 });
 
   const signature = request.headers.get("x-drap-signature");
   const timestampHeader = request.headers.get("x-drap-timestamp");
@@ -78,9 +78,13 @@ export async function POST(request: Request) {
 
   const rawPayload = await boundedText(request);
   if (rawPayload === null) return Response.json({ error: "Payload too large" }, { status: 413 });
-  if (!(await verifySignature(rawPayload, timestampHeader.trim(), signature, secret))) {
-    return Response.json({ error: "Invalid signature" }, { status: 401 });
+
+  const matched = [] as typeof candidates;
+  for (const candidate of candidates) {
+    if (await verifySignature(rawPayload, timestampHeader.trim(), signature, candidate.secret)) matched.push(candidate);
   }
+  if (matched.length === 0) return Response.json({ error: "Invalid signature" }, { status: 401 });
+  if (matched.length > 1) return Response.json({ error: "Ambiguous Drap webhook secret" }, { status: 409 });
 
   let payload: Record<string, unknown>;
   try { payload = JSON.parse(rawPayload) as Record<string, unknown>; }
@@ -96,20 +100,34 @@ export async function POST(request: Request) {
 
   try {
     const db = getDb();
-    // O token e o secret configurados no servidor pertencem a um único tenant Drap.
-    // Como o payload oficial não carrega company_id, falhamos fechado se houver mais de
-    // uma conexão ativa que pudesse receber o mesmo secret, em vez de encaminhar um evento
-    // financeiro para a empresa errada.
-    const connections = await db.select({
-      id: integrationConnections.id,
-      organizationId: integrationConnections.organizationId,
-    }).from(integrationConnections)
-      .where(and(eq(integrationConnections.provider, "drap"), eq(integrationConnections.status, "active")))
-      .limit(2);
+    const tenantCompanyId = matched[0].externalCompanyId;
+    let connection: { id: string; organizationId: string } | undefined;
 
-    if (connections.length === 0) return Response.json({ error: "No active Drap connection" }, { status: 404 });
-    if (connections.length > 1) return Response.json({ error: "Ambiguous Drap tenant configuration" }, { status: 409 });
-    const connection = connections[0];
+    if (tenantCompanyId) {
+      [connection] = await db.select({
+        id: integrationConnections.id,
+        organizationId: integrationConnections.organizationId,
+      }).from(integrationConnections)
+        .where(and(
+          eq(integrationConnections.provider, "drap"),
+          eq(integrationConnections.status, "active"),
+          eq(integrationConnections.externalCompanyId, tenantCompanyId),
+        ))
+        .limit(1);
+    } else {
+      // Compatibilidade com a configuração legada de um único token/secret global.
+      // Se houver mais de uma empresa ativa, falha fechado para não misturar tenants.
+      const legacyConnections = await db.select({
+        id: integrationConnections.id,
+        organizationId: integrationConnections.organizationId,
+      }).from(integrationConnections)
+        .where(and(eq(integrationConnections.provider, "drap"), eq(integrationConnections.status, "active")))
+        .limit(2);
+      if (legacyConnections.length > 1) return Response.json({ error: "Ambiguous Drap tenant configuration" }, { status: 409 });
+      connection = legacyConnections[0];
+    }
+
+    if (!connection) return Response.json({ error: "No active Drap connection" }, { status: 404 });
 
     const eventId = `drap_${await sha256Hex(`${timestampHeader.trim()}.${rawPayload}`)}`;
     await db.insert(integrationEvents).values({
