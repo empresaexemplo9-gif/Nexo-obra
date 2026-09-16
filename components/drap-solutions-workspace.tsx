@@ -104,12 +104,10 @@ export function DrapSolutionsWorkspace() {
         </CardContent>
       </Card>
 
-      {!data.checkoutAvailable ? (
-        <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
-          <p className="font-medium">Contratação embutida aguardando endpoint service-to-service da DRAP.</p>
-          <p className="mt-1 text-hoikos-600">A API pública atual permite operar lançamentos, parceiros, categorias e webhooks, mas não publica criação de tenant, checkout, assinatura ou ativação de módulo. A H.OIKOS não redireciona você nem usa rotas privadas não documentadas.</p>
-        </div>
-      ) : null}
+      <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
+        <p className="font-medium">Contratação dentro da H.OIKOS preparada, mas ainda não liberada para cobrança.</p>
+        <p className="mt-1 text-hoikos-600">A API pública da DRAP permite operar lançamentos, parceiros, categorias e webhooks, mas não publica criação de tenant, checkout, assinatura ou ativação de módulo. Mesmo que o adaptador de ativação esteja configurado, a H.OIKOS só habilitará o botão de compra quando existir uma ação de checkout service-to-service homologada e testada de ponta a ponta.</p>
+      </div>
 
       {data.subscription ? (
         <Card><CardHeader><CardTitle className="text-base">Assinatura vinculada</CardTitle></CardHeader><CardContent className="flex flex-wrap items-center gap-3 text-sm"><Badge variant="outline">{data.subscription.status}</Badge><span>{data.subscription.planId}</span>{data.subscription.monthlyCents !== null ? <strong>{currency.format(data.subscription.monthlyCents / 100)}/mês</strong> : null}</CardContent></Card>
@@ -125,7 +123,7 @@ export function DrapSolutionsWorkspace() {
                 <CardContent className="flex flex-1 flex-col gap-4">
                   <div><p className="text-2xl font-semibold tabular-nums text-hoikos-950">{price(item)}</p>{item.annualCents ? <p className="mt-1 text-xs text-hoikos-500">ou {currency.format(item.annualCents / 100)}/ano</p> : null}</div>
                   <p className="flex-1 text-sm text-hoikos-600">{item.description}</p>
-                  {item.kind === "free" ? <Button disabled><Check />Incluído</Button> : <Button disabled={!data.checkoutAvailable}>{data.checkoutAvailable ? "Contratar na H.OIKOS" : "Aguardando checkout DRAP"}</Button>}
+                  {item.kind === "free" ? <Button disabled><Check />Incluído</Button> : <Button disabled>{data.checkoutAvailable ? "Checkout DRAP aguardando homologação final" : "Aguardando checkout DRAP"}</Button>}
                 </CardContent>
               </Card>
             ))}
