@@ -304,3 +304,39 @@ export async function createDrapCharge(input: {
   const shareUrl = readString(data, ["shareUrl", "share_url", "paymentUrl", "payment_url"]);
   return { id, status: readString(data, ["status", "situacao"]) ?? "created", shareUrl: shareUrl && /^https:\/\//i.test(shareUrl) ? shareUrl : null } satisfies DrapCharge;
 }
+
+export class DrapApiError extends Error {
+  constructor(
+    public status: number,
+    public detail: unknown,
+    public retryAfter: string | null,
+  ) {
+    super(`DRAP API request failed with status ${status}`);
+  }
+}
+
+export async function requestDrapApi<T>(
+  externalCompanyId: string,
+  path: string,
+  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+): Promise<{ data: T | null; status: number; retryAfter: string | null }> {
+  if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
+  const method = init.method ?? "GET";
+  const response = await fetch(drapUrl(path), {
+    method,
+    headers: requestHeaders(externalCompanyId),
+    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    signal: AbortSignal.timeout(method === "GET" ? 8000 : 10000),
+  });
+
+  const retryAfter = response.headers.get("retry-after");
+  const text = response.status === 204 ? "" : await response.text();
+  let parsed: unknown = null;
+  if (text) {
+    try { parsed = JSON.parse(text); }
+    catch { parsed = { error: text.slice(0, 500) }; }
+  }
+
+  if (!response.ok) throw new DrapApiError(response.status, parsed, retryAfter);
+  return { data: parsed as T | null, status: response.status, retryAfter };
+}
