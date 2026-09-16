@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ExternalLink, LoaderCircle, MailCheck, ShieldCheck, UserPlus } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, LoaderCircle, ShieldCheck, UserPlus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -132,7 +132,7 @@ export function DrapSolutionsWorkspace() {
             <span className="grid size-11 shrink-0 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700"><UserPlus className="size-5" /></span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-hoikos-950">Crie sua conta DRAP para liberar as soluções financeiras na H.OIKOS</p>
-              <p className="mt-1 text-sm leading-6 text-hoikos-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte à H.OIKOS e conclua a Conexão DRAP no Financeiro. Quando o vínculo for validado, a H.OIKOS enviará um e-mail de confirmação.</p>
+              <p className="mt-1 text-sm leading-6 text-hoikos-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte à H.OIKOS e conclua a Conexão DRAP no Financeiro. A liberação acontece quando a conexão técnica for validada pela API.</p>
             </div>
             <Button onClick={() => void startSignup()} disabled={redirecting !== null}>
               {redirecting === "account" ? <LoaderCircle className="animate-spin" /> : <ExternalLink />}
@@ -143,12 +143,12 @@ export function DrapSolutionsWorkspace() {
       ) : data.connectionStatus !== "active" ? (
         <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
           <p className="font-medium">Conta DRAP vinculada; falta validar a conexão técnica.</p>
-          <p className="mt-1 text-hoikos-600">Assim que a credencial da empresa for validada, os recursos ficam ativos dentro da H.OIKOS e os proprietários recebem o e-mail de confirmação.</p>
+          <p className="mt-1 text-hoikos-600">Assim que a credencial da empresa for validada pela API DRAP, os recursos ficam ativos dentro da H.OIKOS.</p>
         </div>
       ) : (
         <div className="flex items-start gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
-          <MailCheck className="mt-0.5 size-5 shrink-0 text-hoikos-700" />
-          <div><p className="font-medium">DRAP conectada à H.OIKOS.</p><p className="mt-1 text-hoikos-600">Os recursos financeiros podem ser usados no ecossistema H.OIKOS. A confirmação é enviada por e-mail quando o vínculo passa para ativo.</p></div>
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-hoikos-700" />
+          <div><p className="font-medium">DRAP conectada à H.OIKOS.</p><p className="mt-1 text-hoikos-600">Os recursos financeiros DRAP já podem ser usados diretamente no ecossistema H.OIKOS.</p></div>
         </div>
       )}
 
