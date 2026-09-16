@@ -5,6 +5,7 @@ import type { ItemSinapi } from "./sinapi-planilha";
 export const ORCAMENTADOR_BASE_URL = "https://orcamentador.com.br/api";
 export const ORCAMENTADOR_SOURCE_COMMIT = "db5e9129446ec96c66341f0c323c20a8e52b265d";
 export const ORCAMENTADOR_SIGNATURE = `orcamentador-sdk:${ORCAMENTADOR_SOURCE_COMMIT}:codigo-descricao-unidade-preco:v1`;
+const ORCAMENTADOR_PAGE_LIMIT = 100;
 
 type JsonRecord = Record<string, unknown>;
 type FetchResult = { items: ItemSinapi[]; ignored: number };
@@ -114,7 +115,7 @@ function normalizeItem(value: unknown, tipo: "insumo" | "composicao", regime: Pr
   let cents = typeof directCents === "number" && Number.isFinite(directCents) && directCents >= 0 ? Math.round(directCents) : null;
   const regimePriceKeys = regime === "Desonerado"
     ? ["preco_desonerado", "custo_desonerado", "valor_desonerado"]
-    : ["preco_nao_desonerado", "custo_nao_desonerado", "valor_nao_desonerado"];
+    : ["preco_naodesonerado", "preco_nao_desonerado", "custo_naodesonerado", "custo_nao_desonerado", "valor_naodesonerado", "valor_nao_desonerado"];
   if (cents === null) {
     for (const key of [...regimePriceKeys, "preco", "preco_unitario", "preco_mediano", "custo", "custo_unitario", "valor", "price", "unitCost", "unit_cost"]) {
       cents = priceToCents(item[key]);
@@ -125,6 +126,14 @@ function normalizeItem(value: unknown, tipo: "insumo" | "composicao", regime: Pr
   return { codigo, descricao, unidade, custoUnitarioCentavos: cents, tipo };
 }
 
+function commonParams(profile: Profile, month: string) {
+  return {
+    estado: profile.uf.toUpperCase(),
+    regime: profile.regime === "Desonerado" ? "DESONERADO" : "NAO_DESONERADO",
+    data_ref: `${month}-01`,
+  };
+}
+
 async function fetchPaged(path: string, tipo: "insumo" | "composicao", profile: Profile, month: string): Promise<FetchResult> {
   const items: ItemSinapi[] = [];
   const seen = new Set<string>();
@@ -132,12 +141,11 @@ async function fetchPaged(path: string, tipo: "insumo" | "composicao", profile: 
   let previousFingerprint = "";
   for (let page = 1; page <= 500; page++) {
     const payload = await orcamentadorGet(path, {
-      estado: profile.uf.toLowerCase(),
-      regime: profile.regime === "Desonerado" ? "DESONERADO" : "NAO_DESONERADO",
-      data_ref: `${month}-01`,
-      referencia: `${month}-01`,
+      ...commonParams(profile, month),
       page,
-      limit: 500,
+      limit: ORCAMENTADOR_PAGE_LIMIT,
+      sort: "codigo",
+      order: "asc",
     });
     const raw = rawArray(payload);
     if (!raw.length) break;
@@ -155,6 +163,7 @@ async function fetchPaged(path: string, tipo: "insumo" | "composicao", profile: 
     }
     const pages = totalPages(payload);
     if (pages !== null && page >= pages) break;
+    if (pages === null && raw.length < ORCAMENTADOR_PAGE_LIMIT) break;
   }
   return { items, ignored };
 }
@@ -162,7 +171,7 @@ async function fetchPaged(path: string, tipo: "insumo" | "composicao", profile: 
 export async function fetchOrcamentadorMonthlySnapshot(profile: Profile, month: string) {
   const insumos = await fetchPaged("/insumos", "insumo", profile, month);
   const composicoes = await fetchPaged("/composicoes", "composicao", profile, month);
-  const encargos = await orcamentadorGet("/encargos", { estado: profile.uf.toLowerCase() });
+  const encargos = await orcamentadorGet("/encargos", { estado: profile.uf.toUpperCase(), data_ref: `${month}-01` });
   const indicadores = await orcamentadorGet("/indicadores", { indicadores: "incc,incc_acumulado,ipca,igpm,selic,dolar" });
   return {
     items: [...insumos.items, ...composicoes.items],
@@ -171,20 +180,45 @@ export async function fetchOrcamentadorMonthlySnapshot(profile: Profile, month: 
   };
 }
 
-export async function searchOrcamentadorItems(query: string, state: string, referenceMonth: string, regime: Profile["regime"]) {
-  const config = orcamentadorConfig();
+async function searchEndpoint(
+  path: string,
+  tipo: "insumo" | "composicao",
+  query: string,
+  state: string,
+  referenceMonth: string,
+  regime: Profile["regime"],
+) {
   const numeric = /^\d+$/.test(query.trim());
-  const payload = await orcamentadorGet(config.searchPath, {
+  const payload = await orcamentadorGet(path, {
     [numeric ? "codigo" : "nome"]: query.trim(),
-    estado: state.toLowerCase(),
+    estado: state.toUpperCase(),
     regime: regime === "Desonerado" ? "DESONERADO" : "NAO_DESONERADO",
     data_ref: `${referenceMonth}-01`,
-    referencia: `${referenceMonth}-01`,
+    modo_busca: numeric ? undefined : "contem",
     page: 1,
     limit: 50,
+    sort: "codigo",
+    order: "asc",
   });
   return rawArray(payload)
-    .map((value) => normalizeItem(value, "insumo", regime))
-    .filter((value): value is ItemSinapi => Boolean(value))
-    .slice(0, 50);
+    .map((value) => normalizeItem(value, tipo, regime))
+    .filter((value): value is ItemSinapi => Boolean(value));
+}
+
+export async function searchOrcamentadorItems(query: string, state: string, referenceMonth: string, regime: Profile["regime"]) {
+  const config = orcamentadorConfig();
+  const targets: Array<[string, "insumo" | "composicao"]> = config.searchPath === "/insumos"
+    ? [["/insumos", "insumo"], ["/composicoes", "composicao"]]
+    : [[config.searchPath, config.searchPath.toLowerCase().includes("compos") ? "composicao" : "insumo"]];
+  const groups = await Promise.all(targets.map(([path, tipo]) => searchEndpoint(path, tipo, query, state, referenceMonth, regime)));
+  const seen = new Set<string>();
+  const items: ItemSinapi[] = [];
+  for (const item of groups.flat()) {
+    const key = `${item.tipo}:${item.codigo}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+    if (items.length === 50) break;
+  }
+  return items;
 }
