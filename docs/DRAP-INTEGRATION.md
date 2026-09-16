@@ -1,167 +1,240 @@
-# Contrato recomendado para integração remota com a Drap
+# Integração remota com a Drap
 
-Este documento separa a experiência da H.OIKOS do sistema financeiro. Ele é uma proposta técnica a ser alinhada com a API oficial da Drap; não afirma que os caminhos abaixo já existem.
+Este documento registra o contrato técnico confirmado para a API financeira da Drap usada pelo Nexo Obra. A Drap continua sendo a fonte oficial dos dados financeiros; o Nexo guarda apenas vínculos operacionais, estado de sincronização e eventos recebidos.
 
-## Objetivo
+## Base e autenticação
 
-O usuário trabalha na H.OIKOS. Quando precisa de informação financeira, o backend consulta a Drap. Quando uma ação operacional deve produzir efeito financeiro, o backend cria a operação na Drap e guarda apenas o vínculo, o estado de sincronização e um snapshot para leitura resiliente.
+Base técnica:
 
-## Portal operacional
+```text
+https://empresa.drap.app.br/api/v1
+```
 
-O acesso humano à plataforma Drap fica vinculado a `https://empresa.drap.app.br/inicio` e aparece na área **Financeiro** pelo botão **Abrir Drap**. Esse endereço é apenas o portal operacional; ele não substitui a base técnica da API.
+A autenticação usa Bearer token:
+
+```http
+Authorization: Bearer drap_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Cada API key pertence a um único tenant. A própria Drap aplica RLS e filtro explícito no backend, portanto o Nexo **não envia `company_id`** para escolher empresa. O tenant é determinado pela key usada naquela conexão.
+
+O limite informado é de **60 requisições por minuto por API key**. Em excesso a API responde `429` com `Retry-After`.
+
+## Configuração no servidor
+
+Para uma única empresa, a configuração legada continua aceita:
 
 ```dotenv
 DRAP_API_URL=https://empresa.drap.app.br
+DRAP_API_TOKEN=drap_live_...
+DRAP_WEBHOOK_SECRET=...
+DRAP_TRANSACTIONS_PATH=/api/v1/lancamentos
+```
+
+Para várias empresas, configure as credenciais por `external_company_id`:
+
+```dotenv
+DRAP_TENANTS_JSON={"empresa-a":{"apiToken":"drap_live_...","webhookSecret":"..."},"empresa-b":{"apiToken":"drap_live_...","webhookSecret":"..."}}
+```
+
+`DRAP_TENANTS_JSON`, tokens e secrets pertencem somente ao ambiente de execução do servidor. Nunca use `NEXT_PUBLIC_*` para esses valores.
+
+O portal humano continua separado da API:
+
+```dotenv
 NEXT_PUBLIC_DRAP_PORTAL_URL=https://empresa.drap.app.br/inicio
 ```
 
-`DRAP_API_URL` continua sem `/inicio` porque os caminhos técnicos são montados sobre a raiz. `NEXT_PUBLIC_DRAP_PORTAL_URL` é público e não carrega token, segredo ou identificador de empresa.
+## Lançamentos
 
-## Fluxos
-
-### Leitura
-
-```mermaid
-sequenceDiagram
-    participant U as Usuário
-    participant N as H.OIKOS
-    participant D as Drap API
-    U->>N: Abre financeiro do projeto
-    N->>N: Autoriza organização e projeto
-    N->>D: Consulta com token servidor
-    D-->>N: Saldo, contas e resultado
-    N-->>U: Dados no contexto do projeto
-```
-
-### Escrita idempotente
-
-```mermaid
-sequenceDiagram
-    participant U as Usuário
-    participant N as H.OIKOS
-    participant D as Drap API
-    U->>N: Confirma cobrança
-    N->>N: Valida permissão e gera chave
-    N->>D: POST + Idempotency-Key
-    D-->>N: ID remoto e estado
-    N-->>U: Cobrança criada
-```
-
-### Atualização assíncrona
-
-```mermaid
-sequenceDiagram
-    participant D as Drap
-    participant W as Webhook Nexo
-    participant Q as Processador
-    D->>W: Evento assinado
-    W->>W: Verifica e registra uma vez
-    W-->>D: 202 Accepted
-    W->>Q: Evento pendente
-    Q->>Q: Atualiza vínculo/snapshot
-```
-
-## Endpoints que a H.OIKOS precisa
-
-Os nomes são semânticos. Substitua pelos caminhos oficiais no adaptador.
-
-| Capacidade | Método sugerido | Uso |
-| --- | --- | --- |
-| Resumo da empresa | `GET /finance/summary` | saldo, a pagar, a receber e projeção |
-| Transações | `GET /transactions` | drill-down e conciliação visual |
-| Contas a receber | `GET /receivables` | parcelas e atraso por cliente/projeto |
-| Contas a pagar | `GET /payables` | compromissos e previsão de caixa |
-| Centro de custo | `POST /cost-centers` | representar projeto ou obra |
-| Cobrança | `POST /charges` | PIX, boleto ou cartão após confirmação |
-| Lançamento | `POST /transactions` | despesa/receita originada na operação |
-| DRE | `GET /reports/income-statement` | resultado consolidado e por centro de custo |
-
-## Cabeçalhos recomendados
+### Listar
 
 ```http
-Authorization: Bearer <token-servidor>
-Accept: application/json
+GET /api/v1/lancamentos
+Authorization: Bearer drap_live_...
+```
+
+Resposta:
+
+```json
+{
+  "items": [],
+  "total": 142,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+Filtros confirmados: `tipo`, `status`, `data_de`, `data_ate`, `limit` e `offset`.
+
+O adaptador usa páginas de 100 registros e limita cada leitura a 500 lançamentos por requisição interna. O endpoint padrão é `/api/v1/lancamentos` mesmo quando `DRAP_TRANSACTIONS_PATH` não é definido.
+
+### Criar
+
+```http
+POST /api/v1/lancamentos
+Authorization: Bearer drap_live_...
 Content-Type: application/json
-Idempotency-Key: <uuid-da-operacao-local>
-X-Correlation-Id: <uuid-da-requisicao>
 ```
 
-O nome do header de autenticação pode ser configurado por `DRAP_API_KEY_HEADER` quando a API não usa Bearer.
+Exemplo de body:
 
-Os caminhos efetivamente usados pelo adaptador são configurados sem alterar o código:
-
-```dotenv
-DRAP_SUMMARY_PATH=/api/v1/finance/summary
-DRAP_TRANSACTIONS_PATH=
-DRAP_CHARGES_PATH=
+```json
+{
+  "data": "2026-06-22",
+  "descricao": "Venda site",
+  "tipo": "receita",
+  "valor": 1500.00,
+  "contraparte": "ACME Ltda",
+  "status": "pago"
+}
 ```
 
-Enquanto `DRAP_TRANSACTIONS_PATH` ou `DRAP_CHARGES_PATH` estiverem vazios, as respectivas ações permanecem bloqueadas na interface. Isso impede que um caminho de API ainda não confirmado produza efeito financeiro.
+A criação direta de lançamento ainda não é disparada automaticamente pelo Nexo. Toda escrita financeira deve continuar idempotente e explicitamente homologada antes de ser ligada à interface.
 
-Na criação da cobrança, a H.OIKOS envia a política de lembretes junto à operação remota: dias antes do vencimento, envio no vencimento e intervalo após atraso. A automação só deve ser marcada como homologada quando a Drap confirmar que executa essa política.
+## Parceiros e categorias
 
-## Mapeamentos persistidos
+Endpoints confirmados:
 
-| Entidade Nexo | ID Drap | Observação |
-| --- | --- | --- |
-| Organização | empresa/tenant | obrigatório para todas as chamadas |
-| Cliente | pessoa/contato | evita duplicar cobrança por nome |
-| Projeto/obra | centro de custo | base para resultado por trabalho |
-| Orçamento aprovado | documento/origem | rastreabilidade da cobrança |
-| Cobrança | charge/receivable | guardar ID e estado, não recalcular saldo |
+| Recurso | Métodos |
+| --- | --- |
+| `/parceiros` | `GET`, `POST` |
+| `/parceiros/{id}` | `GET`, `PATCH`, `DELETE` |
+| `/categorias` | `GET`, `POST` |
+
+Filtros de parceiros: `tipo`, `ativo`, `limit`, `offset`.
+
+## Respostas HTTP
+
+| Código | Significado |
+| --- | --- |
+| `200` | sucesso em GET/PATCH |
+| `201` | criado em POST |
+| `400` | body inválido; detalhe Zod em `detail` |
+| `401` | key ausente, inválida ou revogada |
+| `403` | scope insuficiente |
+| `404` | recurso não existe naquele tenant |
+| `409` | conflito |
+| `429` | rate-limit; consultar `Retry-After` |
+| `500` | erro interno |
 
 ## Webhooks
 
-O endpoint local é `POST /api/integrations/drap/webhook`.
+Endpoint receptor do Nexo:
 
-Contrato esperado atualmente:
+```text
+POST /api/integrations/drap/webhook
+```
 
-- assinatura hexadecimal HMAC SHA-256 em `x-drap-signature` ou `x-webhook-signature`;
-- ID em `id` ou `event_id`;
-- tipo em `type` ou `event_type`;
-- empresa em `company_id`, `companyId` ou dentro de `data`;
-- o ID do evento é chave primária para impedir duplicação.
+A subscription é criada na Drap em **Configurações → Integrações → Webhooks**. O secret é mostrado uma única vez e deve ser salvo no ambiente do servidor.
 
-Quando a documentação oficial divergir, altere apenas o tradutor da borda. Não leve campos remotos para o domínio central.
+Cabeçalhos confirmados:
 
-Eventos úteis:
+```http
+X-DRAP-Timestamp: 1750564800
+X-DRAP-Signature: sha256=...
+Content-Type: application/json
+```
 
-- `transaction.created|updated|deleted`;
-- `receivable.created|paid|overdue|cancelled`;
-- `payable.created|paid|overdue|cancelled`;
-- `charge.created|paid|failed|refunded`;
-- `invoice.authorized|rejected|cancelled`;
-- `reconciliation.updated`.
+Envelope confirmado:
 
-## Resiliência
+```json
+{
+  "event": "lancamento.created",
+  "timestamp": 1750564800,
+  "data": {
+    "lancamento": {
+      "id": "uuid",
+      "data": "2026-06-22",
+      "descricao": "Venda site",
+      "tipo": "receita",
+      "valor": 1500.00,
+      "status": "pago"
+    }
+  }
+}
+```
 
-- Timeout curto para telas: 8 segundos no protótipo.
-- Retry automático apenas para GET e escritas com idempotência.
-- Circuit breaker após falhas consecutivas.
-- Snapshot com horário para leitura quando a Drap estiver indisponível.
-- Reconciliação periódica para cobrir webhook perdido.
-- Fila de erro com reprocessamento manual e motivo legível.
-- Nunca mostrar dado de demonstração como se fosse financeiro real.
+### Assinatura
 
-## Segurança
+A assinatura é HMAC-SHA256 do texto exato:
 
-- Token e segredo somente no ambiente de execução do servidor.
-- Token por ambiente e, se possível, escopo mínimo por empresa.
-- Rotação sem indisponibilidade.
-- Payload de webhook limitado por tamanho antes de persistir.
-- Logs sem token, documento, dados bancários ou payload completo sensível.
-- Auditoria de quem iniciou cada escrita remota.
-- Chave de idempotência única por empresa, persistida antes da chamada de criação de cobrança.
+```text
+X-DRAP-Timestamp + "." + rawBody
+```
 
-## Checklist de homologação
+Em Node, a regra equivalente é:
 
-- [ ] OpenAPI oficial recebida e versionada.
-- [ ] Sandbox e empresa de teste criadas.
-- [ ] Autenticação e rotação validadas.
-- [ ] Paginação, moeda, fuso e arredondamento confirmados.
-- [ ] Testes de contrato com respostas reais anonimizadas.
-- [ ] Assinatura do webhook confirmada byte a byte.
-- [ ] Evento repetido não duplica efeito.
-- [ ] Timeout e indisponibilidade exibem estado correto.
-- [ ] Reconciliação encontra e corrige divergência.
-- [ ] Escritas financeiras auditadas de ponta a ponta.
+```js
+const esperado = "sha256=" + createHmac("sha256", secret)
+  .update(`${timestamp}.${rawBody}`)
+  .digest("hex");
+```
+
+O Nexo rejeita timestamps com diferença superior a **300 segundos**. O `rawBody` é validado antes de parsear JSON.
+
+Como o contrato não fornece `event_id`, o Nexo gera um identificador idempotente SHA-256 a partir de `timestamp.rawBody`. Uma repetição byte a byte do mesmo webhook é registrada apenas uma vez.
+
+### Roteamento multiempresa
+
+O payload oficial não contém `company_id`. Para não misturar tenants, o Nexo identifica a empresa pelo **secret que validou a assinatura** e pelo `external_company_id` correspondente em `DRAP_TENANTS_JSON`.
+
+A configuração legada com um único `DRAP_WEBHOOK_SECRET` só é aceita quando existe no máximo uma conexão Drap ativa. Se houver mais de uma, o receptor falha fechado com conflito em vez de encaminhar o evento à empresa errada.
+
+## Eventos oficiais
+
+Eventos informados pela Drap:
+
+- `lancamento.created`, `lancamento.updated`, `lancamento.deleted`, `lancamento.paid`, `lancamento.unpaid`;
+- `parceiro.created`, `parceiro.updated`, `parceiro.deleted`;
+- `categoria.created`, `categoria.updated`, `categoria.deleted`;
+- `conta_bancaria.created`, `conta_bancaria.updated`, `conta_bancaria.deleted`;
+- `nfse.emitida`, `nfse.cancelada`;
+- `cobranca.criada`, `cobranca.paga`, `cobranca.cancelada`;
+- `orcamento.criado`, `orcamento.atualizado`;
+- `anexo.adicionado`.
+
+O processador do Nexo trata `lancamento.*` como sinal de atualização da fonte oficial e volta a consultar a Drap quando a tela precisar do dado. Ele não replica lançamentos como segunda verdade local. Eventos de cobrança atualizam somente solicitações de cobrança já vinculadas por ID remoto. Os demais eventos ficam preservados para auditoria até existir regra de domínio explícita.
+
+## Mapeamento de lançamentos para a interface
+
+O adaptador reconhece, entre outros:
+
+- `tipo=receita` como valor a receber;
+- `tipo=despesa` como valor a pagar;
+- `status=pago` como quitado;
+- `status=vencido` como vencido;
+- `descricao` como descrição;
+- `valor` como valor;
+- `contraparte` como cliente/fornecedor exibido.
+
+O resumo financeiro mostrado pelo Nexo é calculado em memória a partir dos lançamentos consultados na Drap. Nenhum saldo ou lançamento é persistido como fonte concorrente.
+
+## Segurança e resiliência
+
+- tokens e secrets só no servidor;
+- credencial separada por tenant em ambiente multiempresa;
+- payload do webhook limitado a 256 KiB;
+- HMAC verificado sobre `timestamp.rawBody`;
+- tolerância máxima de relógio de 300 segundos;
+- webhook repetido não duplica processamento;
+- consulta GET tem timeout curto e respeita paginação;
+- `429` preserva o valor de `Retry-After` no erro interno;
+- nenhuma falha da Drap é substituída por dado fictício;
+- escritas financeiras continuam exigindo idempotency key quando forem homologadas.
+
+## Estado de homologação
+
+- [x] autenticação Bearer confirmada;
+- [x] isolamento por tenant da API key confirmado;
+- [x] listagem e paginação de `/api/v1/lancamentos` mapeadas;
+- [x] campos básicos de lançamento mapeados;
+- [x] assinatura do webhook confirmada como `timestamp.rawBody`;
+- [x] janela de 300 segundos implementada;
+- [x] idempotência do receptor implementada;
+- [x] roteamento multiempresa por secret implementado;
+- [x] eventos `lancamento.*` e `cobranca.*` reconhecidos;
+- [ ] credenciais reais configuradas no ambiente de produção;
+- [ ] subscription real criada apontando para o endpoint publicado;
+- [ ] POST automático de lançamentos habilitado após teste de idempotência/escrita;
+- [ ] endpoints de cobrança homologados antes de liberar criação pela interface.
