@@ -2,7 +2,7 @@ import { z } from "zod";
 import { apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import { requireSuperAdmin } from "@/lib/server/superadmin";
 import { checkPortalOrigin } from "@/lib/server/portal";
-import { mappingSchema, monthSchema, regimeSchema, UFS } from "@/lib/integrations/sinapi-contract";
+import { isLegacyCaixaReference, mappingSchema, monthSchema, regimeSchema, UFS } from "@/lib/integrations/sinapi-contract";
 import { activateSinapi, advanceSinapi, discardSinapi, mapSinapi, setSinapiAutomatic, sinapiStatus, startSinapi, uploadSinapi, withSinapiLock } from "@/lib/server/sinapi-sync";
 
 export const runtime = "nodejs";
@@ -63,6 +63,12 @@ export async function POST(request: Request) {
     checkPortalOrigin(request); const admin = await requireSuperAdmin(request);
     const parsed = schema.safeParse(await jsonBody(request)); if (!parsed.success) throw validationError(parsed.error.flatten());
     const data = parsed.data;
+    if (data.action === "start" && isLegacyCaixaReference(data.month)) {
+      throw validationError({
+        formErrors: ["Referências SINAPI até 2024 usam arquivos históricos por UF e regime, com nomes variáveis. Use o envio manual do ZIP oficial da CAIXA."],
+        fieldErrors: {},
+      });
+    }
     await withSinapiLock(async (token) => {
       if (data.action === "start") {
         const existing = (await sinapiStatus()).config;
