@@ -1,7 +1,7 @@
 import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { isSinapiConfigured, searchSinapiItems } from "@/lib/integrations/sinapi";
 import { getDatabase } from "@/db";
-import { UFS } from "@/lib/integrations/sinapi-contract";
+import { monthSchema, normalizeSinapiUf, regimeSchema } from "@/lib/integrations/sinapi-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,16 @@ export async function GET(request: Request) {
     requireModulePermission(context, "budgets", "view");
     const url = new URL(request.url);
     const query = url.searchParams.get("q")?.trim() ?? "";
-    const state = url.searchParams.get("uf")?.trim().toUpperCase() ?? "";
+    const rawState = url.searchParams.get("uf")?.trim() ?? "";
     const referenceMonth = url.searchParams.get("referenceMonth")?.trim() ?? "";
-    const regime = url.searchParams.get("regime") ?? "NaoDesonerado";
-    if (query.length < 2 || query.length > 160 || !UFS.includes(state) || (referenceMonth && !/^20\d{2}-(0[1-9]|1[0-2])$/.test(referenceMonth)) || !["Desonerado", "NaoDesonerado"].includes(regime)) {
-      return Response.json({ error: "Informe busca, UF e mês de referência válidos.", code: "invalid_sinapi_search" }, { status: 400 });
+    const parsedRegime = regimeSchema.safeParse(url.searchParams.get("regime") ?? "NaoDesonerado");
+    let state = "";
+    try { state = normalizeSinapiUf(rawState); } catch {}
+    const validMonth = !referenceMonth || monthSchema.safeParse(referenceMonth).success;
+    if (query.length < 2 || query.length > 160 || !state || !validMonth || !parsedRegime.success) {
+      return Response.json({ error: "Informe busca, UF, regime e mês de referência válidos.", code: "invalid_sinapi_search" }, { status: 400 });
     }
+    const regime = parsedRegime.data;
     const db = getDatabase();
     const active = await db.prepare(`SELECT id,competencia FROM sinapi_competencias WHERE estado='aprovada' AND uf=?1 AND regime=?2
       AND (?3='' OR competencia=?3) ORDER BY competencia DESC LIMIT 1`).bind(state, regime, referenceMonth).first<{ id: string; competencia: string }>();
