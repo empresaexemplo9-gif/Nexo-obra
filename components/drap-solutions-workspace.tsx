@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, LoaderCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, ExternalLink, LoaderCircle, MailCheck, ShieldCheck, UserPlus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,8 @@ type CatalogResponse = {
   };
 };
 
+type SignupResponse = { redirectUrl: string; catalogItemId: string | null; error?: string };
+
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 function price(item: CatalogItem) {
@@ -48,7 +50,9 @@ function price(item: CatalogItem) {
 export function DrapSolutionsWorkspace() {
   const [data, setData] = useState<CatalogResponse | null>(null);
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +77,24 @@ export function DrapSolutionsWorkspace() {
     ];
   }, [data]);
 
+  async function startSignup(catalogItemId: string | null = null) {
+    setActionError("");
+    setRedirecting(catalogItemId ?? "account");
+    try {
+      const response = await fetch("/api/integrations/drap/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ catalogItemId }),
+      });
+      const body = await response.json().catch(() => ({})) as SignupResponse;
+      if (!response.ok || !body.redirectUrl) throw new Error(body.error ?? "Não foi possível abrir o cadastro DRAP.");
+      window.location.assign(body.redirectUrl);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Não foi possível abrir o cadastro DRAP.");
+      setRedirecting(null);
+    }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><LoaderCircle className="size-7 animate-spin" /></div>;
   }
@@ -91,7 +113,7 @@ export function DrapSolutionsWorkspace() {
         <div>
           <p className="eyebrow text-hoikos-600">H.OIKOS · Financeiro</p>
           <h1 className="display-heading mt-2 text-4xl text-hoikos-950">Soluções DRAP</h1>
-          <p className="mt-2 max-w-3xl text-sm text-hoikos-500">Use os serviços DRAP dentro da H.OIKOS, com o mesmo preço publicado pela DRAP e sem redirecionamento operacional.</p>
+          <p className="mt-2 max-w-3xl text-sm text-hoikos-500">Use os serviços DRAP dentro da H.OIKOS, com o mesmo preço publicado pela DRAP. Enquanto o provisionamento automático não estiver disponível, somente a criação inicial da conta acontece na DRAP.</p>
         </div>
         <Button variant="outline" onClick={() => { window.location.href = "/"; }}><ArrowLeft />Voltar à H.OIKOS</Button>
       </div>
@@ -99,14 +121,42 @@ export function DrapSolutionsWorkspace() {
       <Card>
         <CardContent className="grid gap-4 p-5 md:grid-cols-3">
           <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Preço</p><p className="mt-2 font-medium">Mesmo valor da DRAP</p></div>
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Experiência</p><p className="mt-2 font-medium">Dentro da H.OIKOS</p></div>
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Tenant DRAP</p><p className="mt-2 font-medium">{data.tenantProvisioned ? "Vinculado" : "Ainda não provisionado"}</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Uso</p><p className="mt-2 font-medium">Dentro da H.OIKOS</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Conta DRAP</p><p className="mt-2 font-medium">{data.tenantProvisioned ? (data.connectionStatus === "active" ? "Conectada" : "Vínculo pendente") : "Ainda não criada/vinculada"}</p></div>
         </CardContent>
       </Card>
 
+      {!data.tenantProvisioned ? (
+        <Card className="border-hoikos-200 bg-hoikos-50">
+          <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
+            <span className="grid size-11 shrink-0 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700"><UserPlus className="size-5" /></span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-hoikos-950">Crie sua conta DRAP para liberar as soluções financeiras na H.OIKOS</p>
+              <p className="mt-1 text-sm leading-6 text-hoikos-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte à H.OIKOS e conclua a Conexão DRAP no Financeiro. Quando o vínculo for validado, a H.OIKOS enviará um e-mail de confirmação.</p>
+            </div>
+            <Button onClick={() => void startSignup()} disabled={redirecting !== null}>
+              {redirecting === "account" ? <LoaderCircle className="animate-spin" /> : <ExternalLink />}
+              Criar conta DRAP
+            </Button>
+          </CardContent>
+        </Card>
+      ) : data.connectionStatus !== "active" ? (
+        <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
+          <p className="font-medium">Conta DRAP vinculada; falta validar a conexão técnica.</p>
+          <p className="mt-1 text-hoikos-600">Assim que a credencial da empresa for validada, os recursos ficam ativos dentro da H.OIKOS e os proprietários recebem o e-mail de confirmação.</p>
+        </div>
+      ) : (
+        <div className="flex items-start gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
+          <MailCheck className="mt-0.5 size-5 shrink-0 text-hoikos-700" />
+          <div><p className="font-medium">DRAP conectada à H.OIKOS.</p><p className="mt-1 text-hoikos-600">Os recursos financeiros podem ser usados no ecossistema H.OIKOS. A confirmação é enviada por e-mail quando o vínculo passa para ativo.</p></div>
+        </div>
+      )}
+
+      {actionError ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 p-3 text-sm text-hoikos-800">{actionError}</p> : null}
+
       <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
-        <p className="font-medium">Contratação dentro da H.OIKOS preparada, mas ainda não liberada para cobrança.</p>
-        <p className="mt-1 text-hoikos-600">A API pública da DRAP permite operar lançamentos, parceiros, categorias e webhooks, mas não publica criação de tenant, checkout, assinatura ou ativação de módulo. Mesmo que o adaptador de ativação esteja configurado, a H.OIKOS só habilitará o botão de compra quando existir uma ação de checkout service-to-service homologada e testada de ponta a ponta.</p>
+        <p className="font-medium">Contratação dentro da H.OIKOS continua sendo o destino final.</p>
+        <p className="mt-1 text-hoikos-600">Até a DRAP publicar o checkout service-to-service, a H.OIKOS usa o cadastro oficial da DRAP como etapa provisória. A operação financeira continua dentro da H.OIKOS após a conexão.</p>
       </div>
 
       {data.subscription ? (
@@ -123,7 +173,16 @@ export function DrapSolutionsWorkspace() {
                 <CardContent className="flex flex-1 flex-col gap-4">
                   <div><p className="text-2xl font-semibold tabular-nums text-hoikos-950">{price(item)}</p>{item.annualCents ? <p className="mt-1 text-xs text-hoikos-500">ou {currency.format(item.annualCents / 100)}/ano</p> : null}</div>
                   <p className="flex-1 text-sm text-hoikos-600">{item.description}</p>
-                  {item.kind === "free" ? <Button disabled><Check />Incluído</Button> : <Button disabled>{data.checkoutAvailable ? "Checkout DRAP aguardando homologação final" : "Aguardando checkout DRAP"}</Button>}
+                  {item.kind === "free" ? (
+                    <Button disabled><Check />Incluído</Button>
+                  ) : !data.tenantProvisioned ? (
+                    <Button onClick={() => void startSignup(item.id)} disabled={redirecting !== null}>
+                      {redirecting === item.id ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
+                      Criar conta DRAP
+                    </Button>
+                  ) : (
+                    <Button disabled>{data.checkoutAvailable ? "Checkout DRAP aguardando homologação final" : "Contratação embutida em integração"}</Button>
+                  )}
                 </CardContent>
               </Card>
             ))}
