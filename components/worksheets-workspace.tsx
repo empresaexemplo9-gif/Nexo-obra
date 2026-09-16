@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
   insertColumn, insertRow, parseCellKey, sheetToCsv, sortRows,
-  SHEET_FUNCTIONS, type SheetCells, type SheetResult,
+  SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
@@ -122,7 +122,13 @@ function Grid({
                       if (event.key === "ArrowLeft") { event.preventDefault(); move(key, -1, 0); }
                       if (event.key === "ArrowDown") { event.preventDefault(); move(key, 0, 1); }
                       if (event.key === "ArrowUp") { event.preventDefault(); move(key, 0, -1); }
-                      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) { setDraft(event.key); setEditing(key); }
+                      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.nativeEvent.isComposing) {
+                        // A tecla que abre o editor não pode também cair no input recém-montado.
+                        // Sem o preventDefault, "1" podia virar "11" e "a" virar "aa".
+                        event.preventDefault();
+                        setDraft(event.key);
+                        setEditing(key);
+                      }
                     }}
                     className={`h-8 w-full min-w-[7.5rem] truncate px-2 text-left ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""}`}
                   >{result?.display ?? ""}</button>
@@ -145,6 +151,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [active, setActive] = useState("A1");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
   const formulaRef = useRef<HTMLInputElement>(null);
@@ -201,6 +208,24 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column" | "fill-down") {
     const address = parseCellKey(active);
     if (!current || !address || readOnly) return;
+    if (operation === "insert-row" && current.rows >= SHEET_MAX_ROWS) {
+      toast.error(`A planilha já tem o limite de ${SHEET_MAX_ROWS} linhas.`); return;
+    }
+    if (operation === "insert-column" && current.columns >= SHEET_MAX_COLUMNS) {
+      toast.error(`A planilha já tem o limite de ${SHEET_MAX_COLUMNS} colunas.`); return;
+    }
+    if (operation === "delete-row" && current.rows <= 1) {
+      toast.error("A planilha precisa manter pelo menos uma linha."); return;
+    }
+    if (operation === "delete-column" && current.columns <= 1) {
+      toast.error("A planilha precisa manter pelo menos uma coluna."); return;
+    }
+
+    const nextRows = operation === "insert-row" ? current.rows + 1
+      : operation === "delete-row" ? current.rows - 1 : current.rows;
+    const nextColumns = operation === "insert-column" ? current.columns + 1
+      : operation === "delete-column" ? current.columns - 1 : current.columns;
+
     setCurrent((sheet) => {
       if (!sheet) return sheet;
       const cells = sheet.content.cells;
@@ -212,11 +237,17 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         : fillDown(cells, active, sheet.rows - 1);
       return {
         ...sheet,
-        rows: operation === "insert-row" ? Math.min(500, sheet.rows + 1) : sheet.rows,
-        columns: operation === "insert-column" ? Math.min(52, sheet.columns + 1) : sheet.columns,
+        rows: nextRows,
+        columns: nextColumns,
         content: { ...sheet.content, cells: next },
       };
     });
+    if (operation === "delete-row" || operation === "delete-column") {
+      setActive(cellKey({
+        column: Math.min(address.column, nextColumns - 1),
+        row: Math.min(address.row, nextRows - 1),
+      }));
+    }
     setDirty(true);
   }
 
@@ -256,7 +287,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const result = await api<{ worksheet: Worksheet }>("/api/worksheets", { method: "POST", body: JSON.stringify({ name, kind, templateId }) });
       await loadList();
       setCurrent(result.worksheet);
-      setAccess({ canView: true, canEdit: true, canGovern: kind === "analysis", level: "superadmin" });
+      setAccess({ canView: true, canEdit: true, canGovern: kind === "analysis", level: kind === "analysis" ? "superadmin" : "empresa" });
       setDirty(false);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível criar."); }
   }
@@ -279,18 +310,29 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }
 
   async function remove() {
-    if (!current) return;
+    if (!current || deleting) return;
+    if (!window.confirm(`Excluir “${current.name}”? Essa ação não pode ser desfeita.`)) return;
+    const deletedId = current.id;
+    setDeleting(true); setError("");
     try {
-      await api(`/api/worksheets/${current.id}`, { method: "DELETE" });
+      await api<{ deleted: boolean }>(`/api/worksheets/${deletedId}`, { method: "DELETE" });
       const remaining = await loadList();
       setCurrent(null);
-      if (remaining[0]) await open(remaining[0].id);
-    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível excluir."); }
+      setAccess(null);
+      setDirty(false);
+      const next = remaining.find((item) => item.id !== deletedId);
+      if (next) await open(next.id);
+      toast.success("Planilha excluída");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Não foi possível excluir.";
+      setError(message);
+      toast.error(message);
+    } finally { setDeleting(false); }
   }
 
   // Cola a tabela real a partir da célula selecionada, já com a fórmula de total.
   async function insertSource(sourceId: string) {
-    if (!current || !sourceId) return;
+    if (!current || !sourceId || readOnly) return;
     const anchor = parseCellKey(active) ?? { column: 0, row: 0 };
     try {
       const result = await api<{ headers: string[]; rows: Array<Array<string | number>> }>(
@@ -308,8 +350,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         const tallest = anchor.row + result.rows.length + 1;
         return {
           ...sheet,
-          columns: Math.max(sheet.columns, Math.min(52, widest)),
-          rows: Math.max(sheet.rows, Math.min(500, tallest + 2)),
+          columns: Math.max(sheet.columns, Math.min(SHEET_MAX_COLUMNS, widest)),
+          rows: Math.max(sheet.rows, Math.min(SHEET_MAX_ROWS, tallest + 2)),
           content: { ...sheet.content, cells },
         };
       });
@@ -319,13 +361,19 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }
 
   function insertFunction(name: string) {
-    if (!name || !current) return;
+    if (!name || !current || readOnly) return;
     const address = parseCellKey(active);
-    const suggestion = address && address.row > 0
-      ? `=${name}(${columnName(address.column)}1:${columnName(address.column)}${address.row})`
-      : `=${name}()`;
+    const rangeFunctions = new Set(["SOMA", "MEDIA", "MIN", "MAX", "CONT.NUM", "CONT.VALORES", "MEDIANA"]);
+    const suggestion = ["HOJE", "AGORA"].includes(name)
+      ? `=${name}()`
+      : address && address.row > 0 && rangeFunctions.has(name)
+        ? `=${name}(${columnName(address.column)}1:${columnName(address.column)}${address.row})`
+        : `=${name}(`;
     updateCell(active, suggestion);
-    formulaRef.current?.focus();
+    window.requestAnimationFrame(() => {
+      formulaRef.current?.focus();
+      formulaRef.current?.setSelectionRange(suggestion.length, suggestion.length);
+    });
   }
 
   const filtered = useMemo(() => {
@@ -402,14 +450,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           {current.visibility === "restricted" ? <Badge variant="outline" className="gap-1 border-hoikos-300"><ShieldCheck className="size-3" />Acesso liberado pelo superadmin</Badge> : null}
           {dirty ? <Badge variant="outline" className="border-hoikos-300">Não salvo</Badge> : <span className="text-xs text-hoikos-500">Revisão {current.revision}</span>}
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            {sources.length ? <NativeSelect aria-label="Inserir dados reais" value="" onChange={(event) => { void insertSource(event.target.value); event.target.value = ""; }} className="h-9">
+            {!readOnly && sources.length ? <NativeSelect aria-label="Inserir dados reais" value="" onChange={(event) => { void insertSource(event.target.value); event.target.value = ""; }} className="h-9">
               <option value="">Inserir dados reais…</option>
               {sources.map((source) => <option key={source.id} value={source.id}>{source.label}</option>)}
             </NativeSelect> : null}
             <Button size="sm" variant="outline" onClick={() => download(`${current.name}.csv`, sheetToCsv(current.content.cells, current.columns, current.rows), "text/csv;charset=utf-8")}><Download />CSV</Button>
             {readOnly ? null : <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>{saving ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>}
             {readOnly || (current.visibility === "restricted" && !access?.canGovern) ? null
-              : <Button size="sm" variant="ghost" onClick={() => void remove()} aria-label="Excluir"><Trash2 /></Button>}
+              : <Button size="sm" variant="ghost" onClick={() => void remove()} aria-label="Excluir" disabled={deleting}>
+                  {deleting ? <LoaderCircle className="animate-spin" /> : <Trash2 />}Excluir
+                </Button>}
           </div>
         </div>
         {current.kind !== "document" ? <div className="flex flex-wrap items-center gap-2">
@@ -420,7 +470,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
             placeholder="Digite um valor ou uma fórmula começando por ="
             className="h-9 flex-1 font-mono text-[13px]"
           />
-          <NativeSelect aria-label="Inserir função" value="" onChange={(event) => { insertFunction(event.target.value); event.target.value = ""; }} className="h-9 max-w-[11rem]">
+          <NativeSelect aria-label="Inserir função" value="" disabled={readOnly} onChange={(event) => { insertFunction(event.target.value); event.target.value = ""; }} className="h-9 max-w-[11rem]">
             <option value="">Função…</option>
             {SHEET_FUNCTIONS.map((name) => <option key={name} value={name}>{name}</option>)}
           </NativeSelect>
