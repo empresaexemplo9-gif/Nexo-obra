@@ -28,6 +28,11 @@ export type DrapCharge = {
   shareUrl: string | null;
 };
 
+type DrapTenantConfig = {
+  apiToken?: string;
+  webhookSecret?: string;
+};
+
 type DrapRuntimeEnv = {
   DRAP_API_URL?: string;
   DRAP_API_TOKEN?: string;
@@ -35,15 +40,54 @@ type DrapRuntimeEnv = {
   DRAP_TRANSACTIONS_PATH?: string;
   DRAP_CHARGES_PATH?: string;
   DRAP_WEBHOOK_SECRET?: string;
+  DRAP_TENANTS_JSON?: string;
 };
 
 function runtimeEnv() {
   return platformEnv() as unknown as DrapRuntimeEnv;
 }
 
+function tenantConfigs() {
+  const raw = runtimeEnv().DRAP_TENANTS_JSON;
+  if (!raw) return {} as Record<string, DrapTenantConfig>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {} as Record<string, DrapTenantConfig>;
+    const result: Record<string, DrapTenantConfig> = {};
+    for (const [companyId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      const entry = value as Record<string, unknown>;
+      const apiToken = typeof entry.apiToken === "string" && entry.apiToken.trim() ? entry.apiToken.trim() : undefined;
+      const webhookSecret = typeof entry.webhookSecret === "string" && entry.webhookSecret.trim() ? entry.webhookSecret.trim() : undefined;
+      if (apiToken || webhookSecret) result[companyId] = { apiToken, webhookSecret };
+    }
+    return result;
+  } catch {
+    return {} as Record<string, DrapTenantConfig>;
+  }
+}
+
+function apiTokenFor(externalCompanyId: string) {
+  const config = runtimeEnv();
+  const tenantToken = tenantConfigs()[externalCompanyId]?.apiToken;
+  const token = tenantToken ?? config.DRAP_API_TOKEN;
+  if (!token) throw new Error("DRAP integration is not configured for this tenant");
+  return token;
+}
+
+export function getDrapWebhookCandidates() {
+  const config = runtimeEnv();
+  const candidates = Object.entries(tenantConfigs())
+    .filter(([, value]) => Boolean(value.webhookSecret))
+    .map(([externalCompanyId, value]) => ({ externalCompanyId, secret: value.webhookSecret as string }));
+  if (config.DRAP_WEBHOOK_SECRET) candidates.push({ externalCompanyId: "", secret: config.DRAP_WEBHOOK_SECRET });
+  return candidates;
+}
+
 export function isDrapConfigured() {
   const config = runtimeEnv();
-  return Boolean(config.DRAP_API_URL && config.DRAP_API_TOKEN);
+  const hasTenantToken = Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken));
+  return Boolean(config.DRAP_API_URL && (config.DRAP_API_TOKEN || hasTenantToken));
 }
 
 export function isDrapTransactionsConfigured() {
@@ -52,7 +96,7 @@ export function isDrapTransactionsConfigured() {
 
 export function isDrapChargesConfigured() {
   const config = runtimeEnv();
-  return Boolean(config.DRAP_API_URL && config.DRAP_API_TOKEN && config.DRAP_CHARGES_PATH);
+  return Boolean(config.DRAP_API_URL && config.DRAP_CHARGES_PATH && (config.DRAP_API_TOKEN || Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken))));
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -88,12 +132,12 @@ function readString(record: Record<string, unknown>, keys: string[]) {
   return null;
 }
 
-function requestHeaders() {
+function requestHeaders(externalCompanyId: string) {
   const config = runtimeEnv();
-  if (!config.DRAP_API_TOKEN) throw new Error("DRAP integration is not configured");
+  const token = apiTokenFor(externalCompanyId);
   const headers = new Headers({ Accept: "application/json", "Content-Type": "application/json" });
-  if (config.DRAP_API_KEY_HEADER) headers.set(config.DRAP_API_KEY_HEADER, config.DRAP_API_TOKEN);
-  else headers.set("Authorization", `Bearer ${config.DRAP_API_TOKEN}`);
+  if (config.DRAP_API_KEY_HEADER) headers.set(config.DRAP_API_KEY_HEADER, token);
+  else headers.set("Authorization", `Bearer ${token}`);
   return headers;
 }
 
@@ -134,7 +178,7 @@ function normalizeTransaction(value: unknown): FinancialTransaction | null {
   };
 }
 
-export async function fetchDrapTransactions(_externalCompanyId: string, costCenterId?: string | null) {
+export async function fetchDrapTransactions(externalCompanyId: string, costCenterId?: string | null) {
   const config = runtimeEnv();
   if (!isDrapTransactionsConfigured()) throw new Error("DRAP transactions are not configured");
 
@@ -147,7 +191,7 @@ export async function fetchDrapTransactions(_externalCompanyId: string, costCent
     url.searchParams.set("limit", "100");
     url.searchParams.set("offset", String(offset));
 
-    const response = await fetch(url, { headers: requestHeaders(), signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       const retryAfter = response.headers.get("retry-after");
       const suffix = response.status === 429 && retryAfter ? `; retry after ${retryAfter}s` : "";
@@ -226,7 +270,7 @@ export async function createDrapCharge(input: {
 }) {
   const config = runtimeEnv();
   if (!isDrapChargesConfigured() || !config.DRAP_CHARGES_PATH) throw new Error("DRAP charges are not configured");
-  const headers = requestHeaders();
+  const headers = requestHeaders(input.externalCompanyId);
   headers.set("Idempotency-Key", input.idempotencyKey);
   const response = await fetch(drapUrl(config.DRAP_CHARGES_PATH), {
     method: "POST",
@@ -252,8 +296,4 @@ export async function createDrapCharge(input: {
   if (!id) throw new Error("DRAP charge response has no id");
   const shareUrl = readString(data, ["shareUrl", "share_url", "paymentUrl", "payment_url"]);
   return { id, status: readString(data, ["status", "situacao"]) ?? "created", shareUrl: shareUrl && /^https:\/\//i.test(shareUrl) ? shareUrl : null } satisfies DrapCharge;
-}
-
-export function getDrapWebhookSecret() {
-  return runtimeEnv().DRAP_WEBHOOK_SECRET ?? null;
 }
