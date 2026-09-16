@@ -46,7 +46,7 @@ export type WorksheetRow = {
   visibility: string; revision: number; created_at: number; updated_at: number;
 };
 
-export type WorksheetAccess = { canView: boolean; canEdit: boolean; canGovern: boolean; level: string };
+export type WorksheetAccess = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
 
 // Regra única de acesso, para nenhuma rota divergir da outra.
 // A planilha de saúde financeira é governada pelo superadministrador: só ele cria,
@@ -56,13 +56,14 @@ export function worksheetAccess(
   viewer: { memberId: string; role: string; isSuperAdmin: boolean },
   grant: { level: string } | null,
 ): WorksheetAccess {
-  if (viewer.isSuperAdmin) return { canView: true, canEdit: true, canGovern: true, level: "superadmin" };
+  if (viewer.isSuperAdmin) return { canView: true, canEdit: true, canGovern: true, canDelete: true, level: "superadmin" };
   if (row.visibility !== "restricted") {
-    return { canView: true, canEdit: true, canGovern: false, level: "empresa" };
+    const canDelete = row.created_by_member_id === viewer.memberId || ["owner", "admin"].includes(viewer.role);
+    return { canView: true, canEdit: true, canGovern: false, canDelete, level: "empresa" };
   }
-  if (grant?.level === "edit") return { canView: true, canEdit: true, canGovern: false, level: "edit" };
-  if (grant?.level === "view") return { canView: true, canEdit: false, canGovern: false, level: "view" };
-  return { canView: false, canEdit: false, canGovern: false, level: "nenhum" };
+  if (grant?.level === "edit") return { canView: true, canEdit: true, canGovern: false, canDelete: false, level: "edit" };
+  if (grant?.level === "view") return { canView: true, canEdit: false, canGovern: false, canDelete: false, level: "view" };
+  return { canView: false, canEdit: false, canGovern: false, canDelete: false, level: "nenhum" };
 }
 
 export function worksheetResponse(row: WorksheetRow) {
