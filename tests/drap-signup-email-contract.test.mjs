@@ -13,30 +13,24 @@ test("DRAP signup uses only the official signup URL and audits the redirect", as
   assert.doesNotMatch(route, /redirectUrl\s*:\s*parsed|new URL\([^)]*catalogItemId/);
 });
 
-test("H.OIKOS sends the requested DRAP-ready confirmation only after an active connection", async () => {
+test("H.OIKOS activates DRAP only after the operational API validates the tenant", async () => {
   const connection = await source("app/api/integrations/drap/connection/route.ts");
-  const email = await source("lib/server/transactional-email.ts");
   assert.match(connection, /requestDrapApi\(externalCompanyId, "\/api\/v1\/lancamentos\?limit=1&offset=0"\)/);
-  assert.match(connection, /verification\.status === "active"/);
-  assert.match(connection, /sendReadyNotifications/);
-  assert.match(email, /Você já pode usar as soluções financeiras DRAP no seu ecossistema H\.OIKOS\./);
-  assert.match(email, /https:\/\/api\.brevo\.com\/v3\/smtp\/email/);
-  assert.match(email, /"api-key": apiKey/);
-  assert.doesNotMatch(email, /api\.resend\.com|RESEND_API_KEY|NEXT_PUBLIC_/);
+  assert.match(connection, /status: "active"/);
+  assert.match(connection, /status: "pending"/);
+  assert.doesNotMatch(connection, /sendReadyNotifications|sendDrapReadyEmail|transactionalEmailConfigured|drap_ready_notification/);
 });
 
-test("solutions screen redirects to DRAP signup while keeping operations in H.OIKOS", async () => {
+test("solutions screen redirects to DRAP signup and confirms activation inside H.OIKOS", async () => {
   const ui = await source("components/drap-solutions-workspace.tsx");
   assert.match(ui, /\/api\/integrations\/drap\/signup/);
   assert.match(ui, /window\.location\.assign\(body\.redirectUrl\)/);
   assert.match(ui, /Criar conta DRAP/);
-  assert.match(ui, /Quando o vínculo for validado, a H\.OIKOS enviará um e-mail de confirmação/);
+  assert.match(ui, /DRAP conectada à H\.OIKOS/);
+  assert.doesNotMatch(ui, /e-mail|email|MailCheck|Brevo|Resend/);
 });
 
-test("transactional email secrets remain server-only and use Brevo", async () => {
+test("project no longer configures a transactional email provider for the DRAP flow", async () => {
   const env = await source(".env.example");
-  assert.match(env, /BREVO_API_KEY=/);
-  assert.match(env, /HOIKOS_EMAIL_FROM=/);
-  assert.match(env, /HOIKOS_EMAIL_FROM_NAME=H\.OIKOS/);
-  assert.doesNotMatch(env, /RESEND_API_KEY=|NEXT_PUBLIC_(?:BREVO|HOIKOS_EMAIL)/);
+  assert.doesNotMatch(env, /BREVO_API_KEY|HOIKOS_EMAIL_FROM|RESEND_API_KEY/);
 });
