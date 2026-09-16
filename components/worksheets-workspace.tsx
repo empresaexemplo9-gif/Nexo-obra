@@ -15,7 +15,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
-  insertColumn, insertRow, parseCellKey, sheetToCsv, sortRows,
+  insertColumn, insertRow, moveAnalysis, parseCellKey, sheetToCsv, sortRows,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
@@ -33,7 +33,7 @@ type WorksheetContent = {
   formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
-type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; level: string };
+type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
 type DataSource = { id: string; label: string; headers: string[] };
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -235,11 +235,19 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         : operation === "insert-column" ? insertColumn(cells, address.column)
         : operation === "delete-column" ? deleteColumn(cells, address.column)
         : fillDown(cells, active, sheet.rows - 1);
+      // Os parâmetros guardam posições (letra de coluna, índice de linha). Sem deslocá-los
+      // junto, a coluna marcada como "Custo" passa a apontar para a vizinha e a leitura
+      // financeira lê a coluna errada, sem erro nenhum na tela.
+      const eixo = operation === "insert-row" || operation === "delete-row" ? "row" : "column";
+      const alvo = eixo === "row" ? address.row : address.column;
+      const passo = operation === "insert-row" || operation === "insert-column" ? 1 : -1;
+      const analysis = operation === "fill-down" ? sheet.content.analysis
+        : moveAnalysis(sheet.content.analysis, eixo, alvo, passo);
       return {
         ...sheet,
         rows: nextRows,
         columns: nextColumns,
-        content: { ...sheet.content, cells: next },
+        content: { ...sheet.content, cells: next, analysis },
       };
     });
     if (operation === "delete-row" || operation === "delete-column") {
@@ -286,8 +294,10 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const name = existing ? `${label} ${existing + 1}` : label;
       const result = await api<{ worksheet: Worksheet }>("/api/worksheets", { method: "POST", body: JSON.stringify({ name, kind, templateId }) });
       await loadList();
-      setCurrent(result.worksheet);
-      setAccess({ canView: true, canEdit: true, canGovern: kind === "analysis", level: kind === "analysis" ? "superadmin" : "empresa" });
+      // A permissão vem do servidor, que é quem a aplica. Antes era montada aqui a partir
+      // do tipo da planilha — um palpite do navegador sobre o que ele mesmo pode fazer,
+      // que divergia do servidor e deixava botão à vista sem efeito.
+      await open(result.worksheet.id);
       setDirty(false);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível criar."); }
   }
@@ -456,7 +466,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
             </NativeSelect> : null}
             <Button size="sm" variant="outline" onClick={() => download(`${current.name}.csv`, sheetToCsv(current.content.cells, current.columns, current.rows), "text/csv;charset=utf-8")}><Download />CSV</Button>
             {readOnly ? null : <Button size="sm" onClick={() => void save()} disabled={saving || !dirty}>{saving ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>}
-            {readOnly || (current.visibility === "restricted" && !access?.canGovern) ? null
+            {/* O servidor exige `canDelete`; mostrar o botão sem conferir o mesmo campo
+                fazia o colaborador clicar e receber 403 — o "excluir não responde". */}
+            {readOnly || !access?.canDelete || (current.visibility === "restricted" && !access?.canGovern) ? null
               : <Button size="sm" variant="ghost" onClick={() => void remove()} aria-label="Excluir" disabled={deleting}>
                   {deleting ? <LoaderCircle className="animate-spin" /> : <Trash2 />}Excluir
                 </Button>}

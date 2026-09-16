@@ -618,3 +618,45 @@ export function sortRows(
   });
   return { cells: next, blocked: false };
 }
+
+// Reposiciona os parâmetros da análise financeira quando a grade muda de forma.
+//
+// Inserir ou remover linha/coluna move as células, mas `roles`, `headerRow` e `ignoreRows`
+// guardam POSIÇÕES — letra de coluna e índice de linha. Sem deslocá-los junto, a coluna
+// marcada como "Custo" passa a apontar para a vizinha depois de uma remoção, e a leitura
+// financeira lê a coluna errada sem nenhum erro na tela. É a falha silenciosa que o
+// titular relatou como "parâmetros falhando antes de usar".
+//
+// Uma coluna removida perde o papel em vez de herdá-lo da seguinte: herdar seria inventar
+// uma marcação que ninguém fez. Uma linha de cabeçalho removida cede o lugar para a linha
+// que ocupou seu índice, que é o que a tela passa a mostrar ali.
+export function moveAnalysis<T extends { headerRow: number; roles: Record<string, string>; ignoreRows: number[] }>(
+  analysis: T,
+  axis: "row" | "column",
+  at: number,
+  delta: 1 | -1,
+): T {
+  if (axis === "column") {
+    const roles: Record<string, string> = {};
+    for (const [letra, papel] of Object.entries(analysis.roles)) {
+      const indice = columnIndex(letra);
+      if (indice < at) { roles[letra] = papel; continue; }
+      // A coluna excluída leva o papel embora.
+      if (delta === -1 && indice === at) continue;
+      roles[columnName(indice + delta)] = papel;
+    }
+    return { ...analysis, roles };
+  }
+
+  const deslocar = (linha: number) => (linha < at ? linha : linha + delta);
+  const ignoreRows = [...new Set(
+    analysis.ignoreRows
+      .filter((linha) => !(delta === -1 && linha === at))
+      .map(deslocar)
+      .filter((linha) => linha >= 0),
+  )].sort((a, b) => a - b);
+  // Remover a própria linha de cabeçalho mantém o índice: quem ocupou o lugar vira o
+  // cabeçalho, que é o que aparece na tela depois da remoção.
+  const headerRow = delta === -1 && analysis.headerRow === at ? at : Math.max(0, deslocar(analysis.headerRow));
+  return { ...analysis, headerRow, ignoreRows };
+}

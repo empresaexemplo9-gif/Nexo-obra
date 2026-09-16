@@ -92,6 +92,25 @@ test("remover linha e coluna reduz a grade e mantém uma célula ativa válida",
   assert.ok(container.querySelector("#cell-A1"), "a seleção permanece dentro da grade");
 });
 
+test("quem edita mas não pode excluir não vê o botão de excluir", async () => {
+  // O servidor exige canDelete e responde 403. Mostrar o botão mesmo assim fazia o
+  // colaborador clicar e nada acontecer — o "excluir não responde" relatado pelo titular.
+  // O teste anterior afirmava o contrário e consolidava o defeito.
+  const current = worksheet();
+  const summary = { ...current }; delete summary.content;
+  stubFetch({
+    "/api/worksheets/data": { sources: [] },
+    "/api/worksheets": () => ({ worksheets: [summary], canGovern: false }),
+    "/api/worksheets/w1": () => ({ worksheet: current, access: { canView: true, canEdit: true, canGovern: false, canDelete: false, level: "edit" } }),
+  });
+  await act(async () => { reactRoot.render(React.createElement(WorksheetsWorkspace, { query: "" })); });
+  await settle();
+
+  assert.equal(container.querySelector('[aria-label="Excluir"]'), null,
+    "sem canDelete o botão não pode aparecer");
+  assert.match(textOf(container), /Salvar/, "mas continua podendo editar e salvar");
+});
+
 test("excluir planilha chama DELETE, remove a peça da tela e dá caminho para criar outra", async () => {
   let exists = true;
   const current = worksheet();
@@ -104,14 +123,14 @@ test("excluir planilha chama DELETE, remove a peça da tela e dá caminho para c
       "/api/worksheets": () => ({ worksheets: exists ? [summary] : [], canGovern: false }),
       "/api/worksheets/w1": ({ method }) => {
         if (method === "DELETE") { exists = false; return { deleted: true }; }
-        return { worksheet: current, access: { canView: true, canEdit: true, canGovern: false, level: "empresa" } };
+        return { worksheet: current, access: { canView: true, canEdit: true, canGovern: false, canDelete: true, level: "empresa" } };
       },
     });
     await act(async () => { reactRoot.render(React.createElement(WorksheetsWorkspace, { query: "" })); });
     await settle();
 
     const button = container.querySelector('[aria-label="Excluir"]');
-    assert.ok(button, "o botão de excluir está disponível para quem pode editar");
+    assert.ok(button, "quem pode excluir vê o botão");
     await act(async () => { button.click(); });
     await settle();
 
