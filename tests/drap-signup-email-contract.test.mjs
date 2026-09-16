@@ -20,8 +20,9 @@ test("H.OIKOS sends the requested DRAP-ready confirmation only after an active c
   assert.match(connection, /verification\.status === "active"/);
   assert.match(connection, /sendReadyNotifications/);
   assert.match(email, /Você já pode usar as soluções financeiras DRAP no seu ecossistema H\.OIKOS\./);
-  assert.match(email, /https:\/\/api\.resend\.com\/emails/);
-  assert.doesNotMatch(email, /NEXT_PUBLIC_/);
+  assert.match(email, /https:\/\/api\.brevo\.com\/v3\/smtp\/email/);
+  assert.match(email, /"api-key": apiKey/);
+  assert.doesNotMatch(email, /api\.resend\.com|RESEND_API_KEY|NEXT_PUBLIC_/);
 });
 
 test("solutions screen redirects to DRAP signup while keeping operations in H.OIKOS", async () => {
@@ -32,9 +33,10 @@ test("solutions screen redirects to DRAP signup while keeping operations in H.OI
   assert.match(ui, /Quando o vínculo for validado, a H\.OIKOS enviará um e-mail de confirmação/);
 });
 
-test("transactional email secrets remain server-only", async () => {
+test("transactional email secrets remain server-only and use Brevo", async () => {
   const env = await source(".env.example");
-  assert.match(env, /RESEND_API_KEY=/);
+  assert.match(env, /BREVO_API_KEY=/);
   assert.match(env, /HOIKOS_EMAIL_FROM=/);
-  assert.doesNotMatch(env, /NEXT_PUBLIC_(?:RESEND|HOIKOS_EMAIL)/);
+  assert.match(env, /HOIKOS_EMAIL_FROM_NAME=H\.OIKOS/);
+  assert.doesNotMatch(env, /RESEND_API_KEY=|NEXT_PUBLIC_(?:BREVO|HOIKOS_EMAIL)/);
 });
