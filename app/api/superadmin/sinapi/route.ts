@@ -2,14 +2,14 @@ import { z } from "zod";
 import { apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import { requireSuperAdmin } from "@/lib/server/superadmin";
 import { checkPortalOrigin } from "@/lib/server/portal";
-import { mappingSchema, monthSchema, UFS } from "@/lib/integrations/sinapi-contract";
+import { mappingSchema, monthSchema, regimeSchema, UFS } from "@/lib/integrations/sinapi-contract";
 import { activateSinapi, advanceSinapi, discardSinapi, mapSinapi, setSinapiAutomatic, sinapiStatus, startSinapi, uploadSinapi, withSinapiLock } from "@/lib/server/sinapi-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("start"), month: monthSchema, uf: z.string().refine((s) => UFS.includes(s)), regime: z.enum(["Desonerado", "NaoDesonerado"]) }).strict(),
+  z.object({ action: z.literal("start"), month: monthSchema, uf: z.string().refine((s) => UFS.includes(s)), regime: regimeSchema }).strict(),
   z.object({ action: z.literal("map"), maps: z.array(mappingSchema).min(1).max(2).refine((m) => new Set(m.map((v) => v.tipo)).size === m.length, "Selecione uma aba por tipo.") }).strict(),
   z.object({ action: z.literal("advance") }).strict(),
   z.object({ action: z.literal("discard") }).strict(),
@@ -19,7 +19,7 @@ const schema = z.discriminatedUnion("action", [
 const envioSchema = z.object({
   month: monthSchema,
   uf: z.string().refine((s) => UFS.includes(s)),
-  regime: z.enum(["Desonerado", "NaoDesonerado"]),
+  regime: regimeSchema,
 });
 // O mesmo teto que o armazenamento temporário aceita.
 const LIMITE_ENVIO = 80 * 1024 * 1024;
