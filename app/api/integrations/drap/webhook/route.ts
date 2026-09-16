@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { getDatabase, getDb } from "@/db";
 import { integrationConnections, integrationEvents } from "@/db/schema";
@@ -6,6 +6,7 @@ import { getDrapWebhookSecret } from "@/lib/integrations/drap";
 import { processDrapEvent } from "@/lib/server/drap-events";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
+const MAX_CLOCK_SKEW_SECONDS = 300;
 
 function hexToBytes(value: string) {
   if (!/^[0-9a-f]+$/i.test(value) || value.length % 2 !== 0) return null;
@@ -14,20 +15,30 @@ function hexToBytes(value: string) {
   return bytes;
 }
 
-async function verifySignature(payload: string, signatureHeader: string, secret: string) {
+async function verifySignature(payload: string, timestamp: string, signatureHeader: string, secret: string) {
   const signature = hexToBytes(signatureHeader.replace(/^sha256=/i, "").trim());
   if (!signature) return false;
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-  return crypto.subtle.verify("HMAC", key, signature, new TextEncoder().encode(payload));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const signed = new TextEncoder().encode(`${timestamp}.${payload}`);
+  return crypto.subtle.verify("HMAC", key, signature, signed);
 }
 
-function eventFields(payload: Record<string, unknown>) {
-  const data = payload.data && typeof payload.data === "object" ? payload.data as Record<string, unknown> : {};
-  return {
-    id: String(payload.id ?? payload.event_id ?? ""),
-    type: String(payload.type ?? payload.event_type ?? "unknown"),
-    externalCompanyId: String(payload.company_id ?? data.company_id ?? payload.companyId ?? data.companyId ?? ""),
-  };
+async function sha256Hex(value: string) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function parseTimestamp(value: string | null) {
+  if (!value || !/^\d+$/.test(value.trim())) return null;
+  const timestamp = Number(value);
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) return null;
+  return timestamp;
 }
 
 async function boundedText(request: Request) {
@@ -55,33 +66,63 @@ async function boundedText(request: Request) {
 export async function POST(request: Request) {
   const secret = getDrapWebhookSecret();
   if (!secret) return Response.json({ error: "Webhook secret is not configured" }, { status: 503 });
-  const signature = request.headers.get("x-drap-signature") ?? request.headers.get("x-webhook-signature");
-  if (!signature) return Response.json({ error: "Missing signature" }, { status: 401 });
+
+  const signature = request.headers.get("x-drap-signature");
+  const timestampHeader = request.headers.get("x-drap-timestamp");
+  if (!signature || !timestampHeader) return Response.json({ error: "Missing Drap signature headers" }, { status: 401 });
+
+  const timestamp = parseTimestamp(timestampHeader);
+  if (timestamp === null) return Response.json({ error: "Invalid Drap timestamp" }, { status: 401 });
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - timestamp) > MAX_CLOCK_SKEW_SECONDS) return Response.json({ error: "Expired Drap webhook" }, { status: 401 });
 
   const rawPayload = await boundedText(request);
   if (rawPayload === null) return Response.json({ error: "Payload too large" }, { status: 413 });
-  if (!(await verifySignature(rawPayload, signature, secret))) return Response.json({ error: "Invalid signature" }, { status: 401 });
+  if (!(await verifySignature(rawPayload, timestampHeader.trim(), signature, secret))) {
+    return Response.json({ error: "Invalid signature" }, { status: 401 });
+  }
 
   let payload: Record<string, unknown>;
   try { payload = JSON.parse(rawPayload) as Record<string, unknown>; }
   catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  const event = eventFields(payload);
-  if (!event.id || !event.externalCompanyId) return Response.json({ error: "Event id and company id are required" }, { status: 400 });
+  const eventType = typeof payload.event === "string" ? payload.event.trim() : "";
+  const payloadTimestamp = typeof payload.timestamp === "number"
+    ? payload.timestamp
+    : typeof payload.timestamp === "string" && /^\d+$/.test(payload.timestamp) ? Number(payload.timestamp) : null;
+  if (!eventType || payloadTimestamp !== timestamp) {
+    return Response.json({ error: "Invalid Drap event envelope" }, { status: 400 });
+  }
 
   try {
     const db = getDb();
-    const [connection] = await db.select({ organizationId: integrationConnections.organizationId }).from(integrationConnections)
-      .where(eq(integrationConnections.externalCompanyId, event.externalCompanyId)).limit(1);
-    if (!connection) return Response.json({ error: "Unknown company" }, { status: 404 });
+    // O token e o secret configurados no servidor pertencem a um único tenant Drap.
+    // Como o payload oficial não carrega company_id, falhamos fechado se houver mais de
+    // uma conexão ativa que pudesse receber o mesmo secret, em vez de encaminhar um evento
+    // financeiro para a empresa errada.
+    const connections = await db.select({
+      id: integrationConnections.id,
+      organizationId: integrationConnections.organizationId,
+    }).from(integrationConnections)
+      .where(and(eq(integrationConnections.provider, "drap"), eq(integrationConnections.status, "active")))
+      .limit(2);
 
-    await db.insert(integrationEvents).values({ id: event.id, organizationId: connection.organizationId, provider: "drap", eventType: event.type, payload: rawPayload, status: "received" })
-      .onConflictDoNothing({ target: integrationEvents.id });
+    if (connections.length === 0) return Response.json({ error: "No active Drap connection" }, { status: 404 });
+    if (connections.length > 1) return Response.json({ error: "Ambiguous Drap tenant configuration" }, { status: 409 });
+    const connection = connections[0];
 
-    // Processa somente semântica conhecida. Tipos não homologados ficam preservados como
-    // ignored; não inventamos efeito financeiro a partir de um payload não documentado.
-    const processing = await processDrapEvent(getDatabase(), event.id, connection.organizationId);
-    return Response.json({ accepted: true, eventId: event.id, processing: processing.status }, { status: 202 });
+    const eventId = `drap_${await sha256Hex(`${timestampHeader.trim()}.${rawPayload}`)}`;
+    await db.insert(integrationEvents).values({
+      id: eventId,
+      organizationId: connection.organizationId,
+      provider: "drap",
+      eventType,
+      payload: rawPayload,
+      status: "received",
+    }).onConflictDoNothing({ target: integrationEvents.id });
+
+    const processing = await processDrapEvent(getDatabase(), eventId, connection.organizationId);
+    return Response.json({ accepted: true, eventId, processing: processing.status }, { status: 202 });
   } catch {
     return Response.json({ error: "Event storage unavailable" }, { status: 503 });
   }
