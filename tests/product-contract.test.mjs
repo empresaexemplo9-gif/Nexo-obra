@@ -32,7 +32,17 @@ test("keeps the Drap secret behind a server route", async () => {
   const adapter = await source("lib/integrations/drap.ts");
 
   assert.doesNotMatch(app, /DRAP_API_TOKEN/);
-  assert.doesNotMatch(env, /NEXT_PUBLIC_.*DRAP/);
+  // Nenhum segredo pode viajar em variável pública — de qualquer provedor, não só da Drap.
+  //
+  // Antes esta linha barrava qualquer `NEXT_PUBLIC_*` que citasse DRAP, o que é mais largo
+  // do que a regra 4 do CLAUDE.md: ela proíbe expor TOKEN, não proíbe endereço público. O
+  // portal da Drap é um link que o navegador precisa conhecer para abrir. Barrá-lo não
+  // protegia nada e bloqueava uso legítimo; conferir o sufixo do nome protege mais, porque
+  // vale para todo provedor.
+  const publicasComSegredo = [...env.matchAll(/^NEXT_PUBLIC_[A-Z0-9_]+/gm)]
+    .map(([nome]) => nome)
+    .filter((nome) => /(TOKEN|SECRET|KEY|PASSWORD|HASH|CREDENTIAL)$/.test(nome));
+  assert.deepEqual(publicasComSegredo, [], `variável pública com nome de segredo: ${publicasComSegredo.join(", ")}`);
   assert.match(adapter, /Authorization/);
   // O segredo vem do ambiente resolvido no servidor, nunca do navegador. O nome do
   // provedor não faz parte do contrato: antes era cloudflare:workers, hoje é process.env.

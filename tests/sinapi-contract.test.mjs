@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import test, { after } from "node:test";
+import test from "node:test";
 import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));

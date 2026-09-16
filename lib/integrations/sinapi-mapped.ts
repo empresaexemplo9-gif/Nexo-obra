@@ -5,11 +5,61 @@ import { paraCentavos, type ItemSinapi } from "./sinapi-planilha";
 import type { Mapping } from "./sinapi-contract";
 
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Formas com que a competência aparece no nome dos arquivos da Caixa.
+//
+// Não é um padrão só. Na listagem real de GO convivem `202412` (AAAAMM), `092023`
+// (MMAAAA, invertido), `2024_12`, e ainda retificações com e sem sublinhado
+// (`..._NaoDesonerado_Retificacao01` e `..._DesoneradoRetificacao02`). Exigir uma única
+// forma recusa a maior parte do acervo histórico.
+export function formasDaCompetencia(month: string): string[] {
+  const [ano, mes] = month.split("-");
+  return [`${ano}_${mes}`, `${ano}${mes}`, `${mes}${ano}`, `${ano}-${mes}`];
+}
+
+// Acha a planilha de referência dentro do pacote da Caixa.
+//
+// Antes exigia a palavra "referencia" no nome E a competência escrita como `AAAA_MM`.
+// Os pacotes históricos reais não atendem nem a primeira nem a segunda condição, e o erro
+// dizia só que não havia "uma única planilha" — sem contar o que havia, o que deixava
+// quem tentou importar sem nenhum caminho adiante.
 export function referenceFile(zipBytes: Buffer, month: string) {
   const zip = abrirZip(zipBytes);
-  const files = zip.entradas.filter((e) => /referencia/.test(normalize(e.nome)) && e.nome.endsWith(".xlsx") && normalize(e.nome).includes(month.replace("-", "_")));
-  if (files.length !== 1) throw new Error("O pacote não contém uma única planilha de referência da competência solicitada.");
-  return { name: files[0].nome, bytes: zip.extrair(files[0].nome) };
+  const planilhas = zip.entradas.filter((e) => normalize(e.nome).endsWith(".xlsx"));
+  if (!planilhas.length) {
+    const conteudo = zip.entradas.slice(0, 12).map((e) => e.nome).join(", ");
+    throw new Error(`O pacote não contém nenhuma planilha .xlsx. Encontrei: ${conteudo || "nada"}. Baixe a versão em formato xlsx, não a versão só em PDF.`);
+  }
+
+  const formas = formasDaCompetencia(month);
+  const daCompetencia = planilhas.filter((e) => formas.some((forma) => normalize(e.nome).includes(forma)));
+
+  // Se o pacote datou os nomes e nenhum é a competência pedida, é o pacote errado. Aceitar
+  // assim mesmo importaria preço de outro mês com o rótulo deste — errado e silencioso.
+  // Por isso o encaixe por "planilha única" só vale quando NENHUM nome traz data alguma.
+  const algumNomeTemData = planilhas.some((e) => /(?:^|[^0-9])\d{6}(?:[^0-9]|$)|\d{4}[_-]\d{2}/.test(normalize(e.nome)));
+  if (!daCompetencia.length && algumNomeTemData) {
+    const nomes = planilhas.slice(0, 12).map((e) => e.nome).join(", ");
+    throw new Error(`Nenhuma planilha do pacote é da competência ${month}. Encontrei: ${nomes}. Confira se baixou o arquivo do mês certo.`);
+  }
+
+  // Preferência decrescente: nome que traz a competência; depois o que se diz referência;
+  // por fim, se só existe uma planilha e o pacote não data nada, ela é a planilha.
+  const escolhidas = daCompetencia.length ? daCompetencia
+    : planilhas.filter((e) => /referencia|insumos|composicoes/.test(normalize(e.nome)));
+  const alvo = escolhidas.length === 1 ? escolhidas[0]
+    : escolhidas.length === 0 && planilhas.length === 1 ? planilhas[0]
+    : null;
+
+  if (!alvo) {
+    // Listar o que existe transforma "não deu" em "é este aqui": a próxima tentativa é
+    // informada pelo pacote, não por suposição sobre o nome.
+    const nomes = planilhas.slice(0, 12).map((e) => e.nome).join(", ");
+    throw new Error(
+      `Não consegui identificar uma única planilha da competência ${month} no pacote. ` +
+      `Planilhas encontradas: ${nomes}${planilhas.length > 12 ? ", ..." : ""}.`,
+    );
+  }
+  return { name: alvo.nome, bytes: zip.extrair(alvo.nome) };
 }
 export function inspectReference(bytes: Buffer) {
   const book = abrirPlanilha(bytes);
