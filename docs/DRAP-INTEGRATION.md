@@ -6,6 +6,17 @@ Este documento separa a experiência da H.OIKOS do sistema financeiro. Ele é um
 
 O usuário trabalha na H.OIKOS. Quando precisa de informação financeira, o backend consulta a Drap. Quando uma ação operacional deve produzir efeito financeiro, o backend cria a operação na Drap e guarda apenas o vínculo, o estado de sincronização e um snapshot para leitura resiliente.
 
+## Portal operacional
+
+O acesso humano à plataforma Drap fica vinculado a `https://empresa.drap.app.br/inicio` e aparece na área **Financeiro** pelo botão **Abrir Drap**. Esse endereço é apenas o portal operacional; ele não substitui a base técnica da API.
+
+```dotenv
+DRAP_API_URL=https://empresa.drap.app.br
+NEXT_PUBLIC_DRAP_PORTAL_URL=https://empresa.drap.app.br/inicio
+```
+
+`DRAP_API_URL` continua sem `/inicio` porque os caminhos técnicos são montados sobre a raiz. `NEXT_PUBLIC_DRAP_PORTAL_URL` é público e não carrega token, segredo ou identificador de empresa.
+
 ## Fluxos
 
 ### Leitura
