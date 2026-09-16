@@ -1,4 +1,4 @@
-import type { Profile } from "./sinapi-contract";
+import { normalizeReferenceMonth, normalizeSinapiUf, regimeSchema } from "./sinapi-contract";
 import { isOrcamentadorConfigured, searchOrcamentadorItems } from "./orcamentador";
 
 // Contrato de compatibilidade: SINAPI_API_TOKEN continua sendo a credencial server-side.
@@ -19,15 +19,17 @@ export function isSinapiConfigured() {
 }
 
 export async function searchSinapiItems(query: string, state: string, referenceMonth: string, regime = "NaoDesonerado"): Promise<SinapiItem[]> {
-  const typedRegime = (regime === "Desonerado" ? "Desonerado" : "NaoDesonerado") as Profile["regime"];
-  const items = await searchOrcamentadorItems(query, state, referenceMonth, typedRegime);
+  const typedRegime = regimeSchema.parse(regime);
+  const normalizedState = normalizeSinapiUf(state);
+  const normalizedMonth = normalizeReferenceMonth(referenceMonth);
+  const items = await searchOrcamentadorItems(query, normalizedState, normalizedMonth, typedRegime);
   return items.map((item) => ({
     code: item.codigo,
     description: item.descricao,
     unit: item.unidade,
     unitCostCents: item.custoUnitarioCentavos,
-    referenceMonth,
-    state,
-    sourceReference: `ORCAMENTADOR:SINAPI:${state}:${referenceMonth}:${typedRegime}:${item.tipo}:${item.codigo}`,
+    referenceMonth: normalizedMonth,
+    state: normalizedState,
+    sourceReference: `ORCAMENTADOR:SINAPI:${normalizedState}:${normalizedMonth}:${typedRegime}:${item.tipo}:${item.codigo}`,
   }));
 }
