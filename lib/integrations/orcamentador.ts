@@ -1,11 +1,12 @@
 import { runtimeEnv } from "@/lib/server/runtime";
-import type { Profile } from "./sinapi-contract";
+import { apiRegime, normalizeReferenceMonth, normalizeSinapiUf, referenceDate, type Profile } from "./sinapi-contract";
 import type { ItemSinapi } from "./sinapi-planilha";
 
 export const ORCAMENTADOR_BASE_URL = "https://orcamentador.com.br/api";
 export const ORCAMENTADOR_SOURCE_COMMIT = "db5e9129446ec96c66341f0c323c20a8e52b265d";
 export const ORCAMENTADOR_SIGNATURE = `orcamentador-sdk:${ORCAMENTADOR_SOURCE_COMMIT}:codigo-descricao-unidade-preco:v1`;
 const ORCAMENTADOR_PAGE_LIMIT = 100;
+const ORCAMENTADOR_SEARCH_LIMIT = 50;
 
 type JsonRecord = Record<string, unknown>;
 type FetchResult = { items: ItemSinapi[]; ignored: number };
@@ -89,7 +90,13 @@ export function orcamentadorSourceUrl() {
 export async function orcamentadorGet(path: string, params: Record<string, string | number | undefined> = {}) {
   const config = orcamentadorConfig();
   if (!config.token) throw new Error("SINAPI_API_TOKEN não está configurado para o Orçamentador.");
-  const base = config.baseUrl.endsWith("/") ? config.baseUrl : `${config.baseUrl}/`;
+  let base: URL;
+  try {
+    base = new URL(config.baseUrl.endsWith("/") ? config.baseUrl : `${config.baseUrl}/`);
+  } catch {
+    throw new Error("SINAPI_API_URL é inválida.");
+  }
+  if (!/^https?:$/.test(base.protocol)) throw new Error("SINAPI_API_URL deve usar HTTP ou HTTPS.");
   const url = new URL(path.replace(/^\//, ""), base);
   for (const [key, value] of Object.entries(params)) if (value !== undefined && String(value) !== "") url.searchParams.set(key, String(value));
   const headers = new Headers({ Accept: "application/json" });
@@ -128,9 +135,9 @@ function normalizeItem(value: unknown, tipo: "insumo" | "composicao", regime: Pr
 
 function commonParams(profile: Profile, month: string) {
   return {
-    estado: profile.uf.toUpperCase(),
-    regime: profile.regime === "Desonerado" ? "DESONERADO" : "NAO_DESONERADO",
-    data_ref: `${month}-01`,
+    estado: normalizeSinapiUf(profile.uf),
+    regime: apiRegime(profile.regime),
+    data_ref: referenceDate(month),
   };
 }
 
@@ -169,14 +176,24 @@ async function fetchPaged(path: string, tipo: "insumo" | "composicao", profile: 
 }
 
 export async function fetchOrcamentadorMonthlySnapshot(profile: Profile, month: string) {
-  const insumos = await fetchPaged("/insumos", "insumo", profile, month);
-  const composicoes = await fetchPaged("/composicoes", "composicao", profile, month);
-  const encargos = await orcamentadorGet("/encargos", { estado: profile.uf.toUpperCase(), data_ref: `${month}-01` });
+  const referenceMonth = normalizeReferenceMonth(month);
+  const estado = normalizeSinapiUf(profile.uf);
+  const insumos = await fetchPaged("/insumos", "insumo", profile, referenceMonth);
+  const composicoes = await fetchPaged("/composicoes", "composicao", profile, referenceMonth);
+  const encargos = await orcamentadorGet("/encargos", { estado, data_ref: referenceDate(referenceMonth) });
   const indicadores = await orcamentadorGet("/indicadores", { indicadores: "incc,incc_acumulado,ipca,igpm,selic,dolar" });
   return {
     items: [...insumos.items, ...composicoes.items],
     ignored: insumos.ignored + composicoes.ignored,
-    parametros: { encargos, indicadores },
+    parametros: {
+      estado,
+      regime: apiRegime(profile.regime),
+      dataRef: referenceDate(referenceMonth),
+      pageLimit: ORCAMENTADOR_PAGE_LIMIT,
+      searchLimit: ORCAMENTADOR_SEARCH_LIMIT,
+      encargos,
+      indicadores,
+    },
   };
 }
 
@@ -188,15 +205,16 @@ async function searchEndpoint(
   referenceMonth: string,
   regime: Profile["regime"],
 ) {
-  const numeric = /^\d+$/.test(query.trim());
+  const normalizedQuery = query.trim();
+  const numeric = /^\d+$/.test(normalizedQuery);
   const payload = await orcamentadorGet(path, {
-    [numeric ? "codigo" : "nome"]: query.trim(),
-    estado: state.toUpperCase(),
-    regime: regime === "Desonerado" ? "DESONERADO" : "NAO_DESONERADO",
-    data_ref: `${referenceMonth}-01`,
+    [numeric ? "codigo" : "nome"]: normalizedQuery,
+    estado: normalizeSinapiUf(state),
+    regime: apiRegime(regime),
+    data_ref: referenceDate(referenceMonth),
     modo_busca: numeric ? undefined : "contem",
     page: 1,
-    limit: 50,
+    limit: ORCAMENTADOR_SEARCH_LIMIT,
     sort: "codigo",
     order: "asc",
   });
@@ -206,11 +224,15 @@ async function searchEndpoint(
 }
 
 export async function searchOrcamentadorItems(query: string, state: string, referenceMonth: string, regime: Profile["regime"]) {
+  const normalizedQuery = query.trim();
+  if (!normalizedQuery) throw new Error("Informe o código ou nome do item SINAPI.");
+  normalizeReferenceMonth(referenceMonth);
+  normalizeSinapiUf(state);
   const config = orcamentadorConfig();
   const targets: Array<[string, "insumo" | "composicao"]> = config.searchPath === "/insumos"
     ? [["/insumos", "insumo"], ["/composicoes", "composicao"]]
     : [[config.searchPath, config.searchPath.toLowerCase().includes("compos") ? "composicao" : "insumo"]];
-  const groups = await Promise.all(targets.map(([path, tipo]) => searchEndpoint(path, tipo, query, state, referenceMonth, regime)));
+  const groups = await Promise.all(targets.map(([path, tipo]) => searchEndpoint(path, tipo, normalizedQuery, state, referenceMonth, regime)));
   const seen = new Set<string>();
   const items: ItemSinapi[] = [];
   for (const item of groups.flat()) {
@@ -218,7 +240,7 @@ export async function searchOrcamentadorItems(query: string, state: string, refe
     if (seen.has(key)) continue;
     seen.add(key);
     items.push(item);
-    if (items.length === 50) break;
+    if (items.length === ORCAMENTADOR_SEARCH_LIMIT) break;
   }
   return items;
 }
