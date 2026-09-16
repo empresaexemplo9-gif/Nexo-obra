@@ -69,19 +69,26 @@ function tenantConfigs() {
 
 function apiTokenFor(externalCompanyId: string) {
   const config = runtimeEnv();
-  const tenantToken = tenantConfigs()[externalCompanyId]?.apiToken;
-  const token = tenantToken ?? config.DRAP_API_TOKEN;
-  if (!token) throw new Error("DRAP integration is not configured for this tenant");
-  return token;
+  const tenants = tenantConfigs();
+  const tenantIds = Object.keys(tenants);
+  if (tenantIds.length > 0) {
+    const token = tenants[externalCompanyId]?.apiToken;
+    if (!token) throw new Error("DRAP integration is not configured for this tenant");
+    return token;
+  }
+  if (!config.DRAP_API_TOKEN) throw new Error("DRAP integration is not configured");
+  return config.DRAP_API_TOKEN;
 }
 
 export function getDrapWebhookCandidates() {
   const config = runtimeEnv();
-  const candidates = Object.entries(tenantConfigs())
-    .filter(([, value]) => Boolean(value.webhookSecret))
-    .map(([externalCompanyId, value]) => ({ externalCompanyId, secret: value.webhookSecret as string }));
-  if (config.DRAP_WEBHOOK_SECRET) candidates.push({ externalCompanyId: "", secret: config.DRAP_WEBHOOK_SECRET });
-  return candidates;
+  const tenants = tenantConfigs();
+  if (Object.keys(tenants).length > 0) {
+    return Object.entries(tenants)
+      .filter(([, value]) => Boolean(value.webhookSecret))
+      .map(([externalCompanyId, value]) => ({ externalCompanyId, secret: value.webhookSecret as string }));
+  }
+  return config.DRAP_WEBHOOK_SECRET ? [{ externalCompanyId: "", secret: config.DRAP_WEBHOOK_SECRET }] : [];
 }
 
 export function isDrapConfigured() {
