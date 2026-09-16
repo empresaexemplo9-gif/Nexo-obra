@@ -13,6 +13,7 @@ export async function GET(request: Request) {
       context.db.prepare("SELECT external_company_id, status FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1")
         .bind(context.organization.id).first<{ external_company_id: string; status: string }>(),
     ]);
+    const tenantProvisioned = Boolean(connection?.external_company_id);
 
     return Response.json({
       catalog: DRAP_CATALOG,
@@ -20,9 +21,10 @@ export async function GET(request: Request) {
       checkedAt: DRAP_CATALOG_CHECKED_AT,
       pricing: "same_as_drap",
       embeddedExperience: true,
-      requiresRedirect: false,
+      requiresRedirect: !tenantProvisioned,
+      signupAvailable: true,
       checkoutAvailable: activationConfigured(),
-      tenantProvisioned: Boolean(connection?.external_company_id),
+      tenantProvisioned,
       connectionStatus: connection?.status ?? null,
       subscription: activation ? {
         planId: activation.plan_id,
