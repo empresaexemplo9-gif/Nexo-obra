@@ -1,8 +1,9 @@
 import { runtimeEnv } from "@/lib/server/runtime";
 
 type EmailConfig = {
-  RESEND_API_KEY?: string;
+  BREVO_API_KEY?: string;
   HOIKOS_EMAIL_FROM?: string;
+  HOIKOS_EMAIL_FROM_NAME?: string;
   HOIKOS_EMAIL_REPLY_TO?: string;
 };
 
@@ -16,7 +17,7 @@ function emailConfig() {
 
 export function transactionalEmailConfigured() {
   const config = emailConfig();
-  return Boolean(config.RESEND_API_KEY?.trim() && config.HOIKOS_EMAIL_FROM?.trim());
+  return Boolean(config.BREVO_API_KEY?.trim() && config.HOIKOS_EMAIL_FROM?.trim());
 }
 
 function escapeHtml(value: string) {
@@ -36,32 +37,38 @@ export async function sendTransactionalEmail(input: {
   html: string;
 }): Promise<TransactionalEmailResult> {
   const config = emailConfig();
-  const apiKey = config.RESEND_API_KEY?.trim();
+  const apiKey = config.BREVO_API_KEY?.trim();
   const from = config.HOIKOS_EMAIL_FROM?.trim();
   if (!apiKey || !from) return { sent: false, reason: "not_configured" };
 
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
       redirect: "error",
       signal: AbortSignal.timeout(8_000),
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Accept: "application/json",
+        "api-key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from,
-        to: [input.to],
+        sender: {
+          email: from,
+          name: config.HOIKOS_EMAIL_FROM_NAME?.trim() || "H.OIKOS",
+        },
+        to: [{ email: input.to }],
         subject: input.subject,
-        text: input.text,
-        html: input.html,
-        ...(config.HOIKOS_EMAIL_REPLY_TO?.trim() ? { reply_to: config.HOIKOS_EMAIL_REPLY_TO.trim() } : {}),
+        textContent: input.text,
+        htmlContent: input.html,
+        ...(config.HOIKOS_EMAIL_REPLY_TO?.trim()
+          ? { replyTo: { email: config.HOIKOS_EMAIL_REPLY_TO.trim() } }
+          : {}),
       }),
     });
 
     if (!response.ok) return { sent: false, reason: "provider_error" };
-    const payload = await response.json().catch(() => ({})) as { id?: unknown };
-    return { sent: true, id: typeof payload.id === "string" ? payload.id : null };
+    const payload = await response.json().catch(() => ({})) as { messageId?: unknown };
+    return { sent: true, id: typeof payload.messageId === "string" ? payload.messageId : null };
   } catch {
     return { sent: false, reason: "provider_error" };
   }
