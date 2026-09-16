@@ -179,6 +179,11 @@ label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
 .metric-number { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
 .nexo-shell, .nexo-canvas { background: var(--hoikos-paper); }
+/* A largura reservada pelo menu lateral não pode encolher quando um módulo contém
+   conteúdo largo (como a grade da planilha). O conteúdo principal, por sua vez,
+   precisa aceitar min-width: 0 para que a rolagem aconteça dentro do módulo. */
+.nexo-shell [data-slot="sidebar-gap"] { flex-shrink: 0; }
+.nexo-shell [data-slot="sidebar-inset"] { min-width: 0; }
 .nexo-sidebar [data-sidebar="sidebar"] { background: var(--hoikos-earth); box-shadow: none; }
 .nexo-sidebar [data-sidebar="group-label"] {
   color: var(--hoikos-stone);
