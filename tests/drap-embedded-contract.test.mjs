@@ -46,11 +46,17 @@ test("catálogo H.OIKOS reproduz os preços públicos DRAP sem preço vindo do n
   assert.match(catalog, /annualCents: 990000/);
 });
 
-test("catálogo é servido dentro da H.OIKOS e não exige redirecionamento", async () => {
+test("catálogo é servido dentro da H.OIKOS e só manda criar conta quem ainda não tem", async () => {
   const route = await source("app/api/integrations/drap/catalog/route.ts");
   assert.match(route, /requireOrganizationContext/);
   assert.match(route, /requireModulePermission\(context, "finance", "view"\)/);
   assert.match(route, /pricing: "same_as_drap"/);
-  assert.match(route, /requiresRedirect: false/);
+  // Enquanto a Drap não expõe rota de provisionamento, quem ainda não tem tenant é
+  // levado ao cadastro oficial. Quem já tem opera dentro da H.OIKOS, sem sair.
+  // O sinal precisa vir do estado do tenant: fixá-lo em `false` anunciava operação
+  // embutida a quem ainda não tem conta, e fixá-lo em `true` mandaria para fora quem
+  // já está ligado.
+  assert.match(route, /requiresRedirect: !tenantProvisioned/);
+  assert.doesNotMatch(route, /requiresRedirect: (true|false)/, "o sinal não pode ser constante");
   assert.match(route, /Cache-Control/);
 });
