@@ -92,11 +92,10 @@ export async function DELETE(request: Request, route: RouteContext) {
     const context = await requireOrganizationContext(request);
     const { worksheetId: id } = await route.params;
     const { row, access } = await loadWorksheet(context, id);
-    if (row.visibility === "restricted" && !access.canGovern) {
-      throw new ApiError(403, "analysis_superadmin_only", "Somente o superadministrador exclui uma planilha de saúde financeira.");
-    }
-    const privileged = access.canGovern || ["owner", "admin"].includes(context.member.role);
-    if (!privileged && row.created_by_member_id !== context.member.id) {
+    if (!access.canDelete) {
+      if (row.visibility === "restricted") {
+        throw new ApiError(403, "analysis_superadmin_only", "Somente o superadministrador exclui uma planilha de saúde financeira.");
+      }
       throw new ApiError(403, "worksheet_owner_required", "Somente quem criou a planilha, o contratante ou um administrador pode excluí-la.");
     }
     await context.db.batch([
