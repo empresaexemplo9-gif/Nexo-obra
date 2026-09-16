@@ -24,6 +24,27 @@ async function verifyDrapConnection(externalCompanyId: string) {
   }
 }
 
+async function readyNotificationCompleted(
+  context: Awaited<ReturnType<typeof requireOrganizationContext>>,
+  connectionId: string,
+) {
+  const row = await context.db.prepare(
+    `SELECT metadata_json FROM platform_audit_events
+     WHERE organization_id = ?1 AND action = 'integration.drap_ready_notification'
+       AND entity_type = 'integration_connection' AND entity_id = ?2
+     ORDER BY created_at DESC LIMIT 1`,
+  ).bind(context.organization.id, connectionId).first<{ metadata_json: string }>();
+  if (!row) return false;
+  try {
+    const metadata = JSON.parse(row.metadata_json) as { attempted?: unknown; sent?: unknown };
+    const attempted = typeof metadata.attempted === "number" ? metadata.attempted : 0;
+    const sent = typeof metadata.sent === "number" ? metadata.sent : 0;
+    return attempted > 0 && sent >= attempted;
+  } catch {
+    return false;
+  }
+}
+
 async function sendReadyNotifications(
   context: Awaited<ReturnType<typeof requireOrganizationContext>>,
   connectionId: string,
@@ -110,9 +131,12 @@ export async function PUT(request: Request) {
       }),
     ]);
 
-    const becameActive = verification.status === "active"
-      && (!existing || existing.status !== "active" || existing.external_company_id !== externalCompanyId);
-    const notification = becameActive ? await sendReadyNotifications(context, id) : null;
+    const notificationAlreadySent = verification.status === "active"
+      ? await readyNotificationCompleted(context, id)
+      : false;
+    const notification = verification.status === "active" && !notificationAlreadySent
+      ? await sendReadyNotifications(context, id)
+      : null;
 
     return Response.json({
       connection: {
