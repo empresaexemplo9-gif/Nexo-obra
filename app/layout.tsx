@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./hoikos-polish.css";
 
 export const metadata: Metadata = {
   title: "H.OIKOS | Ecossistema para arquitetos",
@@ -20,10 +21,10 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <head>
-        {/* As duas famílias da marca abrem a primeira tela; o resto dos pesos vem do arquivo variável. */}
+        {/* A primeira tela carrega diretamente a sans e a serifada reais da marca. */}
         <link rel="preload" href="/fonts/jost-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <link rel="preload" href="/fonts/cormorant-latin.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-        <meta name="theme-color" content="#38301B" />
+        <link rel="preload" href="/fonts/ador-hairline-light.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <meta name="theme-color" content="#1C190F" />
       </head>
       <body>{children}</body>
     </html>

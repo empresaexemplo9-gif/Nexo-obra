@@ -1,0 +1,392 @@
+/*
+ * H.OIKOS — acabamento visual global.
+ *
+ * Esta camada não muda contratos, permissões, dados nem comportamento dos componentes.
+ * Ela usa apenas os tokens definidos em globals.css e dá o mesmo acabamento às telas
+ * que compartilham os primitives de UI: produto, projetos, financeiro, CRM, diário,
+ * portal, superadmin, formulários, menus e modais.
+ */
+
+body {
+  background: var(--hoikos-linen);
+}
+
+/* Navegação principal: profundidade no marrom quase preto e seleção ativa inequívoca. */
+.nexo-sidebar [data-sidebar="sidebar"] {
+  background: var(--hoikos-soil);
+  border-color: var(--sidebar-border);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--hoikos-stone) 10%, transparent);
+}
+
+.nexo-sidebar [data-sidebar="header"],
+.nexo-sidebar [data-sidebar="footer"] {
+  position: relative;
+}
+
+.nexo-sidebar [data-sidebar="header"]::after,
+.nexo-sidebar [data-sidebar="footer"]::before {
+  content: "";
+  position: absolute;
+  right: 0.75rem;
+  left: 0.75rem;
+  height: 1px;
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+}
+
+.nexo-sidebar [data-sidebar="header"]::after { bottom: 0; }
+.nexo-sidebar [data-sidebar="footer"]::before { top: 0; }
+
+.nexo-sidebar [data-sidebar="menu-button"] {
+  border: 1px solid transparent;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.nexo-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: color-mix(in srgb, var(--hoikos-earth) 76%, var(--hoikos-soil));
+  border-color: color-mix(in srgb, var(--hoikos-gold) 46%, var(--hoikos-soil));
+  color: var(--hoikos-paper);
+  box-shadow:
+    inset 2px 0 0 var(--hoikos-gold),
+    0 1px 0 color-mix(in srgb, var(--hoikos-black) 18%, transparent);
+}
+
+.nexo-sidebar [data-sidebar="menu-button"][data-active="true"] svg {
+  color: color-mix(in srgb, var(--hoikos-gold) 74%, var(--hoikos-paper));
+}
+
+.nexo-sidebar [data-sidebar="group-label"] {
+  color: color-mix(in srgb, var(--hoikos-stone) 86%, var(--hoikos-paper));
+}
+
+.nexo-sidebar [data-sidebar="separator"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+}
+
+@media (hover: hover) {
+  .nexo-sidebar [data-sidebar="menu-button"]:not([data-active="true"]):hover {
+    background: color-mix(in srgb, var(--hoikos-earth) 46%, var(--hoikos-soil));
+    border-color: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+    color: var(--hoikos-paper);
+    transform: translateX(1px);
+  }
+}
+
+/* Cabeçalho: superfície luminosa separada do canvas por uma linha muito leve. */
+.nexo-header {
+  background: color-mix(in srgb, var(--hoikos-paper) 96%, var(--hoikos-linen));
+  border-color: color-mix(in srgb, var(--hoikos-stone) 34%, var(--hoikos-paper));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.nexo-canvas {
+  background: var(--hoikos-linen);
+}
+
+/* Superfícies de trabalho: uma linguagem única de borda, luz e profundidade. */
+[data-slot="card"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 5%, transparent),
+    0 8px 24px color-mix(in srgb, var(--hoikos-soil) 3%, transparent);
+}
+
+.workspace-card {
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 6%, transparent),
+    0 10px 28px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+
+@media (hover: hover) {
+  .workspace-card:hover {
+    border-color: color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper));
+    box-shadow:
+      0 2px 4px color-mix(in srgb, var(--hoikos-soil) 7%, transparent),
+      0 14px 34px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+  }
+}
+
+/* Formulários: contraste limpo, foco dourado e estados consistentes. */
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="select-trigger"],
+[data-slot="native-select"],
+[data-slot="input-group"] {
+  background: var(--hoikos-paper);
+  border-color: color-mix(in srgb, var(--hoikos-stone) 62%, var(--hoikos-paper));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hoikos-paper) 74%, transparent);
+}
+
+[data-slot="input"]:hover:not(:disabled),
+[data-slot="textarea"]:hover:not(:disabled),
+[data-slot="select-trigger"]:hover:not(:disabled),
+[data-slot="native-select"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 84%, var(--hoikos-paper));
+}
+
+[data-slot="input"]:focus-visible,
+[data-slot="textarea"]:focus-visible,
+[data-slot="select-trigger"]:focus-visible,
+[data-slot="native-select"]:focus-visible,
+[data-slot="input-group"]:focus-within {
+  border-color: var(--hoikos-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hoikos-gold) 12%, transparent);
+}
+
+[data-slot="label"],
+[data-slot="field-label"] {
+  color: var(--hoikos-earth);
+  font-weight: 550;
+}
+
+/* Tabelas: leitura operacional com cabeçalho editorial e hover discreto. */
+[data-slot="table-container"] {
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  border-radius: calc(var(--radius) + 6px);
+  background: var(--hoikos-paper);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+
+[data-slot="table"] {
+  background: var(--hoikos-paper);
+}
+
+[data-slot="table-header"] {
+  background: color-mix(in srgb, var(--hoikos-linen) 80%, var(--hoikos-paper));
+}
+
+[data-slot="table-head"] {
+  color: color-mix(in srgb, var(--hoikos-earth) 82%, var(--hoikos-stone));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+
+[data-slot="table-row"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 32%, var(--hoikos-paper));
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+@media (hover: hover) {
+  [data-slot="table-body"] [data-slot="table-row"]:hover {
+    background: color-mix(in srgb, var(--hoikos-linen) 68%, var(--hoikos-paper));
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hoikos-gold) 72%, var(--hoikos-paper));
+  }
+}
+
+[data-slot="table-footer"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, var(--hoikos-paper));
+}
+
+/* Abas e filtros: seleção forte sem introduzir cores fora da identidade. */
+[data-slot="tabs-list"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  background: color-mix(in srgb, var(--hoikos-stone) 18%, var(--hoikos-paper));
+  box-shadow: inset 0 1px 1px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+
+[data-slot="tabs-trigger"] {
+  color: color-mix(in srgb, var(--hoikos-earth) 72%, var(--hoikos-stone));
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+[data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--hoikos-paper);
+  color: var(--hoikos-soil);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 8%, transparent),
+    inset 0 -2px 0 color-mix(in srgb, var(--hoikos-gold) 72%, var(--hoikos-paper));
+}
+
+/* Menus, popovers, diálogos e painéis flutuantes compartilham a mesma elevação. */
+[data-slot="select-content"],
+[data-slot="popover-content"],
+[data-slot="dropdown-menu-content"],
+[data-slot="context-menu-content"],
+[data-slot="hover-card-content"],
+[data-slot="command"],
+[data-slot="dialog-content"],
+[data-slot="alert-dialog-content"],
+[data-slot="sheet-content"],
+[data-slot="drawer-content"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 48%, var(--hoikos-paper));
+  background: var(--hoikos-paper);
+  box-shadow:
+    0 10px 34px color-mix(in srgb, var(--hoikos-soil) 10%, transparent),
+    0 2px 8px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+}
+
+[data-slot="dropdown-menu-item"],
+[data-slot="context-menu-item"],
+[data-slot="select-item"],
+[data-slot="command-item"] {
+  transition: background-color 100ms ease, color 100ms ease;
+}
+
+[data-slot="dropdown-menu-item"]:focus,
+[data-slot="context-menu-item"]:focus,
+[data-slot="select-item"]:focus,
+[data-slot="command-item"][data-selected="true"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 24%, var(--hoikos-paper));
+  color: var(--hoikos-soil);
+}
+
+/* Estados compactos: o dourado é sinal, nunca superfície dominante. */
+[data-slot="badge"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 54%, var(--hoikos-paper));
+  letter-spacing: 0.025em;
+  font-weight: 650;
+}
+
+[data-slot="checkbox"],
+[data-slot="radio-group-item"],
+[data-slot="switch"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 68%, var(--hoikos-paper));
+}
+
+[data-slot="checkbox"][data-state="checked"] {
+  border-color: var(--hoikos-gold);
+  background: var(--hoikos-gold);
+  color: var(--hoikos-paper);
+}
+
+[data-slot="radio-group-item"][data-state="checked"] {
+  border-color: var(--hoikos-gold);
+  color: var(--hoikos-gold);
+}
+
+[data-slot="switch"][data-state="checked"] {
+  background: var(--hoikos-gold);
+}
+
+[data-slot="progress"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 28%, var(--hoikos-paper));
+}
+
+[data-slot="progress-indicator"] {
+  background: var(--hoikos-gold);
+}
+
+[data-slot="slider-track"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 34%, var(--hoikos-paper));
+}
+
+[data-slot="slider-range"] {
+  background: var(--hoikos-gold);
+}
+
+[data-slot="slider-thumb"] {
+  border-color: var(--hoikos-gold);
+  background: var(--hoikos-paper);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--hoikos-soil) 14%, transparent);
+}
+
+/* Conteúdo informativo e estados vazios. */
+[data-slot="alert"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 46%, var(--hoikos-paper));
+  background: color-mix(in srgb, var(--hoikos-paper) 94%, var(--hoikos-linen));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+
+[data-slot="empty"] {
+  border: 1px dashed color-mix(in srgb, var(--hoikos-stone) 66%, var(--hoikos-paper));
+  border-radius: calc(var(--radius) + 8px);
+  background: color-mix(in srgb, var(--hoikos-paper) 68%, var(--hoikos-linen));
+}
+
+[data-slot="avatar"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 54%, var(--hoikos-paper));
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--hoikos-soil) 8%, transparent);
+}
+
+[data-slot="skeleton"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 26%, var(--hoikos-paper));
+}
+
+[data-slot="separator"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 36%, var(--hoikos-paper));
+}
+
+[data-slot="accordion-item"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 38%, var(--hoikos-paper));
+}
+
+[data-slot="accordion-trigger"] {
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+@media (hover: hover) {
+  [data-slot="accordion-trigger"]:hover {
+    color: var(--hoikos-gold);
+  }
+}
+
+/* Tooltips e pequenas superfícies escuras repetem o solo do menu. */
+[data-slot="tooltip-content"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 18%, var(--hoikos-soil));
+  background: var(--hoikos-soil);
+  color: var(--hoikos-paper);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hoikos-black) 18%, transparent);
+}
+
+/* Scrollbars discretas, mas visíveis em grids, planilhas e painéis longos. */
+* {
+  scrollbar-color:
+    color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper))
+    color-mix(in srgb, var(--hoikos-linen) 82%, var(--hoikos-paper));
+}
+
+[data-slot="scroll-area-thumb"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper));
+}
+
+/* Entrada de página curta: dá vida sem distrair do trabalho. */
+@keyframes hoikos-surface-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.nexo-canvas > div {
+  animation: hoikos-surface-enter 180ms ease-out both;
+}
+
+/* Responsividade: mantém o refinamento sem roubar espaço útil no celular. */
+@media (max-width: 640px) {
+  .nexo-header {
+    min-height: 4rem;
+    backdrop-filter: none;
+  }
+
+  [data-slot="card"] {
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 5%, transparent);
+  }
+
+  [data-slot="dialog-content"],
+  [data-slot="alert-dialog-content"] {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nexo-canvas > div {
+    animation: none !important;
+  }
+
+  .nexo-sidebar [data-sidebar="menu-button"],
+  [data-slot="table-row"],
+  [data-slot="tabs-trigger"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="context-menu-item"],
+  [data-slot="select-item"],
+  [data-slot="command-item"] {
+    transition: none !important;
+    transform: none !important;
+  }
+}
