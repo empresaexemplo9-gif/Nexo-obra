@@ -290,9 +290,23 @@ function HonestEmpty({ icon: Icon, title, description, action, actionLabel }: { 
   return <Card><Empty className="min-h-72 border-0"><EmptyHeader><EmptyMedia variant="icon" className="bg-hoikos-50 text-hoikos-700"><Icon /></EmptyMedia><EmptyTitle>{title}</EmptyTitle><EmptyDescription>{description}</EmptyDescription></EmptyHeader>{action ? <EmptyContent><Button onClick={action}><Plus />{actionLabel}</Button></EmptyContent> : null}</Empty></Card>;
 }
 
+// Todos os estados tinham a mesma aparência, então uma lista de tarefas ou projetos não
+// dizia nada de relance. O dourado — única cor de matiz diferente no guia da marca — fica
+// para o que trava trabalho; o concluído recua para o acinzentado, porque já não pede
+// ação; o que está em andamento é o marrom, que é onde o olho deve cair.
+const APARENCIA_DO_ESTADO: Record<string, string> = {
+  active: "border-hoikos-300 bg-hoikos-linen text-hoikos-800",
+  in_progress: "border-hoikos-300 bg-hoikos-linen text-hoikos-800",
+  blocked: "border-hoikos-gold/40 bg-hoikos-gold/10 text-hoikos-gold",
+  on_hold: "border-hoikos-gold/40 bg-hoikos-gold/10 text-hoikos-gold",
+  completed: "border-hoikos-200 bg-hoikos-50 text-hoikos-500",
+  done: "border-hoikos-200 bg-hoikos-50 text-hoikos-500",
+  archived: "border-hoikos-200 bg-hoikos-50 text-hoikos-500",
+};
+
 function StatusBadge({ status }: { status: string }) {
   const labels: Record<string, string> = { active: "Em andamento", on_hold: "Pausado", completed: "Concluído", archived: "Arquivado", todo: "A fazer", in_progress: "Em execução", blocked: "Bloqueada", done: "Concluída" };
-  return <Badge variant="outline" className="border-hoikos-200 bg-hoikos-50 text-hoikos-700">{labels[status] ?? status}</Badge>;
+  return <Badge variant="outline" className={APARENCIA_DO_ESTADO[status] ?? "border-hoikos-300 bg-hoikos-50 text-hoikos-700"}>{labels[status] ?? status}</Badge>;
 }
 
 function ProjectTable({ projects, query }: { projects: Project[]; query: string }) {

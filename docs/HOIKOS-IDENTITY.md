@@ -11,8 +11,19 @@ O manual completo não é publicado como asset; só as aplicações autorizadas 
 | Cor principal, superfícies escuras, texto | Marrom profundo | `#38301B` |
 | Apoio, bordas, metadados sobre fundo escuro | Acinzentado neutro | `#B5B19E` |
 | Fundo geral, texto sobre fundo escuro | Off-white | `#F7F7F0` |
+| Profundidade sem recorrer ao preto puro | Marrom quase preto | `#1C190F` |
+| Superfície destacada sobre o fundo | Off-white quente | `#F4F2E9` |
+| **Acento**: o que pede atenção — vencido, bloqueado, pausado | Dourado | `#846100` |
 
-Todo tom da interface é uma dessas quatro cores ou uma mistura entre elas (`color-mix`).
+Todo tom da interface é uma dessas sete cores ou uma mistura entre elas (`color-mix`).
+
+As três últimas saíram da leitura do arquivo do guia oficial e não tinham token antes, o
+que prendia a interface a um marrom só — `hoikos-600` até `hoikos-900` são todos `#38301B`.
+
+O dourado é a **única cor de matiz diferente em todo o guia** e por isso é acento, nunca
+superfície nem texto corrido: em área grande brigaria com a sobriedade do resto da
+identidade. Ele marca o que pede ação — conta vencida, tarefa bloqueada, projeto pausado.
+O estado resolvido recua para o acinzentado, porque já não pede nada.
 Nenhum gradiente decorativo. Estados continuam identificados por texto e ícone, não só por cor.
 O teste `tests/product-contract.test.mjs` falha se qualquer outro HEX entrar em `app/globals.css`.
 

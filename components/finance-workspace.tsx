@@ -79,8 +79,23 @@ function formatDate(value: string | null) {
   return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString("pt-BR");
 }
 
+// As três situações tinham o mesmo desenho: a condição existia e devolvia a mesma string
+// nos três ramos, então pago, vencido e processando eram indistinguíveis de relance. Quem
+// olha uma lista de contas precisa achar o vencido sem ler item por item.
+//
+// O dourado é a única cor de matiz diferente no guia da marca, e fica reservado ao que
+// pede atenção. Resolvido, usa o marrom sobre off-white quente; em andamento fica no
+// acinzentado. A palavra continua na tela: cor acompanha o texto, não substitui.
+const APARENCIA_DO_ESTADO: Record<string, string> = {
+  paid: "border-hoikos-300 bg-hoikos-linen text-hoikos-800",
+  created: "border-hoikos-300 bg-hoikos-linen text-hoikos-800",
+  active: "border-hoikos-300 bg-hoikos-linen text-hoikos-800",
+  overdue: "border-hoikos-gold/40 bg-hoikos-gold/10 text-hoikos-gold",
+  failed: "border-hoikos-gold/40 bg-hoikos-gold/10 text-hoikos-gold",
+};
+
 function StatusBadge({ status }: { status: string }) {
-  const color = status === "paid" || status === "created" || status === "active" ? "border-hoikos-200 bg-hoikos-50 text-hoikos-700" : status === "overdue" || status === "failed" ? "border-hoikos-200 bg-hoikos-50 text-hoikos-700" : "border-hoikos-200 bg-hoikos-50 text-hoikos-700";
+  const color = APARENCIA_DO_ESTADO[status] ?? "border-hoikos-300 bg-hoikos-50 text-hoikos-500";
   return <Badge variant="outline" className={color}>{transactionStatus[status] ?? (status === "failed" ? "Falhou" : status === "pending" ? "Processando" : status)}</Badge>;
 }
 

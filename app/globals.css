@@ -51,11 +51,28 @@
 /* H.OIKOS: master colors from page 15 of the supplied identity guide.
    Interface tints mix only these colors; no decorative gradients. */
 :root {
+  /* Paleta do guia oficial (GUIA DA IDENTIDADE VISUAL - H.OIKOS).
+     As quatro primeiras já eram usadas; as três seguintes estavam no guia e não tinham
+     token, o que deixava a interface presa a um marrom só. */
   --hoikos-black: #000000;
   --hoikos-earth: #38301B;
   --hoikos-stone: #B5B19E;
   --hoikos-paper: #F7F7F0;
-  --background: var(--hoikos-paper);
+  /* Marrom quase preto: profundidade sem recorrer ao preto puro, que o guia reserva
+     para contraste extremo. */
+  --hoikos-soil: #1C190F;
+  /* Off-white quente: separa superfície de fundo sem introduzir cinza, que não é da marca. */
+  --hoikos-linen: #F4F2E9;
+  /* Dourado: a única cor com matiz diferente em todo o guia. Por isso é acento —
+     destaque pontual e estado que precisa de atenção — nunca superfície ou texto corrido.
+     Usá-la em área grande brigaria com a sobriedade do resto da identidade. */
+  --hoikos-gold: #846100;
+  /* Três camadas, não uma.
+     Antes fundo, cartão e popover eram a MESMA cor, então nada se destacava de nada e a
+     tela inteira lia como uma folha chapada. Agora o fundo recua para o off-white quente
+     e a superfície avança para o mais claro: o cartão passa a existir por luz, não por
+     borda. É o que dá profundidade sem sombra pesada, gradiente ou cor de fora da marca. */
+  --background: var(--hoikos-linen);
   --foreground: var(--hoikos-earth);
   --card: var(--hoikos-paper);
   --card-foreground: var(--hoikos-earth);
@@ -70,22 +87,29 @@
   --accent: color-mix(in srgb, var(--hoikos-stone) 35%, var(--hoikos-paper));
   --accent-foreground: var(--hoikos-earth);
   --destructive: var(--hoikos-black);
-  --border: color-mix(in srgb, var(--hoikos-stone) 65%, var(--hoikos-paper));
+  /* Borda mais leve: com o fundo agora separado por luz, a linha não precisa fazer o
+     trabalho sozinha. Traço duro em toda caixa é o que dava aspecto de formulário. */
+  --border: color-mix(in srgb, var(--hoikos-stone) 45%, var(--hoikos-paper));
   --input: var(--hoikos-stone);
   --ring: var(--hoikos-earth);
+  /* Séries distinguíveis entre si, todas da marca: marrom, dourado, acinzentado. */
   --chart-1: var(--hoikos-earth);
-  --chart-2: var(--hoikos-stone);
-  --chart-3: var(--hoikos-black);
+  --chart-2: var(--hoikos-gold);
+  --chart-3: var(--hoikos-stone);
   --chart-4: var(--muted-foreground);
   --chart-5: var(--secondary);
   --radius: 0.25rem;
-  --sidebar: var(--hoikos-earth);
-  --sidebar-foreground: var(--hoikos-paper);
-  --sidebar-primary: var(--hoikos-paper);
-  --sidebar-primary-foreground: var(--hoikos-earth);
-  --sidebar-accent: var(--hoikos-stone);
-  --sidebar-accent-foreground: var(--hoikos-earth);
-  --sidebar-border: color-mix(in srgb, var(--hoikos-stone) 30%, var(--hoikos-earth));
+  /* O menu é a maior área de cor da tela e era um marrom chapado do topo à base.
+     Descer para o marrom quase preto dá o assentamento que faz o conteúdo à direita
+     parecer iluminado — e o item ativo, agora no marrom da marca, se destaca contra ele
+     em vez de brigar por saturação. */
+  --sidebar: var(--hoikos-soil);
+  --sidebar-foreground: color-mix(in srgb, var(--hoikos-paper) 88%, var(--hoikos-stone));
+  --sidebar-primary: var(--hoikos-earth);
+  --sidebar-primary-foreground: var(--hoikos-paper);
+  --sidebar-accent: color-mix(in srgb, var(--hoikos-earth) 70%, var(--hoikos-soil));
+  --sidebar-accent-foreground: var(--hoikos-paper);
+  --sidebar-border: color-mix(in srgb, var(--hoikos-stone) 22%, var(--hoikos-soil));
   --sidebar-ring: var(--hoikos-paper);
 }
 
@@ -134,6 +158,9 @@
   --color-hoikos-800: var(--hoikos-earth);
   --color-hoikos-900: var(--hoikos-earth);
   --color-hoikos-950: var(--hoikos-black);
+  --color-hoikos-soil: var(--hoikos-soil);
+  --color-hoikos-linen: var(--hoikos-linen);
+  --color-hoikos-gold: var(--hoikos-gold);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
@@ -178,7 +205,9 @@ h1, h2, h3, h4 { letter-spacing: -0.01em; }
 label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
 .metric-number { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-.nexo-shell, .nexo-canvas { background: var(--hoikos-paper); }
+/* A área de trabalho recua para o off-white quente: é ela que faz o cartão claro
+   parecer levantado. Com as duas na mesma cor, a tela inteira lia como uma folha só. */
+.nexo-shell, .nexo-canvas { background: var(--hoikos-linen); }
 /* A largura reservada pelo menu lateral não pode encolher quando um módulo contém
    conteúdo largo (como a grade da planilha). O conteúdo principal, por sua vez,
    precisa aceitar min-width: 0 para que a rolagem aconteça dentro do módulo. */
@@ -191,9 +220,27 @@ label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
   text-transform: uppercase;
   letter-spacing: 0.2em;
 }
+/* O cabeçalho fica na cor da superfície, não na do fundo: ele acompanha o conteúdo. */
 .nexo-header { background: var(--hoikos-paper); border-color: var(--border); box-shadow: none; }
-.workspace-card { border-color: var(--border); box-shadow: none; }
-.workspace-card:hover { border-color: var(--hoikos-stone); }
+
+/* O cartão existe por luz e por um assentamento mínimo, não por traço grosso. A sombra é
+   do próprio marrom em baixa opacidade — nada de cinza, que não pertence à marca. */
+.workspace-card {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+.workspace-card:hover {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 75%, var(--hoikos-paper));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--hoikos-soil) 9%, transparent);
+}
+
+/* Foco visível e da marca: acessibilidade por teclado não pode depender de cor herdada
+   do navegador, que não tem nada a ver com a identidade. */
+:where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--hoikos-gold);
+  outline-offset: 2px;
+}
 
 /* O manual proíbe achatar ou esticar a marca; a proporção fica travada aqui. */
 .hoikos-brand { object-fit: contain; }
