@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { UFS, columnName, previousMonth, type Mapping, type Profile } from "@/lib/integrations/sinapi-contract";
+import { DEFAULT_SINAPI_UF, UFS, columnName, previousMonth, type Mapping, type Profile } from "@/lib/integrations/sinapi-contract";
 
 type Sheet = { aba: string; linhas: string[][] };
 type Snapshot = {
   config: Profile | null; jobId?: string; lastChecked?: number; error?: string;
   schedulerConfigured: boolean; storageConfigured: boolean;
   jobs: { id: string; competencia: string; uf: string; regime: string; estado: string; total_itens: number; origem_url: string; arquivo_sha256: string;
-    report: { abas?: Sheet[]; cursor?: number; alertas?: string[]; semPreco?: number; cleanup?: boolean; amostra?: { codigo: string; descricao: string; unidade: string; custoUnitarioCentavos: number; tipo: string }[] } }[];
+    report: { arquivos?: string[]; abas?: Sheet[]; cursor?: number; alertas?: string[]; semPreco?: number; cleanup?: boolean; amostra?: { codigo: string; descricao: string; unidade: string; custoUnitarioCentavos: number; tipo: string }[] } }[];
 };
 const labels: Record<string, string> = { baixando: "Aguardando download", conferindo: "Conferir colunas", interpretando: "Aguardando análise", importando: "Importando preços", pendente: "Aguardando revisão", aprovada: "Ativa" };
 function MappingForm({ sheets, busy, onSave }: { sheets: Sheet[]; busy: boolean; onSave: (maps: Mapping[]) => void }) {
@@ -51,28 +51,48 @@ export function SinapiControl() {
     }
     finally { setBusy(false); }
   }
+  async function uploadOfficial(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setBusy(true); setError(""); setMessage(""); setConfirmed(false);
+    try {
+      const response = await fetch("/api/superadmin/sinapi", { method: "PUT", body: new FormData(event.currentTarget) });
+      const value: Snapshot & { error?: string } = await response.json();
+      if (!response.ok) throw new Error(value.error || "Não foi possível importar o pacote oficial.");
+      setData(value); setMessage("Pacote oficial recebido e encaminhado para validação.");
+    } catch (e) { setError(e instanceof Error ? e.message : "Não foi possível importar o pacote oficial."); }
+    finally { setBusy(false); }
+  }
   const job = data?.jobs.find((j) => j.id === data.jobId);
-  return <Card className="mt-6 min-w-0 [&_button]:h-auto [&_button]:min-h-9 [&_button]:whitespace-normal"><CardHeader><CardTitle>Referência SINAPI</CardTitle><p className="text-sm">Confira a primeira referência e habilite a renovação mensal. A tabela anterior é excluída após a ativação da nova; os orçamentos salvos são preservados.</p></CardHeader><CardContent className="min-w-0 space-y-4">
+  return <Card className="mt-6 min-w-0 [&_button]:h-auto [&_button]:min-h-9 [&_button]:whitespace-normal"><CardHeader><CardTitle>Referência SINAPI</CardTitle><p className="text-sm">O pacote XLSX oficial da CAIXA é nacional. A plataforma seleciona a UF, o regime e a competência sem depender de API de terceiro; Goiás é o padrão inicial e as 27 UFs ficam disponíveis.</p></CardHeader><CardContent className="min-w-0 space-y-4">
     <div aria-live="polite">{busy ? <p>Processando a etapa. O progresso fica salvo no servidor.</p> : message ? <p>{message}</p> : null}{error || data?.error ? <p role="alert" className="break-words text-red-700">{error || data?.error}</p> : null}</div>
     {!data ? <Button variant="outline" disabled={busy} onClick={() => void load().catch((e: Error) => setError(e.message))}>Carregar referências</Button> : <>
       {!data.storageConfigured ? <p className="text-sm">Configure BLOB_READ_WRITE_TOKEN na hospedagem para permitir o processamento temporário.</p> : null}
       {!data.schedulerConfigured ? <p className="text-sm">Configure CRON_SECRET na hospedagem para autorizar a verificação diária de novas competências.</p> : null}
-      <p className="text-sm">{data.lastChecked ? `Última verificação: ${new Date(data.lastChecked).toLocaleString("pt-BR")}.` : "Nenhuma verificação automática realizada."} A rotina atende à UF e ao regime configurados abaixo.</p>
-      {data.config?.assinaturas.length ? <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={data.config.automatico} disabled={busy} onChange={(e) => void act({ action: "automatic", enabled: e.target.checked })} />Renovar automaticamente {data.config.uf} · {data.config.regime === "Desonerado" ? "Desonerado" : "Não desonerado"} quando a Caixa publicar a competência anterior. Mudanças de colunas ou contagens exigem revisão.</label> : null}
-      {!job ? <form key={`${data.config?.uf}:${data.config?.regime}`} className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void act({ action: "start", month: f.get("month"), uf: f.get("uf"), regime: f.get("regime") }); }}>
-        <label className="text-sm">Competência<Input name="month" type="month" defaultValue={previousMonth()} required /></label>
-        <label className="text-sm">UF<NativeSelect name="uf" defaultValue={data.config?.uf ?? "SP"}>{UFS.map((uf) => <option key={uf}>{uf}</option>)}</NativeSelect></label>
-        <label className="text-sm">Regime<NativeSelect name="regime" defaultValue={data.config?.regime ?? "NaoDesonerado"}><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
-        <Button disabled={busy}>Preparar referência</Button>
-      </form> : <section className="min-w-0 space-y-4 rounded-md border p-3">
+      <p className="text-sm">{data.lastChecked ? `Última verificação: ${new Date(data.lastChecked).toLocaleString("pt-BR")}.` : "Nenhuma verificação automática realizada."} A renovação automática acompanha a combinação de UF e regime homologada; outras UFs podem ser preparadas com o mesmo pacote nacional.</p>
+      {data.config?.assinaturas.length ? <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={data.config.automatico} disabled={busy} onChange={(e) => void act({ action: "automatic", enabled: e.target.checked })} />Renovar automaticamente {data.config.uf} · {data.config.regime === "Desonerado" ? "Desonerado" : "Não desonerado"} quando a CAIXA publicar a competência anterior. Mudanças de estrutura, contagem ou preços exigem revisão.</label> : null}
+      {!job ? <div className="space-y-4">
+        <form key={`${data.config?.uf}:${data.config?.regime}`} className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); const f = new FormData(e.currentTarget); void act({ action: "start", month: f.get("month"), uf: f.get("uf"), regime: f.get("regime") }); }}>
+          <label className="text-sm">Competência<Input name="month" type="month" defaultValue={previousMonth()} required /></label>
+          <label className="text-sm">UF<NativeSelect name="uf" defaultValue={data.config?.uf ?? DEFAULT_SINAPI_UF}>{UFS.map((uf) => <option key={uf}>{uf}</option>)}</NativeSelect></label>
+          <label className="text-sm">Regime<NativeSelect name="regime" defaultValue={data.config?.regime ?? "NaoDesonerado"}><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
+          <Button disabled={busy}>Baixar e preparar referência oficial</Button>
+        </form>
+        <details className="rounded-md border p-3"><summary className="cursor-pointer text-sm font-medium">Se a CAIXA bloquear o download automático, enviar o ZIP oficial</summary><form onSubmit={uploadOfficial} className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">Competência<Input name="month" type="month" defaultValue={previousMonth()} required /></label>
+          <label className="text-sm">UF<NativeSelect name="uf" defaultValue={data.config?.uf ?? DEFAULT_SINAPI_UF}>{UFS.map((uf) => <option key={uf}>{uf}</option>)}</NativeSelect></label>
+          <label className="text-sm">Regime<NativeSelect name="regime" defaultValue={data.config?.regime ?? "NaoDesonerado"}><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
+          <label className="text-sm">Pacote XLSX (.zip)<Input name="arquivo" type="file" accept=".zip,application/zip,application/x-zip-compressed" required /></label>
+          <Button type="submit" variant="outline" disabled={busy}>Enviar pacote oficial</Button>
+        </form><p className="mt-2 text-xs">Use exatamente o arquivo “SINAPI-AAAA-MM-formato-xlsx” baixado da CAIXA. O mesmo ZIP contém dados de todas as UFs.</p></details>
+      </div> : <section className="min-w-0 space-y-4 rounded-md border p-3">
         <h3 className="font-medium">{job.competencia} · {job.uf} · {job.regime === "Desonerado" ? "Desonerado" : "Não desonerado"} — {labels[job.estado] ?? job.estado}</h3>
-        <a className="text-sm underline" href={job.origem_url} target="_blank" rel="noreferrer">Abrir publicação original da Caixa</a>
+        {job.origem_url.startsWith("http") ? <a className="text-sm underline" href={job.origem_url} target="_blank" rel="noreferrer">Abrir publicação original da CAIXA</a> : <p className="text-sm">Origem: ZIP oficial enviado manualmente.</p>}
+        {job.report.arquivos?.length ? <p className="text-xs">Relatórios usados: {job.report.arquivos.join(", ")}</p> : null}
         {job.report.alertas?.map((a) => <p role="alert" key={a}>{a}</p>)}
         {job.estado === "conferindo" && job.report.abas ? <MappingForm key={job.id} sheets={job.report.abas} busy={busy} onSave={(maps) => void act({ action: "map", maps })} /> : null}
         {job.total_itens > 0 ? <p className="text-sm">{job.report.cursor ?? 0} de {job.total_itens} preços gravados. {job.report.semPreco ?? 0} itens sem preço, não importados.</p> : null}
         {job.report.amostra?.length ? <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><caption className="text-left">Amostra para conferir no arquivo original</caption><thead><tr><th>Código / tipo</th><th>Descrição</th><th>Un.</th><th>Preço</th></tr></thead><tbody>{job.report.amostra.map((item) => <tr key={`${item.tipo}:${item.codigo}`}><td className="border p-2">{item.codigo} · {item.tipo}</td><td className="border p-2">{item.descricao}</td><td className="border p-2">{item.unidade}</td><td className="border p-2">{(item.custoUnitarioCentavos / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</td></tr>)}</tbody></table></div> : null}
         {job.arquivo_sha256 ? <p className="break-all text-xs">SHA-256 da publicação: {job.arquivo_sha256}</p> : null}
-        {job.estado === "pendente" ? <div className="space-y-3"><label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />Conferi competência, UF, regime, colunas e preços da amostra no arquivo original.</label><Button disabled={busy || !confirmed} onClick={() => void act({ action: "approve", confirmed: true })}>Ativar e substituir a referência anterior</Button></div> : null}
+        {job.estado === "pendente" ? <div className="space-y-3"><label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />Conferi competência, UF, regime e preços da amostra no arquivo oficial.</label><Button disabled={busy || !confirmed} onClick={() => void act({ action: "approve", confirmed: true })}>Ativar e substituir a referência anterior desta UF/regime</Button></div> : null}
         <div className="flex flex-wrap gap-2">{!["conferindo", "pendente"].includes(job.estado) ? <Button disabled={busy} onClick={() => void act({ action: "advance" })}>{job.estado === "aprovada" ? "Concluir limpeza dos temporários" : "Processar próxima etapa"}</Button> : null}{job.estado !== "aprovada" ? <Button variant="outline" disabled={busy} onClick={() => void act({ action: "discard" })}>Descartar tentativa</Button> : null}</div>
       </section>}
       <div className="space-y-1 text-sm"><h3 className="font-medium">Referências ativas</h3>{data.jobs.filter((j) => j.estado === "aprovada").map((j) => <p key={j.id}>{j.uf} · {j.regime === "Desonerado" ? "Desonerado" : "Não desonerado"} · {j.competencia} · {j.total_itens.toLocaleString("pt-BR")} preços</p>)}{!data.jobs.some((j) => j.estado === "aprovada") ? <p>Nenhuma referência ativa. Prepare e confira a primeira tabela.</p> : null}</div>

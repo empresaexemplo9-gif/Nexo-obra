@@ -174,3 +174,22 @@ test("os termos pendentes bloqueiam o produto até o aceite", async () => {
   assert.match(texto, /Termos de Uso/);
   assert.doesNotMatch(texto, /Visão geral/, "nada do produto abre antes do aceite");
 });
+
+// A tela de criar registro tinha um beco sem saída: sem nenhum projeto cadastrado, a aba
+// Tarefa abria um select vazio e um botão desabilitado, sem dizer o motivo nem oferecer
+// saída. Quem chegava ali só via a interface recusar, sem explicação.
+test("sem projeto, a aba Tarefa explica o motivo e oferece o caminho", async () => {
+  await abrir(sessionFor("owner"));
+  // O diálogo monta em portal, fora do container da aplicação.
+  await act(async () => { findByText(document.body, "Criar", "button").click(); });
+  const dialogo = () => document.body.querySelector('[role="dialog"]');
+  await act(async () => { findByText(dialogo(), "Tarefa", "button").click(); });
+
+  const texto = textOf(dialogo());
+  assert.match(texto, /Toda tarefa pertence a um projeto/, "diz por que não dá para criar");
+  assert.ok(findByText(dialogo(), "Cadastrar projeto primeiro", "button"), "e oferece a saída");
+  assert.equal(dialogo().querySelector('select[name="projectId"]'), null,
+    "não mostra um select sem nenhuma opção");
+  assert.equal(dialogo().querySelector('button[type="submit"]'), null,
+    "nem um botão de salvar que não salva");
+});

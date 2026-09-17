@@ -16,7 +16,7 @@ import { montarZip, xlsx } from "./helpers/sinapi-fixtures.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({ configFile: false, appType: "custom", root, resolve: { alias: { "@": root } }, server: { middlewareMode: true, hmr: false } });
-const { referenceFile, formasDaCompetencia } = await vite.ssrLoadModule("/lib/integrations/sinapi-mapped.ts");
+const { referenceFile, formasDaCompetencia, parseNationalPackage } = await vite.ssrLoadModule("/lib/integrations/sinapi-mapped.ts");
 after(() => vite.close());
 
 const planilha = () => xlsx({ "Composições": [["SINAPI"], ["Código", "Descrição", "Unidade", "GO"], ["1", "Serviço", "M2", "1.234,56"]] });
@@ -89,4 +89,52 @@ test("pacote do mês errado é recusado, mesmo com uma planilha só", () => {
   // entrariam rotulados com a competência pedida — errado e sem nenhum aviso.
   const pacote = montarZip({ "SINAPI_Referencia_GO_202411_Desonerado.xlsx": planilha() });
   assert.throws(() => referenceFile(pacote, "2024-12"), /competência 2024-12.*202411/s);
+});
+
+function tabelaNacional(regime, goInsumo, spInsumo, goComposicao, spComposicao) {
+  const tituloInsumos = `RELATÓRIO DE PREÇOS DE INSUMOS - ENCARGOS SOCIAIS ${regime}`;
+  const tituloComposicoes = `RELATÓRIO DE CUSTOS DE COMPOSIÇÕES - ENCARGOS SOCIAIS ${regime}`;
+  const insumos = xlsx({ Insumos: [
+    [tituloInsumos],
+    ["Classificação", "Código do Insumo", "Descrição do Insumo", "Unidade", "Origem de Preço", "GO", "SP"],
+    ...Array.from({ length: 120 }, (_, i) => ["MATERIAL", String(i + 1), `Insumo ${i + 1}`, "UN", "C", goInsumo, spInsumo]),
+  ] });
+  const composicoes = xlsx({ Composicoes: [
+    [tituloComposicoes],
+    ["Grupo", "Código da Composição", "Descrição", "Unidade", "GO Custo (R$)", "GO %AS", "SP Custo (R$)", "SP %AS"],
+    ...Array.from({ length: 120 }, (_, i) => ["Grupo", String(1000 + i), `Composição ${i + 1}`, "M2", goComposicao, "0%", spComposicao, "0%"]),
+  ] });
+  return { insumos, composicoes };
+}
+
+test("pacote nacional 2025+ seleciona a UF pedida sem misturar preços", () => {
+  const sem = tabelaNacional("SEM DESONERAÇÃO", "1,23", "9,87", "4,56", "8,76");
+  const pacote = montarZip({
+    "Relatorio_Insumos_Sem_Desoneracao.xlsx": sem.insumos,
+    "Relatorio_Composicoes_Sem_Desoneracao.xlsx": sem.composicoes,
+  });
+  const go = parseNationalPackage(pacote, "2026-08", "GO", "NaoDesonerado");
+  const sp = parseNationalPackage(pacote, "2026-08", "SP", "NaoDesonerado");
+  assert.ok(go); assert.ok(sp);
+  assert.equal(go.itens.length, 240); assert.equal(sp.itens.length, 240);
+  assert.equal(go.itens.find((i) => i.tipo === "insumo").custoUnitarioCentavos, 123);
+  assert.equal(sp.itens.find((i) => i.tipo === "insumo").custoUnitarioCentavos, 987);
+  assert.equal(go.itens.find((i) => i.tipo === "composicao").custoUnitarioCentavos, 456);
+  assert.equal(sp.itens.find((i) => i.tipo === "composicao").custoUnitarioCentavos, 876);
+});
+
+test("pacote nacional não mistura desonerado com não desonerado", () => {
+  const sem = tabelaNacional("SEM DESONERAÇÃO", "1,00", "2,00", "3,00", "4,00");
+  const com = tabelaNacional("COM DESONERAÇÃO", "11,00", "12,00", "13,00", "14,00");
+  const pacote = montarZip({
+    "Insumos_Sem_Desoneracao.xlsx": sem.insumos,
+    "Composicoes_Sem_Desoneracao.xlsx": sem.composicoes,
+    "Insumos_Desonerado.xlsx": com.insumos,
+    "Composicoes_Desonerado.xlsx": com.composicoes,
+  });
+  const nao = parseNationalPackage(pacote, "2026-08", "GO", "NaoDesonerado");
+  const des = parseNationalPackage(pacote, "2026-08", "GO", "Desonerado");
+  assert.ok(nao); assert.ok(des);
+  assert.equal(nao.itens.find((i) => i.tipo === "insumo").custoUnitarioCentavos, 100);
+  assert.equal(des.itens.find((i) => i.tipo === "insumo").custoUnitarioCentavos, 1100);
 });

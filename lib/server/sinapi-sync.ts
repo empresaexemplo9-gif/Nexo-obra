@@ -3,13 +3,13 @@ import { del, get, put } from "@vercel/blob";
 import { getDatabase } from "@/db";
 import { ApiError } from "./api-error";
 import { runtimeEnv } from "./runtime";
-import { inspectReference, parseMapped, referenceFile } from "@/lib/integrations/sinapi-mapped";
+import { inspectReference, parseMapped, parseNationalPackage, referenceFile } from "@/lib/integrations/sinapi-mapped";
 import { previousMonth, sourceUrl, type Mapping, type Profile } from "@/lib/integrations/sinapi-contract";
 import type { ItemSinapi } from "@/lib/integrations/sinapi-planilha";
 
 type Sync = { config_json: string | null; job_id: string | null; last_checked: number | null; last_error: string | null };
 type Job = { id: string; competencia: string; uf: string; regime: string; estado: string; total_itens: number; laudo_json: string | null; origem_url: string; falha: string | null; arquivo_sha256: string | null };
-type Report = { arquivo?: string; abas?: ReturnType<typeof inspectReference>; signatures?: string[]; semPreco?: number; cursor?: number; amostra?: ItemSinapi[]; alertas?: string[]; revisadoPor?: string; revisadoEm?: number; cleanup?: boolean };
+type Report = { arquivo?: string; arquivos?: string[]; abas?: ReturnType<typeof inspectReference>; signatures?: string[]; semPreco?: number; cursor?: number; amostra?: ItemSinapi[]; alertas?: string[]; revisadoPor?: string; revisadoEm?: number; cleanup?: boolean };
 export type SinapiIO = { read(key: string): Promise<Buffer>; write(key: string, bytes: Buffer): Promise<void>; remove(key: string): Promise<void>; download(url: string): Promise<Buffer> };
 const LIMIT = 80 * 1024 * 1024;
 async function bounded(response: Response, limit = LIMIT) {
@@ -164,11 +164,43 @@ export async function advanceSinapi(token: string, io = sinapiIO, budgetMs = 180
     const bytes = job.origem_url === ORIGEM_MANUAL
       ? await io.read(`sinapi-temporario/${job.id}/origem.zip`)
       : await io.download(job.origem_url);
+    await db.prepare("UPDATE sinapi_competencias SET arquivo_sha256=?1,arquivo_bytes=?2,baixado_em=?3 WHERE id=?4")
+      .bind(createHash("sha256").update(bytes).digest("hex"), bytes.length, Date.now(), job.id).run();
+
+    // Desde 2025 o ZIP XLSX oficial é nacional. Primeiro tentamos o contrato novo: o
+    // mesmo pacote é filtrado pela UF/regime solicitados e nenhuma API de terceiro é
+    // necessária. Pacotes antigos ou não reconhecidos seguem pelo fluxo manual já existente.
+    const national = parseNationalPackage(bytes, job.competencia, job.uf, profile.regime);
+    if (national) {
+      report.arquivo = "Pacote nacional XLSX da CAIXA";
+      report.arquivos = national.arquivos;
+      report.signatures = national.signatures;
+      report.semPreco = national.semPreco;
+      report.cursor = 0;
+      report.amostra = [...national.itens.slice(0, 5), ...national.itens.slice(-5)];
+      report.alertas = [];
+      delete report.abas;
+      const previous = await db.prepare("SELECT total_itens,laudo_json FROM sinapi_competencias WHERE uf=?1 AND regime=?2 AND estado='aprovada' ORDER BY competencia DESC LIMIT 1")
+        .bind(job.uf, job.regime).first<{ total_itens: number; laudo_json: string }>();
+      if (profile.assinaturas.length && JSON.stringify(national.signatures) !== JSON.stringify(profile.assinaturas)) {
+        report.alertas.push("A estrutura do pacote nacional mudou. A nova referência será importada, mas exige revisão humana antes de substituir a vigente.");
+      }
+      if (previous && Math.abs(national.itens.length / previous.total_itens - 1) > 0.2) report.alertas.push("A quantidade de preços variou mais de 20%.");
+      if (previous) {
+        const old = JSON.parse(previous.laudo_json) as Report;
+        if (national.semPreco > (old.semPreco ?? 0) + 100) report.alertas.push("Mais de 100 itens adicionais estão sem preço.");
+      }
+      await io.write(itemsKey, Buffer.from(JSON.stringify(national.itens)));
+      job.total_itens = national.itens.length;
+      job.estado = "importando";
+      await saveJob(job, report, token);
+      return;
+    }
+
     const file = referenceFile(bytes, job.competencia);
     report.arquivo = file.name; report.abas = inspectReference(file.bytes);
     // Chaves determinísticas registradas pelo ID antes do upload; crash não deixa órfãos.
     await io.write(xlsxKey, file.bytes);
-    await db.prepare("UPDATE sinapi_competencias SET arquivo_sha256=?1,arquivo_bytes=?2,baixado_em=?3 WHERE id=?4").bind(createHash("sha256").update(bytes).digest("hex"), bytes.length, Date.now(), job.id).run();
     job.estado = profile.assinaturas.length ? "interpretando" : "conferindo";
     await saveJob(job, report, token); return;
   }

@@ -1,4 +1,4 @@
-import { normalizeReferenceMonth, normalizeSinapiUf, regimeSchema } from "./sinapi-contract";
+import { normalizeReferenceMonth, normalizeSinapiUf, regimeSchema, type SinapiRegime } from "./sinapi-contract";
 import { isOrcamentadorConfigured, searchOrcamentadorItems } from "./orcamentador";
 
 // Contrato de compatibilidade: SINAPI_API_TOKEN continua sendo a credencial server-side.
@@ -11,6 +11,7 @@ export type SinapiItem = {
   unitCostCents: number;
   referenceMonth: string;
   state: string;
+  regime: SinapiRegime;
   sourceReference: string;
 };
 
@@ -30,6 +31,7 @@ export async function searchSinapiItems(query: string, state: string, referenceM
     unitCostCents: item.custoUnitarioCentavos,
     referenceMonth: normalizedMonth,
     state: normalizedState,
+    regime: typedRegime,
     sourceReference: `ORCAMENTADOR:SINAPI:${normalizedState}:${normalizedMonth}:${typedRegime}:${item.tipo}:${item.codigo}`,
   }));
 }
