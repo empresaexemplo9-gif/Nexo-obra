@@ -44,6 +44,7 @@ type DrapRuntimeEnv = {
   DRAP_API_URL?: string;
   DRAP_API_TOKEN?: string;
   DRAP_API_KEY_HEADER?: string;
+  DRAP_PARTNER_TOKEN?: string;
   DRAP_SUMMARY_PATH?: string;
   DRAP_TRANSACTIONS_PATH?: string;
   DRAP_CHARGES_PATH?: string;
@@ -75,17 +76,32 @@ function tenantConfigs() {
   }
 }
 
-function apiTokenFor(externalCompanyId: string) {
+/**
+ * Token de operação desta empresa.
+ *
+ * Ordem: ambiente primeiro, banco depois. O ambiente vence de propósito — quem configurou
+ * à mão não muda de caminho por causa da tabela nova, e um segredo trocado no painel
+ * continua sendo a saída de emergência.
+ *
+ * O banco entra para a empresa provisionada pela API de parceiro: a chave dela chega numa
+ * resposta HTTP, uma vez só, e exigir um deploy para guardá-la anularia o provisionamento.
+ * O `import` é dinâmico para o grafo estático deste módulo continuar sem banco.
+ */
+async function apiTokenFor(externalCompanyId: string) {
   const config = runtimeEnv();
   const tenants = tenantConfigs();
   const tenantIds = Object.keys(tenants);
-  if (tenantIds.length > 0) {
-    const token = tenants[externalCompanyId]?.apiToken;
-    if (!token) throw new Error("DRAP integration is not configured for this tenant");
-    return token;
-  }
-  if (!config.DRAP_API_TOKEN) throw new Error("DRAP integration is not configured");
-  return config.DRAP_API_TOKEN;
+
+  const doAmbiente = tenantIds.length > 0
+    ? tenants[externalCompanyId]?.apiToken
+    : config.DRAP_API_TOKEN;
+  if (doAmbiente) return doAmbiente;
+
+  const { tokenGuardado } = await import("@/lib/server/drap-credenciais");
+  const guardado = await tokenGuardado(externalCompanyId);
+  if (guardado) return guardado;
+
+  throw new Error("DRAP integration is not configured for this tenant");
 }
 
 export function getDrapWebhookCandidates() {
@@ -102,7 +118,11 @@ export function getDrapWebhookCandidates() {
 export function isDrapConfigured() {
   const config = runtimeEnv();
   const hasTenantToken = Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken));
-  return Boolean(config.DRAP_API_URL && (config.DRAP_API_TOKEN || hasTenantToken));
+  // `DRAP_PARTNER_TOKEN` conta como credencial configurada porque, com ele, as empresas
+  // provisionadas guardam a chave delas no banco. Sem isso, uma instalação que só
+  // provisiona apareceria como "integração não configurada" com tudo funcionando.
+  const temParceiro = Boolean((config as { DRAP_PARTNER_TOKEN?: string }).DRAP_PARTNER_TOKEN);
+  return Boolean(config.DRAP_API_URL && (config.DRAP_API_TOKEN || hasTenantToken || temParceiro));
 }
 
 export function isDrapTransactionsConfigured() {
@@ -149,9 +169,9 @@ function readString(record: Record<string, unknown>, keys: string[]) {
   return null;
 }
 
-function requestHeaders(externalCompanyId: string) {
+async function requestHeaders(externalCompanyId: string) {
   const config = runtimeEnv();
-  const token = apiTokenFor(externalCompanyId);
+  const token = await apiTokenFor(externalCompanyId);
   const headers = new Headers({ Accept: "application/json", "Content-Type": "application/json" });
   if (config.DRAP_API_KEY_HEADER) headers.set(config.DRAP_API_KEY_HEADER, token);
   else headers.set("Authorization", `Bearer ${token}`);
@@ -213,7 +233,7 @@ export async function fetchDrapTransactions(externalCompanyId: string, costCente
     url.searchParams.set("offset", String(offset));
     if (costCenterId) url.searchParams.set("centro_custo", costCenterId);
 
-    const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+    const response = await fetch(url, { headers: await requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
       const retryAfter = response.headers.get("retry-after");
       const suffix = response.status === 429 && retryAfter ? `; retry after ${retryAfter}s` : "";
@@ -261,7 +281,7 @@ export async function hasAnyDrapTransaction(externalCompanyId: string) {
   const url = drapUrl(config.DRAP_TRANSACTIONS_PATH ?? "/api/v1/lancamentos");
   url.searchParams.set("limit", "1");
 
-  const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+  const response = await fetch(url, { headers: await requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error(`DRAP transactions request failed with status ${response.status}`);
 
   const corpo = await response.json();
@@ -307,7 +327,7 @@ async function fetchDrapResumo(externalCompanyId: string): Promise<FinancialSumm
   if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
 
   const url = drapUrl(config.DRAP_SUMMARY_PATH ?? "/api/v1/resumo");
-  const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+  const response = await fetch(url, { headers: await requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`DRAP summary request failed with status ${response.status}`);
 
@@ -392,7 +412,7 @@ export async function createDrapCharge(input: {
   const config = runtimeEnv();
   if (!isDrapChargesConfigured()) throw new Error("DRAP charges are not configured");
 
-  const headers = requestHeaders(input.externalCompanyId);
+  const headers = await requestHeaders(input.externalCompanyId);
   // Sem esta chave, um timeout depois de a Drap aceitar deixa a H.OIKOS sem
   // resposta e o cliente com boleto emitido — e a retentativa manda o segundo.
   headers.set("Idempotency-Key", input.idempotencyKey);
@@ -457,7 +477,7 @@ export async function requestDrapApi<T>(
 ): Promise<{ data: T | null; status: number; retryAfter: string | null }> {
   if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
   const method = init.method ?? "GET";
-  const headers = requestHeaders(externalCompanyId);
+  const headers = await requestHeaders(externalCompanyId);
   // Escrita financeira é operação distribuída (regra 5 do CLAUDE.md): um tempo esgotado
   // numa requisição que a Drap já efetivou faz a tentativa seguinte duplicar o registro.
   // `createDrapCharge` já mandava a chave; as rotas operacionais não mandavam nenhuma.

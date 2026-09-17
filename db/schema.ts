@@ -373,6 +373,16 @@ export const integrationConnections = sqliteTable("integration_connections", {
   status: text("status").notNull().default("active"),
   lastSyncedAt: text("last_synced_at"),
   lastError: text("last_error"),
+  // Credencial da empresa no provedor, cifrada (lib/server/segredos.ts). Chega uma vez
+  // só, na resposta do provisionamento, e precisa sobreviver a isso. Em claro aqui seria
+  // a chave do financeiro de todas as empresas atendidas numa cópia de backup.
+  apiTokenEncrypted: text("api_token_encrypted"),
+  // Segredo com que o provedor assina os webhooks desta empresa. Mesma guarda.
+  webhookSecretEncrypted: text("webhook_secret_encrypted"),
+  // Como esta conexão nasceu: 'provisionado' (a plataforma criou a empresa no provedor)
+  // ou 'vinculado' (a empresa já existia e o dono dela consentiu). NULL = conexão antiga,
+  // configurada à mão por variável de ambiente.
+  origem: text("origem"),
   ...timestamps,
 }, (table) => [
   uniqueIndex("uidx_integrations_provider_external_company").on(table.provider, table.externalCompanyId),
