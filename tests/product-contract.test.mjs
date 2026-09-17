@@ -346,7 +346,7 @@ test("creates remote charges only with idempotency and confirmed Drap output", a
 
   assert.match(schema, /sqliteTable\("financial_charge_requests"/);
   assert.match(schema, /uidx_financial_charge_org_idempotency/);
-  assert.match(charges, /isDrapChargesConfigured/);
+  assert.match(charges, /requireDrapResourcePath\(connection\.external_company_id, "cobrancas"\)/);
   assert.match(charges, /idempotencyKey: z\.string\(\)\.uuid\(\)/);
   assert.match(charges, /requireActiveDrapConnection/);
   assert.match(adapter, /Idempotency-Key/);
