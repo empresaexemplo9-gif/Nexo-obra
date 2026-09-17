@@ -2,7 +2,7 @@
 
 > **H.OIKOS — Ecossistema para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta é preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E`, off-white `#F7F7F0`, marrom quase preto `#1C190F`, off-white quente `#F4F2E9` e dourado `#846100` — este último reservado a acento, por ser a única cor de matiz diferente no guia. A tipografia usa as substitutas livres de Barium e Ador Hairline, servidas de `public/fonts/`. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
+A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta é preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E`, off-white `#F7F7F0`, marrom quase preto `#1C190F`, off-white quente `#F4F2E9` e dourado `#846100` — este último reservado a acento, por ser a única cor de matiz diferente no guia. A tipografia usa a **Ador Hairline licenciada** nos títulos, servida de `public/fonts/` nos cinco pesos recebidos (Light, Black e três itálicos); a Cormorant fica como reserva. A Barium continua sem licença web e a Jost segue no lugar dela. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
 
 Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 

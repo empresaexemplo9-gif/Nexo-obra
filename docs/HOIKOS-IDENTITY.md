@@ -62,7 +62,7 @@ equivalentes livres mais próximas em desenho e peso, hospedadas no próprio dom
 | Papel | Fonte do manual | Fonte servida | Licença |
 | --- | --- | --- | --- |
 | Texto, rótulos, controles | Barium Regular | Jost (variável 300–700) | SIL OFL 1.1 |
-| Títulos de página | Ador Hairline | Cormorant (variável 300–600) | SIL OFL 1.1 |
+| Títulos de página | **Ador Hairline** (licenciada, em uso) | Cormorant só como reserva | licença própria |
 
 Os arquivos ficam em `public/fonts/` (subconjuntos latin e latin-ext, ~109 KB no total) e são
 declarados em `app/globals.css` como `Hoikos Sans` e `Hoikos Display`. Ao receber os `.woff2`
