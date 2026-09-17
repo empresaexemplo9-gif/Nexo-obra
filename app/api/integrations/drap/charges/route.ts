@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+import { requestDrapApi } from "@/lib/integrations/drap";
 import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
-import { createDrapCharge, isDrapChargesConfigured } from "@/lib/integrations/drap";
 import { requireActiveDrapConnection } from "@/lib/server/drap";
+import { requireDrapResourcePath } from "@/lib/server/drap-resources";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,27 @@ function response(row: ChargeRow) {
   return { id: row.id, projectId: row.project_id, projectName: row.project_name, clientId: row.client_id, clientName: row.client_name, description: row.description, amountCents: row.amount_cents, dueDate: row.due_date, reminders: JSON.parse(row.reminder_policy_json) as unknown, status: row.status, externalChargeId: row.external_charge_id, shareUrl: row.share_url, lastError: row.last_error, createdAt: row.created_at };
 }
 
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function text(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function remoteCharge(value: unknown) {
+  const root = record(value);
+  const data = record(root.data ?? root.charge ?? root.cobranca ?? root);
+  const id = text(data.id) ?? text(data.chargeId) ?? text(data.charge_id) ?? text(data.cobranca_id);
+  if (!id) throw new Error("DRAP charge response has no id");
+  const rawShareUrl = text(data.shareUrl) ?? text(data.share_url) ?? text(data.paymentUrl) ?? text(data.payment_url) ?? text(data.link_pagamento);
+  return {
+    id,
+    status: text(data.status) ?? text(data.situacao) ?? "created",
+    shareUrl: rawShareUrl && /^https:\/\//i.test(rawShareUrl) ? rawShareUrl : null,
+  };
+}
+
 const select = `SELECT r.id, r.project_id, p.name AS project_name, r.client_id, c.name AS client_name,
   r.description, r.amount_cents, r.due_date, r.reminder_policy_json, r.status,
   r.external_charge_id, r.share_url, r.last_error, r.created_at
@@ -52,7 +74,6 @@ export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "finance", "edit");
-    if (!isDrapChargesConfigured()) return Response.json({ error: "A criação de cobranças na Drap ainda não foi homologada.", code: "drap_charges_not_configured" }, { status: 503 });
     const parsed = chargeSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
@@ -65,6 +86,7 @@ export async function POST(request: Request) {
     if (!project.external_financial_cost_center_id) throw new ApiError(409, "project_cost_center_required", "Vincule esta obra a um centro de custo da Drap.");
     if (!project.client_id || !project.external_financial_id) throw new ApiError(409, "client_financial_link_required", "Vincule o cliente desta obra ao cadastro financeiro da Drap.");
     const connection = await requireActiveDrapConnection(context);
+    const chargePath = await requireDrapResourcePath(connection.external_company_id, "cobrancas");
     const id = crypto.randomUUID();
     const reminders = JSON.stringify(data.reminders);
     try {
@@ -74,7 +96,23 @@ export async function POST(request: Request) {
       throw error;
     }
     try {
-      const charge = await createDrapCharge({ externalCompanyId: connection.external_company_id, externalCustomerId: project.external_financial_id, costCenterId: project.external_financial_cost_center_id, description: data.description, amountCents: data.amountCents, dueDate: data.dueDate, idempotencyKey: data.idempotencyKey, reminders: data.reminders });
+      const result = await requestDrapApi<unknown>(connection.external_company_id, chargePath, {
+        method: "POST",
+        idempotencyKey: data.idempotencyKey,
+        body: {
+          customer_id: project.external_financial_id,
+          cost_center_id: project.external_financial_cost_center_id,
+          description: data.description,
+          amount_cents: data.amountCents,
+          due_date: data.dueDate,
+          reminder_policy: {
+            days_before: data.reminders.daysBefore,
+            on_due_date: data.reminders.onDueDate,
+            overdue_interval_days: data.reminders.overdueIntervalDays,
+          },
+        },
+      });
+      const charge = remoteCharge(result.data);
       await context.db.batch([
         context.db.prepare("UPDATE financial_charge_requests SET status = ?1, external_charge_id = ?2, share_url = ?3, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?4 AND organization_id = ?5").bind(charge.status, charge.id, charge.shareUrl, id, context.organization.id),
         auditStatement(context, "financial_charge.created", "financial_charge", id, { projectId: data.projectId }),
