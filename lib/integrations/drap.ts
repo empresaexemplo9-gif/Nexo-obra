@@ -1,4 +1,5 @@
 import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
+import { lerEnvelope } from "@/lib/drap-envelope";
 
 export type FinancialSummary = {
   currentBalance: number;
@@ -219,14 +220,11 @@ export async function fetchDrapTransactions(externalCompanyId: string, costCente
       throw new Error(`DRAP transactions request failed with status ${response.status}${suffix}`);
     }
 
-    const root = asRecord(await response.json());
-    const page = [root.items, root.transactions, root.results, asRecord(root.data).items, root.data].find(Array.isArray) ?? [];
-    const declaredTotal = root.total;
-    if (typeof declaredTotal === "number" && Number.isFinite(declaredTotal) && declaredTotal >= 0) total = declaredTotal;
-    if (typeof declaredTotal === "string") {
-      const parsedTotal = Number(declaredTotal);
-      if (Number.isFinite(parsedTotal) && parsedTotal >= 0) total = parsedTotal;
-    }
+    // A mesma leitura que a tela usa, em `lib/drap-envelope`: a regra estava escrita duas
+    // vezes aqui dentro e uma terceira no componente, e três cópias divergem.
+    const lido = lerEnvelope(await response.json());
+    const page = lido?.itens ?? [];
+    if (lido?.total !== null && lido?.total !== undefined) total = lido.total;
 
     records.push(...page);
     if (page.length === 0 || page.length < 100) break;
@@ -262,10 +260,9 @@ export async function hasAnyDrapTransaction(externalCompanyId: string) {
   const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error(`DRAP transactions request failed with status ${response.status}`);
 
-  const root = asRecord(await response.json());
-  if (readNumber(root, ["total"]) > 0) return true;
-  const page = [root.items, root.transactions, root.results, asRecord(root.data).items, root.data].find(Array.isArray) ?? [];
-  return page.length > 0;
+  const lido = lerEnvelope(await response.json());
+  if ((lido?.total ?? 0) > 0) return true;
+  return (lido?.itens.length ?? 0) > 0;
 }
 
 /**
