@@ -1,4 +1,4 @@
-import { callOperationalDrap, drapOperationalRoute, operationalDrapBody, operationalDrapContext } from "@/lib/server/drap-operational";
+import { callOperationalDrap, chaveIdempotenciaDe, drapOperationalRoute, operationalDrapBody, operationalDrapContext } from "@/lib/server/drap-operational";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +22,6 @@ export async function POST(request: Request) {
   return drapOperationalRoute(async () => {
     const { connection } = await operationalDrapContext(request, "edit");
     const body = await operationalDrapBody(request);
-    return callOperationalDrap(connection.external_company_id, "/api/v1/lancamentos", { method: "POST", body });
+    return callOperationalDrap(connection.external_company_id, "/api/v1/lancamentos", { method: "POST", body, idempotencyKey: chaveIdempotenciaDe(request) });
   });
 }

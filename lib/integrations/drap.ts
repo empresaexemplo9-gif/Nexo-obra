@@ -1,5 +1,5 @@
 import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
-import { lerEnvelope } from "@/lib/drap-envelope";
+import { camposDoCorpo, lerEnvelope } from "@/lib/drap-envelope";
 
 export type FinancialSummary = {
   currentBalance: number;
@@ -220,9 +220,13 @@ export async function fetchDrapTransactions(externalCompanyId: string, costCente
 
     // A mesma leitura que a tela usa, em `lib/drap-envelope`: a regra estava escrita duas
     // vezes aqui dentro e uma terceira no componente, e três cópias divergem.
-    const lido = lerEnvelope(await response.json());
-    const page = lido?.itens ?? [];
-    if (lido?.total !== null && lido?.total !== undefined) total = lido.total;
+    const corpo = await response.json();
+    const lido = lerEnvelope(corpo);
+    // Envelope irreconhecível não é página vazia: seguir como se fosse entregaria lista
+    // vazia sem erro nenhum — o defeito que o financeiro por obra já teve.
+    if (!lido) throw new Error(`DRAP devolveu um envelope não reconhecido em ${url.pathname}. Campos: ${camposDoCorpo(corpo).join(", ") || "nenhum"}`);
+    const page = lido.itens;
+    if (lido.total !== null) total = lido.total;
 
     records.push(...page);
     if (page.length === 0 || page.length < 100) break;
@@ -258,8 +262,12 @@ export async function hasAnyDrapTransaction(externalCompanyId: string) {
   const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
   if (!response.ok) throw new Error(`DRAP transactions request failed with status ${response.status}`);
 
-  const lido = lerEnvelope(await response.json());
-  if ((lido?.total ?? 0) > 0) return true;
+  const corpo = await response.json();
+  const raiz = asRecord(corpo);
+  // O total declarado vale mesmo quando a lista não veio nesta resposta: sem isto, uma
+  // obra com movimento seria rotulada "sem movimento" em vez de "centro de custo errado".
+  if (readNumber(raiz, ["total"]) > 0) return true;
+  const lido = lerEnvelope(corpo);
   return (lido?.itens.length ?? 0) > 0;
 }
 
@@ -422,13 +430,18 @@ export class DrapApiError extends Error {
 export async function requestDrapApi<T>(
   externalCompanyId: string,
   path: string,
-  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown } = {},
+  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; idempotencyKey?: string } = {},
 ): Promise<{ data: T | null; status: number; retryAfter: string | null }> {
   if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
   const method = init.method ?? "GET";
+  const headers = requestHeaders(externalCompanyId);
+  // Escrita financeira é operação distribuída (regra 5 do CLAUDE.md): um tempo esgotado
+  // numa requisição que a Drap já efetivou faz a tentativa seguinte duplicar o registro.
+  // `createDrapCharge` já mandava a chave; as rotas operacionais não mandavam nenhuma.
+  if (init.idempotencyKey) headers.set("Idempotency-Key", init.idempotencyKey);
   const response = await fetch(drapUrl(path), {
     method,
-    headers: requestHeaders(externalCompanyId),
+    headers,
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(method === "GET" ? 8000 : 10000),
   });

@@ -50,8 +50,21 @@ export function drapOperationalRoute(
 export async function callOperationalDrap(
   externalCompanyId: string,
   path: string,
-  init?: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
+  init?: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; idempotencyKey?: string },
 ) {
   const result = await requestDrapApi(externalCompanyId, path, init);
   return { data: result.data, status: result.status, retryAfter: result.retryAfter };
+}
+
+/** Chave de idempotência que o navegador enviou, higienizada.
+ *
+ * Vem do cliente de propósito: é ele quem sabe que duas tentativas são a MESMA intenção
+ * do usuário — o servidor, recebendo dois POSTs, não tem como distinguir repetição de
+ * dois lançamentos iguais de verdade. O formato é restrito para que nada além de um
+ * identificador atravesse até a Drap.
+ */
+export function chaveIdempotenciaDe(request: Request): string | undefined {
+  const bruto = request.headers.get("Idempotency-Key")?.trim();
+  if (!bruto || !/^[A-Za-z0-9_-]{8,128}$/.test(bruto)) return undefined;
+  return bruto;
 }

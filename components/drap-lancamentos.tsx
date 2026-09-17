@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { camposDoCorpo, lerEnvelope } from "@/lib/drap-envelope";
+import { camposDoCorpo, lerEnvelope, lerValorBrasileiro } from "@/lib/drap-envelope";
 
 // Operação de lançamentos da Drap dentro da H.OIKOS.
 //
@@ -25,6 +25,15 @@ import { camposDoCorpo, lerEnvelope } from "@/lib/drap-envelope";
 type Lancamento = { id: string; data?: string; descricao?: string; tipo?: string; valor?: number; status?: string };
 
 const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+// A Drap documenta `data` como AAAA-MM-DD, mas pode devolver data-hora. Sem o corte, a
+// concatenação vira string inválida e a célula mostra "Invalid Date".
+function formatarData(valor?: string) {
+  if (!valor) return "—";
+  const dia = valor.slice(0, 10);
+  const data = new Date(`${dia}T12:00:00`);
+  return Number.isNaN(data.getTime()) ? valor : data.toLocaleDateString("pt-BR");
+}
 
 async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
   const resposta = await fetch(url, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
@@ -51,7 +60,7 @@ export function extrairLista(corpo: unknown): { itens: Lancamento[]; total: numb
   return { erro: `A Drap respondeu num formato não previsto. Campos recebidos: ${campos.join(", ") || "nenhum"}.` };
 }
 
-export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; habilitado: boolean }) {
+export function DrapLancamentos({ canEdit, habilitado, centroCusto, escopo }: { canEdit: boolean; habilitado: boolean; centroCusto?: string; escopo?: string }) {
   const [itens, setItens] = useState<Lancamento[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -59,6 +68,10 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState("");
   const [total, setTotal] = useState<number | null>(null);
+  // Uma chave por abertura do diálogo: duas tentativas do MESMO envio compartilham a
+  // chave e a Drap devolve o mesmo registro; um envio novo abre o diálogo de novo e
+  // recebe chave nova. Gerar por requisição não protegeria nada.
+  const [chaveIdempotencia, setChaveIdempotencia] = useState("");
 
   const carregar = useCallback(async () => {
     // Sem conexão não há o que consultar, e a tela já devolve o cartão de "não conectada"
@@ -66,7 +79,8 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
     if (!habilitado) return;
     setCarregando(true); setErro("");
     try {
-      const corpo = await pedir<unknown>("/api/integrations/drap/lancamentos?limit=50");
+      const filtro = centroCusto ? `&centro_custo=${encodeURIComponent(centroCusto)}` : "";
+      const corpo = await pedir<unknown>(`/api/integrations/drap/lancamentos?limit=50${filtro}`);
       const lido = extrairLista(corpo);
       if ("erro" in lido) { setErro(lido.erro); setItens([]); return; }
       setItens(lido.itens);
@@ -76,7 +90,7 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
       setErro(causa instanceof Error ? causa.message : "Não foi possível consultar a Drap.");
       setItens([]);
     } finally { setCarregando(false); }
-  }, [habilitado]);
+  }, [habilitado, centroCusto]);
 
   // Mesmo padrão do finance-workspace: adiar a primeira carga tira o setState síncrono
   // de dentro do efeito, que dispara renders em cascata.
@@ -85,17 +99,26 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
   async function criar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     const form = new FormData(evento.currentTarget);
-    const valor = Number(String(form.get("valor") ?? "").replace(/\./g, "").replace(",", "."));
-    if (!Number.isFinite(valor) || valor <= 0) { toast.error("Informe um valor maior que zero."); return; }
+    // `1.234,56` e `1234.56` convivem. Tirar o ponto sempre transformava 1500.50 em
+    // 150050 — dinheiro errado gravado no financeiro oficial.
+    const valor = lerValorBrasileiro(String(form.get("valor") ?? ""));
+    if (valor === null || valor <= 0) { toast.error("Informe um valor maior que zero."); return; }
     setSalvando(true);
     try {
       await pedir("/api/integrations/drap/lancamentos", {
         method: "POST",
+        // Escrita financeira é operação distribuída: um tempo esgotado numa requisição
+        // que a Drap já efetivou leva a pessoa a tentar de novo e duplicar o lançamento.
+        // A chave repetida deixa a segunda tentativa cair no mesmo registro.
+        headers: { "Idempotency-Key": chaveIdempotencia },
         body: JSON.stringify({
           descricao: String(form.get("descricao") ?? "").trim(),
           tipo: String(form.get("tipo") ?? "receita"),
           valor,
           data: String(form.get("data") ?? ""),
+          // Sem o centro de custo, o lançamento fica invisível no financeiro da obra —
+          // é exatamente o defeito que o filtro por obra levou semanas para revelar.
+          ...(centroCusto ? { centro_custo: centroCusto } : {}),
         }),
       });
       toast.success("Lançamento criado na Drap.");
@@ -132,7 +155,7 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar"><RefreshCw className={carregando ? "animate-spin" : ""} />Atualizar</Button>
-            {canEdit ? <Button size="sm" onClick={() => setCriando(true)}><Plus />Novo lançamento</Button> : null}
+            {canEdit ? <Button size="sm" onClick={() => { setChaveIdempotencia(crypto.randomUUID()); setCriando(true); }}><Plus />Novo lançamento</Button> : null}
           </div>
         </div>
       </CardHeader>
@@ -143,19 +166,19 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
               <TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Descrição</TableHead><TableHead>Data</TableHead><TableHead>Situação</TableHead><TableHead className="text-right">Valor</TableHead>{canEdit ? <TableHead className="pr-5" /> : null}</TableRow></TableHeader>
               <TableBody>{itens.map((item) => <TableRow key={item.id}>
                 <TableCell className="pl-5"><p className="font-medium">{item.descricao || "Sem descrição"}</p><p className="text-xs text-hoikos-500">{item.tipo === "despesa" ? "Despesa" : "Receita"}</p></TableCell>
-                <TableCell>{item.data ? new Date(`${item.data}T12:00:00`).toLocaleDateString("pt-BR") : "—"}</TableCell>
+                <TableCell>{formatarData(item.data)}</TableCell>
                 <TableCell>{item.status ? <Badge variant="secondary">{item.status}</Badge> : "—"}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{item.tipo === "despesa" ? "−" : "+"}{moeda.format(Math.abs(Number(item.valor ?? 0)))}</TableCell>
                 {canEdit ? <TableCell className="pr-5 text-right"><Button size="sm" variant="ghost" aria-label={`Excluir ${item.descricao ?? item.id}`} disabled={excluindo === item.id} onClick={() => void excluir(item.id)}>{excluindo === item.id ? <LoaderCircle className="animate-spin" /> : <Trash2 />}</Button></TableCell> : null}
               </TableRow>)}</TableBody>
             </Table></div>
-          : <Empty className="min-h-64 border-0"><EmptyHeader><EmptyMedia variant="icon"><CircleDollarSign /></EmptyMedia><EmptyTitle>Nenhum lançamento na Drap</EmptyTitle><EmptyDescription>Quando existir receita ou despesa lançada, ela aparece aqui — sem cópia local.</EmptyDescription></EmptyHeader>{canEdit ? <Button onClick={() => setCriando(true)}><Plus />Criar o primeiro</Button> : null}</Empty>}
+          : <Empty className="min-h-64 border-0"><EmptyHeader><EmptyMedia variant="icon"><CircleDollarSign /></EmptyMedia><EmptyTitle>Nenhum lançamento na Drap</EmptyTitle><EmptyDescription>Quando existir receita ou despesa lançada, ela aparece aqui — sem cópia local.</EmptyDescription></EmptyHeader>{canEdit ? <Button onClick={() => { setChaveIdempotencia(crypto.randomUUID()); setCriando(true); }}><Plus />Criar o primeiro</Button> : null}</Empty>}
       </CardContent>
     </Card>
 
     <Dialog open={criando} onOpenChange={(aberto) => { if (!salvando) setCriando(aberto); }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader><DialogTitle>Novo lançamento</DialogTitle><DialogDescription>Grava direto na Drap. Não existe cópia local do valor.</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle>Novo lançamento</DialogTitle><DialogDescription>Grava direto na Drap. Não existe cópia local do valor.{escopo ? ` Centro de custo: ${escopo}.` : ""}</DialogDescription></DialogHeader>
         <form onSubmit={criar} className="space-y-4">
           <fieldset disabled={salvando} className="space-y-4">
             <div><label htmlFor="descricao" className="mb-1.5 block text-sm font-medium text-hoikos-700">Descrição</label><Input id="descricao" name="descricao" required maxLength={180} /></div>

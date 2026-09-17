@@ -29,7 +29,10 @@ function totalDeclarado(raiz: Record<string, unknown>): number | null {
  *  se isso é erro a mostrar ou lista vazia. Tratar as duas coisas como "vazio" foi o que
  *  escondeu, por semanas, o financeiro por obra voltando sem nada. */
 export function lerEnvelope(corpo: unknown): EnvelopeLido | null {
-  if (Array.isArray(corpo)) return { itens: corpo, total: corpo.length };
+  // Array puro não declara total. Dizer que o total é o tamanho da página faria o
+  // adaptador — que usa `total` como teto de paginação — parar na primeira página e
+  // descartar o resto em silêncio.
+  if (Array.isArray(corpo)) return { itens: corpo, total: null };
   if (!corpo || typeof corpo !== "object") return null;
   const raiz = registro(corpo);
   const lista = [raiz.items, raiz.transactions, raiz.results, raiz.lancamentos, registro(raiz.data).items, raiz.data]
@@ -41,4 +44,15 @@ export function lerEnvelope(corpo: unknown): EnvelopeLido | null {
 /** Os campos do corpo, para a mensagem de erro dizer o que a Drap devolveu. */
 export function camposDoCorpo(corpo: unknown): string[] {
   return corpo && typeof corpo === "object" && !Array.isArray(corpo) ? Object.keys(corpo) : [];
+}
+
+/** Número como a Drap escreve: "1.234,56" (brasileiro) e "1234.56" (ponto decimal)
+ *  convivem. O ponto só é separador de milhar quando existe vírgula — tirá-lo sempre
+ *  transforma 1500.50 em 150050, que num sistema financeiro é dinheiro errado gravado. */
+export function lerValorBrasileiro(bruto: string): number | null {
+  const limpo = bruto.trim().replace(/\s|R\$/g, "");
+  if (!limpo) return null;
+  const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo;
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : null;
 }

@@ -9,7 +9,7 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const vite = await createServer({ configFile: false, appType: "custom", root, resolve: { alias: { "@": root } }, server: { middlewareMode: true, hmr: false } });
-const { lerEnvelope, camposDoCorpo } = await vite.ssrLoadModule("/lib/drap-envelope.ts");
+const { lerEnvelope, camposDoCorpo, lerValorBrasileiro: lerValorBrasileiroDireto } = await vite.ssrLoadModule("/lib/drap-envelope.ts");
 after(() => vite.close());
 
 const item = { id: "a1", descricao: "Venda", valor: 1500 };
@@ -48,4 +48,30 @@ test("os campos do corpo ficam disponíveis para a mensagem de erro", () => {
   assert.deepEqual(camposDoCorpo({ resultado: 1, total: 2 }), ["resultado", "total"]);
   assert.deepEqual(camposDoCorpo([1, 2]), []);
   assert.deepEqual(camposDoCorpo(null), []);
+});
+
+// Valor escrito no financeiro oficial. A primeira versão tirava o ponto sempre, e
+// "1500.50" virava 150050 — cento e cinquenta mil reais gravados na Drap por um
+// lançamento de mil e quinhentos.
+test("o ponto só é separador de milhar quando existe vírgula", () => {
+  const lerValorBrasileiro = lerValorBrasileiroDireto;
+  assert.equal(lerValorBrasileiro("1.234,56"), 1234.56, "formato brasileiro");
+  assert.equal(lerValorBrasileiro("1500.50"), 1500.5, "ponto decimal não pode virar milhar");
+  assert.equal(lerValorBrasileiro("1234,56"), 1234.56);
+  assert.equal(lerValorBrasileiro("1234"), 1234);
+  assert.equal(lerValorBrasileiro("R$ 89,90"), 89.9);
+  assert.equal(lerValorBrasileiro("1.234.567,89"), 1234567.89);
+});
+
+test("valor ilegível devolve nulo, nunca zero", () => {
+  // Zero silencioso viraria lançamento de graça no sistema financeiro.
+  for (const bruto of ["", "  ", "abc", "R$", "-"]) {
+    assert.equal(lerValorBrasileiroDireto(bruto), null, `"${bruto}"`);
+  }
+});
+
+test("array puro não declara total", () => {
+  // O adaptador usa `total` como teto de paginação: dizer que o total é o tamanho da
+  // página faria ele parar na primeira e descartar o resto sem avisar.
+  assert.equal(lerEnvelope([{ id: "a" }, { id: "b" }]).total, null);
 });
