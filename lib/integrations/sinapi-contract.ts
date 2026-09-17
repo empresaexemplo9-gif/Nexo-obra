@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const UFS = "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
+export const DEFAULT_SINAPI_UF = "GO";
 export const monthSchema = z.string().regex(/^20\d{2}-(0[1-9]|1[0-2])$/);
 export const regimeSchema = z.enum(["Desonerado", "NaoDesonerado"]);
 export const mappingSchema = z.object({
