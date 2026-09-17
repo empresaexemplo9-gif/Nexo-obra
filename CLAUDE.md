@@ -18,6 +18,7 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 8. Não adicione dependência sem explicar no resumo final por que a plataforma atual não resolve o caso.
 9. Texto visível deve ser português do Brasil, curto e específico.
 10. Não crie card, menu, gráfico ou filtro sem uma pergunta real que ele responda.
+11. Runtime de produção usa somente persistência e integrações reais. Mock, demo, fixture, seed fictício e fallback demonstrativo ficam restritos a testes automatizados e nunca alimentam API ou interface de produção.
 
 ## Regra de interface
 
@@ -51,37 +52,48 @@ Para cada fatia:
 6. Execute `npm run build`.
 7. Se o schema mudou, execute `npm run db:generate` e inspecione o SQL.
 8. Atualize a seção correspondente do README quando o estado do produto mudar.
+9. Antes de publicar, confirme que nenhum caminho de runtime introduziu dado demonstrativo ou sucesso remoto fabricado.
 
 ## Prioridade atual
 
 1. Ampliar CRM, orçamento e obra usando somente dados persistentes.
 2. Implementar convites e administração de membros por empresa.
 3. Preparar planos, limites e cobrança para monetização.
-4. Homologar a integração Drap antes de liberar operações financeiras.
+4. Expandir a integração DRAP somente sobre recursos reais: endpoint confirmado ou descoberta allowlist por tenant, com validação ao vivo das operações externas de alto impacto.
 
 ## Integração Drap
 
-O código atual é um adaptador de referência, porque os endpoints públicos não estão documentados no briefing. Antes de conectar:
+A integração atual é operacional e fala com a API real da DRAP. Endpoints confirmados permanecem explícitos e recursos adicionais são descobertos por tenant somente dentro da allowlist de `lib/server/drap-resources.ts`.
 
-- peça ou leia a especificação OpenAPI oficial;
-- crie testes de contrato com payloads anonimizados reais;
+Ao ampliar a superfície DRAP:
+
+- leia a especificação oficial disponível e compare com respostas reais;
+- quando a documentação ainda estiver incompleta, use sondagem somente de leitura para descobrir entre aliases previamente autorizados; nunca invente caminho remoto;
+- crie testes de contrato com payloads anonimizados representativos, mas mantenha esses dados confinados à suíte de testes;
 - mapeie IDs de empresa, cliente, projeto/centro de custo e cobrança;
-- mantenha os nomes remotos dentro de `lib/integrations/drap.ts`;
-- não espalhe formato Drap pelo restante do domínio;
+- mantenha os nomes remotos dentro da camada de integração;
+- não espalhe formato DRAP pelo restante do domínio;
 - registre eventos recebidos antes de processar;
 - aceite o mesmo evento mais de uma vez sem duplicar efeito;
-- mostre falha de sincronização sem substituir dados reais por dados de demonstração em produção.
+- toda escrita remota exige `Idempotency-Key` e deve reutilizar a mesma chave no retry;
+- não transforme `404`, `403`, `429`, timeout ou resposta incompatível em sucesso;
+- mostre falha de sincronização sem substituir dados reais por dados de demonstração.
 
-Em produção, fallback demonstrativo deve ficar desativado por configuração. Uma falha remota deve mostrar o último snapshot conhecido, o horário e um estado de indisponibilidade.
+Em produção, fallback demonstrativo é proibido. Um fallback só é aceitável quando deriva exclusivamente de outra fonte real do mesmo domínio — por exemplo, calcular o resumo a partir de lançamentos reais da DRAP quando `/api/v1/resumo` não existe naquele ambiente — e precisa declarar truncamento ou indisponibilidade quando não houver base suficiente.
+
+Operações externas de alto impacto, como emissão de NFS-e, cancelamento fiscal e cobrança, só podem ser apresentadas ao usuário como concluídas depois da confirmação real do backend remoto. A H.OIKOS nunca deve fabricar ID, status, link ou pagamento.
 
 ## Definição de pronto para uma funcionalidade
 
 - regra de negócio no servidor;
 - autorização multiempresa;
 - persistência real;
+- integração externa real quando a função depender de outro produto;
+- nenhum mock/demo no runtime de produção;
 - validação e mensagens úteis;
 - carregamento, vazio, erro e sucesso;
 - uso móvel aceitável;
 - auditoria quando houver efeito relevante;
 - build sem erro;
+- testes automatizados verdes;
 - documentação curta atualizada.
