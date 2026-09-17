@@ -181,7 +181,11 @@ function normalizeTransaction(value: unknown): FinancialTransaction | null {
     paidAt: readString(item, ["paidAt", "paid_at", "paymentDate", "data_pagamento"]),
     status: transactionStatus(readString(item, ["status", "situacao"])),
     partyName: readString(item, ["partyName", "party_name", "customerName", "supplierName", "cliente", "fornecedor", "contraparte"]),
-    costCenterId: readString(item, ["costCenterId", "cost_center_id", "centro_custo_id"]),
+    // `centro_custo` é o nome oficial da Drap — texto livre, não ID. Estava
+    // fora desta lista, então TODO lançamento voltava com costCenterId nulo e
+    // o recorte por obra devolvia vazio sem erro nenhum. Os outros nomes
+    // continuam aceitos porque o adaptador atende contrato antigo também.
+    costCenterId: readString(item, ["centro_custo", "costCenterId", "cost_center_id", "centro_custo_id"]),
   };
 }
 
@@ -197,6 +201,7 @@ export async function fetchDrapTransactions(externalCompanyId: string, costCente
     const url = drapUrl(config.DRAP_TRANSACTIONS_PATH ?? "/api/v1/lancamentos");
     url.searchParams.set("limit", "100");
     url.searchParams.set("offset", String(offset));
+    if (costCenterId) url.searchParams.set("centro_custo", costCenterId);
 
     const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
     if (!response.ok) {
@@ -223,10 +228,35 @@ export async function fetchDrapTransactions(externalCompanyId: string, costCente
     .map(normalizeTransaction)
     .filter((item): item is FinancialTransaction => item !== null);
 
-  // O contrato informado não documenta filtro por centro de custo no endpoint de
-  // lançamentos. Quando a tela pede um projeto, filtramos somente pelo campo retornado;
-  // nunca ampliamos silenciosamente para os lançamentos da empresa inteira.
+  // O filtro vai no servidor (acima) E é reaplicado aqui. Não é redundância:
+  // servidor que ignora parâmetro desconhecido responde 200 com a lista
+  // inteira, e sem esta segunda passada a tela da obra mostraria o financeiro
+  // da empresa toda como se fosse dela. Nunca ampliamos o recorte em silêncio.
   return costCenterId ? normalized.filter((item) => item.costCenterId === costCenterId) : normalized;
+}
+
+/**
+ * A empresa tem ALGUM lançamento na Drap?
+ *
+ * Serve pra uma pergunta só, e importante: quando o recorte por obra volta
+ * vazio, isso é obra sem movimento ou centro de custo vinculado errado? As
+ * duas situações desenham a mesma tela vazia, e só uma delas é problema. Uma
+ * chamada com `limit=1` resolve — não pagina nada.
+ */
+export async function hasAnyDrapTransaction(externalCompanyId: string) {
+  const config = runtimeEnv();
+  if (!isDrapTransactionsConfigured()) throw new Error("DRAP transactions are not configured");
+
+  const url = drapUrl(config.DRAP_TRANSACTIONS_PATH ?? "/api/v1/lancamentos");
+  url.searchParams.set("limit", "1");
+
+  const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`DRAP transactions request failed with status ${response.status}`);
+
+  const root = asRecord(await response.json());
+  if (readNumber(root, ["total"]) > 0) return true;
+  const page = [root.items, root.transactions, root.results, asRecord(root.data).items, root.data].find(Array.isArray) ?? [];
+  return page.length > 0;
 }
 
 export async function fetchDrapFinancialSummary(externalCompanyId: string) {

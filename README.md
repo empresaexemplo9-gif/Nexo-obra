@@ -314,7 +314,7 @@ CLAUDE.md
 ### Fase 4 — financeiro remoto e automações
 
 - Conector Drap homologado em sandbox.
-- Vínculo de projeto com centro de custo remoto. **Concluído no produto; homologação Drap pendente.**
+- Vínculo de projeto com centro de custo remoto, recortado no servidor da Drap pelo campo `centro_custo` do lançamento. Obra sem movimento e centro de custo que não casa aparecem como casos diferentes na tela. **Concluído no produto; homologação Drap pendente.**
 - Leitura de saldos e contas por projeto, com relatório CSV. **Concluída no produto; endpoint Drap pendente.**
 - Criação remota de cobrança com idempotência e política de lembretes. **Concluída no produto; endpoint Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.

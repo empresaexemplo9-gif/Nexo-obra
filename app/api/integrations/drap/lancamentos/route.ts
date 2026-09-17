@@ -2,7 +2,7 @@ import { callOperationalDrap, drapOperationalRoute, operationalDrapBody, operati
 
 export const dynamic = "force-dynamic";
 
-const FILTERS = ["tipo", "status", "data_de", "data_ate", "limit", "offset"] as const;
+const FILTERS = ["tipo", "status", "data_de", "data_ate", "centro_custo", "limit", "offset"] as const;
 
 export async function GET(request: Request) {
   return drapOperationalRoute(async () => {
