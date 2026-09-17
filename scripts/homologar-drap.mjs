@@ -181,7 +181,25 @@ if (resumo.status === 404) {
   }
 }
 
-// ─────────────── 8. Qual é o escopo real desta chave ───────────────
+// ─────────────── 8. Cobrança ───────────────
+//
+// Só leitura: emitir cobrança de teste mandaria boleto real pra alguém.
+
+const cobrancas = await chamar("/cobrancas?limit=1");
+if (cobrancas.status === 200) {
+  registrar("Cobranças", "ok", "a chave lê cobranças e o módulo está ativo");
+} else if (cobrancas.status === 403) {
+  const motivo = cobrancas.corpo?.error === "module-required"
+    ? "módulo Cobranças inativo nesta empresa"
+    : "a chave não tem o escopo cobrancas:read";
+  registrar("Cobranças", "aviso", motivo);
+} else if (cobrancas.status === 404) {
+  registrar("Cobranças", "aviso", "endpoint ainda não publicado nesta instalação");
+} else {
+  registrar("Cobranças", "falha", `GET /cobrancas → ${cobrancas.status}`);
+}
+
+// ─────────────── 9. Qual é o escopo real desta chave ───────────────
 //
 // Sonda sem destruir: DELETE num id que não existe. Com escopo vem 404
 // (não achou), sem escopo vem 403 (não pode). Nada é apagado nos dois casos.
@@ -199,7 +217,7 @@ if (sonda.status === 403) {
   registrar("Escopo de exclusão", "info", `resposta ${sonda.status} — inconclusivo`);
 }
 
-// ─────────────── 9. Escrita (opt-in) ───────────────
+// ─────────────── 10. Escrita (opt-in) ───────────────
 
 if (!ESCRITA) {
   registrar("Escrita", "info", "pulada — rode com --escrita pra homologar POST e PATCH");

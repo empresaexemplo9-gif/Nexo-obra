@@ -157,7 +157,7 @@ DRAP_WEBHOOK_SECRET=segredo_compartilhado
 
 ### Importante
 
-A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros, categorias e resumo financeiro estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: cobranças e provisionamento de empresa sem login humano.
+A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros, categorias e resumo financeiro estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: provisionamento de empresa sem login humano.
 
 Por isso:
 
@@ -316,7 +316,7 @@ CLAUDE.md
 - Conector Drap homologado em sandbox.
 - Vínculo de projeto com centro de custo remoto, recortado no servidor da Drap pelo campo `centro_custo` do lançamento. Obra sem movimento e centro de custo que não casa aparecem como casos diferentes na tela. **Concluído no produto; homologação Drap pendente.**
 - Leitura de saldos e contas por projeto, com relatório CSV. Os totais vêm somados pela Drap, com plano B local declarado como parcial. **Concluída no produto; homologação Drap pendente.**
-- Criação remota de cobrança com idempotência e política de lembretes. **Concluída no produto; endpoint Drap pendente.**
+- Criação remota de cobrança com idempotência e política de lembretes. A cobrança sai na conta Asaas da própria empresa; os lembretes são da H.OIKOS. **Concluída no produto; homologação Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.
 - Alertas úteis: atraso, caixa negativo, margem baixa e tarefa bloqueadora.
 
