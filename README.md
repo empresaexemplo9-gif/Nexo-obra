@@ -157,25 +157,24 @@ DRAP_WEBHOOK_SECRET=segredo_compartilhado
 
 ### Importante
 
-O site público da Drap informa suporte a API REST e webhooks assinados, mas não expõe a documentação técnica nem confirma os caminhos de endpoint. Por isso:
+A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros e categorias estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: resumo financeiro, cobranças e provisionamento de empresa sem login humano.
 
-- `/api/v1/finance/summary` é um contrato configurável de referência, não um endpoint confirmado;
-- o token nunca é enviado ao navegador;
+Por isso:
+
+- `/api/v1/finance/summary` é um contrato configurável de referência, não um endpoint confirmado — hoje o resumo é calculado aqui a partir dos lançamentos;
+- o token nunca é enviado ao navegador nem entra em variável `NEXT_PUBLIC_*`;
+- a chave resolve o tenant no servidor da Drap; a H.OIKOS nunca envia identificador de empresa na chamada;
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
-- até as credenciais e o contrato real serem fornecidos, a tela informa que a integração está indisponível, sem fabricar valores;
-- nenhuma escrita financeira deve ser liberada antes de testes em ambiente sandbox.
+- enquanto a credencial real não for homologada, a tela informa que a integração está indisponível, sem fabricar valores;
+- nenhuma escrita financeira é liberada antes da homologação com chave real.
 
-Para concluir a conexão real, obtenha da Drap:
+### Homologar a credencial
 
-1. URL base de API e ambiente sandbox.
-2. Método de autenticação e rotação do token de serviço.
-3. OpenAPI ou lista oficial de endpoints.
-4. Identificador estável da empresa/tenant.
-5. Eventos disponíveis e formato da assinatura dos webhooks.
-6. Política de rate limit, paginação, erros e idempotência.
-7. Campos necessários para centro de custo por projeto/obra.
+```bash
+DRAP_API_TOKEN=drap_live_... npm run homologar:drap
+```
 
-Veja o contrato recomendado em `docs/DRAP-INTEGRATION.md`.
+O roteiro completo — pré-requisitos, preset de escopo correto e o que cada falha significa — está em [Homologação da credencial Drap](docs/HOMOLOGACAO-DRAP.md). O contrato recomendado segue em `docs/DRAP-INTEGRATION.md`, e o que falta pro cadastro sem segundo login, em `docs/DRAP-ACTIVATION.md`.
 
 ## Divisão de responsabilidade dos dados
 
