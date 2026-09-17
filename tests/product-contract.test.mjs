@@ -355,6 +355,18 @@ test("creates remote charges only with idempotency and confirmed Drap output", a
   assert.match(charges, /idempotencyKey: z\.string\(\)\.uuid\(\)/);
   assert.match(charges, /requireActiveDrapConnection/);
   assert.match(adapter, /Idempotency-Key/);
-  assert.match(adapter, /reminder_policy/);
+
+  // A política de lembrete é da H.OIKOS e fica na H.OIKOS: a cobrança da Drap
+  // não tem esse campo. Enquanto o contrato era suposição, o adaptador mandava
+  // `reminder_policy` no corpo — campo que o outro lado ignora, e que faria o
+  // contrato divergir em silêncio. Quem guarda o prazo é a coluna local.
+  assert.match(charges, /reminder_policy_json/);
+  assert.doesNotMatch(adapter, /reminder_policy/);
+
+  // O valor viaja em reais, que é como a Drap trabalha. Mandar centavos
+  // cobraria cem vezes mais, sem erro nenhum no caminho.
+  assert.match(adapter, /amountCents \/ 100/);
+  assert.match(adapter, /parceiro_id/);
+
   assert.doesNotMatch(`${charges}\n${adapter}`, /demoCharge|mockCharge|fakeCharge/);
 });

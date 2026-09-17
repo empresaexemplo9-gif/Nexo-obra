@@ -87,10 +87,24 @@ tela distingue os dois casos — obra sem movimento e centro de custo que não
 casa com nenhum lançamento — em vez de mostrar a mesma lista vazia para os
 dois.
 
+## Cobrança
+
+A cobrança sai na conta Asaas **da própria empresa**, não da H.OIKOS. Três
+pré-requisitos, todos do lado da Drap: módulo Cobranças ativo, conta Asaas
+conectada e o parceiro cobrado com CNPJ ou CPF preenchido. Faltando qualquer
+um, a Drap responde com o código dizendo qual — a tela precisa mostrar isso,
+não um erro genérico.
+
+O escopo `cobrancas:write` **não** vem junto com os presets nem com as chaves
+antigas: precisa ser marcado na emissão. Toda chamada leva `Idempotency-Key`;
+repetir a mesma chave devolve a cobrança de antes em vez de emitir outra.
+
+Uma diferença que vale saber: a cobrança da Drap não carrega centro de custo.
+O vínculo por obra vale para o lançamento, não para o boleto.
+
 ## Fora desta fatia
 
-Cobranças, assinatura de webhook por API e provisionamento de empresa sem
-login humano.
+Assinatura de webhook por API e provisionamento de empresa sem login humano.
 
 O resumo financeiro já é somado pela Drap em `/api/v1/resumo`. Enquanto o
 endpoint não estiver no ar naquele ambiente, o roteiro acusa aviso e a

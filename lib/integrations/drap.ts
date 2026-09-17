@@ -109,9 +109,11 @@ export function isDrapTransactionsConfigured() {
   return isDrapConfigured();
 }
 
+/** A rota de cobrança existe na Drap desde `/api/v1/cobrancas`, então a
+ *  capacidade deixa de depender de `DRAP_CHARGES_PATH` estar configurado —
+ *  a variável segue aceita pra apontar outro caminho em homologação. */
 export function isDrapChargesConfigured() {
-  const config = runtimeEnv();
-  return Boolean(config.DRAP_API_URL && config.DRAP_CHARGES_PATH && (config.DRAP_API_TOKEN || Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken))));
+  return isDrapConfigured();
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -388,33 +390,54 @@ export async function createDrapCharge(input: {
   reminders: { daysBefore: number; onDueDate: boolean; overdueIntervalDays: number };
 }) {
   const config = runtimeEnv();
-  if (!isDrapChargesConfigured() || !config.DRAP_CHARGES_PATH) throw new Error("DRAP charges are not configured");
+  if (!isDrapChargesConfigured()) throw new Error("DRAP charges are not configured");
+
   const headers = requestHeaders(input.externalCompanyId);
+  // Sem esta chave, um timeout depois de a Drap aceitar deixa a H.OIKOS sem
+  // resposta e o cliente com boleto emitido — e a retentativa manda o segundo.
   headers.set("Idempotency-Key", input.idempotencyKey);
-  const response = await fetch(drapUrl(config.DRAP_CHARGES_PATH), {
+
+  const response = await fetch(drapUrl(config.DRAP_CHARGES_PATH ?? "/api/v1/cobrancas"), {
     method: "POST",
     headers,
     body: JSON.stringify({
-      customer_id: input.externalCustomerId,
-      cost_center_id: input.costCenterId,
-      description: input.description,
-      amount_cents: input.amountCents,
-      due_date: input.dueDate,
-      reminder_policy: {
-        days_before: input.reminders.daysBefore,
-        on_due_date: input.reminders.onDueDate,
-        overdue_interval_days: input.reminders.overdueIntervalDays,
-      },
+      // O cliente é um parceiro da empresa no cadastro da Drap. Ela exige
+      // CNPJ/CPF nele — sem documento o Asaas recusa, e a Drap devolve 422
+      // dizendo qual parceiro completar.
+      parceiro_id: input.externalCustomerId,
+      descricao: input.description,
+      // A Drap trabalha o valor em reais; aqui ele vive em centavos. A
+      // conversão acontece só nesta borda.
+      valor: input.amountCents / 100,
+      vencimento: input.dueDate,
+      // Deixa o pagador escolher entre PIX, boleto e cartão.
+      forma: "UNDEFINED",
     }),
     signal: AbortSignal.timeout(10000),
   });
+
+  // Dois campos do contrato da H.OIKOS não existem na cobrança da Drap e
+  // ficam SÓ aqui, de propósito:
+  //   - centro de custo: a cobrança da Drap não carrega obra. O vínculo por
+  //     obra continua valendo pro lançamento, não pro boleto;
+  //   - política de lembretes: quem lembra o cliente é a H.OIKOS, com os
+  //     prazos gravados em financial_charge_requests.
   if (!response.ok) throw new Error(`DRAP charge request failed with status ${response.status}`);
+
   const root = asRecord(await response.json());
-  const data = asRecord(root.data ?? root.charge ?? root);
+  const data = asRecord(root.cobranca ?? root.data ?? root.charge ?? root);
   const id = readString(data, ["id", "chargeId", "charge_id"]);
   if (!id) throw new Error("DRAP charge response has no id");
-  const shareUrl = readString(data, ["shareUrl", "share_url", "paymentUrl", "payment_url"]);
-  return { id, status: readString(data, ["status", "situacao"]) ?? "created", shareUrl: shareUrl && /^https:\/\//i.test(shareUrl) ? shareUrl : null } satisfies DrapCharge;
+
+  // `invoice_url` é a página de pagamento da Drap/Asaas; o boleto puro serve
+  // de segunda opção quando ela não vem.
+  const shareUrl = readString(data, ["invoice_url", "invoiceUrl", "shareUrl", "share_url", "paymentUrl", "payment_url", "bank_slip_url", "bankSlipUrl"]);
+
+  return {
+    id,
+    status: readString(data, ["status", "situacao"]) ?? "created",
+    shareUrl: shareUrl && /^https:\/\//i.test(shareUrl) ? shareUrl : null,
+  } satisfies DrapCharge;
 }
 
 export class DrapApiError extends Error {
