@@ -149,7 +149,7 @@ Gere o hash da senha administrativa com `npm run superadmin:hash -- "sua senha"`
 DRAP_API_URL=https://empresa.drap.app.br
 DRAP_API_TOKEN=token_de_servico
 DRAP_API_KEY_HEADER=
-DRAP_SUMMARY_PATH=/api/v1/finance/summary
+DRAP_SUMMARY_PATH=/api/v1/resumo
 DRAP_TRANSACTIONS_PATH=
 DRAP_CHARGES_PATH=
 DRAP_WEBHOOK_SECRET=segredo_compartilhado
@@ -157,11 +157,11 @@ DRAP_WEBHOOK_SECRET=segredo_compartilhado
 
 ### Importante
 
-A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros e categorias estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: resumo financeiro, cobranças e provisionamento de empresa sem login humano.
+A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros, categorias e resumo financeiro estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: cobranças e provisionamento de empresa sem login humano.
 
 Por isso:
 
-- `/api/v1/finance/summary` é um contrato configurável de referência, não um endpoint confirmado — hoje o resumo é calculado aqui a partir dos lançamentos;
+- o resumo financeiro vem somado pela Drap em `/api/v1/resumo`; quando o endpoint não existe no ambiente, a H.OIKOS soma pelos lançamentos e marca o total como parcial em vez de exibi-lo como completo;
 - o token nunca é enviado ao navegador nem entra em variável `NEXT_PUBLIC_*`;
 - a chave resolve o tenant no servidor da Drap; a H.OIKOS nunca envia identificador de empresa na chamada;
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
@@ -315,7 +315,7 @@ CLAUDE.md
 
 - Conector Drap homologado em sandbox.
 - Vínculo de projeto com centro de custo remoto, recortado no servidor da Drap pelo campo `centro_custo` do lançamento. Obra sem movimento e centro de custo que não casa aparecem como casos diferentes na tela. **Concluído no produto; homologação Drap pendente.**
-- Leitura de saldos e contas por projeto, com relatório CSV. **Concluída no produto; endpoint Drap pendente.**
+- Leitura de saldos e contas por projeto, com relatório CSV. Os totais vêm somados pela Drap, com plano B local declarado como parcial. **Concluída no produto; homologação Drap pendente.**
 - Criação remota de cobrança com idempotência e política de lembretes. **Concluída no produto; endpoint Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.
 - Alertas úteis: atraso, caixa negativo, margem baixa e tarefa bloqueadora.

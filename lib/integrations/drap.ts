@@ -8,6 +8,12 @@ export type FinancialSummary = {
   overdueReceivables: number;
   updatedAt: string;
   source: "drap";
+  /** `resumo` = totais somados pela Drap. `lancamentos` = somados aqui, a
+   *  partir da listagem, porque o endpoint de resumo ainda não respondeu. */
+  origem: "resumo" | "lancamentos";
+  /** Verdadeiro quando a soma cobriu só parte dos lançamentos. Número
+   *  incompleto tem que se declarar; senão passa por número menor. */
+  truncado: boolean;
 };
 
 export type FinancialTransaction = {
@@ -37,6 +43,7 @@ type DrapRuntimeEnv = {
   DRAP_API_URL?: string;
   DRAP_API_TOKEN?: string;
   DRAP_API_KEY_HEADER?: string;
+  DRAP_SUMMARY_PATH?: string;
   DRAP_TRANSACTIONS_PATH?: string;
   DRAP_CHARGES_PATH?: string;
   DRAP_WEBHOOK_SECRET?: string;
@@ -259,7 +266,73 @@ export async function hasAnyDrapTransaction(externalCompanyId: string) {
   return page.length > 0;
 }
 
-export async function fetchDrapFinancialSummary(externalCompanyId: string) {
+/**
+ * Resumo financeiro da empresa.
+ *
+ * Caminho oficial: a Drap soma e devolve pronto em `/api/v1/resumo`. Antes
+ * desse endpoint existir, a única saída era paginar os lançamentos e somar
+ * aqui — o que trunca em 500 e entrega um total menor com cara de certo.
+ *
+ * A soma local continua como plano B e SÓ pra um caso: a Drap respondeu 404,
+ * isto é, o endpoint ainda não subiu naquele ambiente. Erro de credencial,
+ * escopo ou rate-limit não cai pro plano B — a listagem bateria na mesma
+ * parede, e insistir só transformaria um erro claro em um número torto.
+ */
+export async function fetchDrapFinancialSummary(externalCompanyId: string): Promise<FinancialSummary> {
+  const oficial = await fetchDrapResumo(externalCompanyId);
+  if (oficial) return oficial;
+  return somarResumoPelosLancamentos(externalCompanyId);
+}
+
+type DrapResumo = {
+  realizado?: { saldo?: unknown };
+  em_aberto?: { a_receber?: unknown; a_pagar?: unknown };
+  vencido?: { a_receber?: unknown; a_pagar?: unknown };
+  proximos_30_dias?: { a_receber?: unknown; a_pagar?: unknown };
+  truncado?: unknown;
+  atualizado_em?: unknown;
+};
+
+/** `null` = endpoint ainda não existe neste ambiente (404). Qualquer outra
+ *  falha sobe como erro. */
+async function fetchDrapResumo(externalCompanyId: string): Promise<FinancialSummary | null> {
+  const config = runtimeEnv();
+  if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
+
+  const url = drapUrl(config.DRAP_SUMMARY_PATH ?? "/api/v1/resumo");
+  const response = await fetch(url, { headers: requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`DRAP summary request failed with status ${response.status}`);
+
+  const corpo = (await response.json()) as DrapResumo;
+  // Sem `realizado` no corpo não é a resposta que esperamos. Tratar como 404
+  // em vez de somar zeros: zero é um número que a tela exibe sem desconfiar.
+  if (!corpo || typeof corpo !== "object" || !corpo.realizado) return null;
+
+  const saldo = readNumber(asRecord(corpo.realizado), ["saldo"]);
+  const aReceber = readNumber(asRecord(corpo.em_aberto), ["a_receber"]);
+  const aPagar = readNumber(asRecord(corpo.em_aberto), ["a_pagar"]);
+  const vencidoReceber = readNumber(asRecord(corpo.vencido), ["a_receber"]);
+  const vencidoPagar = readNumber(asRecord(corpo.vencido), ["a_pagar"]);
+  const janelaReceber = readNumber(asRecord(corpo.proximos_30_dias), ["a_receber"]);
+  const janelaPagar = readNumber(asRecord(corpo.proximos_30_dias), ["a_pagar"]);
+
+  return {
+    currentBalance: saldo,
+    receivables: aReceber,
+    payables: aPagar,
+    overdueReceivables: vencidoReceber,
+    // Projeção de 30 dias inclui o que já venceu e ainda está em aberto: é
+    // dinheiro que a empresa espera movimentar, não histórico.
+    projected30d: saldo + vencidoReceber + janelaReceber - vencidoPagar - janelaPagar,
+    updatedAt: typeof corpo.atualizado_em === "string" ? corpo.atualizado_em : new Date().toISOString(),
+    source: "drap",
+    origem: "resumo",
+    truncado: corpo.truncado === true,
+  };
+}
+
+async function somarResumoPelosLancamentos(externalCompanyId: string): Promise<FinancialSummary> {
   const transactions = await fetchDrapTransactions(externalCompanyId);
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);
@@ -292,6 +365,10 @@ export async function fetchDrapFinancialSummary(externalCompanyId: string) {
     overdueReceivables,
     updatedAt: new Date().toISOString(),
     source: "drap",
+    origem: "lancamentos",
+    // A paginação para em 500. Bateu no teto, a soma cobriu só parte da
+    // empresa — e quem lê precisa saber disso.
+    truncado: transactions.length >= 500,
   } satisfies FinancialSummary;
 }
 
