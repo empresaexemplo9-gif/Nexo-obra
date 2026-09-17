@@ -8,9 +8,12 @@ const source = (path) => readFile(`${root}/${path}`, "utf8");
 
 test("novas ativações embutidas usam exatamente o preço oficial da DRAP", async () => {
   const activation = await source("lib/server/activation.ts");
+  const ui = await source("components/platform-control.tsx");
   assert.match(activation, /product: "drap_embedded"/);
   assert.match(activation, /pricingMultiplierBps: 10000/);
   assert.match(activation, /embeddedDrapMonthlyCents\(base: number\)[\s\S]*return checkedMonthlyCents\(base\)/);
+  assert.match(ui, /preço oficial do Drap Empresa, sem acréscimo da H\.OIKOS/);
+  assert.doesNotMatch(ui, /\+\s*50%|acrescid[oa] de 50%/i);
 });
 
 test("contrato antigo de 150% existe somente como compatibilidade histórica", async () => {
