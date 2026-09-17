@@ -153,7 +153,16 @@ DRAP_SUMMARY_PATH=/api/v1/resumo
 DRAP_TRANSACTIONS_PATH=
 DRAP_CHARGES_PATH=
 DRAP_WEBHOOK_SECRET=segredo_compartilhado
+
+# Conexão automática: cria a empresa na Drap e guarda a chave dela aqui, cifrada.
+DRAP_PARTNER_TOKEN=drap_partner_...
+SECRETS_ENCRYPTION_KEY=32_bytes_em_base64
 ```
+
+Gere a chave de cifra com `npm run segredos:key`. Ela protege a credencial de cada
+empresa no banco e é **separada** da `MEDIA_ENCRYPTION_KEY` das fotos de propósito:
+propósitos diferentes, prazos de rotação diferentes. Trocar esta chave torna ilegíveis as
+credenciais já guardadas — as empresas precisam reconectar.
 
 ### Importante
 
@@ -167,6 +176,21 @@ Por isso:
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
 - enquanto a credencial real não for homologada, a tela informa que a integração está indisponível, sem fabricar valores;
 - nenhuma escrita financeira é liberada antes da homologação com chave real.
+
+### Conectar uma empresa
+
+Com `DRAP_PARTNER_TOKEN` e `SECRETS_ENCRYPTION_KEY` configurados, quem administra a
+empresa conecta pela própria H.OIKOS, em Financeiro → Conexão DRAP:
+
+- **Criar empresa** — a empresa ainda não existe na Drap. A plataforma cria e guarda a
+  chave dela, cifrada. O documento (CNPJ/CPF) é o que impede empresa duplicada lá.
+- **Já uso a Drap** — a empresa existe. O administrador dela gera um código em
+  Configurações → Integrações, dentro da Drap, e cola aqui. O código vale uma vez, por 15
+  minutos, e é a única prova de consentimento: sem ele, saber um CNPJ bastaria para passar
+  a operar o financeiro de alguém.
+
+A chave nunca chega ao navegador nem ao log. `DRAP_TENANTS_JSON` continua funcionando e
+tem precedência sobre o que está no banco — é a saída de emergência.
 
 ### Homologar a credencial
 

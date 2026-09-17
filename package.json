@@ -18,6 +18,7 @@
     "db:manifest": "node scripts/build-migrations-manifest.mjs",
     "superadmin:hash": "node scripts/superadmin-hash.mjs",
     "media:key": "node scripts/media-key.mjs",
+    "segredos:key": "node scripts/segredos-key.mjs",
     "homologar:drap": "node scripts/homologar-drap.mjs"
   },
   "dependencies": {
