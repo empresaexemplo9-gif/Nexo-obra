@@ -33,6 +33,32 @@ Clientes, fornecedores e registros do tipo ambos.
 - `GET /categorias` — lista áreas e subcategorias.
 - `POST /categorias` — cria nova área.
 
+## Superfície adicional descoberta pela API real
+
+A documentação pública da DRAP não enumera toda a superfície disponível para uma chave. Por isso a H.OIKOS não transforma nomes presumidos em contrato: ela consulta a API real do próprio tenant, com a credencial guardada no servidor, e só libera o recurso que respondeu como existente.
+
+A descoberta fica em `lib/server/drap-resources.ts` e usa uma allowlist fechada. Os recursos sondados são lançamentos, parceiros, categorias, resumo, NFS-e/notas fiscais, cobranças, orçamentos, contas bancárias, anexos, centros de custo, módulos, assinaturas, planos, empresas e webhooks. Para NFS-e e contas bancárias existem aliases conhecidos; `404` avança para o próximo alias, enquanto `403` para a busca porque comprova que o recurso existe mas a chave não tem escopo.
+
+A aplicação expõe a leitura do mapa real em:
+
+```text
+GET /api/integrations/drap/capabilities
+```
+
+A resposta é privada e por tenant. Ela informa `available`, `forbidden`, `missing`, `rate_limited` ou `error` para cada recurso, sem devolver API key ou cabeçalhos de autenticação. O resultado positivo/negativo é mantido em cache curto para não consumir o limite da DRAP a cada renderização.
+
+Recursos operacionais permitidos podem ser usados pelo backend H.OIKOS em:
+
+```text
+GET|POST|PATCH|DELETE /api/integrations/drap/resources/{resource}/{...segmentos}
+```
+
+Isso **não** é proxy aberto: o primeiro segmento precisa existir na allowlist, os segmentos seguintes são codificados, a conexão DRAP do tenant precisa estar ativa e a permissão `finance` é conferida no servidor. Recursos administrativos (`modulos`, `assinaturas`, `planos`, `empresas`) ficam somente leitura por essa ponte.
+
+Toda escrita pela ponte exige `Idempotency-Key` válida e a mesma chave é encaminhada à DRAP. Assim um timeout pode ser repetido sem transformar a mesma intenção da pessoa em duas operações financeiras.
+
+Cobranças usam a mesma descoberta em tempo de execução. A capacidade deixa de depender de `DRAP_CHARGES_PATH` existir no ambiente: a H.OIKOS primeiro comprova que o recurso `cobrancas` existe para aquele tenant e só então tenta criar a cobrança. A solicitação local continua idempotente e a `Idempotency-Key` chega ao backend DRAP.
+
 ## Códigos HTTP
 
 - `200` — sucesso em GET/PATCH.
@@ -89,6 +115,6 @@ A primeira entrega ocorre imediatamente. Falhas por HTTP >= 400, timeout ou DNS 
 
 ## Limite atual do contrato
 
-Este contrato operacional permite usar recursos DRAP dentro da H.OIKOS sem redirecionar para o portal DRAP depois que o tenant e a credencial existem.
+A ponte de descoberta permite usar, sem expor a credencial, os recursos que a API real comprovar para o tenant. Ela não transforma a existência de um módulo comercial em um payload de escrita inventado: quando a DRAP exige campos específicos, a H.OIKOS encaminha o corpo somente pelas rotas operacionais permitidas e deixa a própria API validar o contrato.
 
-Ainda não foi fornecido contrato de API para: criar tenant DRAP, consultar catálogo/preço comercial, criar assinatura, cobrar a assinatura, cancelar plano ou emitir/rotacionar automaticamente a API key. Esses pontos permanecem bloqueados até existir contrato real; nenhum endpoint é inventado no código.
+Ainda não foi fornecido contrato público de provisionamento para: criar tenant DRAP, criar/cancelar assinatura comercial, cobrar a assinatura ou emitir/rotacionar automaticamente a API key. Esses pontos permanecem fora da ponte de escrita; nenhum endpoint administrativo é inventado no código.
