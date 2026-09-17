@@ -23,7 +23,7 @@ const empty = { config: null, jobs: [], storageConfigured: true, schedulerConfig
 test("SINAPI vazia mostra configuração com controles rotulados e sem preços fictícios", async () => {
   await render(empty); assert.match(textOf(container), /Nenhuma referência ativa/);
   for (const control of container.querySelectorAll("input,select")) assert.ok(control.closest("label"), "controle precisa de label");
-  assert.ok(findByText(container, "Preparar referência"));
+  assert.ok(findByText(container, "preparar referência oficial"), "o botão de baixar da CAIXA");
 });
 test("aprovação exige a conferência explícita e envia a ação ao servidor", async () => {
   const snapshot = { ...empty, jobId: "job", jobs: [{ id: "job", competencia: "2026-04", uf: "SP", regime: "NaoDesonerado", estado: "pendente", total_itens: 100, origem_url: "https://www.caixa.gov.br/Downloads/sinapi.zip", report: { cursor: 100, amostra: [{ codigo: "1", descricao: "Teste", unidade: "M2", custoUnitarioCentavos: 123456, tipo: "insumo" }] } }] };

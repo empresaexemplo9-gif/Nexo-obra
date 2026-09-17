@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { camposDoCorpo, lerEnvelope } from "@/lib/drap-envelope";
 
 // Operação de lançamentos da Drap dentro da H.OIKOS.
 //
@@ -37,21 +38,17 @@ async function pedir<T>(url: string, init?: RequestInit): Promise<T> {
   return corpo as T;
 }
 
-// A Drap documenta os campos do lançamento, mas não o envelope da listagem. Em vez de
-// assumir um formato e mostrar "nenhum lançamento" quando ele não bate — escondendo o
-// problema —, aqui as formas conhecidas são aceitas e o que não for reconhecido vira erro
-// com o conteúdo à vista, para consertar numa rodada.
-export function extrairLista(corpo: unknown): { itens: Lancamento[] } | { erro: string } {
-  if (Array.isArray(corpo)) return { itens: corpo as Lancamento[] };
-  if (corpo && typeof corpo === "object") {
-    for (const chave of ["data", "lancamentos", "items", "results", "records"]) {
-      const valor = (corpo as Record<string, unknown>)[chave];
-      if (Array.isArray(valor)) return { itens: valor as Lancamento[] };
-    }
-    const chaves = Object.keys(corpo as Record<string, unknown>);
-    return { erro: `A Drap respondeu num formato não previsto. Campos recebidos: ${chaves.join(", ") || "nenhum"}.` };
-  }
-  return { erro: "A Drap respondeu um corpo vazio ou inesperado." };
+// A leitura do envelope é a mesma do adaptador do servidor, extraída para `lib/drap-envelope`
+// — módulo puro, sem credencial, que o componente cliente pode importar sem ferir a regra 4.
+//
+// Antes esta função duplicava a regra numa versão mais fraca: não cobria `data.items`
+// aninhado nem `transactions`, que a Drap usa. A homologação contra a API real confirmou
+// `{ items, total }`, e a lista de formas vem de respostas observadas, não de suposição.
+export function extrairLista(corpo: unknown): { itens: Lancamento[]; total: number | null } | { erro: string } {
+  const lido = lerEnvelope(corpo);
+  if (lido) return { itens: lido.itens as Lancamento[], total: lido.total };
+  const campos = camposDoCorpo(corpo);
+  return { erro: `A Drap respondeu num formato não previsto. Campos recebidos: ${campos.join(", ") || "nenhum"}.` };
 }
 
 export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; habilitado: boolean }) {
@@ -61,6 +58,7 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
   const [criando, setCriando] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState("");
+  const [total, setTotal] = useState<number | null>(null);
 
   const carregar = useCallback(async () => {
     // Sem conexão não há o que consultar, e a tela já devolve o cartão de "não conectada"
@@ -72,6 +70,8 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
       const lido = extrairLista(corpo);
       if ("erro" in lido) { setErro(lido.erro); setItens([]); return; }
       setItens(lido.itens);
+      // A Drap declara o total; sem isso a tela mostraria 50 de mil como se fossem todos.
+      setTotal(lido.total);
     } catch (causa) {
       setErro(causa instanceof Error ? causa.message : "Não foi possível consultar a Drap.");
       setItens([]);
@@ -128,7 +128,7 @@ export function DrapLancamentos({ canEdit, habilitado }: { canEdit: boolean; hab
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
             <CardTitle className="text-base">Lançamentos na Drap</CardTitle>
-            <p className="mt-1 text-sm text-hoikos-500">Receitas e despesas gravadas direto no financeiro oficial. A credencial fica no servidor.</p>
+            <p className="mt-1 text-sm text-hoikos-500">Receitas e despesas gravadas direto no financeiro oficial. A credencial fica no servidor.{total !== null && total > itens.length ? ` Mostrando ${itens.length} de ${total}.` : ""}</p>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar"><RefreshCw className={carregando ? "animate-spin" : ""} />Atualizar</Button>
