@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { activationFor } from "@/lib/server/activation";
-import { isDrapChargesConfigured, isDrapConfigured, isDrapTransactionsConfigured, requestDrapApi } from "@/lib/integrations/drap";
+import { isDrapConfigured, isDrapTransactionsConfigured, requestDrapApi } from "@/lib/integrations/drap";
+import { probeDrapResource } from "@/lib/server/drap-resources";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,9 @@ export async function GET(request: Request) {
     requireModulePermission(context, "finance", "view");
     const connection = await context.db.prepare("SELECT id, external_company_id, status, last_synced_at, last_error FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1")
       .bind(context.organization.id).first<ConnectionRow>();
+    const chargesProbe = connection?.status === "active"
+      ? await probeDrapResource(connection.external_company_id, "cobrancas")
+      : null;
     return Response.json({
       connection: connection ? {
         id: connection.id,
@@ -39,7 +43,7 @@ export async function GET(request: Request) {
       capabilities: {
         summary: isDrapConfigured(),
         transactions: isDrapTransactionsConfigured(),
-        charges: isDrapChargesConfigured(),
+        charges: chargesProbe?.status === "available",
       },
     });
   });
