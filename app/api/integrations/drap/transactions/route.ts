@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "finance", "view");
-    if (!isDrapTransactionsConfigured()) return Response.json({ error: "A consulta de contas da Drap ainda não foi homologada.", code: "drap_transactions_not_configured" }, { status: 503 });
+    if (!isDrapTransactionsConfigured()) return Response.json({ error: "A integração real com a Drap não está configurada para esta instalação.", code: "drap_transactions_not_configured" }, { status: 503 });
     const connection = await requireActiveDrapConnection(context);
     const projectId = new URL(request.url).searchParams.get("projectId");
     let costCenterId: string | null = null;
