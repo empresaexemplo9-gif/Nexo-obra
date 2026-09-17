@@ -245,6 +245,68 @@ if (!ESCRITA) {
   }
 }
 
+// ─────────────── Superfície real da API ───────────────
+//
+// A /api-docs publica três recursos — lançamentos, parceiros, categorias — mas o
+// endpoint /resumo, que a H.OIKOS já usa em produção, não está listado nela. Ou seja:
+// a documentação é incompleta, e discutir o que a API faz a partir dela leva a
+// conclusão errada nos dois sentidos.
+//
+// Esta fase pergunta à própria API. Só GET, nenhuma escrita: descobrir não pode
+// alterar nada no tenant.
+//
+// O que cada resposta significa, e é a distinção que importa comercialmente:
+//   200 → existe e a sua chave opera
+//   403 → EXISTE, mas a chave não tem escopo (módulo não contratado, não ausência)
+//   405 → existe, só não aceita GET nessa forma
+//   404 → não existe nesta API
+const CANDIDATOS = [
+  ["/lancamentos", "Lançamentos"], ["/parceiros", "Parceiros"], ["/categorias", "Categorias"],
+  ["/resumo", "Resumo financeiro"],
+  ["/nfse", "NFS-e"], ["/notas-fiscais", "Notas fiscais"], ["/notas", "Notas"],
+  ["/cobrancas", "Cobranças"], ["/orcamentos", "Orçamentos"],
+  ["/contas-bancarias", "Contas bancárias"], ["/contas", "Contas"],
+  ["/anexos", "Anexos"], ["/centros-custo", "Centros de custo"],
+  ["/modulos", "Módulos contratados"], ["/assinaturas", "Assinaturas"],
+  ["/planos", "Planos"], ["/empresas", "Empresas/tenants"], ["/webhooks", "Webhooks"],
+];
+
+const encontrados = [];
+const semEscopo = [];
+const ausentes = [];
+
+for (const [caminho, nome] of CANDIDATOS) {
+  // A DRAP limita a 60 req/min por chave. Um respiro entre sondas evita que o
+  // resultado da descoberta seja um 429 disfarçado de "não existe".
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  let resposta;
+  try {
+    resposta = await chamar(`${caminho}?limit=1`);
+  } catch (causa) {
+    registrar(`Sonda ${nome}`, "aviso", `não respondeu — ${causa instanceof Error ? causa.message : "erro de rede"}`);
+    continue;
+  }
+  if (resposta.status === 429) {
+    registrar(`Sonda ${nome}`, "aviso", "429: limite de requisições atingido, repita mais devagar");
+    continue;
+  }
+  if (resposta.status === 404) { ausentes.push(nome); continue; }
+  if (resposta.status === 403) { semEscopo.push(`${nome} (${caminho})`); continue; }
+  if (resposta.status === 200 || resposta.status === 405) {
+    encontrados.push(`${nome} (${caminho})`);
+    continue;
+  }
+  registrar(`Sonda ${nome}`, "info", `${caminho} → ${resposta.status}`);
+}
+
+registrar("Endpoints que a chave opera", encontrados.length ? "ok" : "aviso",
+  encontrados.length ? encontrados.join(", ") : "nenhum além do que já falhou antes");
+if (semEscopo.length) {
+  registrar("Existem, mas a chave não tem escopo", "aviso",
+    `${semEscopo.join(", ")} — módulo não contratado ou chave sem permissão, NÃO ausência do recurso`);
+}
+registrar("Não existem nesta API", "info", ausentes.length ? ausentes.join(", ") : "nenhum dos candidatos");
+
 encerrar();
 
 function encerrar() {

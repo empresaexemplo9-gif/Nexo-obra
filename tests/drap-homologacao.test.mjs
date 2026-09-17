@@ -59,3 +59,20 @@ test("o roteiro aponta o preset de escopo correto e o tenant de teste", async ()
   // Os dois avisos esperados hoje são a fatia seguinte, não falha de credencial.
   assert.match(doc, /centro_custo/);
 });
+
+test("a fase de descoberta é só leitura e não imprime a chave", async () => {
+  const fonte = await readFile(new URL("../scripts/homologar-drap.mjs", import.meta.url), "utf8");
+  const bloco = fonte.slice(fonte.indexOf("Superfície real da API"));
+
+  // Descobrir não pode alterar nada no tenant de quem roda.
+  for (const verbo of ["POST", "PATCH", "DELETE", "PUT"]) {
+    assert.doesNotMatch(bloco, new RegExp(`method: "${verbo}"`), `a descoberta não pode usar ${verbo}`);
+  }
+  // 403 significa que o recurso existe e a chave não alcança — confundir isso com
+  // ausência é o erro que levaria a dizer "a API não faz" sobre módulo não contratado.
+  assert.match(bloco, /403/);
+  assert.match(bloco, /NÃO ausência/);
+  // A pausa entre sondas evita que o limite de 60 req/min vire "não existe".
+  assert.match(bloco, /setTimeout/);
+  assert.doesNotMatch(bloco, /TOKEN\b(?![^\n]*headers)/, "a chave não entra em log");
+});

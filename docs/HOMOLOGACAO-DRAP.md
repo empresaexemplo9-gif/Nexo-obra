@@ -97,3 +97,33 @@ endpoint não estiver no ar naquele ambiente, o roteiro acusa aviso e a
 H.OIKOS soma pelos lançamentos — marcando o total como parcial, nunca como
 completo. Estado e contrato pretendido em
 [`DRAP-ACTIVATION.md`](./DRAP-ACTIVATION.md) e [`DRAP-INTEGRATION.md`](./DRAP-INTEGRATION.md).
+
+## Descobrir a superfície real da API
+
+A `/api-docs` publica três recursos — lançamentos, parceiros, categorias. Mas `/resumo`,
+que a H.OIKOS já consome em produção, não está listado lá. A documentação é incompleta, e
+discutir o que a API faz a partir dela erra nos dois sentidos: nega o que existe e promete
+o que não existe.
+
+A última fase do roteiro pergunta à própria API, com a sua chave:
+
+```bash
+DRAP_API_TOKEN=drap_live_... npm run homologar:drap
+```
+
+Só GET — descobrir não altera nada no tenant. A saída separa três situações, e a segunda é
+a que costuma ser lida errado:
+
+| Resposta | Significa |
+| --- | --- |
+| `200` / `405` | o recurso existe e a chave opera |
+| `403` | **o recurso existe**; a chave é que não tem escopo — módulo não contratado, não ausência |
+| `404` | não existe nesta API |
+
+Confundir `403` com `404` leva a concluir que "a API não faz" quando o caso é "este módulo
+não está contratado nesta chave". São decisões comerciais opostas: uma exige contrato novo
+com o fornecedor, a outra exige contratar um módulo.
+
+Entre as sondas há uma pausa de pouco mais de um segundo. A DRAP limita 60 requisições por
+minuto por chave, e sem a pausa o limite chegaria como `429` — que, contado como ausência,
+produziria um mapa falso da API.
