@@ -153,7 +153,35 @@ for (const [nome, caminho] of [["Parceiros", "/parceiros?limit=1"], ["Categorias
   registrar(nome, r.status === 200 ? "ok" : "falha", `GET ${caminho} → ${r.status}`);
 }
 
-// ─────────────── 7. Qual é o escopo real desta chave ───────────────
+// ─────────────── 7. Resumo financeiro somado pela Drap ───────────────
+
+const resumo = await chamar("/resumo");
+if (resumo.status === 404) {
+  registrar(
+    "Resumo financeiro",
+    "aviso",
+    "endpoint ainda não publicado — a H.OIKOS soma pelos lançamentos e trunca em 500",
+  );
+} else if (resumo.status !== 200) {
+  registrar("Resumo financeiro", "falha", `GET /resumo → ${resumo.status}`);
+} else if (!resumo.corpo?.realizado) {
+  registrar("Resumo financeiro", "falha", "200 sem o campo `realizado` — a H.OIKOS trata como ausente");
+} else {
+  const campos = ["realizado", "em_aberto", "vencido", "proximos_30_dias"];
+  const faltando = campos.filter((campo) => !(campo in resumo.corpo));
+  registrar(
+    "Resumo financeiro",
+    faltando.length === 0 ? "ok" : "falha",
+    faltando.length === 0
+      ? `saldo ${resumo.corpo.realizado.saldo}, a receber ${resumo.corpo.em_aberto?.a_receber}`
+      : `faltando: ${faltando.join(", ")}`,
+  );
+  if (resumo.corpo.truncado === true) {
+    registrar("Resumo financeiro: cobertura", "aviso", "a Drap marcou `truncado` — o recorte passa do teto de leitura");
+  }
+}
+
+// ─────────────── 8. Qual é o escopo real desta chave ───────────────
 //
 // Sonda sem destruir: DELETE num id que não existe. Com escopo vem 404
 // (não achou), sem escopo vem 403 (não pode). Nada é apagado nos dois casos.
@@ -171,7 +199,7 @@ if (sonda.status === 403) {
   registrar("Escopo de exclusão", "info", `resposta ${sonda.status} — inconclusivo`);
 }
 
-// ─────────────── 8. Escrita (opt-in) ───────────────
+// ─────────────── 9. Escrita (opt-in) ───────────────
 
 if (!ESCRITA) {
   registrar("Escrita", "info", "pulada — rode com --escrita pra homologar POST e PATCH");

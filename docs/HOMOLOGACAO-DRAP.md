@@ -89,6 +89,11 @@ dois.
 
 ## Fora desta fatia
 
-Resumo financeiro no servidor, cobranças, assinatura de webhook por API e
-provisionamento de empresa sem login humano. Estado e contrato pretendido em
+Cobranças, assinatura de webhook por API e provisionamento de empresa sem
+login humano.
+
+O resumo financeiro já é somado pela Drap em `/api/v1/resumo`. Enquanto o
+endpoint não estiver no ar naquele ambiente, o roteiro acusa aviso e a
+H.OIKOS soma pelos lançamentos — marcando o total como parcial, nunca como
+completo. Estado e contrato pretendido em
 [`DRAP-ACTIVATION.md`](./DRAP-ACTIVATION.md) e [`DRAP-INTEGRATION.md`](./DRAP-INTEGRATION.md).

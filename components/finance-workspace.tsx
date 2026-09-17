@@ -40,7 +40,7 @@ type Connection = { id: string; externalCompanyId: string; status: string; lastS
 type Capabilities = { summary: boolean; transactions: boolean; charges: boolean };
 /** Por que o recorte de uma obra voltou sem nada. `null` = não se aplica. */
 type EmptyReason = "company_without_transactions" | "cost_center_without_match" | null;
-type FinancialSummary = { currentBalance: number; receivables: number; payables: number; projected30d: number; overdueReceivables: number; updatedAt: string; source: "drap" };
+type FinancialSummary = { currentBalance: number; receivables: number; payables: number; projected30d: number; overdueReceivables: number; updatedAt: string; source: "drap"; origem?: "resumo" | "lancamentos"; truncado?: boolean };
 type Transaction = {
   id: string; type: "receivable" | "payable"; description: string; amount: number;
   dueDate: string | null; paidAt: string | null; status: "open" | "overdue" | "paid" | "cancelled";
@@ -199,6 +199,9 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
         <Metric label="A pagar" value={summary ? currency.format(summary.payables) : "Indisponível"} icon={ArrowUpRight} tone="amber" />
         <Metric label="Projeção 30 dias" value={summary ? currency.format(summary.projected30d) : "Indisponível"} icon={WalletCards} tone="blue" />
       </div>
+
+      {/* Número somado pela metade não pode passar por número menor. */}
+      {summary?.truncado ? <p className="text-sm text-hoikos-600">Estes totais cobrem apenas parte dos lançamentos da empresa. Consulte o valor completo na Drap.</p> : null}
 
       {message ? <div className="flex flex-col gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900 sm:flex-row sm:items-center"><CircleAlert className="size-5 shrink-0" /><p className="flex-1">{message}</p>{canManageConnection ? <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)}>Revisar conexão</Button> : null}</div> : null}
 
