@@ -108,15 +108,14 @@ if (!amostra) {
     faltando.length === 0 ? esperados.join(", ") : `faltando: ${faltando.join(", ")}`,
   );
 
-  // O achado que motiva a fatia 2: a DRAP devolve `centro_custo` (texto livre)
-  // e o adaptador da H.OIKOS procura `costCenterId`/`centro_custo_id`. Enquanto
-  // os dois nomes não baterem, financeiro por obra volta VAZIO sem erro nenhum.
+  // O adaptador lê `centro_custo` (texto livre) como chave da obra. Se a DRAP
+  // parar de devolver o campo, o recorte por obra volta VAZIO sem erro nenhum.
   registrar(
     "Vínculo de obra (centro de custo)",
-    "centro_custo_id" in amostra ? "ok" : "aviso",
-    "centro_custo_id" in amostra
-      ? "a DRAP já expõe ID de centro de custo"
-      : "a DRAP expõe `centro_custo` (texto). O adaptador precisa ler esse nome — fatia 2",
+    "centro_custo" in amostra ? "ok" : "falha",
+    "centro_custo" in amostra
+      ? "a DRAP devolve `centro_custo`, que é o campo que a H.OIKOS usa como chave da obra"
+      : "sem `centro_custo` na resposta — o recorte por obra não tem como funcionar",
   );
 }
 
@@ -143,7 +142,7 @@ if (filtrado.status !== 200) {
   registrar(
     "Filtro ?centro_custo",
     "aviso",
-    `ignorado (${totalFiltrado} de ${totalGeral} com centro de custo inexistente) — fatia 2`,
+    `ignorado (${totalFiltrado} de ${totalGeral} com centro de custo inexistente) — a H.OIKOS recorta na memória até a DRAP publicar o filtro`,
   );
 }
 

@@ -62,19 +62,30 @@ de outra fatia.
 | Campos do lançamento | Falta campo que a H.OIKOS lê. Ajuste `lib/integrations/drap.ts`. |
 | Parceiros / Categorias | A chave não cobre o recurso, ou o endpoint mudou. |
 
-Dois avisos são esperados hoje, e são exatamente a fatia 2:
+Um aviso é esperado enquanto o filtro não estiver publicado na DRAP:
 
-- **Vínculo de obra** — a DRAP devolve `centro_custo` (texto livre) e o
-  adaptador procura `costCenterId`. Enquanto os nomes não baterem, o financeiro
-  por obra volta vazio **sem erro nenhum**, que é o pior jeito de falhar.
-- **Filtro `?centro_custo`** — a DRAP ignora o parâmetro, então a H.OIKOS
-  pagina a empresa inteira e filtra na memória. Funciona com pouca coisa
-  cadastrada; trunca em 500 lançamentos.
+- **Filtro `?centro_custo`** — se a DRAP ignorar o parâmetro, a H.OIKOS pagina
+  a empresa e recorta na memória. O número na tela continua certo (o adaptador
+  reaplica o filtro), mas trunca em 500 lançamentos. Some quando a DRAP
+  publicar o filtro.
 
 Um aviso **não** esperado:
 
 - **Escopo de exclusão: 404** significa que a chave apaga lançamento. Reemita
   com o preset certo.
+
+## Vínculo da obra
+
+A obra é amarrada ao financeiro pelo campo `centro_custo` do lançamento —
+texto livre na DRAP, não um ID. A H.OIKOS guarda o mesmo texto em
+`projects.external_financial_cost_center_id` e usa a convenção
+`hoikos:<id da obra>`, mas qualquer texto serve desde que seja **o mesmo dos
+dois lados**.
+
+Errar esse texto não dá erro: a obra aparece com financeiro vazio. Por isso a
+tela distingue os dois casos — obra sem movimento e centro de custo que não
+casa com nenhum lançamento — em vez de mostrar a mesma lista vazia para os
+dois.
 
 ## Fora desta fatia
 
