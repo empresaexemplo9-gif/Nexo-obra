@@ -1,7 +1,7 @@
 import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { isSinapiConfigured, searchSinapiItems } from "@/lib/integrations/sinapi";
 import { getDatabase } from "@/db";
-import { monthSchema, normalizeSinapiUf, regimeSchema } from "@/lib/integrations/sinapi-contract";
+import { DEFAULT_SINAPI_UF, monthSchema, normalizeSinapiUf, regimeSchema } from "@/lib/integrations/sinapi-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
     requireModulePermission(context, "budgets", "view");
     const url = new URL(request.url);
     const query = url.searchParams.get("q")?.trim() ?? "";
-    const rawState = url.searchParams.get("uf")?.trim() ?? "";
+    const rawState = url.searchParams.get("uf")?.trim() || DEFAULT_SINAPI_UF;
     const referenceMonth = url.searchParams.get("referenceMonth")?.trim() ?? "";
     const parsedRegime = regimeSchema.safeParse(url.searchParams.get("regime") ?? "NaoDesonerado");
     let state = "";
@@ -28,14 +28,14 @@ export async function GET(request: Request) {
       const result = await db.prepare(`SELECT codigo,descricao,unidade,custo_unitario_centavos,tipo FROM sinapi_itens
         WHERE competencia_id=?1 AND (codigo=?2 OR descricao LIKE ?3 ESCAPE '\\') ORDER BY codigo,tipo LIMIT 50`)
         .bind(active.id, query, `%${query.replace(/[\\%_]/g, "\\$&")}%`).all<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number; tipo: string }>();
-      return Response.json({ source: "sinapi-local", referenceMonth: active.competencia, regime, items: result.results.map((item) => ({
+      return Response.json({ source: "sinapi-local", referenceMonth: active.competencia, regime, state, items: result.results.map((item) => ({
         code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: item.custo_unitario_centavos,
         state, referenceMonth: active.competencia, regime,
         sourceReference: `SINAPI:${state}:${active.competencia}:${regime}:${item.tipo}:${item.codigo}`,
       })) }, { headers: { "Cache-Control": "private, no-store" } });
     }
     if (!isSinapiConfigured()) {
-      return Response.json({ error: "Não há referência SINAPI ativa para esta UF, regime e competência. Consulte o administrador ou deixe a competência vazia para usar a mais recente.", code: "sinapi_not_configured" }, { status: 503 });
+      return Response.json({ error: "Não há referência SINAPI oficial ativa para esta UF, regime e competência. Consulte o administrador ou deixe a competência vazia para usar a mais recente.", code: "sinapi_not_configured" }, { status: 503 });
     }
     if (!referenceMonth) return Response.json({ error: "A fonte externa exige uma competência.", code: "invalid_sinapi_search" }, { status: 400 });
     try {
