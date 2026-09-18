@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
+import { conferir } from "@/lib/parametros";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -268,6 +269,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const podeDesenhar = canEdit && !bloqueada;
   const selecionado = useMemo(() => documento.elementos.find((elemento) => elemento.id === selecao) ?? null, [documento, selecao]);
   const resumo = useMemo(() => quantitativo(documento), [documento]);
+  const conferencia = useMemo(() => conferir(documento), [documento]);
   const visiveis = useMemo(() => elementosVisiveis(documento), [documento]);
 
   const aplicar = useCallback((proximo: Documento) => {
@@ -818,6 +820,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     baixar(exportarSvg(documento, { titulo: nome, origem: window.location.origin }), "image/svg+xml", "svg");
   }
 
+  const faltas = conferencia.achados.filter((achado) => achado.severidade === "falta").length;
   const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
 
   return <div className="prancheta space-y-4">
@@ -1086,6 +1089,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             <TabsTrigger value="propriedades">Seleção</TabsTrigger>
             <TabsTrigger value="camadas">Camadas</TabsTrigger>
             <TabsTrigger value="quantitativo">Quantitativo</TabsTrigger>
+            <TabsTrigger value="conferencia">
+              Norma{faltas > 0 ? ` · ${faltas}` : ""}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="propriedades" className="space-y-3 pt-3">
@@ -1253,6 +1259,47 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             </div>)}
             {!resumo.comodos.length && !resumo.porDisciplina.length && !resumo.paredesM &&
               <p className="text-sm text-hoikos-500">O quantitativo sai do desenho. Comece pelas paredes e pelos cômodos.</p>}
+          </TabsContent>
+
+          <TabsContent value="conferencia" className="space-y-3 pt-3">
+            <p className="text-xs leading-5 text-hoikos-500">
+              Conferência contra a NBR 5410 (pontos de tomada e iluminação) e a NBR 9050 (vão de porta),
+              derivada da área e do perímetro que você desenhou. A ferramenta aponta; quem decide é você —
+              norma tem exceção, e nada aqui altera o desenho.
+            </p>
+
+            {conferencia.achados.length === 0 && conferencia.comodos.length > 0
+              ? <p className="rounded-md border border-hoikos-200 bg-white px-3 py-2 text-sm text-hoikos-700">
+                Nenhuma não conformidade nos itens conferidos.
+              </p>
+              : <ul className="space-y-2">
+                {conferencia.achados.map((achado, indice) => <li key={`${achado.parametroId}-${indice}`}
+                  className={`rounded-md border px-3 py-2 ${achado.severidade === "falta"
+                    ? "border-hoikos-gold bg-hoikos-50" : "border-hoikos-200 bg-white"}`}>
+                  <p className="text-xs font-medium text-hoikos-800">
+                    {achado.comodo ? `${achado.comodo} · ` : ""}{achado.severidade === "falta" ? "Falta" : achado.severidade === "atencao" ? "Atenção" : "Nota"}
+                    <span className="ml-1 font-normal text-hoikos-500">item {achado.item}</span>
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-hoikos-600">{achado.mensagem}</p>
+                </li>)}
+              </ul>}
+
+            {conferencia.comodos.length > 0 && <div>
+              <p className="eyebrow text-hoikos-600">Exigido por cômodo</p>
+              <ul className="mt-1 space-y-1 text-xs">
+                {conferencia.comodos.map((linha, indice) => <li key={`${linha.nome}-${indice}`}
+                  className="flex items-baseline justify-between gap-2 border-b border-hoikos-100 py-1">
+                  <span className="truncate text-hoikos-700">{linha.nome}</span>
+                  <span className="shrink-0 text-hoikos-500">
+                    {linha.tomadasDesenhadas}/{linha.tomadasMinimas} tomadas · {linha.pontosDeLuzDesenhados}/{linha.pontosDeLuzMinimos} luz
+                  </span>
+                </li>)}
+              </ul>
+              <p className="mt-2 text-xs text-hoikos-500">
+                Carga prevista somada: {conferencia.cargaTotalVa.toLocaleString("pt-BR")} VA.
+                É o mínimo da norma, não o dimensionamento do quadro.
+              </p>
+            </div>}
           </TabsContent>
         </Tabs>
       </aside>

@@ -141,6 +141,13 @@
       "when": 1789705914696,
       "tag": "0019_quick_blockbuster",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1789727074079,
+      "tag": "0020_stale_bloodscream",
+      "breakpoints": true
     }
   ]
 }

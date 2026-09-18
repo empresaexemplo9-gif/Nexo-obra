@@ -708,3 +708,23 @@ export const studioAssets = sqliteTable("studio_assets", {
   uniqueIndex("uidx_studio_assets_storage_key").on(table.storageKey),
   index("idx_studio_assets_org").on(table.organizationId, table.categoria),
 ]);
+
+// Vigilância das fontes dos parâmetros normativos.
+//
+// Guarda a impressão digital do que a página da norma dizia na última conferência. É o
+// que permite avisar "a NBR 5410 mudou de página" sem API e sem custo — e é tudo o que
+// esta tabela faz: ela não guarda parâmetro, guarda o sinal de que alguém precisa olhar.
+//
+// Global, e não por empresa: a norma é a mesma para todo mundo.
+export const parametroFontes = sqliteTable("parametro_fontes", {
+  id: text("id").primaryKey(),
+  assinatura: text("assinatura"),
+  // igual | mudou | primeira | inalcancavel
+  estado: text("estado"),
+  detalhe: text("detalhe"),
+  conferidoEm: integer("conferido_em"),
+  // Momento em que uma pessoa olhou a mudança e deu por resolvida. Enquanto for nulo e o
+  // estado for "mudou", o aviso continua de pé.
+  revisadoEm: integer("revisado_em"),
+  revisadoPor: text("revisado_por"),
+});
