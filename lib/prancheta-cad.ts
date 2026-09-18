@@ -1,0 +1,276 @@
+import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar } from "@/lib/prancheta";
+
+// O que separa desenhar de chutar.
+//
+// Com só a malha, a parede nova encosta perto do canto da anterior — perto, não no canto.
+// Cinco milímetros de folga em vinte junções viram uma planta que não fecha, e o erro só
+// aparece quando alguém tenta cotar. Encaixe em entidade resolve isso: o cursor pousa no
+// extremo, no meio, no cruzamento ou na perpendicular de algo que já existe.
+//
+// A outra metade é digitar. Ninguém desenha parede de 3,15 m arrastando o mouse até
+// acertar; digita 3150 e a direção. É assim em todo CAD, e é o que torna o desenho
+// rápido em vez de laborioso.
+
+export type Ponto = { x: number; y: number };
+export type Segmento = { a: Ponto; b: Ponto; elementoId: string };
+
+// A ordem aqui é a ordem de preferência, e ela importa: com dois candidatos à mesma
+// distância, o extremo vence o meio, porque é nele que paredes se encontram.
+export const TIPOS_ENCAIXE = ["extremo", "interseccao", "perpendicular", "meio", "centro", "malha"] as const;
+export type TipoEncaixe = typeof TIPOS_ENCAIXE[number];
+
+export const encaixeLabels: Record<TipoEncaixe, string> = {
+  extremo: "Extremo",
+  interseccao: "Interseção",
+  perpendicular: "Perpendicular",
+  meio: "Meio",
+  centro: "Centro",
+  malha: "Malha",
+};
+
+export type Encaixe = { tipo: TipoEncaixe; ponto: Ponto; elementoId?: string };
+
+const distancia = (um: Ponto, outro: Ponto) => Math.hypot(outro.x - um.x, outro.y - um.y);
+const inteiro = (ponto: Ponto): Ponto => ({ x: Math.round(ponto.x) || 0, y: Math.round(ponto.y) || 0 });
+
+/** Segmentos de tudo que está desenhado e pode ser encaixado. Camada escondida ou travada
+ *  fica de fora: encaixar no que não se vê é perseguir fantasma. */
+export function segmentosDo(documento: Documento): Segmento[] {
+  const saida: Segmento[] = [];
+  for (const elemento of elementosVisiveis(documento)) {
+    if (camadaBloqueada(documento, elemento.camada)) continue;
+    if (elemento.tipo === "parede" || elemento.tipo === "cota") {
+      saida.push({ a: elemento.a, b: elemento.b, elementoId: elemento.id });
+      continue;
+    }
+    if (elemento.tipo === "comodo" || elemento.tipo === "traco") {
+      const fechado = elemento.tipo === "comodo";
+      const quantos = fechado ? elemento.pontos.length : elemento.pontos.length - 1;
+      for (let i = 0; i < quantos; i += 1) {
+        saida.push({
+          a: elemento.pontos[i],
+          b: elemento.pontos[(i + 1) % elemento.pontos.length],
+          elementoId: elemento.id,
+        });
+      }
+    }
+  }
+  return saida;
+}
+
+/** Pontos notáveis do desenho: extremo, meio e centro. */
+export function pontosNotaveis(documento: Documento): Encaixe[] {
+  const saida: Encaixe[] = [];
+  for (const segmento of segmentosDo(documento)) {
+    saida.push({ tipo: "extremo", ponto: segmento.a, elementoId: segmento.elementoId });
+    saida.push({ tipo: "extremo", ponto: segmento.b, elementoId: segmento.elementoId });
+    saida.push({
+      tipo: "meio",
+      ponto: inteiro({ x: (segmento.a.x + segmento.b.x) / 2, y: (segmento.a.y + segmento.b.y) / 2 }),
+      elementoId: segmento.elementoId,
+    });
+  }
+  for (const elemento of elementosVisiveis(documento)) {
+    if (camadaBloqueada(documento, elemento.camada)) continue;
+    if ("posicao" in elemento) saida.push({ tipo: "centro", ponto: elemento.posicao, elementoId: elemento.id });
+  }
+  return saida;
+}
+
+/** Onde dois segmentos se cruzam de verdade — dentro dos dois, não no prolongamento. */
+export function interseccao(um: Segmento, outro: Segmento): Ponto | null {
+  const r = { x: um.b.x - um.a.x, y: um.b.y - um.a.y };
+  const s = { x: outro.b.x - outro.a.x, y: outro.b.y - outro.a.y };
+  const denominador = r.x * s.y - r.y * s.x;
+  if (denominador === 0) return null; // Paralelos ou colineares: não há ponto único.
+  const diferenca = { x: outro.a.x - um.a.x, y: outro.a.y - um.a.y };
+  const t = (diferenca.x * s.y - diferenca.y * s.x) / denominador;
+  const u = (diferenca.x * r.y - diferenca.y * r.x) / denominador;
+  if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+  return inteiro({ x: um.a.x + t * r.x, y: um.a.y + t * r.y });
+}
+
+/** Pé da perpendicular baixada de um ponto sobre o segmento. É o que faz uma parede nova
+ *  encontrar a existente em ângulo reto sem ninguém calcular nada. */
+export function pePerpendicular(origem: Ponto, segmento: Segmento): Ponto | null {
+  const r = { x: segmento.b.x - segmento.a.x, y: segmento.b.y - segmento.a.y };
+  const comprimentoQuadrado = r.x * r.x + r.y * r.y;
+  if (comprimentoQuadrado === 0) return null;
+  const t = ((origem.x - segmento.a.x) * r.x + (origem.y - segmento.a.y) * r.y) / comprimentoQuadrado;
+  if (t < 0 || t > 1) return null;
+  return inteiro({ x: segmento.a.x + t * r.x, y: segmento.a.y + t * r.y });
+}
+
+export type OpcoesEncaixe = {
+  /** Raio de captura em milímetros de desenho. Vem do zoom: o que vale é a distância na
+   *  tela, senão o encaixe fica impossível de acertar afastado e agressivo demais perto. */
+  toleranciaMm: number;
+  /** Ponto de onde o traço está saindo, quando há um. Só com ele existe perpendicular. */
+  origem?: Ponto | null;
+  ativos?: readonly TipoEncaixe[];
+};
+
+/**
+ * O encaixe escolhido para uma posição do cursor.
+ *
+ * Nunca devolve nada: quando não há entidade por perto, cai na malha, que é o
+ * comportamento anterior. Assim a ferramenta funciona igual em desenho vazio.
+ */
+export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEncaixe): Encaixe {
+  const ativos = opcoes.ativos ?? TIPOS_ENCAIXE;
+  const tolerancia = Math.max(1, opcoes.toleranciaMm);
+  const naMalha: Encaixe = {
+    tipo: "malha",
+    ponto: { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) },
+  };
+  if (!ativos.length) return naMalha;
+
+  const candidatos: Encaixe[] = [];
+  const perto = (ponto: Ponto) => distancia(ponto, alvo) <= tolerancia;
+
+  for (const candidato of pontosNotaveis(documento)) {
+    if (!ativos.includes(candidato.tipo)) continue;
+    if (perto(candidato.ponto)) candidatos.push(candidato);
+  }
+
+  // Interseção e perpendicular custam mais, então só se olha o que passa perto do alvo.
+  const proximos = ativos.includes("interseccao") || ativos.includes("perpendicular")
+    ? segmentosDo(documento).filter((segmento) =>
+      Math.min(segmento.a.x, segmento.b.x) - tolerancia <= alvo.x
+      && Math.max(segmento.a.x, segmento.b.x) + tolerancia >= alvo.x
+      && Math.min(segmento.a.y, segmento.b.y) - tolerancia <= alvo.y
+      && Math.max(segmento.a.y, segmento.b.y) + tolerancia >= alvo.y)
+    : [];
+
+  if (ativos.includes("interseccao")) {
+    for (let i = 0; i < proximos.length; i += 1) {
+      for (let j = i + 1; j < proximos.length; j += 1) {
+        if (proximos[i].elementoId === proximos[j].elementoId) continue;
+        const cruzamento = interseccao(proximos[i], proximos[j]);
+        if (cruzamento && perto(cruzamento)) {
+          candidatos.push({ tipo: "interseccao", ponto: cruzamento, elementoId: proximos[i].elementoId });
+        }
+      }
+    }
+  }
+
+  if (ativos.includes("perpendicular") && opcoes.origem) {
+    for (const segmento of proximos) {
+      const pe = pePerpendicular(opcoes.origem, segmento);
+      if (pe && perto(pe)) candidatos.push({ tipo: "perpendicular", ponto: pe, elementoId: segmento.elementoId });
+    }
+  }
+
+  if (!candidatos.length) return naMalha;
+  // Prioridade primeiro, distância como desempate: o extremo a 4 mm vence o meio a 2 mm,
+  // porque é no extremo que a parede precisa fechar.
+  candidatos.sort((um, outro) => {
+    const ordem = TIPOS_ENCAIXE.indexOf(um.tipo) - TIPOS_ENCAIXE.indexOf(outro.tipo);
+    return ordem !== 0 ? ordem : distancia(um.ponto, alvo) - distancia(outro.ponto, alvo);
+  });
+  return candidatos[0];
+}
+
+/** Trava ortogonal: prende o traço no horizontal ou no vertical, o que estiver mais
+ *  perto. Parede quase reta é parede torta, e ninguém percebe olhando a tela. */
+export function ortogonal(origem: Ponto, alvo: Ponto): Ponto {
+  return Math.abs(alvo.x - origem.x) >= Math.abs(alvo.y - origem.y)
+    ? { x: alvo.x, y: origem.y }
+    : { x: origem.x, y: alvo.y };
+}
+
+// ## Entrada por teclado
+//
+// Quatro formas, todas as que se usa na prática:
+//
+//   3150          comprimento na direção em que o cursor está
+//   3150<90       comprimento e ângulo em graus
+//   @3000,1500    deslocamento relativo, em x e y
+//   3,15m         qualquer das anteriores aceita unidade e vírgula decimal
+//
+// O ângulo é o do desenho técnico: 0° para a direita, crescendo no sentido anti-horário.
+// Na tela o eixo Y aponta para baixo, então 90° sobe — a conversão fica aqui, uma vez só.
+
+const FATOR: Record<string, number> = { mm: 1, cm: 10, m: 1000, "": 1 };
+
+export function lerMedida(texto: string): number | null {
+  const limpo = texto.trim().toLowerCase().replace(/\s+/g, "");
+  const casado = /^(-?\d+(?:[.,]\d+)?)(mm|cm|m)?$/.exec(limpo);
+  if (!casado) return null;
+  const numero = Number.parseFloat(casado[1].replace(",", "."));
+  if (!Number.isFinite(numero)) return null;
+  return numero * FATOR[casado[2] ?? ""];
+}
+
+export type EntradaResolvida = { ponto: Ponto; comprimentoMm: number; anguloGraus: number };
+
+/**
+ * Converte o que foi digitado no ponto de destino, a partir da origem do traço.
+ *
+ * `direcao` é para onde o cursor está apontando e só é usada quando a pessoa digita
+ * apenas o comprimento — é o atalho mais usado: apontar e dizer quanto.
+ */
+export function resolverEntrada(origem: Ponto, texto: string, direcao?: Ponto | null): EntradaResolvida | null {
+  const limpo = texto.trim().toLowerCase().replace(/\s+/g, "");
+  if (!limpo) return null;
+
+  const montar = (destino: Ponto): EntradaResolvida => {
+    const ponto = inteiro(destino);
+    const dx = ponto.x - origem.x;
+    const dy = ponto.y - origem.y;
+    return {
+      ponto,
+      comprimentoMm: Math.round(Math.hypot(dx, dy)),
+      // De volta ao ângulo do desenho técnico, com o eixo Y desinvertido.
+      anguloGraus: ((Math.round(Math.atan2(-dy, dx) * 180 / Math.PI) % 360) + 360) % 360,
+    };
+  };
+
+  if (limpo.startsWith("@")) {
+    const partes = limpo.slice(1).split(/[;,]/);
+    if (partes.length !== 2) return null;
+    // Vírgula é separador aqui, então a decimal do par relativo é o ponto. Aceitar os
+    // dois papéis para a vírgula na mesma expressão tornaria "@1,5,2" ambíguo.
+    const dx = lerMedida(partes[0].replace(",", "."));
+    const dy = lerMedida(partes[1].replace(",", "."));
+    if (dx === null || dy === null) return null;
+    return montar({ x: origem.x + dx, y: origem.y - dy });
+  }
+
+  const comAngulo = limpo.split("<");
+  if (comAngulo.length === 2) {
+    const comprimento = lerMedida(comAngulo[0]);
+    const graus = Number.parseFloat(comAngulo[1].replace(",", "."));
+    if (comprimento === null || !Number.isFinite(graus)) return null;
+    const radianos = graus * Math.PI / 180;
+    return montar({
+      x: origem.x + comprimento * Math.cos(radianos),
+      y: origem.y - comprimento * Math.sin(radianos),
+    });
+  }
+
+  const comprimento = lerMedida(limpo);
+  if (comprimento === null) return null;
+  const dx = (direcao?.x ?? origem.x + 1) - origem.x;
+  const dy = (direcao?.y ?? origem.y) - origem.y;
+  const modulo = Math.hypot(dx, dy);
+  // Sem direção utilizável, o traço sai para a direita: é o padrão de todo CAD e não
+  // deixa a digitação sem resposta.
+  if (modulo === 0) return montar({ x: origem.x + comprimento, y: origem.y });
+  return montar({ x: origem.x + dx / modulo * comprimento, y: origem.y + dy / modulo * comprimento });
+}
+
+/** Move um vértice de um cômodo ou traço, sem tocar nos outros. Refazer o cômodo inteiro
+ *  para corrigir um canto é o que faz ninguém corrigir o canto. */
+export function moverVertice(elemento: Elemento, indice: number, destino: Ponto): Elemento {
+  if (elemento.tipo !== "comodo" && elemento.tipo !== "traco") return elemento;
+  if (indice < 0 || indice >= elemento.pontos.length) return elemento;
+  const pontos = elemento.pontos.map((ponto, i) => i === indice ? inteiro(destino) : ponto);
+  return { ...elemento, pontos };
+}
+
+/** Vértices que a tela deve oferecer para arrastar, com o índice de cada um. */
+export function verticesDe(elemento: Elemento): { indice: number; ponto: Ponto }[] {
+  if (elemento.tipo !== "comodo" && elemento.tipo !== "traco") return [];
+  return elemento.pontos.map((ponto, indice) => ({ indice, ponto }));
+}

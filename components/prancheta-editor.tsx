@@ -4,15 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Blinds, Circle, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
   Lock, LockOpen, Minus, MousePointer2, PencilLine, Plug, Redo2, Ruler, Save, Sofa,
-  Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
+  Magnet, Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { exportarDxf } from "@/lib/integrations/dxf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Encaixe, TIPOS_ENCAIXE, TipoEncaixe, encaixeLabels, encaixePerto, moverVertice,
+  ortogonal, resolverEntrada, verticesDe,
+} from "@/lib/prancheta-cad";
 import {
   Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada,
   comprimentoM, disciplinaLabels, elementosVisiveis, encaixar, exportarSvg, glifoDoSimbolo,
@@ -209,6 +214,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const [sujo, definirSujo] = useState(false);
   const [salvando, definirSalvando] = useState(false);
   const [conflito, definirConflito] = useState(false);
+  const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>([...TIPOS_ENCAIXE]);
+  const [orto, definirOrto] = useState(false);
+  const [entrada, definirEntrada] = useState("");
+  const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
   const [importando, definirImportando] = useState(false);
   const [unidadeImportacao, definirUnidadeImportacao] = useState("");
@@ -220,6 +229,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const arrastando = useRef<{ id: string; de: { x: number; y: number } } | null>(null);
   const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
+  const verticeArrastado = useRef<{ id: string; indice: number } | null>(null);
 
   const camadaAtiva = camadaDaFerramenta[ferramenta];
   const bloqueada = camadaBloqueada(documento, camadaAtiva);
@@ -233,6 +243,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     definirRefeitos([]);
     definirDocumento(proximo);
     definirSujo(true);
+  }, [documento]);
+
+  /** Um ponto de desfazer antes de um arrasto. O arrasto em si altera sem empilhar a
+   *  cada quadro, senão desfazer voltaria um pixel por vez; sem esta marca no começo,
+   *  porém, mover não teria volta nenhuma. */
+  const marcarHistorico = useCallback(() => {
+    definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
+    definirRefeitos([]);
   }, [documento]);
 
   const acrescentar = useCallback((elemento: Elemento) => {
@@ -303,9 +321,25 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     return { x: Math.round(ponto.x), y: Math.round(ponto.y) };
   }, []);
 
-  const encaixado = useCallback((ponto: { x: number; y: number }) => ({
-    x: encaixar(ponto.x, documento.malhaMm), y: encaixar(ponto.y, documento.malhaMm),
-  }), [documento.malhaMm]);
+  /** Raio de captura em milímetros de desenho, derivado do zoom. O que a mão sente é a
+   *  distância na TELA: um raio fixo em milímetros seria impossível de acertar afastado
+   *  e agarraria tudo de perto. */
+  const toleranciaMm = useCallback(() => {
+    const largura = svgRef.current?.getBoundingClientRect().width ?? 0;
+    return largura > 0 ? vista.largura / largura * 14 : vista.largura / 80;
+  }, [vista.largura]);
+
+  const encaixarEm = useCallback((bruto: { x: number; y: number }, origem?: { x: number; y: number } | null) => {
+    const alvo = orto && origem ? ortogonal(origem, bruto) : bruto;
+    const encaixe = encaixePerto(documento, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe });
+    // Com a trava ortogonal ligada, só vale o encaixe que não sai do eixo — senão a
+    // trava seria desfeita pelo próprio encaixe, calada.
+    if (orto && origem && encaixe.tipo !== "malha"
+      && encaixe.ponto.x !== origem.x && encaixe.ponto.y !== origem.y) {
+      return { tipo: "malha" as const, ponto: { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) } };
+    }
+    return encaixe;
+  }, [ativosEncaixe, documento, orto, toleranciaMm]);
 
   const fundosPossiveis = useMemo(
     () => biblioteca.filter((item) => item.categoria === "fundo" || item.categoria === "referencia"),
@@ -375,12 +409,29 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     }
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
-    const ponto = encaixado(bruto);
+    const origem = pendentes.length ? pendentes[pendentes.length - 1] : null;
+    const encaixe = encaixarEm(bruto, origem);
+    const ponto = encaixe.ponto;
+    definirEncaixeAtual(encaixe);
 
     if (ferramenta === "selecionar") {
+      // Vértice antes de elemento: quem clica em cima de uma alça quer a alça. Testar o
+      // elemento primeiro tornaria a alça inalcançável, já que ela fica dentro dele.
+      if (selecionado && canEdit && !camadaBloqueada(documento, selecionado.camada)) {
+        const raio = toleranciaMm();
+        const alca = verticesDe(selecionado).find((vertice) =>
+          Math.hypot(vertice.ponto.x - bruto.x, vertice.ponto.y - bruto.y) <= raio);
+        if (alca) {
+          marcarHistorico();
+          verticeArrastado.current = { id: selecionado.id, indice: alca.indice };
+          (evento.target as Element).setPointerCapture?.(evento.pointerId);
+          return;
+        }
+      }
       const alvo = elementoNoPonto(documento, bruto.x, bruto.y);
       definirSelecao(alvo?.id ?? null);
       if (alvo && canEdit) {
+        marcarHistorico();
         arrastando.current = { id: alvo.id, de: ponto };
         (evento.target as Element).setPointerCapture?.(evento.pointerId);
       }
@@ -430,8 +481,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     }
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
-    const ponto = encaixado(bruto);
+    const origem = pendentes.length ? pendentes[pendentes.length - 1] : arrastando.current?.de ?? null;
+    const encaixe = encaixarEm(bruto, origem);
+    const ponto = encaixe.ponto;
     definirCursor(ponto);
+    definirEncaixeAtual(encaixe);
+
+    if (verticeArrastado.current) {
+      const { id, indice } = verticeArrastado.current;
+      definirDocumento((anterior) => ({
+        ...anterior,
+        elementos: anterior.elementos.map((item) => item.id === id ? moverVertice(item, indice, ponto) : item),
+      }));
+      definirSujo(true);
+      return;
+    }
 
     if (arrastando.current) {
       const { id, de } = arrastando.current;
@@ -456,15 +520,43 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
 
   function aoSoltar() {
     if (panorama.current) { panorama.current = null; return; }
-    if (arrastando.current) {
-      arrastando.current = null;
-      definirHistorico((anterior) => anterior.slice(-LIMITE_HISTORICO));
-      return;
-    }
+    if (verticeArrastado.current) { verticeArrastado.current = null; return; }
+    if (arrastando.current) { arrastando.current = null; return; }
     if (ferramenta === "traco" && pendentes.length > 1) {
       acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "traco", pontos: pendentes, espessuraMm: 30 });
       definirPendentes([]);
     }
+  }
+
+  /** Confirma o traço pelo que foi digitado, a partir do último ponto marcado. Ninguém
+   *  desenha parede de 3,15 m arrastando o mouse até acertar. */
+  function confirmarEntrada() {
+    const origem = pendentes.length ? pendentes[pendentes.length - 1] : null;
+    if (!origem) { toast.error("Marque o ponto de partida na prancha antes de digitar a medida."); return; }
+    const resolvido = resolverEntrada(origem, entrada, cursor);
+    if (!resolvido) {
+      toast.error("Não entendi a medida. Use 3150, 3150<90, @3000,1500 ou 3,15m.");
+      return;
+    }
+    const destino = resolvido.ponto;
+    if (ferramenta === "parede") {
+      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "parede", a: origem, b: destino, espessuraMm: 150 });
+      definirPendentes([destino]);
+    } else if (ferramenta === "cota") {
+      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "cota", a: origem, b: destino, deslocamentoMm: 400 });
+      definirPendentes([]);
+    } else if (ferramenta === "comodo") {
+      definirPendentes((anterior) => [...anterior, destino]);
+    } else {
+      toast.error("A medida digitada vale para parede, cômodo e cota.");
+      return;
+    }
+    definirEntrada("");
+  }
+
+  function alternarEncaixe(tipo: TipoEncaixe) {
+    definirAtivosEncaixe((anterior) => anterior.includes(tipo)
+      ? anterior.filter((item) => item !== tipo) : [...anterior, tipo]);
   }
 
   function fecharComodo() {
@@ -482,7 +574,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         if (evento.shiftKey) refazer(); else desfazer();
         return;
       }
-      if (evento.key === "Escape") { definirPendentes([]); definirSelecao(null); return; }
+      if (evento.key === "Escape") { definirPendentes([]); definirSelecao(null); definirEntrada(""); return; }
+      if (evento.key.toLowerCase() === "o") { evento.preventDefault(); definirOrto((anterior) => !anterior); return; }
       if (evento.key === "Enter" && ferramenta === "comodo") { evento.preventDefault(); fecharComodo(); return; }
       if ((evento.key === "Delete" || evento.key === "Backspace") && selecao && canEdit) {
         evento.preventDefault(); apagar(selecao); return;
@@ -583,14 +676,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     }
   }
 
-  function exportar() {
-    const conteudo = exportarSvg(documento, { titulo: nome, origem: window.location.origin });
-    const url = URL.createObjectURL(new Blob([conteudo], { type: "image/svg+xml" }));
+  function baixar(conteudo: string, tipo: string, extensao: string) {
+    const url = URL.createObjectURL(new Blob([conteudo], { type: tipo }));
     const ligacao = document.createElement("a");
     ligacao.href = url;
-    ligacao.download = `${nome.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "prancha"}.svg`;
+    ligacao.download = `${nome.replace(/[^\p{L}\p{N} _-]/gu, "").trim() || "prancha"}.${extensao}`;
     ligacao.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportarParaCad() {
+    // Só o visível, o mesmo critério da tela e do SVG: as três exportações precisam
+    // concordar sobre o que está no desenho.
+    baixar(exportarDxf(documento, { visiveis }), "image/vnd.dxf", "dxf");
+  }
+
+  function exportar() {
+    baixar(exportarSvg(documento, { titulo: nome, origem: window.location.origin }), "image/svg+xml", "svg");
   }
 
   const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
@@ -617,7 +719,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar DXF
           </Button>
         </>}
-        <Button variant="outline" size="sm" onClick={exportar}><Download />Exportar SVG</Button>
+        <Button variant="outline" size="sm" onClick={exportarParaCad}><Download />Exportar DXF</Button>
+        <Button variant="outline" size="sm" onClick={exportar}><Download />SVG</Button>
         {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>
           {salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Gravar
         </Button>}
@@ -736,6 +839,22 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         </Button>}
 
         <div className="space-y-2 border-t border-hoikos-200 pt-3">
+          <p className="eyebrow text-hoikos-600">Encaixe</p>
+          <div className="grid grid-cols-2 gap-1">
+            {TIPOS_ENCAIXE.filter((tipo) => tipo !== "malha").map((tipo) => <button key={tipo} type="button"
+              onClick={() => alternarEncaixe(tipo)} aria-pressed={ativosEncaixe.includes(tipo)}
+              className="rounded-md border border-hoikos-200 bg-white px-2 py-1.5 text-xs text-hoikos-700 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+              {encaixeLabels[tipo]}
+            </button>)}
+          </div>
+          <button type="button" onClick={() => definirOrto((anterior) => !anterior)} aria-pressed={orto}
+            title="Trava ortogonal — tecla O"
+            className="flex w-full items-center justify-center gap-2 rounded-md border border-hoikos-200 bg-white px-2 py-2 text-xs text-hoikos-700 aria-pressed:border-hoikos-gold aria-pressed:bg-hoikos-gold aria-pressed:text-white">
+            <Magnet className="size-3.5" />Trava ortogonal (O)
+          </button>
+        </div>
+
+        <div className="space-y-2 border-t border-hoikos-200 pt-3">
           <Label htmlFor="prancheta-malha" className="text-xs">Malha de encaixe</Label>
           <NativeSelect id="prancheta-malha" value={String(documento.malhaMm)}
             onChange={(evento) => { definirDocumento((anterior) => ({ ...anterior, malhaMm: Number(evento.target.value) })); definirSujo(true); }}>
@@ -772,13 +891,47 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
           {pendentes.length > 0 && <polyline
             points={[...pendentes, ...(cursor ? [cursor] : [])].map((ponto) => `${ponto.x},${ponto.y}`).join(" ")}
             fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140" />}
+          {/* Alças dos vértices do elemento selecionado: corrigir um canto sem refazer o
+              cômodo inteiro é o que faz alguém de fato corrigir o canto. */}
+          {canEdit && selecionado && verticesDe(selecionado).map((vertice) => <rect key={vertice.indice}
+            x={vertice.ponto.x - vista.largura / 220} y={vertice.ponto.y - vista.largura / 220}
+            width={vista.largura / 110} height={vista.largura / 110}
+            fill="#F4F2E9" stroke="#846100" strokeWidth={vista.largura / 900} />)}
+          {/* A marca do encaixe diz em QUE ponto o traço vai cair, antes de o clique
+              acontecer. Sem ela o encaixe age por baixo e a pessoa não confia nele. */}
+          {encaixeAtual && encaixeAtual.tipo !== "malha" && <g stroke="#846100" fill="none" strokeWidth={vista.largura / 700}>
+            <rect x={encaixeAtual.ponto.x - vista.largura / 130} y={encaixeAtual.ponto.y - vista.largura / 130}
+              width={vista.largura / 65} height={vista.largura / 65} />
+            {encaixeAtual.tipo === "interseccao" && <>
+              <line x1={encaixeAtual.ponto.x - vista.largura / 130} y1={encaixeAtual.ponto.y - vista.largura / 130}
+                x2={encaixeAtual.ponto.x + vista.largura / 130} y2={encaixeAtual.ponto.y + vista.largura / 130} />
+              <line x1={encaixeAtual.ponto.x + vista.largura / 130} y1={encaixeAtual.ponto.y - vista.largura / 130}
+                x2={encaixeAtual.ponto.x - vista.largura / 130} y2={encaixeAtual.ponto.y + vista.largura / 130} />
+            </>}
+          </g>}
           {cursor && ferramenta !== "selecionar" && <circle cx={cursor.x} cy={cursor.y} r={vista.largura / 160} fill="#846100" />}
         </svg>
-        <p className="flex flex-wrap items-center gap-3 border-t border-hoikos-200 px-3 py-2 text-xs text-hoikos-500">
-          <Grid2x2 aria-hidden="true" className="size-3.5" />
-          {cursor ? `${(cursor.x / 1000).toFixed(2).replace(".", ",")} m · ${(cursor.y / 1000).toFixed(2).replace(".", ",")} m` : "Mova o cursor sobre a prancha"}
-          <span>Arraste com Shift ou com o botão direito para deslocar a vista.</span>
-        </p>
+        <div className="flex flex-wrap items-center gap-3 border-t border-hoikos-200 px-3 py-2 text-xs text-hoikos-500">
+          <span className="flex items-center gap-1.5">
+            <Grid2x2 aria-hidden="true" className="size-3.5" />
+            {cursor ? `${(cursor.x / 1000).toFixed(2).replace(".", ",")} m · ${(cursor.y / 1000).toFixed(2).replace(".", ",")} m` : "Mova o cursor sobre a prancha"}
+          </span>
+          {encaixeAtual && encaixeAtual.tipo !== "malha" && <span className="font-medium text-hoikos-gold">{encaixeLabels[encaixeAtual.tipo]}</span>}
+          {orto && <span className="font-medium text-hoikos-gold">Ortogonal</span>}
+          {pendentes.length > 0 && cursor && <span>
+            {metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
+          </span>}
+          {canEdit && <form className="ml-auto flex items-center gap-2"
+            onSubmit={(evento) => { evento.preventDefault(); confirmarEntrada(); }}>
+            <Label htmlFor="prancheta-medida" className="text-xs">Medida</Label>
+            <Input id="prancheta-medida" value={entrada} onChange={(evento) => definirEntrada(evento.target.value)}
+              placeholder="3150 · 3150<90 · @3000,1500" className="h-8 w-56 text-xs"
+              disabled={!pendentes.length} />
+            <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!pendentes.length || !entrada.trim()}>
+              Aplicar
+            </Button>
+          </form>}
+        </div>
       </div>
 
       <aside className="prancheta-painel">

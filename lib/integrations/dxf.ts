@@ -392,3 +392,158 @@ export function versaoDoDwg(bytes: Uint8Array): { codigo: string; nome: string }
   if (!/^AC10\d\d$/.test(codigo)) return null;
   return { codigo, nome: VERSOES_DWG[codigo] ?? "versão não catalogada" };
 }
+
+// ## Escrita
+//
+// O caminho de volta. Sem ele a prancheta é uma ilha: o desenho entra e não sai para o
+// programa em que o resto do escritório trabalha.
+//
+// A saída é DXF R12 ASCII, que é o dialeto mais antigo e por isso o que TODO programa
+// abre — AutoCAD, BricsCAD, LibreCAD, QCAD, SketchUp, Revit. Versões novas trazem
+// recursos que este desenho não usa e fecham a porta de programas antigos: escolher a
+// versão mais capaz aqui seria pagar compatibilidade por nada.
+//
+// O eixo Y volta a apontar para cima, desfazendo a inversão da leitura. Exportar sem
+// desfazer devolveria a planta espelhada para quem a mandou.
+
+function par(codigo: number, valor: string | number) {
+  return `${codigo}\n${valor}`;
+}
+
+// O DXF R12 não tem onde guardar acento, e nome de camada não aceita alguns sinais.
+// Trocar é melhor do que gerar um arquivo que o CAD recusa a abrir.
+function nomeDeCamada(nome: string, usados: Map<string, string>) {
+  const existente = usados.get(nome);
+  if (existente) return existente;
+  const base = nome.normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toUpperCase().replace(/[^A-Z0-9_$-]/g, "-").replace(/^-+|-+$/g, "").slice(0, 31) || "CAMADA";
+  let candidato = base;
+  let n = 2;
+  const tomados = new Set(usados.values());
+  while (tomados.has(candidato)) { candidato = `${base.slice(0, 28)}-${n}`; n += 1; }
+  usados.set(nome, candidato);
+  return candidato;
+}
+
+const numeroDxf = (valor: number) => Number.isInteger(valor) ? String(valor) : valor.toFixed(4);
+
+/**
+ * Escreve o documento como DXF R12 ASCII, em milímetros.
+ *
+ * Só sai o que está em camada visível — o mesmo critério da tela e da exportação em SVG,
+ * para que as três concordem. Cômodo vira polilinha fechada; a área calculada não vai
+ * junto, porque no DXF ela seria texto solto que envelhece assim que alguém mover uma
+ * parede. Símbolo e mobília saem como a geometria que representam, não como bloco: bloco
+ * exigiria uma tabela de definição que este desenho não mantém.
+ */
+export function exportarDxf(documento: { camadas: Camada[]; elementos: Elemento[] },
+  opcoes: { visiveis?: Elemento[] } = {}): string {
+  const elementos = opcoes.visiveis ?? documento.elementos;
+  const nomes = new Map<string, string>();
+  const camadaDoElemento = new Map<string, string>();
+  for (const camada of documento.camadas) camadaDoElemento.set(camada.id, nomeDeCamada(camada.nome, nomes));
+  const nomeDe = (id: string) => camadaDoElemento.get(id) ?? "0";
+
+  const linhas: string[] = [];
+  const escrever = (codigo: number, valor: string | number) => linhas.push(par(codigo, valor));
+
+  escrever(0, "SECTION"); escrever(2, "HEADER");
+  // 4 = milímetro. É o que torna a medida do arquivo inequívoca para quem o abrir.
+  escrever(9, "$INSUNITS"); escrever(70, 4);
+  escrever(9, "$MEASUREMENT"); escrever(70, 1);
+  escrever(0, "ENDSEC");
+
+  escrever(0, "SECTION"); escrever(2, "TABLES");
+  escrever(0, "TABLE"); escrever(2, "LAYER"); escrever(70, documento.camadas.length + 1);
+  escrever(0, "LAYER"); escrever(2, "0"); escrever(70, 0); escrever(62, 7); escrever(6, "CONTINUOUS");
+  for (const camada of documento.camadas) {
+    escrever(0, "LAYER"); escrever(2, nomeDe(camada.id));
+    escrever(70, 0); escrever(62, camada.visivel ? 7 : -7); escrever(6, "CONTINUOUS");
+  }
+  escrever(0, "ENDTAB"); escrever(0, "ENDSEC");
+
+  escrever(0, "SECTION"); escrever(2, "ENTITIES");
+
+  // Y para cima de novo: é aqui, e só aqui, que a inversão da leitura é desfeita.
+  const ex = (valor: number) => numeroDxf(valor);
+  const ey = (valor: number) => numeroDxf(-valor);
+
+  const linha = (camada: string, a: { x: number; y: number }, b: { x: number; y: number }) => {
+    escrever(0, "LINE"); escrever(8, camada);
+    escrever(10, ex(a.x)); escrever(20, ey(a.y)); escrever(30, 0);
+    escrever(11, ex(b.x)); escrever(21, ey(b.y)); escrever(31, 0);
+  };
+  const polilinha = (camada: string, pontos: { x: number; y: number }[], fechada: boolean) => {
+    escrever(0, "LWPOLYLINE"); escrever(8, camada);
+    escrever(90, pontos.length); escrever(70, fechada ? 1 : 0);
+    for (const ponto of pontos) { escrever(10, ex(ponto.x)); escrever(20, ey(ponto.y)); }
+  };
+  const texto = (camada: string, posicao: { x: number; y: number }, conteudo: string, alturaMm: number, giro: number) => {
+    escrever(0, "TEXT"); escrever(8, camada);
+    escrever(10, ex(posicao.x)); escrever(20, ey(posicao.y)); escrever(30, 0);
+    escrever(40, numeroDxf(alturaMm));
+    escrever(1, conteudo.replace(/[\r\n]+/g, " ").slice(0, 250));
+    escrever(50, numeroDxf(((-giro % 360) + 360) % 360));
+  };
+
+  for (const elemento of elementos) {
+    const camada = nomeDe(elemento.camada);
+    switch (elemento.tipo) {
+      case "parede":
+      case "cota":
+        linha(camada, elemento.a, elemento.b);
+        break;
+      case "comodo":
+        polilinha(camada, elemento.pontos, true);
+        break;
+      case "traco":
+        polilinha(camada, elemento.pontos, false);
+        break;
+      case "abertura": {
+        const meia = elemento.larguraMm / 2;
+        const radianos = elemento.rotacaoGraus * Math.PI / 180;
+        const girar = (dx: number, dy: number) => ({
+          x: elemento.posicao.x + dx * Math.cos(radianos) - dy * Math.sin(radianos),
+          y: elemento.posicao.y + dx * Math.sin(radianos) + dy * Math.cos(radianos),
+        });
+        linha(camada, girar(-meia, 0), girar(meia, 0));
+        break;
+      }
+      case "mobilia":
+      case "imagem": {
+        const meiaLargura = elemento.larguraMm / 2;
+        const meiaAltura = elemento.alturaMm / 2;
+        const radianos = elemento.rotacaoGraus * Math.PI / 180;
+        const girar = (dx: number, dy: number) => ({
+          x: elemento.posicao.x + dx * Math.cos(radianos) - dy * Math.sin(radianos),
+          y: elemento.posicao.y + dx * Math.sin(radianos) + dy * Math.cos(radianos),
+        });
+        polilinha(camada, [
+          girar(-meiaLargura, -meiaAltura), girar(meiaLargura, -meiaAltura),
+          girar(meiaLargura, meiaAltura), girar(-meiaLargura, meiaAltura),
+        ], true);
+        if (elemento.tipo === "mobilia" && elemento.rotulo) {
+          texto(camada, elemento.posicao, elemento.rotulo, Math.max(50, elemento.alturaMm / 6), elemento.rotacaoGraus);
+        }
+        break;
+      }
+      case "simbolo": {
+        // Círculo de referência com o rótulo ao lado: o glifo da tela é desenho de tela,
+        // e reproduzi-lo em segmentos encheria o arquivo de traço sem significado. O
+        // ponto e o nome dele são o que o outro programa precisa.
+        escrever(0, "CIRCLE"); escrever(8, camada);
+        escrever(10, ex(elemento.posicao.x)); escrever(20, ey(elemento.posicao.y)); escrever(30, 0);
+        escrever(40, 120);
+        texto(camada, { x: elemento.posicao.x + 180, y: elemento.posicao.y }, elemento.rotulo ?? elemento.familia, 150, 0);
+        break;
+      }
+      case "texto":
+        texto(camada, elemento.posicao, elemento.texto, elemento.alturaMm, elemento.rotacaoGraus);
+        break;
+    }
+  }
+
+  escrever(0, "ENDSEC");
+  escrever(0, "EOF");
+  return `${linhas.join("\n")}\n`;
+}
