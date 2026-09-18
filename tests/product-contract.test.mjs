@@ -171,7 +171,7 @@ test("uses only the H.OIKOS master palette in the theme", async () => {
   // primeiras já eram usadas; as três últimas existiam no guia e não tinham token, o que
   // prendia a interface a um marrom só. O guarda continua fechado: qualquer cor fora
   // desta lista quebra o teste.
-  const PALETA = ["#000000", "#38301B", "#B5B19E", "#F7F7F0", "#1C190F", "#F4F2E9", "#846100"];
+  const PALETA = ["#000000", "#38301B", "#B5B19E", "#F7F7F0", "#1C190F", "#F4F2E9", "#846100", "#FFFFFF"];
   assert.deepEqual([...new Set(css.match(/#[0-9a-f]{6}/gi))].sort(), PALETA.sort());
   assert.doesNotMatch(css, /gradient\(|blueprint-grid/);
   for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page", "budgets-workspace", "finance-workspace", "diary-workspace", "platform-control", "portal-manager", "portal-shared", "team-access-manager"]) {

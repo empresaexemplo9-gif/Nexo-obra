@@ -2,7 +2,7 @@
 
 > **H.OIKOS — Ecossistema para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta é preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E`, off-white `#F7F7F0`, marrom quase preto `#1C190F`, off-white quente `#F4F2E9` e dourado `#846100` — este último reservado a acento, por ser a única cor de matiz diferente no guia. A tipografia usa a **Ador Hairline licenciada** nos títulos, servida de `public/fonts/` nos cinco pesos recebidos (Light, Black e três itálicos); a Cormorant fica como reserva. A Barium continua sem licença web e a Jost segue no lugar dela. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
+A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta usa branco `#FFFFFF` como fundo predominante e preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E`, off-white `#F7F7F0`, marrom quase preto `#1C190F`, off-white quente `#F4F2E9` e dourado `#846100` — este último reservado a acento, por ser a única cor de matiz diferente no guia. A tipografia usa a **Ador Hairline licenciada** nos títulos, servida de `public/fonts/` nos cinco pesos recebidos (Light, Black e três itálicos); a Cormorant fica como reserva. A Barium continua sem licença web e a Jost segue no lugar dela. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
 
 Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
@@ -20,7 +20,7 @@ flowchart TD
 ## O que já está no código
 
 - Ativador de assinatura por API e painel de parceiros/acessos no superadmin: **preço 1:1 com a Drap, sem acréscimo da H.OIKOS** (`pricingMultiplierBps: 10000`), confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. Cada plataforma carrega o próprio custo, isolado: a H.OIKOS não revende a mensalidade da Drap com margem. O multiplicador de 1,5 foi descontinuado e só permanece no código para reconhecer callbacks de ativações antigas já emitidas. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
-- Painel “Visão geral” com prioridades, trabalhos ativos, funil e resumo financeiro.
+- Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em branco, marrom e off-white, com profundidade e acentos dourados.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.

@@ -10,7 +10,7 @@ import {
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
-import { taskResponse, taskSelect, type TaskRow } from "../route";
+import { taskResponse, taskSelect, type TaskRow } from "@/lib/server/tasks-records";
 
 export const dynamic = "force-dynamic";
 

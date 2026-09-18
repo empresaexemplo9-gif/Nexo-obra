@@ -10,7 +10,7 @@ import {
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
-import { opportunityResponse, opportunitySelect, type OpportunityRow } from "../route";
+import { opportunityResponse, opportunitySelect, type OpportunityRow } from "@/lib/server/crm-records";
 
 export const dynamic = "force-dynamic";
 

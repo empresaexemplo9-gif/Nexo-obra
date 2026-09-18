@@ -10,7 +10,7 @@ import {
   requireOrganizationContext,
   validationError,
 } from "@/lib/server/backend";
-import { projectResponse, projectSelect, type ProjectRow } from "../route";
+import { projectResponse, projectSelect, type ProjectRow } from "@/lib/server/projects-records";
 
 export const dynamic = "force-dynamic";
 

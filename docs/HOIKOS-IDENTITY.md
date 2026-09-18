@@ -3,11 +3,12 @@
 Fonte: “GUIA DA IDENTIDADE VISUAL — H.OIKOS.pdf”, enviado pelo proprietário da marca.
 O manual completo não é publicado como asset; só as aplicações autorizadas ficam no repositório.
 
-## Paleta oficial (página 15)
+## Paleta de aplicação confirmada pelo proprietário
 
 | Papel na interface | Nome | HEX |
 | --- | --- | --- |
-| Contraste extremo, alertas críticos | Preto | `#000000` |
+| Fundo predominante de página e superfície | Branco | `#FFFFFF` |
+| Texto e contraste extremo | Preto | `#000000` |
 | Cor principal, superfícies escuras, texto | Marrom profundo | `#38301B` |
 | Apoio, bordas, metadados sobre fundo escuro | Acinzentado neutro | `#B5B19E` |
 | Fundo geral, texto sobre fundo escuro | Off-white | `#F7F7F0` |
@@ -15,7 +16,7 @@ O manual completo não é publicado como asset; só as aplicações autorizadas 
 | Superfície destacada sobre o fundo | Off-white quente | `#F4F2E9` |
 | **Acento**: o que pede atenção — vencido, bloqueado, pausado | Dourado | `#846100` |
 
-Todo tom da interface é uma dessas sete cores ou uma mistura entre elas (`color-mix`).
+Todo tom da interface é uma dessas oito cores ou uma mistura entre elas (`color-mix`).
 
 As três últimas saíram da leitura do arquivo do guia oficial e não tinham token antes, o
 que prendia a interface a um marrom só — `hoikos-600` até `hoikos-900` são todos `#38301B`.
@@ -84,3 +85,7 @@ Ritmo tipográfico aplicado, espelhando as páginas do manual:
 Somente visual e de nomenclatura de produto. URLs, autenticação, permissões, dados, contratos de
 API e a integração financeira Drap permanecem intactos. Identificadores técnicos, nomes de tabela
 e códigos de erro não foram renomeados.
+
+## Composição da área de trabalho
+
+Branco predominante, menu em marrom principal e rodapé em marrom quase preto. O dourado aparece em ícones, seleção e ações pontuais. A visão geral separa a prioridade do dia, indicadores, primeiros cadastros e listas de tarefas/projetos reais. Superfícies quentes, bordas finas e sombras derivadas do marrom dão profundidade. A navegação e os formulários sobre fundo escuro têm contraste próprio; em celular, os painéis se empilham e os indicadores usam duas colunas.

@@ -96,6 +96,7 @@
      As quatro primeiras já eram usadas; as três seguintes estavam no guia e não tinham
      token, o que deixava a interface presa a um marrom só. */
   --hoikos-black: #000000;
+  --hoikos-white: #FFFFFF;
   --hoikos-earth: #38301B;
   --hoikos-stone: #B5B19E;
   --hoikos-paper: #F7F7F0;
@@ -113,11 +114,11 @@
      tela inteira lia como uma folha chapada. Agora o fundo recua para o off-white quente
      e a superfície avança para o mais claro: o cartão passa a existir por luz, não por
      borda. É o que dá profundidade sem sombra pesada, gradiente ou cor de fora da marca. */
-  --background: var(--hoikos-linen);
-  --foreground: var(--hoikos-earth);
-  --card: var(--hoikos-paper);
+  --background: var(--hoikos-white);
+  --foreground: var(--hoikos-black);
+  --card: var(--hoikos-white);
   --card-foreground: var(--hoikos-earth);
-  --popover: var(--hoikos-paper);
+  --popover: var(--hoikos-white);
   --popover-foreground: var(--hoikos-earth);
   --primary: var(--hoikos-earth);
   --primary-foreground: var(--hoikos-paper);
@@ -186,7 +187,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --color-white: var(--hoikos-paper);
+  --color-white: var(--hoikos-white);
   --color-black: var(--hoikos-black);
   --color-hoikos-50: var(--hoikos-paper);
   --color-hoikos-100: var(--secondary);
@@ -214,7 +215,7 @@
 * { border-color: var(--border); }
 html { background: var(--background); color-scheme: light; }
 body {
-  min-width: 320px;
+  min-width: 0;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);

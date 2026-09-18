@@ -23,7 +23,12 @@ const { permissionsForRole } = await vite.ssrLoadModule("/lib/permissions.ts");
 after(async () => { await vite.close(); dom.cleanup(); });
 
 let container; let reactRoot;
-beforeEach(() => { container = null; reactRoot = null; });
+beforeEach(async () => {
+  if (reactRoot) await act(async () => { reactRoot.unmount(); });
+  container?.remove();
+  container = null;
+  reactRoot = null;
+});
 
 const vazio = { clients: [], projects: [], tasks: [], members: [] };
 function sessionFor(role, overrides = {}) {
@@ -68,6 +73,31 @@ async function abrir(session, extra) {
 }
 const menu = () => [...container.querySelectorAll('[data-sidebar="menu-button"], nav a, nav button')]
   .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim()).filter(Boolean);
+
+test("visão geral prioriza tarefas vencidas e mostra projetos persistidos", async () => {
+  await abrir(sessionFor("owner"), {
+    "/api/projects": { projects: [{ id: "p1", name: "Projeto de teste", code: "T-01", kind: "project", status: "active", phase: "Executivo", progressPercent: 45 }] },
+    "/api/tasks": { tasks: [
+      { id: "t2", projectId: "p1", projectName: "Projeto de teste", title: "Entrega futura", status: "todo", dueAt: "2099-01-01T12:00:00Z" },
+      { id: "t1", projectId: "p1", projectName: "Projeto de teste", title: "Entrega vencida", status: "todo", dueAt: "2020-01-01T12:00:00Z" },
+      { id: "t3", projectId: "p1", projectName: "Projeto de teste", title: "Entrega concluída", status: "done", dueAt: null },
+    ] },
+  });
+  assert.match(textOf(container), /Prazos que precisam de atenção/);
+  const rows = [...container.querySelectorAll(".hoikos-task-row")];
+  assert.equal(rows.length, 2);
+  assert.match(textOf(rows[0]), /Entrega vencida/);
+  assert.ok(container.querySelector('a[href="/projetos/p1"]'));
+  assert.equal(container.querySelector(".hoikos-start"), null);
+});
+
+test("primeiros passos respeitam acesso somente leitura", async () => {
+  await abrir(sessionFor("partner"));
+  const overview = container.querySelector(".hoikos-overview");
+  assert.ok(overview);
+  assert.equal(findByText(overview, /Novo projeto|Criar projeto|Cadastrar cliente/, "button"), null);
+  assert.ok(findByText(overview, "Ver lembretes", "button"));
+});
 
 test("o contratante enxerga todos os módulos do menu", async () => {
   await abrir(sessionFor("owner"));

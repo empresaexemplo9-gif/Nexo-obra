@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
-import { budgetResponse, budgetSelect, type BudgetRow } from "../route";
+import { budgetResponse, budgetSelect, type BudgetRow } from "@/lib/server/budgets-records";
 
 export const dynamic = "force-dynamic";
 
