@@ -152,3 +152,87 @@
   .hoikos-metric { padding: 1rem; }
   .hoikos-metric-value { font-size: 2.5rem; }
 }
+
+/* ## Ambiente de cada aba
+ *
+ * Cada módulo abre com uma fotografia própria. Ela entra por uma variável só,
+ * `--ambiente`, declarada no `<main data-module="…">`; tudo o que desenha imagem daqui
+ * para baixo lê essa variável. Trocar a foto de um módulo é uma linha.
+ *
+ * A foto aparece em dois lugares, e em nenhum deles por baixo de dado:
+ *
+ * 1. no bloco de título, ocupando a metade direita e dissolvendo para a esquerda, onde
+ *    está o texto — é a imagem em tamanho de verdade, que é o ponto de usá-la;
+ * 2. como lavagem no alto da área de trabalho, a 10% e desaparecendo antes de chegar às
+ *    tabelas.
+ *
+ * Fotografia atrás de número é ruído: quem lê um saldo ou uma linha de tabela não pode
+ * disputar atenção com folhagem. Por isso o cartão continua opaco e a lavagem morre
+ * antes dele. A imagem dá o ar do escritório; a leitura continua sendo do dado.
+ */
+.nexo-canvas { position: relative; isolation: isolate; }
+.nexo-canvas::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; z-index: -1;
+  height: min(58vh, 560px); pointer-events: none;
+  background-image: var(--ambiente); background-size: cover;
+  background-position: center 38%; background-repeat: no-repeat;
+  opacity: .1;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, color-mix(in srgb, #000 45%, transparent) 52%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, color-mix(in srgb, #000 45%, transparent) 52%, transparent 100%);
+}
+
+/* No bloco de título a foto substitui o estudo em traço: o desenho vetorial dizia
+ * "arquitetura" em tese; a fotografia diz qual trabalho é este. O recorte à esquerda é
+ * máscara, não caixa — borda dura sobre papel viraria adesivo colado. */
+.hoikos-module-heading::after, .hoikos-focus::after {
+  background-image: var(--ambiente, url('/brand/architectural-study.svg'));
+  background-size: cover;
+  background-position: center;
+  width: 52%;
+  opacity: 1;
+  /* Duas máscaras cruzadas: a foto some para a esquerda, onde está o texto, e some para
+   * baixo, onde fica o botão de ação. Sem a segunda, um botão cai em cima de folhagem ou
+   * de céu claro e deixa de ser legível justamente na hora de clicar. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 26%), linear-gradient(to bottom, #000 42%, transparent 96%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 26%), linear-gradient(to bottom, #000 42%, transparent 96%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+/* O painel de foco é marrom escuro e tem texto claro por cima: ali a foto recua para
+ * textura, senão vira um buraco de luz no meio do escuro. */
+.hoikos-focus::after { width: 50%; opacity: .5; }
+
+/* Qual foto para qual aba. O critério é o trabalho que a aba serve, não o enfeite:
+ * obra mostra obra, orçamento mostra material, portal mostra a entrada da casa. */
+.nexo-canvas[data-module="overview"]  { --ambiente: url('/ambientes/atelie.webp'); }
+.nexo-canvas[data-module="projects"]  { --ambiente: url('/ambientes/maquete.webp'); }
+.nexo-canvas[data-module="works"]     { --ambiente: url('/ambientes/obra.webp'); }
+.nexo-canvas[data-module="budgets"]   { --ambiente: url('/ambientes/amostras.webp'); }
+.nexo-canvas[data-module="schedule"]  { --ambiente: url('/ambientes/escada-travertino.webp'); }
+.nexo-canvas[data-module="diary"]     { --ambiente: url('/ambientes/casa-entardecer.webp'); }
+.nexo-canvas[data-module="portal"]    { --ambiente: url('/ambientes/entrada-arco.webp'); }
+.nexo-canvas[data-module="crm"]       { --ambiente: url('/ambientes/poltronas.webp'); }
+.nexo-canvas[data-module="finance"]   { --ambiente: url('/ambientes/fachada-varandas.webp'); }
+.nexo-canvas[data-module="team"]      { --ambiente: url('/ambientes/atelie.webp'); }
+.nexo-canvas[data-module="tasks"]     { --ambiente: url('/ambientes/escada-travertino.webp'); }
+.nexo-canvas[data-module="files"]     { --ambiente: url('/ambientes/biblioteca.webp'); }
+.nexo-canvas[data-module="sheets"]    { --ambiente: url('/ambientes/amostras.webp'); }
+.nexo-canvas[data-module="usage"]     { --ambiente: url('/ambientes/estar-piscina.webp'); }
+.nexo-canvas[data-module="reminders"] { --ambiente: url('/ambientes/poltronas.webp'); }
+.nexo-canvas[data-module="studio"]    { --ambiente: url('/ambientes/prancheta.webp'); }
+
+/* Quem pede mais contraste no sistema está pedindo para ler, não para contemplar. */
+@media (prefers-contrast: more) {
+  .nexo-canvas::before { display: none; }
+  .hoikos-module-heading::after, .hoikos-focus::after { opacity: .28; }
+}
+@media (max-width: 640px) {
+  /* Em 320 px a foto lateral engoliria a coluna de texto: vira fundo do bloco inteiro,
+     bem apagada, e o título continua legível. */
+  .nexo-canvas::before { height: 34vh; opacity: .08; }
+  .hoikos-module-heading::after {
+    width: 100%; opacity: .16;
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .hoikos-focus::after { width: 100%; opacity: .3; -webkit-mask-image: none; mask-image: none; }
+}
