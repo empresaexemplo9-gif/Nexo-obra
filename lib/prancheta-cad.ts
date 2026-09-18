@@ -1,4 +1,4 @@
-import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, pontosDoArco } from "@/lib/prancheta";
+import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, moverElemento, pontosDoArco } from "@/lib/prancheta";
 
 // O que separa desenhar de chutar.
 //
@@ -421,4 +421,193 @@ export function facesDaParede(elemento: Elemento): [Elemento, Elemento] | null {
   const um = paralelaDe(elemento, meia);
   const outro = paralelaDe(elemento, -meia);
   return um && outro ? [um, outro] : null;
+}
+
+// ## Editar sem redesenhar
+//
+// Espelhar, repetir e aparar são o que faz um desenho crescer sem crescer o trabalho.
+// Uma fachada simétrica desenhada duas vezes tem duas chances de erro; um pilar copiado
+// vinte vezes à mão tem vinte. E parede que passa do canto é o defeito mais comum de
+// planta feita às pressas — aparar existe para isso.
+
+/** Reflexão de um ponto no eixo que passa por `a` e `b`. */
+function refletir(ponto: Ponto, a: Ponto, b: Ponto): Ponto | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const modulo = Math.hypot(dx, dy);
+  if (modulo === 0) return null;
+  const ux = dx / modulo;
+  const uy = dy / modulo;
+  const vx = ponto.x - a.x;
+  const vy = ponto.y - a.y;
+  const projecao = vx * ux + vy * uy;
+  return inteiro({
+    x: a.x + 2 * projecao * ux - vx,
+    y: a.y + 2 * projecao * uy - vy,
+  });
+}
+
+const normalizarGraus = (graus: number) => ((Math.round(graus) % 360) + 360) % 360;
+
+/**
+ * Espelha um elemento no eixo dado por dois pontos.
+ *
+ * O giro acompanha: espelhar inverte a mão do desenho, e um símbolo refletido que
+ * mantivesse o mesmo ângulo apontaria para o lado errado. O `id` é o do original — quem
+ * chama dá um novo, porque dois elementos com o mesmo identificador se apagam.
+ */
+export function espelhar(elemento: Elemento, a: Ponto, b: Ponto): Elemento | null {
+  const espelho = (ponto: Ponto) => refletir(ponto, a, b);
+  const anguloDoEixo = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  // O giro guardado é o da tela (horário, Y para baixo); o do eixo, calculado acima,
+  // também. Refletir um ângulo no eixo é `2α − θ`, e as duas medidas precisam estar na
+  // mesma convenção para essa conta valer.
+  const giroEspelhado = (graus: number) => normalizarGraus(2 * anguloDoEixo - graus);
+
+  switch (elemento.tipo) {
+    case "parede":
+    case "cota": {
+      const pa = espelho(elemento.a);
+      const pb = espelho(elemento.b);
+      return pa && pb ? { ...elemento, a: pa, b: pb } : null;
+    }
+    case "comodo":
+    case "traco": {
+      const pontos = elemento.pontos.map(espelho);
+      if (pontos.some((ponto) => !ponto)) return null;
+      // A ordem inverte junto: espelhar um polígono sem inverter o sentido deixaria a
+      // face dele virada para dentro, e a paralela sairia para o lado errado depois.
+      return { ...elemento, pontos: (pontos as Ponto[]).reverse() };
+    }
+    case "arco": {
+      const centro = espelho(elemento.centro);
+      if (!centro) return null;
+      // Espelhado, o arco passa a ser percorrido ao contrário. Para continuar guardado
+      // como varredura positiva, ele recomeça onde terminava.
+      return {
+        ...elemento,
+        centro,
+        inicioGraus: normalizarGraus(-(2 * anguloDoEixo + elemento.inicioGraus + elemento.varreduraGraus)),
+      };
+    }
+    default: {
+      const posicao = espelho(elemento.posicao);
+      if (!posicao) return null;
+      return { ...elemento, posicao, rotacaoGraus: giroEspelhado(elemento.rotacaoGraus) };
+    }
+  }
+}
+
+export type Matriz = { colunas: number; linhas: number; passoXMm: number; passoYMm: number };
+
+/**
+ * Cópias de um elemento em matriz retangular.
+ *
+ * Devolve SÓ as cópias — o original continua onde está, e somá-lo aqui faria a contagem
+ * dobrar toda vez que alguém repetisse o comando. Cada cópia recebe o identificador que
+ * `novoId` devolver; sem ele todas nasceriam com o mesmo e se apagariam entre si.
+ */
+export function matrizRetangular(elemento: Elemento, matriz: Matriz, novoId: () => string): Elemento[] {
+  const colunas = Math.round(matriz.colunas);
+  const linhas = Math.round(matriz.linhas);
+  if (!Number.isFinite(colunas) || !Number.isFinite(linhas) || colunas < 1 || linhas < 1) return [];
+  if (colunas * linhas > 400) return []; // Quatrocentas cópias já é o limite do que alguém revisa.
+  const passoX = Math.round(matriz.passoXMm);
+  const passoY = Math.round(matriz.passoYMm);
+  if (!Number.isFinite(passoX) || !Number.isFinite(passoY)) return [];
+  if (colunas > 1 && passoX === 0 && linhas === 1) return []; // Cópias empilhadas no mesmo lugar.
+  if (linhas > 1 && passoY === 0 && colunas === 1) return [];
+
+  const copias: Elemento[] = [];
+  for (let linha = 0; linha < linhas; linha += 1) {
+    for (let coluna = 0; coluna < colunas; coluna += 1) {
+      if (linha === 0 && coluna === 0) continue;
+      // Malha 1 no deslocamento: a matriz já é exata por construção, e reencaixar cada
+      // cópia na malha do documento desalinharia as colunas quando o passo não fosse
+      // múltiplo dela.
+      copias.push({ ...moverElemento(elemento, coluna * passoX, linha * passoY, 1), id: novoId() });
+    }
+  }
+  return copias;
+}
+
+/** Onde a RETA que contém `a`–`b` cruza o segmento cortante. Devolve também a posição
+ *  relativa `t` ao longo de `a`–`b`: `t < 0` é antes de `a`, `t > 1` é depois de `b`. */
+function cruzamentoComCortante(a: Ponto, b: Ponto, cortante: Segmento): { ponto: Ponto; t: number } | null {
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  const s = { x: cortante.b.x - cortante.a.x, y: cortante.b.y - cortante.a.y };
+  const denominador = r.x * s.y - r.y * s.x;
+  if (Math.abs(denominador) < 1e-9) return null;
+  const diferenca = { x: cortante.a.x - a.x, y: cortante.a.y - a.y };
+  const t = (diferenca.x * s.y - diferenca.y * s.x) / denominador;
+  const u = (diferenca.x * r.y - diferenca.y * r.x) / denominador;
+  // O corte precisa cair DENTRO do cortante: aparar contra o prolongamento de uma parede
+  // que não chega ali cortaria num lugar onde não há nada desenhado.
+  if (u < 0 || u > 1) return null;
+  return { ponto: inteiro({ x: a.x + t * r.x, y: a.y + t * r.y }), t };
+}
+
+/** Qual segmento do elemento está mais perto do ponto, e o índice da ponta mais próxima. */
+function segmentoMaisPerto(elemento: Elemento, ponto: Ponto) {
+  const partes = elemento.tipo === "parede"
+    ? [{ a: elemento.a, b: elemento.b, indice: 0 }]
+    : elemento.tipo === "traco"
+      ? elemento.pontos.slice(0, -1).map((a, indice) => ({ a, b: elemento.pontos[indice + 1], indice }))
+      : [];
+  if (!partes.length) return null;
+  let melhor = partes[0];
+  let menor = Infinity;
+  for (const parte of partes) {
+    const pe = pePerpendicular(ponto, { ...parte, elementoId: "" });
+    const perto = pe ? distancia(pe, ponto) : Math.min(distancia(parte.a, ponto), distancia(parte.b, ponto));
+    if (perto < menor) { menor = perto; melhor = parte; }
+  }
+  return melhor;
+}
+
+function comSegmentoTrocado(elemento: Elemento, indice: number, a: Ponto, b: Ponto): Elemento | null {
+  if (a.x === b.x && a.y === b.y) return null; // Segmento de comprimento zero não é traço.
+  if (elemento.tipo === "parede") return { ...elemento, a, b };
+  if (elemento.tipo === "traco") {
+    const pontos = [...elemento.pontos];
+    pontos[indice] = a;
+    pontos[indice + 1] = b;
+    return { ...elemento, pontos };
+  }
+  return null;
+}
+
+/**
+ * Apara o elemento no cortante, removendo o lado em que se clicou.
+ *
+ * Clicar no pedaço que sobra é como se apara em qualquer CAD, e é o gesto certo: a
+ * pessoa aponta o que quer que suma, não o que quer que fique.
+ */
+export function aparar(elemento: Elemento, cortante: Segmento, pontoClicado: Ponto): Elemento | null {
+  const parte = segmentoMaisPerto(elemento, pontoClicado);
+  if (!parte) return null;
+  const cruzamento = cruzamentoComCortante(parte.a, parte.b, cortante);
+  // Fora de 0..1 o corte cairia fora do traço: não há o que aparar.
+  if (!cruzamento || cruzamento.t <= 0 || cruzamento.t >= 1) return null;
+  const distanciaA = distancia(parte.a, pontoClicado);
+  const distanciaB = distancia(parte.b, pontoClicado);
+  return distanciaA < distanciaB
+    ? comSegmentoTrocado(elemento, parte.indice, cruzamento.ponto, parte.b)
+    : comSegmentoTrocado(elemento, parte.indice, parte.a, cruzamento.ponto);
+}
+
+/**
+ * Estende o elemento até encontrar o cortante, pela ponta mais perto do clique.
+ *
+ * Só estende: se o encontro cair dentro do traço, o que a pessoa quer é aparar, e fazer
+ * a coisa errada calada é pior do que não fazer nada.
+ */
+export function estender(elemento: Elemento, cortante: Segmento, pontoClicado: Ponto): Elemento | null {
+  const parte = segmentoMaisPerto(elemento, pontoClicado);
+  if (!parte) return null;
+  const cruzamento = cruzamentoComCortante(parte.a, parte.b, cortante);
+  if (!cruzamento) return null;
+  if (cruzamento.t < 0) return comSegmentoTrocado(elemento, parte.indice, cruzamento.ponto, parte.b);
+  if (cruzamento.t > 1) return comSegmentoTrocado(elemento, parte.indice, parte.a, cruzamento.ponto);
+  return null;
 }

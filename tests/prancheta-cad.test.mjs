@@ -536,3 +536,185 @@ test("a paralela não reaproveita o identificador do original", () => {
   assert.equal(paralela.id, original.id, "quem chama é que dá o id novo — este teste fixa o contrato");
   assert.notDeepEqual(paralela.a, original.a);
 });
+
+// ## Espelhar, repetir, aparar e estender
+
+const { espelhar, matrizRetangular, aparar, estender } = cad;
+
+const eixoVertical = [{ x: 0, y: 0 }, { x: 0, y: 1000 }];
+const eixoHorizontal = [{ x: 0, y: 0 }, { x: 1000, y: 0 }];
+const contador = () => { let n = 0; return () => `copia-${n += 1}`; };
+
+test("espelhar a parede reflete as duas pontas e preserva o comprimento", () => {
+  const original = parede("p1", { x: 1000, y: 500 }, { x: 4000, y: 500 });
+  const refletida = espelhar(original, ...eixoVertical);
+  assert.deepEqual(refletida.a, { x: -1000, y: 500 });
+  assert.deepEqual(refletida.b, { x: -4000, y: 500 });
+  assert.equal(comprimentoM(refletida.a, refletida.b), comprimentoM(original.a, original.b));
+  assert.equal(elementoSchema.safeParse(refletida).success, true);
+});
+
+test("espelhar duas vezes no mesmo eixo devolve o original", () => {
+  const original = parede("p1", { x: 1200, y: 700 }, { x: 4300, y: 2100 });
+  const voltou = espelhar(espelhar(original, ...eixoVertical), ...eixoVertical);
+  assert.deepEqual(voltou.a, original.a);
+  assert.deepEqual(voltou.b, original.b);
+});
+
+test("o polígono espelhado inverte o sentido, para a face não virar para dentro", () => {
+  // Sem inverter, a paralela do cômodo espelhado sairia para o lado errado depois.
+  const original = comodo("c1", [{ x: 1000, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 3000 }]);
+  const refletido = espelhar(original, ...eixoVertical);
+  assert.deepEqual(refletido.pontos, [{ x: -4000, y: 3000 }, { x: -4000, y: 0 }, { x: -1000, y: 0 }]);
+  assert.equal(areaM2(refletido.pontos), areaM2(original.pontos));
+});
+
+test("o giro do símbolo acompanha o espelho, em vez de apontar para o lado errado", () => {
+  const simbolo = { id: "s1", camada: "eletrico", tipo: "simbolo", familia: "tomada-media",
+    posicao: { x: 2000, y: 1000 }, rotacaoGraus: 30 };
+  // Refletir uma direção no eixo de ângulo α leva θ a 2α − θ. No eixo vertical (α = 90°
+  // na tela) um giro de 30° vira 150°; no horizontal (α = 0°), vira 330°. Os dois são
+  // diferentes, e trocá-los apontaria o símbolo para o lado errado num dos casos.
+  const noVertical = espelhar(simbolo, ...eixoVertical);
+  assert.deepEqual(noVertical.posicao, { x: -2000, y: 1000 });
+  assert.equal(noVertical.rotacaoGraus, 150);
+
+  const noHorizontal = espelhar(simbolo, ...eixoHorizontal);
+  assert.deepEqual(noHorizontal.posicao, { x: 2000, y: -1000 });
+  assert.equal(noHorizontal.rotacaoGraus, 330);
+
+  // E espelhar duas vezes no mesmo eixo devolve o giro original.
+  assert.equal(espelhar(noVertical, ...eixoVertical).rotacaoGraus, 30);
+  assert.equal(espelhar(noHorizontal, ...eixoHorizontal).rotacaoGraus, 30);
+});
+
+test("o arco espelhado cobre o trecho refletido, não o oposto", () => {
+  // Espelhado, o arco passa a ser percorrido ao contrário. Guardar a varredura como
+  // positiva exige recomeçar onde ele terminava — errar isso desenha o complementar.
+  const noHorizontal = espelhar(arco("a1", { x: 0, y: 0 }, 1000, 0, 90), ...eixoHorizontal);
+  assert.equal(noHorizontal.inicioGraus, 270);
+  assert.equal(noHorizontal.varreduraGraus, 90);
+  assert.deepEqual(noHorizontal.centro, { x: 0, y: 0 });
+
+  const noVertical = espelhar(arco("a1", { x: 0, y: 0 }, 1000, 0, 90), ...eixoVertical);
+  assert.equal(noVertical.inicioGraus, 90);
+  assert.equal(noVertical.varreduraGraus, 90);
+});
+
+test("o arco espelhado duas vezes volta a ser o mesmo arco", () => {
+  const original = arco("a1", { x: 500, y: 500 }, 1000, 37, 143);
+  const voltou = espelhar(espelhar(original, ...eixoVertical), ...eixoVertical);
+  assert.deepEqual(voltou.centro, original.centro);
+  assert.equal(voltou.inicioGraus, original.inicioGraus);
+  assert.equal(voltou.varreduraGraus, original.varreduraGraus);
+});
+
+test("eixo de comprimento zero não espelha nada", () => {
+  assert.equal(espelhar(parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 }), { x: 5, y: 5 }, { x: 5, y: 5 }), null);
+});
+
+test("a matriz devolve só as cópias, e o original fica onde está", () => {
+  // Somar o original aqui faria a contagem dobrar toda vez que alguém repetisse o comando.
+  const original = parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 });
+  const copias = matrizRetangular(original, { colunas: 3, linhas: 2, passoXMm: 2000, passoYMm: 1500 }, contador());
+  assert.equal(copias.length, 5);
+  assert.ok(!copias.some((copia) => copia.a.x === 0 && copia.a.y === 0));
+  assert.deepEqual(copias.map((copia) => copia.id), ["copia-1", "copia-2", "copia-3", "copia-4", "copia-5"]);
+  assert.deepEqual(copias[0].a, { x: 2000, y: 0 });
+  assert.deepEqual(copias[2].a, { x: 0, y: 1500 });
+  assert.deepEqual(copias[4].a, { x: 4000, y: 1500 });
+});
+
+test("a matriz não reencaixa as cópias na malha do documento", () => {
+  // Passo de 250 mm numa malha de 100 desalinharia as colunas a cada cópia.
+  const copias = matrizRetangular(parede("p1", { x: 0, y: 0 }, { x: 100, y: 0 }),
+    { colunas: 4, linhas: 1, passoXMm: 250, passoYMm: 0 }, contador());
+  assert.deepEqual(copias.map((copia) => copia.a.x), [250, 500, 750]);
+});
+
+test("a matriz funciona com qualquer elemento e mantém todos válidos", () => {
+  const amostras = [
+    comodo("c1", [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }]),
+    arco("a1", { x: 0, y: 0 }, 500, 0, 180),
+    { id: "s1", camada: "eletrico", tipo: "simbolo", familia: "spot", posicao: { x: 0, y: 0 }, rotacaoGraus: 0 },
+  ];
+  for (const amostra of amostras) {
+    const copias = matrizRetangular(amostra, { colunas: 2, linhas: 2, passoXMm: 3000, passoYMm: 3000 }, contador());
+    assert.equal(copias.length, 3, `a matriz falhou em ${amostra.tipo}`);
+    for (const copia of copias) assert.equal(elementoSchema.safeParse(copia).success, true);
+  }
+});
+
+test("matriz sem sentido devolve lista vazia em vez de lixo", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 });
+  assert.deepEqual(matrizRetangular(original, { colunas: 0, linhas: 2, passoXMm: 100, passoYMm: 100 }, contador()), []);
+  assert.deepEqual(matrizRetangular(original, { colunas: 3, linhas: 1, passoXMm: 0, passoYMm: 0 }, contador()), [],
+    "cópias empilhadas no mesmo lugar não são matriz");
+  assert.deepEqual(matrizRetangular(original, { colunas: 50, linhas: 50, passoXMm: 100, passoYMm: 100 }, contador()), [],
+    "duas mil e quinhentas cópias ninguém revisa");
+  assert.deepEqual(matrizRetangular(original, { colunas: 2, linhas: 2, passoXMm: NaN, passoYMm: 0 }, contador()), []);
+});
+
+const cortante = (a, b) => ({ a, b, elementoId: "corte" });
+
+test("aparar remove o lado em que se clicou", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const corte = cortante({ x: 2500, y: -1000 }, { x: 2500, y: 1000 });
+
+  const semAPonta = aparar(original, corte, { x: 3800, y: 0 });
+  assert.deepEqual(semAPonta.a, { x: 0, y: 0 });
+  assert.deepEqual(semAPonta.b, { x: 2500, y: 0 }, "clicando na ponta direita, é a direita que some");
+
+  const semOComeco = aparar(original, corte, { x: 200, y: 0 });
+  assert.deepEqual(semOComeco.a, { x: 2500, y: 0 });
+  assert.deepEqual(semOComeco.b, { x: 4000, y: 0 });
+});
+
+test("aparar contra o prolongamento de uma parede que não chega ali não corta", () => {
+  // O cortante precisa cruzar de verdade: cortar no prolongamento poria o fim da parede
+  // num lugar onde não há nada desenhado.
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  assert.equal(aparar(original, cortante({ x: 2500, y: 500 }, { x: 2500, y: 1500 }), { x: 3800, y: 0 }), null);
+  assert.equal(aparar(original, cortante({ x: 6000, y: -500 }, { x: 6000, y: 500 }), { x: 3800, y: 0 }), null,
+    "cruzamento além da ponta é caso de estender, não de aparar");
+  assert.equal(aparar(original, cortante({ x: 0, y: 500 }, { x: 4000, y: 500 }), { x: 2000, y: 0 }), null,
+    "paralelas não se cruzam");
+});
+
+test("estender leva a ponta mais perto do clique até o cortante", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const corte = cortante({ x: 6000, y: -1000 }, { x: 6000, y: 1000 });
+  const esticada = estender(original, corte, { x: 3900, y: 0 });
+  assert.deepEqual(esticada.a, { x: 0, y: 0 });
+  assert.deepEqual(esticada.b, { x: 6000, y: 0 });
+
+  const paraTras = estender(original, cortante({ x: -2000, y: -1000 }, { x: -2000, y: 1000 }), { x: 100, y: 0 });
+  assert.deepEqual(paraTras.a, { x: -2000, y: 0 });
+  assert.deepEqual(paraTras.b, { x: 4000, y: 0 });
+});
+
+test("estender não apara calado quando o encontro cai dentro do traço", () => {
+  // Fazer a coisa errada em silêncio é pior do que não fazer nada.
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  assert.equal(estender(original, cortante({ x: 2000, y: -500 }, { x: 2000, y: 500 }), { x: 3900, y: 0 }), null);
+});
+
+test("aparar e estender funcionam no segmento certo de uma polilinha", () => {
+  const traco = { id: "t1", camada: "anotacao", tipo: "traco", espessuraMm: 20,
+    pontos: [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 4000 }] };
+  const aparado = aparar(traco, cortante({ x: 3000, y: 1000 }, { x: 5000, y: 1000 }), { x: 4000, y: 3500 });
+  assert.deepEqual(aparado.pontos, [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 1000 }],
+    "o segundo segmento foi aparado e o primeiro ficou intacto");
+  assert.equal(elementoSchema.safeParse(aparado).success, true);
+});
+
+test("aparar até comprimento zero não deixa um traço fantasma", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  assert.equal(aparar(original, cortante({ x: 0, y: -100 }, { x: 0, y: 100 }), { x: 100, y: 0 }), null);
+});
+
+test("o que não é traço nem parede não apara nem estende", () => {
+  const corte = cortante({ x: 0, y: -1000 }, { x: 0, y: 1000 });
+  assert.equal(aparar(comodo("c1", [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }]), corte, { x: 500, y: 0 }), null);
+  assert.equal(estender(arco("a1", { x: 0, y: 0 }, 500, 0, 90), corte, { x: 500, y: 0 }), null);
+});

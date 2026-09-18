@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Blinds, Circle, CircleDashed, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
   Lock, LockOpen, Minus, MousePointer2, PencilLine, Plug, Redo2, Ruler, Save, Sofa,
-  Copy, Magnet, Spline, Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
+  Copy, FlipHorizontal2, Grid3x3, Magnet, MoveHorizontal, Scissors, Spline, Square,
+  Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,7 +17,8 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Encaixe, TIPOS_ENCAIXE, TipoEncaixe, encaixeLabels, encaixePerto, moverVertice,
-  lerMedida, ortogonal, paralelaDe, resolverEntrada, verticesDe,
+  aparar, espelhar, estender, lerMedida, matrizRetangular, ortogonal, paralelaDe,
+  resolverEntrada, segmentosDo, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
   Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada,
@@ -28,7 +30,7 @@ import {
 type Ferramenta =
   | "selecionar" | "parede" | "comodo" | "porta" | "janela" | "passagem"
   | "simbolo" | "mobilia" | "imagem" | "texto" | "cota" | "traco"
-  | "circulo" | "arco";
+  | "circulo" | "arco" | "espelhar" | "aparar" | "estender";
 
 type ItemBiblioteca = {
   id: string; nome: string; categoria: string; larguraMm: number | null;
@@ -56,6 +58,9 @@ const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2
   { id: "traco", rotulo: "Traço livre", icone: PencilLine, atalho: "L" },
   { id: "circulo", rotulo: "Círculo — centro e depois raio", icone: CircleDashed, atalho: "R" },
   { id: "arco", rotulo: "Arco — centro, início e fim", icone: Spline, atalho: "A" },
+  { id: "espelhar", rotulo: "Espelhar a seleção — marque os dois pontos do eixo", icone: FlipHorizontal2, atalho: "H" },
+  { id: "aparar", rotulo: "Aparar — clique no pedaço que deve sumir", icone: Scissors, atalho: "X" },
+  { id: "estender", rotulo: "Estender — clique na ponta que deve crescer", icone: MoveHorizontal, atalho: "N" },
 ];
 
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
@@ -64,7 +69,7 @@ const camadaDaFerramenta: Record<Ferramenta, string> = {
   selecionar: "layout", parede: "layout", comodo: "layout", porta: "layout",
   janela: "layout", passagem: "layout", simbolo: "eletrico", mobilia: "mobiliario",
   imagem: "mobiliario", texto: "anotacao", cota: "anotacao", traco: "anotacao",
-  circulo: "layout", arco: "layout",
+  circulo: "layout", arco: "layout", espelhar: "layout", aparar: "layout", estender: "layout",
 };
 
 type Importado = {
@@ -96,6 +101,17 @@ function alturaPelaProporcao(url: string, larguraMm: number): Promise<number> {
     imagem.onerror = () => rejeitar(new Error("não abriu"));
     imagem.src = url;
   });
+}
+
+/** Quanto um ajuste deslocou as pontas do elemento. Serve para escolher, entre vários
+ *  limites possíveis, o que mexe menos — que é o que a pessoa vê e espera. */
+function alteracaoDe(antes: Elemento, depois: Elemento) {
+  const pontosDe = (elemento: Elemento) => elemento.tipo === "parede" ? [elemento.a, elemento.b]
+    : elemento.tipo === "traco" ? elemento.pontos : [];
+  const um = pontosDe(antes);
+  const outro = pontosDe(depois);
+  if (um.length !== outro.length) return Infinity;
+  return um.reduce((soma, ponto, i) => soma + Math.hypot(outro[i].x - ponto.x, outro[i].y - ponto.y), 0);
 }
 
 /** Ângulo do desenho técnico entre dois pontos: 0° à direita, crescendo no anti-horário.
@@ -232,6 +248,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>([...TIPOS_ENCAIXE]);
   const [orto, definirOrto] = useState(false);
   const [entrada, definirEntrada] = useState("");
+  const [matriz, definirMatriz] = useState({ colunas: 3, linhas: 1, passoXMm: 1000, passoYMm: 1000 });
   const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
   const [importando, definirImportando] = useState(false);
@@ -452,6 +469,49 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       }
       return;
     }
+    if (ferramenta === "espelhar" || ferramenta === "aparar" || ferramenta === "estender") {
+      // Estas três agem sobre a SELEÇÃO, então quem manda é a camada dela. A guarda logo
+      // abaixo olha a camada da ferramenta, e recusaria espelhar uma tomada só porque a
+      // camada de layout está travada.
+      if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
+      if (!selecionado) { toast.error("Selecione o elemento antes de usar esta ferramenta."); return; }
+      if (camadaBloqueada(documento, selecionado.camada)) {
+        toast.error("A camada do elemento selecionado está travada. Destrave-a no painel de camadas.");
+        return;
+      }
+    }
+    if (ferramenta === "espelhar") {
+      if (!selecionado) { toast.error("Selecione o que deve ser espelhado antes de marcar o eixo."); return; }
+      if (!pendentes.length) { definirPendentes([ponto]); return; }
+      const refletido = espelhar(selecionado, pendentes[0], ponto);
+      definirPendentes([]);
+      if (!refletido) { toast.error("O eixo ficou com comprimento zero. Marque dois pontos diferentes."); return; }
+      const id = novoId();
+      aplicar({ ...documento, elementos: [...documento.elementos, { ...refletido, id }] });
+      definirSelecao(id);
+      return;
+    }
+    if (ferramenta === "aparar" || ferramenta === "estender") {
+      // O cortante é o que está por baixo do clique; o alvo é o que está selecionado.
+      // Selecionar primeiro e apontar depois é a ordem de todo CAD.
+      if (!selecionado) { toast.error("Selecione a parede ou o traço a ajustar antes de apontar o limite."); return; }
+      const cortantes = segmentosDo(documento).filter((segmento) => segmento.elementoId !== selecionado.id);
+      const ajustados = cortantes
+        .map((corte) => ferramenta === "aparar" ? aparar(selecionado, corte, bruto) : estender(selecionado, corte, bruto))
+        .filter((resultado): resultado is Elemento => Boolean(resultado));
+      if (!ajustados.length) {
+        toast.error(ferramenta === "aparar"
+          ? "Nada cruza este traço aqui. Aparar precisa de um limite que o atravesse de verdade."
+          : "Nada para estender até aqui. O limite precisa estar além da ponta, no caminho dela.");
+        return;
+      }
+      // Entre vários limites possíveis, vale o que mexe menos: é o que a pessoa vê e
+      // espera, e evita a parede saltar para o outro lado do desenho.
+      const escolhido = ajustados.reduce((melhor, candidato) =>
+        alteracaoDe(selecionado, candidato) < alteracaoDe(selecionado, melhor) ? candidato : melhor);
+      trocar(selecionado.id, escolhido as Partial<Elemento>);
+      return;
+    }
     if (!podeDesenhar) {
       toast.error(bloqueada ? "A camada desta ferramenta está travada. Destrave-a no painel de camadas." : "Você não tem permissão para editar esta prancha.");
       return;
@@ -600,6 +660,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     aplicar({ ...documento, elementos: [...documento.elementos, { ...nova, id }] });
     definirSelecao(id);
     toast.success(`Paralela a ${Math.abs(distancia)} mm.`);
+  }
+
+  function repetirEmMatriz() {
+    if (!selecionado || !canEdit) return;
+    const copias = matrizRetangular(selecionado, matriz, novoId);
+    if (!copias.length) {
+      toast.error("Revise a matriz: precisa de pelo menos uma repetição, com passo diferente de zero e no máximo 400 cópias.");
+      return;
+    }
+    if (documento.elementos.length + copias.length > 20000) {
+      toast.error("O desenho passaria do limite de 20 mil elementos.");
+      return;
+    }
+    aplicar({ ...documento, elementos: [...documento.elementos, ...copias] });
+    toast.success(`${copias.length} cópia(s) criadas.`);
   }
 
   function alternarEncaixe(tipo: TipoEncaixe) {
@@ -1086,6 +1161,34 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
                 </p>
               </>}
               {selecionado.tipo === "parede" && <p className="text-xs text-hoikos-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
+              {canEdit && <div className="space-y-2 border-t border-hoikos-200 pt-3">
+                <p className="eyebrow text-hoikos-600">Repetir em matriz</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="matriz-colunas" className="text-xs">Colunas</Label>
+                    <Input id="matriz-colunas" type="number" inputMode="numeric" min={1} value={matriz.colunas}
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, colunas: Math.round(Number(evento.target.value)) || 1 }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="matriz-linhas" className="text-xs">Linhas</Label>
+                    <Input id="matriz-linhas" type="number" inputMode="numeric" min={1} value={matriz.linhas}
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, linhas: Math.round(Number(evento.target.value)) || 1 }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="matriz-passo-x" className="text-xs">Passo →  (mm)</Label>
+                    <Input id="matriz-passo-x" type="number" inputMode="numeric" value={matriz.passoXMm}
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoXMm: Math.round(Number(evento.target.value)) || 0 }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="matriz-passo-y" className="text-xs">Passo ↓ (mm)</Label>
+                    <Input id="matriz-passo-y" type="number" inputMode="numeric" value={matriz.passoYMm}
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoYMm: Math.round(Number(evento.target.value)) || 0 }))} />
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" className="w-full" onClick={repetirEmMatriz}>
+                  <Grid3x3 />Repetir {Math.max(0, matriz.colunas * matriz.linhas - 1)} vez(es)
+                </Button>
+              </div>}
               {canEdit && paralelaDe(selecionado, 1) && <div className="space-y-1 border-t border-hoikos-200 pt-3">
                 <p className="text-xs text-hoikos-600">
                   Paralela à distância digitada no campo Medida (hoje {lerMedida(entrada) ?? documento.malhaMm} mm).
