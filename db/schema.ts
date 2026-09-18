@@ -653,3 +653,58 @@ export const sinapiSync = sqliteTable("sinapi_sync", {
   lastChecked: integer("last_checked"),
   lastError: text("last_error"),
 });
+
+// ## Prancheta
+//
+// Prancha de desenho da empresa. O documento inteiro fica num único JSON (`documento`),
+// e não em uma tabela por elemento, por uma razão prática: um traço só tem sentido junto
+// dos outros, e salvar planta é sempre salvar a versão inteira. Espalhar 5 mil elementos
+// em linhas transformaria cada gravação em transação gigante sem ganhar consulta nenhuma
+// — ninguém pergunta ao banco "quais tomadas existem"; pergunta à planta aberta.
+//
+// `revisao` é o que impede que duas abas abertas se sobrescrevam em silêncio: quem grava
+// declara a revisão que leu, e o servidor recusa se ela já avançou.
+export const studioDrawings = sqliteTable("studio_drawings", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  // Prancha pode nascer solta — o estudo vem antes do projeto existir no sistema.
+  projectId: text("project_id").references(() => projects.id),
+  nome: text("nome").notNull(),
+  // planta | corte | elevacao | detalhe | apresentacao: muda o carimbo e o que se espera
+  // ver, não a geometria.
+  especie: text("especie").notNull().default("planta"),
+  documento: text("documento").notNull(),
+  revisao: integer("revisao").notNull().default(1),
+  criadoPorMembroId: text("criado_por_membro_id").references(() => members.id),
+  atualizadoPorMembroId: text("atualizado_por_membro_id").references(() => members.id),
+  ...timestamps,
+}, (table) => [
+  index("idx_studio_drawings_org").on(table.organizationId, table.updatedAt),
+  index("idx_studio_drawings_org_project").on(table.organizationId, table.projectId),
+]);
+
+// Biblioteca de imagens da empresa: mobiliário recortado, textura, foto de referência e o
+// PDF ou imagem usado como fundo de traçado. Os bytes vão cifrados para o armazenamento,
+// pelo mesmo caminho das fotos do diário; aqui fica só a chave e o que descreve o item.
+//
+// O DWG entra aqui como anexo e é assumido como anexo: não existe leitor livre confiável
+// do formato, e abrir uma planta errada é pior do que dizer que não abre.
+export const studioAssets = sqliteTable("studio_assets", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  storageKey: text("storage_key").notNull(),
+  nome: text("nome").notNull(),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  // mobilia | textura | referencia | fundo | anexo
+  categoria: text("categoria").notNull().default("referencia"),
+  // Medida real do objeto, quando conhecida: um sofá colado na planta sem escala mente
+  // sobre o espaço que sobra na sala.
+  larguraMm: integer("largura_mm"),
+  alturaMm: integer("altura_mm"),
+  enviadoPorMembroId: text("enviado_por_membro_id").references(() => members.id),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => [
+  uniqueIndex("uidx_studio_assets_storage_key").on(table.storageKey),
+  index("idx_studio_assets_org").on(table.organizationId, table.categoria),
+]);

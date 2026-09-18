@@ -28,8 +28,12 @@ flowchart TD
 - Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
 - Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
 - Contador de tempo online por dia para todos os acessos, medido no servidor, com histórico próprio para cada pessoa, visão da empresa para o contratante e visão de toda a plataforma para o superadmin. Consulte [Tempo de uso](docs/TEMPO-DE-USO.md).
-- Dez modelos de planilha com objetivo definido — orçamento de obra, cronograma físico-financeiro, medição, apropriação de horas, quantitativos, compras, fluxo de caixa, resultado por centro, funil comercial e honorários por etapa —, cada um com fórmulas e papéis de coluna prontos. Consulte [Modelos de planilha](docs/MODELOS-DE-PLANILHA.md).\n- Planilha de saúde financeira governada pelo superadmin: neutra até existir dado, depois aponta margem, preço a aumentar, peso dos colaboradores e em que setor a operação ganha ou perde. Consulte [Saúde financeira](docs/SAUDE-FINANCEIRA.md).\n- Planilha com fórmulas em português e documento com campos calculados, sobre os dados reais da empresa, com importação de orçamentos, projetos, clientes e tarefas. Consulte [Planilha e documento](docs/PLANILHA-E-DOCUMENTO.md).
-- Lembretes diários para todos os acessos — cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo e metas em aberto — com metas cujo realizado é calculado a partir dos dados reais. Consulte [Lembretes e metas](docs/LEMBRETES-E-METAS.md).\n- Interface responsiva, com menu recolhível e busca.
+- Dez modelos de planilha com objetivo definido — orçamento de obra, cronograma físico-financeiro, medição, apropriação de horas, quantitativos, compras, fluxo de caixa, resultado por centro, funil comercial e honorários por etapa —, cada um com fórmulas e papéis de coluna prontos. Consulte [Modelos de planilha](docs/MODELOS-DE-PLANILHA.md).
+- Planilha de saúde financeira governada pelo superadmin: neutra até existir dado, depois aponta margem, preço a aumentar, peso dos colaboradores e em que setor a operação ganha ou perde. Consulte [Saúde financeira](docs/SAUDE-FINANCEIRA.md).
+- Planilha com fórmulas em português e documento com campos calculados, sobre os dados reais da empresa, com importação de orçamentos, projetos, clientes e tarefas. Consulte [Planilha e documento](docs/PLANILHA-E-DOCUMENTO.md).
+- Lembretes diários para todos os acessos — cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo e metas em aberto — com metas cujo realizado é calculado a partir dos dados reais. Consulte [Lembretes e metas](docs/LEMBRETES-E-METAS.md).
+- Prancheta: desenho técnico dentro da plataforma, com coordenadas em milímetros inteiros e camada por disciplina — a mesma planta serve como layout, elétrico, luminotécnico ou mobiliário sem redesenhar. Paredes, cômodos com área calculada do polígono, portas, janelas, passagens, símbolos elétricos e de iluminação, mobiliário, imagens da biblioteca da empresa, textos, cotas e traço livre; desfazer e refazer, encaixe na malha, quantitativo derivado do desenho e exportação em SVG com medida real. Biblioteca própria por empresa para mobiliário, texturas, referências e fundo de traçado, com os bytes cifrados no armazenamento. DWG e DXF são guardados e declarados como anexo: não existe leitor livre confiável do formato, e abrir errado uma planta é pior do que dizer que não abre.
+- Interface responsiva, com menu recolhível e busca. Cada aba abre com uma fotografia própria do trabalho que ela serve, em duas camadas que dissolvem antes de alcançar tabela ou número.
 - Fluxo de criação rápida preparado para virar formulários reais.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
 - Esquema relacional multiempresa em `db/schema.ts`.
@@ -72,8 +76,10 @@ flowchart TD
 | Tarefas | Executar sem perder contexto | Prioridade, checklist, dependência, prazo e apontamento |
 | Equipe | Distribuir capacidade | Papéis, permissões, carga e horas planejadas x realizadas |
 | Arquivos | Encontrar a versão certa | Pastas por projeto, revisão, metadados e acesso do cliente |
+| Prancheta | Desenhar o projeto sem sair da plataforma | Planta, elétrico, luminotécnico, mobiliário e interiores em camadas, com quantitativo e exportação |
 | Tempo de uso | Saber quanto tempo cada acesso ficou online | Total por dia, sessões, ações e histórico por pessoa |
-| Planilha e documento | Somar sem sair da plataforma | Fórmulas em português sobre dados reais, com exportação |\n| Lembretes do dia | Saber o que exige ação hoje | Cobranças, boletos, follow-ups, prazos e metas por acesso |
+| Planilha e documento | Somar sem sair da plataforma | Fórmulas em português sobre dados reais, com exportação |
+| Lembretes do dia | Saber o que exige ação hoje | Cobranças, boletos, follow-ups, prazos e metas por acesso |
 | Financeiro | Ver resultado no contexto | Saldo, contas, caixa e resultado por projeto vindos da Drap |
 
 ## Stack escolhida

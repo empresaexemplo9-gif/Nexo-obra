@@ -1,5 +1,5 @@
 export const permissionModules = [
-  "overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files",
+  "overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio",
 ] as const;
 
 export type PermissionModule = typeof permissionModules[number];
@@ -19,6 +19,7 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
   team: "Equipe e acessos",
   tasks: "Tarefas",
   files: "Arquivos",
+  studio: "Prancheta e projeto",
 };
 
 // Perfil da plataforma, fora da matriz das empresas: leitura e edição total em todos os módulos.
@@ -51,13 +52,13 @@ export function permissionsForRole(role: string): PermissionSet {
     permissions[area] = { view: view || edit, edit };
   };
   if (role === "manager") {
-    for (const area of ["overview", "projects", "budgets", "schedule", "crm", "tasks", "files"] as PermissionModule[]) set(area, true, true);
+    for (const area of ["overview", "projects", "budgets", "schedule", "crm", "tasks", "files", "studio"] as PermissionModule[]) set(area, true, true);
     set("finance", true); set("team", true);
   } else if (role === "member") {
     for (const area of ["overview", "projects", "schedule", "files"] as PermissionModule[]) set(area, true);
-    set("tasks", true, true);
+    set("tasks", true, true); set("studio", true, true);
   } else if (role === "partner") {
-    for (const area of ["overview", "projects", "schedule", "tasks", "files"] as PermissionModule[]) set(area, true);
+    for (const area of ["overview", "projects", "schedule", "tasks", "files", "studio"] as PermissionModule[]) set(area, true);
   } else if (role === "service_provider") {
     for (const area of ["overview", "projects", "schedule"] as PermissionModule[]) set(area, true);
     set("tasks", true, true); set("files", true, true);
@@ -80,7 +81,7 @@ export function normalizePermissions(value: unknown, role: string): PermissionSe
     const grant = input[area];
     if (!grant || typeof grant !== "object" || Array.isArray(grant)) {
       // New modules must not expand an already customized secondary account's access.
-      normalized[area] = ["diary", "portal"].includes(area) && Object.keys(input).length > 0 ? { view: false, edit: false } : defaults[area];
+      normalized[area] = ["diary", "portal", "studio"].includes(area) && Object.keys(input).length > 0 ? { view: false, edit: false } : defaults[area];
       continue;
     }
     const candidate = grant as Record<string, unknown>;
