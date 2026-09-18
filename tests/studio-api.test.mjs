@@ -318,3 +318,24 @@ test("apagar o item leva junto os bytes do armazenamento", async () => {
   assert.equal(bytes.size, 0, "o arquivo ficou órfão no armazenamento");
   assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action = 'studio.asset.deleted'").get().n, 1);
 });
+
+test("o fundo de traçado sobrevive à gravação e volta inteiro", async () => {
+  const criada = await criar();
+  const fundo = { chave: "/api/studio/assets/abc", nome: "planta-existente.png", larguraMm: 12000, alturaMm: 8400, opacidade: 45 };
+  const salva = await prancha.PUT(pedido(`/api/studio/${criada.id}`, {
+    method: "PUT", json: { documento: { ...documentoVazio(), fundo }, revisao: 1 },
+  }), parametros(criada.id));
+  assert.equal(salva.status, 200);
+  const aberta = await (await prancha.GET(pedido(`/api/studio/${criada.id}`), parametros(criada.id))).json();
+  assert.deepEqual(aberta.prancha.documento.fundo, fundo);
+});
+
+test("fundo sem proporção declarada não entra: traçar sobre planta esticada erra a obra", async () => {
+  const criada = await criar();
+  const semAltura = { chave: "/api/studio/assets/abc", nome: "planta.png", larguraMm: 12000, opacidade: 45 };
+  const recusado = await prancha.PUT(pedido(`/api/studio/${criada.id}`, {
+    method: "PUT", json: { documento: { ...documentoVazio(), fundo: semAltura }, revisao: 1 },
+  }), parametros(criada.id));
+  assert.equal(recusado.status, 400);
+  assert.equal(db.sqlite.prepare("SELECT revisao FROM studio_drawings WHERE id = ?").get(criada.id).revisao, 1);
+});

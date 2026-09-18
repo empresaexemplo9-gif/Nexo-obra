@@ -64,6 +64,21 @@ const LIMITE_HISTORICO = 60;
 const metros = (valor: number) => `${valor.toFixed(2).replace(".", ",")} m`;
 const metrosQuadrados = (valor: number) => `${valor.toFixed(2).replace(".", ",")} m²`;
 
+/** Altura do fundo pela proporção real da imagem. Esticar a planta escaneada para uma
+ *  proporção inventada é pior do que não ter fundo nenhum: tudo que for traçado por cima
+ *  sai com a medida errada, e o erro só aparece na obra. */
+function alturaPelaProporcao(url: string, larguraMm: number): Promise<number> {
+  return new Promise((resolver, rejeitar) => {
+    const imagem = new Image();
+    imagem.onload = () => {
+      if (!imagem.naturalWidth || !imagem.naturalHeight) { rejeitar(new Error("sem proporção")); return; }
+      resolver(Math.max(1, Math.round(larguraMm * imagem.naturalHeight / imagem.naturalWidth)));
+    };
+    imagem.onerror = () => rejeitar(new Error("não abriu"));
+    imagem.src = url;
+  });
+}
+
 function novoId() {
   return globalThis.crypto?.randomUUID?.() ?? `el-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -274,6 +289,38 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const encaixado = useCallback((ponto: { x: number; y: number }) => ({
     x: encaixar(ponto.x, documento.malhaMm), y: encaixar(ponto.y, documento.malhaMm),
   }), [documento.malhaMm]);
+
+  const fundosPossiveis = useMemo(
+    () => biblioteca.filter((item) => item.categoria === "fundo" || item.categoria === "referencia"),
+    [biblioteca],
+  );
+
+  async function colocarFundo(assetId: string) {
+    const escolhido = biblioteca.find((item) => item.id === assetId);
+    if (!escolhido) return;
+    const larguraMm = escolhido.larguraMm ?? 10000;
+    try {
+      const alturaMm = await alturaPelaProporcao(escolhido.url, larguraMm);
+      aplicar({ ...documento, fundo: { chave: escolhido.url, nome: escolhido.nome.slice(0, 200), larguraMm, alturaMm, opacidade: 45 } });
+    } catch {
+      // Sem proporção real não há fundo confiável, e um fundo esticado leva o traçado
+      // inteiro junto. Melhor não colocar do que colocar torto.
+      toast.error("Não foi possível ler as dimensões desta imagem. Envie-a de novo como PNG, JPEG ou WebP.");
+    }
+  }
+
+  async function redimensionarFundo(larguraMm: number) {
+    if (!documento.fundo || !Number.isFinite(larguraMm) || larguraMm < 100) return;
+    const chave = documento.fundo.chave;
+    try {
+      const alturaMm = await alturaPelaProporcao(chave, larguraMm);
+      definirDocumento((anterior) => anterior.fundo && anterior.fundo.chave === chave
+        ? { ...anterior, fundo: { ...anterior.fundo, larguraMm, alturaMm } } : anterior);
+      definirSujo(true);
+    } catch {
+      toast.error("Não foi possível ler as dimensões desta imagem.");
+    }
+  }
 
   function colocar(ponto: { x: number; y: number }) {
     const base = { id: novoId(), camada: camadaAtiva };
@@ -540,6 +587,37 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             </button>)}
           </div> : <p className="text-xs text-hoikos-500">Nenhuma imagem na biblioteca. Envie mobiliário, texturas ou referências na aba Biblioteca.</p>}
         </div>}
+
+        <div className="space-y-2 border-t border-hoikos-200 pt-3">
+          <p className="eyebrow text-hoikos-600">Fundo de traçado</p>
+          {documento.fundo ? <>
+            <p className="truncate text-xs text-hoikos-700" title={documento.fundo.nome}>{documento.fundo.nome}</p>
+            <Label htmlFor="fundo-largura" className="text-xs">Largura real do fundo (mm)</Label>
+            <Input id="fundo-largura" type="number" inputMode="numeric" min={100} value={documento.fundo.larguraMm} disabled={!canEdit}
+              onChange={(evento) => { void redimensionarFundo(Math.round(Number(evento.target.value))); }} />
+            <Label htmlFor="fundo-opacidade" className="text-xs">Opacidade: {documento.fundo.opacidade}%</Label>
+            <input id="fundo-opacidade" type="range" min={5} max={100} value={documento.fundo.opacidade} disabled={!canEdit}
+              className="w-full accent-hoikos-700"
+              onChange={(evento) => {
+                const opacidade = Number(evento.target.value);
+                definirDocumento((anterior) => anterior.fundo ? { ...anterior, fundo: { ...anterior.fundo, opacidade } } : anterior);
+                definirSujo(true);
+              }} />
+            <p className="text-xs leading-5 text-hoikos-500">Meça algo conhecido com a ferramenta de cota e ajuste a largura até fechar. É assim que o traçado sai na escala certa.</p>
+            {canEdit && <Button variant="outline" size="sm" className="w-full" onClick={() => {
+              aplicar({ ...documento, fundo: null });
+            }}><Trash2 />Tirar o fundo</Button>}
+          </> : <>
+            {fundosPossiveis.length ? <>
+              <NativeSelect aria-label="Escolher fundo de traçado" value="" disabled={!canEdit}
+                onChange={(evento) => { void colocarFundo(evento.target.value); }}>
+                <option value="">Escolha uma imagem da biblioteca…</option>
+                {fundosPossiveis.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
+              </NativeSelect>
+              <p className="text-xs leading-5 text-hoikos-500">A planta existente entra por baixo do desenho para ser traçada. PDF e DWG ficam como anexo: converta em imagem para usar como fundo.</p>
+            </> : <p className="text-xs leading-5 text-hoikos-500">Envie a planta existente como imagem na aba Biblioteca para traçar por cima dela.</p>}
+          </>}
+        </div>
 
         {ferramenta === "comodo" && pendentes.length > 0 && <Button size="sm" className="w-full" onClick={fecharComodo}>
           Fechar cômodo ({pendentes.length} cantos)
