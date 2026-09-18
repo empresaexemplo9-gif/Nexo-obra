@@ -141,3 +141,52 @@ test("excluir planilha chama DELETE, remove a peça da tela e dá caminho para c
     window.confirm = previousConfirm;
   }
 });
+
+// Seleção por eixo. A planilha somava coluna certo e não tinha caminho nenhum
+// para a linha: o cabeçalho não era clicável e o rodapé filtrava sempre pela
+// coluna do cursor. Quem fecha um mês lendo a linha via o total de outra conta.
+const comDados = { columns: 4, rows: 4, content: {
+  cells: { A1: "10", B1: "20", C1: "30", A2: "5", A3: "5" }, body: "", widths: {}, formats: {}, bold: [],
+  analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] },
+} };
+
+test("clicar no cabeçalho seleciona a linha e soma a linha, não a coluna", async () => {
+  await openWorksheet(comDados);
+
+  const cabecalho = container.querySelector('[aria-label="Selecionar linha 1"]');
+  assert.ok(cabecalho, "o cabeçalho da linha precisa ser selecionável");
+
+  await act(async () => { cabecalho.click(); });
+  assert.equal(cabecalho.getAttribute("aria-pressed"), "true", "a linha selecionada se anuncia como tal");
+
+  const texto = textOf(container);
+  assert.match(texto, /Total da linha 1/, "o rodapé passa a falar da linha escolhida");
+  assert.match(texto, /Total da linha 1:\s*60/, "10 + 20 + 30 da linha, não os 20 da coluna A");
+});
+
+test("a função inserida na linha selecionada gera intervalo horizontal", async () => {
+  await openWorksheet(comDados);
+
+  await act(async () => { container.querySelector('[aria-label="Selecionar linha 1"]').click(); });
+  // O cursor para na primeira célula livre da linha, que é onde o total entra.
+  assert.equal(container.querySelector('[aria-label="Conteúdo da célula"]').value, "",
+    "D1 está livre e recebe o total");
+
+  const funcoes = container.querySelector('[aria-label="Inserir função"]');
+  await act(async () => {
+    funcoes.value = "SOMA";
+    funcoes.dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+
+  assert.equal(container.querySelector('[aria-label="Conteúdo da célula"]').value, "=SOMA(A1:C1)",
+    "o intervalo anda na linha; antes os dois extremos usavam a mesma coluna");
+});
+
+test("sem eixo escolhido o total continua sendo o da coluna do cursor", async () => {
+  await openWorksheet(comDados);
+  assert.match(textOf(container), /Total da coluna A:\s*20/,
+    "A1 + A2 + A3 = 20, o comportamento que já existia");
+
+  await act(async () => { container.querySelector('[aria-label="Selecionar coluna B"]').click(); });
+  assert.match(textOf(container), /Total da coluna B:\s*20/, "a coluna B tem só o 20 de B1");
+});

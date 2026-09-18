@@ -660,3 +660,44 @@ export function moveAnalysis<T extends { headerRow: number; roles: Record<string
   const headerRow = delta === -1 && analysis.headerRow === at ? at : Math.max(0, deslocar(analysis.headerRow));
   return { ...analysis, headerRow, ignoreRows };
 }
+
+// Seleção por eixo. A planilha só sabia somar coluna: o rodapé filtrava pela
+// coluna do cursor e não havia caminho nenhum para o total de uma linha, que é
+// como se lê um mês fechado da esquerda para a direita.
+export type SheetAxis = "row" | "column";
+
+function axisPosition(address: CellAddress, axis: SheetAxis) {
+  return axis === "row" ? address.row : address.column;
+}
+
+export function axisTotal(computed: SheetResult, axis: SheetAxis, index: number) {
+  let total = 0;
+  for (const [key, result] of Object.entries(computed)) {
+    const address = parseCellKey(key);
+    if (!address || axisPosition(address, axis) !== index) continue;
+    if (typeof result.value === "number") total += result.value;
+  }
+  return exact(total);
+}
+
+// Última célula preenchida do eixo, para o cursor parar logo depois dela.
+export function axisLastFilled(cells: SheetCells, axis: SheetAxis, index: number) {
+  let last = -1;
+  for (const [key, raw] of Object.entries(cells)) {
+    const address = parseCellKey(key);
+    if (!address || axisPosition(address, axis) !== index) continue;
+    if (!raw.trim()) continue;
+    const position = axis === "row" ? address.column : address.row;
+    if (position > last) last = position;
+  }
+  return last;
+}
+
+// Intervalo do eixo que termina antes do cursor: A5:D5 na linha, A1:A4 na
+// coluna. Parar antes do cursor evita a fórmula se incluir e dar #CIRCULAR!.
+export function axisRange(axis: SheetAxis, index: number, until: number) {
+  if (until < 1) return null;
+  return axis === "row"
+    ? `${columnName(0)}${index + 1}:${columnName(until - 1)}${index + 1}`
+    : `${columnName(index)}1:${columnName(index)}${until}`;
+}

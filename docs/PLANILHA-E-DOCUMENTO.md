@@ -61,6 +61,15 @@ sobrescrever em silêncio o trabalho de outra pessoa.
   Orçamentos, a origem nem é oferecida, e pedir direto responde `403`.
 - Criação, alteração e exclusão entram na auditoria da empresa.
 
+## Seleção de linha e coluna
+
+Clicar no cabeçalho seleciona a linha ou a coluna inteira: as células ficam destacadas, o
+rodapé passa a mostrar o total do que está selecionado e o cursor para na primeira célula
+livre do eixo, que é onde o total costuma entrar. Com a linha selecionada, `SOMA` e as
+demais funções de intervalo montam uma faixa horizontal (`SOMA(A5:D5)`); com a coluna,
+vertical (`SOMA(A1:A4)`). O intervalo sempre termina antes do cursor, para a fórmula não se
+incluir e virar `#CIRCULAR!`. Sem nada selecionado vale a coluna do cursor.
+
 ## Edição estrutural
 
 Inserir e remover linha ou coluna **reajusta as referências das fórmulas**: `SOMA(A1:A2)`
