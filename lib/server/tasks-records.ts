@@ -46,4 +46,3 @@ export function taskResponse(row: TaskRow) {
     updatedAt: row.updated_at,
   };
 }
-

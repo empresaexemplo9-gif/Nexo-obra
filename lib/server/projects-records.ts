@@ -59,4 +59,3 @@ export function projectResponse(row: ProjectRow, options: ProjectResponseOptions
     updatedAt: row.updated_at,
   };
 }
-

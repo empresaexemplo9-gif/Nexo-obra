@@ -47,4 +47,3 @@ export function opportunityResponse(row: OpportunityRow) {
     updatedAt: row.updated_at,
   };
 }
-

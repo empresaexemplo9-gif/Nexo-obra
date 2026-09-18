@@ -14,4 +14,3 @@ export const budgetSelect = `SELECT b.id, b.project_id, p.name AS project_name, 
 export function budgetResponse(row: BudgetRow) {
   return { id: row.id, projectId: row.project_id, projectName: row.project_name, code: row.code, version: row.version, status: row.status, directCostCents: row.direct_cost_cents, bdiPercent: row.bdi_percent, marginPercent: row.margin_percent, totalCents: row.total_cents, itemCount: row.item_count, createdAt: row.created_at, updatedAt: row.updated_at };
 }
-
