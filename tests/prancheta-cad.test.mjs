@@ -340,3 +340,199 @@ test("uma planta inteira sobrevive à ida e volta com a metragem intacta", () =>
   assert.equal(Math.round(metragem * 100) / 100, 7.3, "4,2 m + 3,1 m de parede");
   assert.ok(lido.elementos.some((elemento) => elemento.tipo === "texto" && elemento.texto === "SALA"));
 });
+
+// ## Arco e círculo nativos
+
+const { paralelaDe, paralelaDePolilinha, facesDaParede } = cad;
+const { pontosDoArco, limitesDoElemento, moverElemento, quantitativo, areaM2 } = await vite.ssrLoadModule("/lib/prancheta.ts");
+
+const arco = (id, centro, raioMm, inicioGraus, varreduraGraus, camada = "layout") =>
+  ({ id, camada, tipo: "arco", centro, raioMm, inicioGraus, varreduraGraus, espessuraMm: 25 });
+
+test("o arco é aceito e guarda varredura, não ângulo final", () => {
+  // Ângulo final deixaria "de 0° a 0°" ambíguo entre nada e a circunferência inteira.
+  assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 1000, 0, 360)).success, true);
+  assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 1000, 0, 0)).success, false, "varredura zero não é arco");
+  assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 1000, 0, 361)).success, false);
+  assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 0, 0, 90)).success, false, "raio zero não é arco");
+  assert.equal(elementoSchema.safeParse({ ...arco("a1", { x: 0, y: 0 }, 1000, 0, 90), raioMm: 10.5 }).success, false);
+});
+
+test("os pontos do arco ficam no raio e cobrem só a varredura", () => {
+  const pontos = pontosDoArco(arco("a1", { x: 2000, y: 2000 }, 1000, 0, 90));
+  for (const ponto of pontos) {
+    assert.ok(Math.abs(Math.hypot(ponto.x - 2000, ponto.y - 2000) - 1000) <= 1, "ponto fora do raio");
+  }
+  assert.deepEqual(pontos[0], { x: 3000, y: 2000 }, "0° é à direita");
+  assert.deepEqual(pontos[pontos.length - 1], { x: 2000, y: 1000 }, "90° sobe na planta");
+  assert.ok(pontos.every((ponto) => Number.isInteger(ponto.x) && Number.isInteger(ponto.y)));
+});
+
+test("o círculo fecha em si mesmo", () => {
+  const pontos = pontosDoArco(arco("a1", { x: 0, y: 0 }, 500, 0, 360));
+  assert.deepEqual(pontos[0], pontos[pontos.length - 1]);
+});
+
+test("a caixa do arco abraça o traço, não a circunferência inteira", () => {
+  // Com a caixa do centro mais o raio, um arco de 20° teria área de clique vinte vezes
+  // maior do que o traço, e selecionar o que está atrás dele ficaria impossível.
+  const caixa = limitesDoElemento(arco("a1", { x: 0, y: 0 }, 1000, 0, 90));
+  assert.ok(caixa.x1 >= -100 && caixa.y2 <= 100, `a caixa vazou para o quadrante errado: ${JSON.stringify(caixa)}`);
+  assert.ok(caixa.x2 >= 1000 && caixa.y1 <= -1000);
+});
+
+test("mover o arco move o centro e preserva a forma", () => {
+  const movido = moverElemento(arco("a1", { x: 0, y: 0 }, 1000, 30, 120), 500, 500, 100);
+  assert.deepEqual(movido.centro, { x: 500, y: 500 });
+  assert.equal(movido.raioMm, 1000);
+  assert.equal(movido.inicioGraus, 30);
+  assert.equal(movido.varreduraGraus, 120);
+  assert.equal(elementoSchema.safeParse(movido).success, true);
+});
+
+test("o arco entra no encaixe pela ponta e pelo centro, não por cada corda", () => {
+  const documento = doc([arco("a1", { x: 2000, y: 2000 }, 1000, 0, 90)]);
+  const naPonta = encaixePerto(documento, { x: 3040, y: 2020 }, padrao);
+  assert.equal(naPonta.tipo, "extremo");
+  assert.deepEqual(naPonta.ponto, { x: 3000, y: 2000 });
+
+  const noCentro = encaixePerto(documento, { x: 2030, y: 1970 }, padrao);
+  assert.equal(noCentro.tipo, "centro");
+  assert.deepEqual(noCentro.ponto, { x: 2000, y: 2000 });
+
+  const notaveis = pontosNotaveis(documento);
+  assert.ok(notaveis.length <= 4, `o arco despejou ${notaveis.length} candidatos de encaixe na tela`);
+});
+
+test("o arco não inventa área no quantitativo", () => {
+  const resumo = quantitativo(doc([arco("a1", { x: 0, y: 0 }, 1000, 0, 360)]));
+  assert.equal(resumo.areaTotalM2, 0);
+  assert.equal(resumo.paredesM, 0);
+});
+
+test("arco e círculo sobrevivem à ida e volta em DXF como curva, não como polilinha", () => {
+  const documento = doc([
+    arco("a1", { x: 2000, y: 1000 }, 800, 0, 90),
+    arco("a2", { x: 5000, y: 5000 }, 450, 0, 360),
+  ]);
+  const saida = exportarDxf(documento);
+  assert.ok(saida.includes("\nARC\n"), "o arco virou outra coisa no arquivo");
+  assert.ok(saida.includes("\nCIRCLE\n"), "o círculo virou outra coisa no arquivo");
+
+  const lido = lerDxf(saida, { unidade: "mm" });
+  const arcos = lido.elementos.filter((elemento) => elemento.tipo === "arco");
+  assert.equal(arcos.length, 2, "a curva voltou achatada e o raio se perdeu");
+  const quarto = arcos.find((elemento) => elemento.varreduraGraus === 90);
+  assert.deepEqual(quarto.centro, { x: 2000, y: 1000 });
+  assert.equal(quarto.raioMm, 800);
+  assert.equal(quarto.inicioGraus, 0);
+  const circulo = arcos.find((elemento) => elemento.varreduraGraus === 360);
+  assert.equal(circulo.raioMm, 450);
+  assert.deepEqual(circulo.centro, { x: 5000, y: 5000 });
+});
+
+test("arco que atravessa o zero volta com a mesma varredura", () => {
+  // De 300° a 30° são 90°, não 270°. Errar o sinal aqui desenha o arco complementar.
+  const lido = lerDxf(exportarDxf(doc([arco("a1", { x: 0, y: 0 }, 1000, 300, 90)])), { unidade: "mm" });
+  const [voltou] = lido.elementos.filter((elemento) => elemento.tipo === "arco");
+  assert.equal(voltou.inicioGraus, 300);
+  assert.equal(voltou.varreduraGraus, 90);
+});
+
+test("arco sem raio no arquivo é declarado em vez de virar um ponto", () => {
+  const lido = lerDxf([
+    "0", "SECTION", "2", "ENTITIES",
+    "0", "CIRCLE", "8", "0", "10", "0", "20", "0", "40", "0",
+    "0", "ENDSEC", "0", "EOF",
+  ].join("\n") + "\n", { unidade: "mm" });
+  assert.equal(lido.elementos.length, 0);
+  assert.match(lido.avisos.join(" "), /arco sem raio/);
+});
+
+// ## Paralela
+
+test("a paralela da parede fica à distância pedida e mantém o comprimento", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const paralela = paralelaDe(original, 150);
+  assert.equal(paralela.a.y, paralela.b.y);
+  assert.equal(Math.abs(paralela.a.y), 150);
+  assert.equal(comprimentoM(paralela.a, paralela.b), comprimentoM(original.a, original.b));
+  assert.equal(elementoSchema.safeParse(paralela).success, true);
+});
+
+test("o sinal escolhe o lado", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const esquerda = paralelaDe(original, 150);
+  const direita = paralelaDe(original, -150);
+  assert.equal(esquerda.a.y, -direita.a.y);
+  assert.notEqual(esquerda.a.y, direita.a.y);
+});
+
+test("a paralela do cômodo encolhe por dentro e cresce por fora", () => {
+  const pontos = [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 3000 }, { x: 0, y: 3000 }];
+  const dentro = paralelaDe(comodo("c1", pontos), -200);
+  const fora = paralelaDe(comodo("c1", pontos), 200);
+  assert.equal(Math.round(areaM2(dentro.pontos) * 100) / 100, 9.36, "3,6 × 2,6 m");
+  assert.equal(Math.round(areaM2(fora.pontos) * 100) / 100, 14.96, "4,4 × 3,4 m");
+  assert.equal(dentro.pontos.length, 4, "a paralela do retângulo continua tendo quatro cantos");
+  assert.equal(elementoSchema.safeParse(dentro).success, true);
+});
+
+test("os cantos da paralela do retângulo caem no lugar exato", () => {
+  const pontos = [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 3000 }, { x: 0, y: 3000 }];
+  const dentro = paralelaDe(comodo("c1", pontos), -200);
+  assert.deepEqual(dentro.pontos, [
+    { x: 200, y: 200 }, { x: 3800, y: 200 }, { x: 3800, y: 2800 }, { x: 200, y: 2800 },
+  ]);
+});
+
+test("canto fechado demais é chanfrado em vez de virar espeto", () => {
+  // Um espeto de dez metros saindo de um cômodo é pior do que um canto levemente
+  // arredondado, e passa despercebido até alguém imprimir.
+  const agudo = [{ x: 0, y: 0 }, { x: 5000, y: 0 }, { x: 0, y: 60 }];
+  const resultado = paralelaDe(comodo("c1", agudo), 200);
+  assert.ok(resultado, "a operação não pode simplesmente falhar");
+  for (const ponto of resultado.pontos) {
+    assert.ok(Math.hypot(ponto.x, ponto.y) < 40000, `emenda disparou para ${JSON.stringify(ponto)}`);
+  }
+});
+
+test("a paralela do traço aberto não fecha o traço", () => {
+  const traco = { id: "t1", camada: "anotacao", tipo: "traco", espessuraMm: 20,
+    pontos: [{ x: 0, y: 0 }, { x: 2000, y: 0 }, { x: 2000, y: 2000 }] };
+  const paralela = paralelaDe(traco, 100);
+  assert.equal(paralela.pontos.length, 3);
+  assert.notDeepEqual(paralela.pontos[0], paralela.pontos[2]);
+});
+
+test("a paralela do arco é concêntrica, e não existe abaixo do centro", () => {
+  const paralela = paralelaDe(arco("a1", { x: 0, y: 0 }, 1000, 0, 90), 200);
+  assert.deepEqual(paralela.centro, { x: 0, y: 0 });
+  assert.equal(paralela.raioMm, 800);
+  assert.equal(paralelaDe(arco("a1", { x: 0, y: 0 }, 100, 0, 90), 500), null, "raio negativo não é arco");
+});
+
+test("o que não tem paralela devolve nada, em vez de um resultado inventado", () => {
+  const cota = { id: "k1", camada: "anotacao", tipo: "cota", a: { x: 0, y: 0 }, b: { x: 1000, y: 0 }, deslocamentoMm: 300 };
+  assert.equal(paralelaDe(cota, 100), null);
+  assert.equal(paralelaDe(parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 }), 0), null, "distância zero não é paralela");
+  assert.equal(paralelaDe(parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 }), NaN), null);
+  assert.equal(paralelaDePolilinha([{ x: 0, y: 0 }], 100, false), null);
+  assert.equal(paralelaDePolilinha([{ x: 0, y: 0 }, { x: 0, y: 0 }], 100, false), null, "pontos repetidos não formam segmento");
+});
+
+test("as duas faces da parede saem simétricas e na espessura dela", () => {
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const [um, outro] = facesDaParede(original);
+  assert.equal(Math.abs(um.a.y - outro.a.y), original.espessuraMm);
+  assert.equal(um.a.y, -outro.a.y);
+  assert.equal(facesDaParede(comodo("c1", [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }])), null);
+});
+
+test("a paralela não reaproveita o identificador do original", () => {
+  // Dois elementos com o mesmo id se apagam mutuamente na hora de editar.
+  const original = parede("p1", { x: 0, y: 0 }, { x: 4000, y: 0 });
+  const paralela = paralelaDe(original, 150);
+  assert.equal(paralela.id, original.id, "quem chama é que dá o id novo — este teste fixa o contrato");
+  assert.notDeepEqual(paralela.a, original.a);
+});

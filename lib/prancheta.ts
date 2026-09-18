@@ -62,6 +62,17 @@ export const elementoSchema = z.discriminatedUnion("tipo", [
   z.object({ ...base, tipo: z.literal("texto"), posicao: ponto, texto: z.string().min(1).max(500), alturaMm: mm.min(10).max(5000), rotacaoGraus: z.number().int().min(0).max(359) }).strict(),
   z.object({ ...base, tipo: z.literal("cota"), a: ponto, b: ponto, deslocamentoMm: mm.min(-5000).max(5000) }).strict(),
   z.object({ ...base, tipo: z.literal("traco"), pontos: z.array(ponto).min(2).max(2000), espessuraMm: mm.min(1).max(200) }).strict(),
+  // Arco guardado por centro, raio, ângulo de partida e VARREDURA — não por ângulo final.
+  // Ângulo final deixaria "de 0° a 0°" ambíguo entre nada e a circunferência inteira, e é
+  // a circunferência inteira que se desenha o tempo todo. Varredura 360 é o círculo, e
+  // tudo continua inteiro: nada de fração acumulando erro a cada edição.
+  z.object({
+    ...base, tipo: z.literal("arco"), centro: ponto,
+    raioMm: mm.min(1).max(1_000_000),
+    inicioGraus: z.number().int().min(0).max(359),
+    varreduraGraus: z.number().int().min(1).max(360),
+    espessuraMm: mm.min(1).max(1000),
+  }).strict(),
 ]);
 export type Elemento = z.infer<typeof elementoSchema>;
 
@@ -128,6 +139,30 @@ export function areaM2(pontos: { x: number; y: number }[]): number {
     dobro += atual.x * proximo.y - proximo.x * atual.y;
   }
   return Math.abs(dobro) / 2 / 1_000_000;
+}
+
+/** O arco em pontos. Uma tessellation só, compartilhada pela tela, pelo arquivo exportado,
+ *  pela caixa de limites e pelo encaixe — arco que muda de forma entre o que se vê e o que
+ *  se imprime não é arco, é engano.
+ *
+ *  O passo sai da flecha: com 1 mm de desvio máximo, a curva no papel não se distingue de
+ *  uma curva de verdade e o desenho não incha com mil pontos por circunferência.
+ *
+ *  O ângulo é o do desenho técnico — 0° à direita, crescendo no anti-horário. Na tela o Y
+ *  aponta para baixo, e é por isso que ele entra negativo aqui. */
+export function pontosDoArco(arco: Extract<Elemento, { tipo: "arco" }>): { x: number; y: number }[] {
+  const passos = Math.min(360, Math.max(8, Math.ceil(Math.PI / Math.acos(Math.max(-1, Math.min(1, 1 - 1 / arco.raioMm))))));
+  const quantos = Math.max(2, Math.ceil(passos * arco.varreduraGraus / 360));
+  const pontos: { x: number; y: number }[] = [];
+  for (let i = 0; i <= quantos; i += 1) {
+    const graus = arco.inicioGraus + arco.varreduraGraus * i / quantos;
+    const radianos = graus * Math.PI / 180;
+    pontos.push({
+      x: Math.round(arco.centro.x + arco.raioMm * Math.cos(radianos)) || 0,
+      y: Math.round(arco.centro.y - arco.raioMm * Math.sin(radianos)) || 0,
+    });
+  }
+  return pontos;
 }
 
 /** Comprimento em metros, para cota e para somar metragem de parede. */
@@ -217,6 +252,9 @@ export function moverElemento(elemento: Elemento, dx: number, dy: number, malhaM
     case "comodo":
     case "traco":
       return { ...elemento, pontos: elemento.pontos.map(p) };
+    case "arco":
+      // Mover o arco é mover o centro: raio e ângulos são a forma dele, não o lugar.
+      return { ...elemento, centro: p(elemento.centro) };
     default:
       return { ...elemento, posicao: p(elemento.posicao) };
   }
@@ -227,13 +265,17 @@ export function moverElemento(elemento: Elemento, dx: number, dy: number, malhaM
 export function limitesDoElemento(elemento: Elemento): { x1: number; y1: number; x2: number; y2: number } {
   const pontos = elemento.tipo === "parede" || elemento.tipo === "cota" ? [elemento.a, elemento.b]
     : elemento.tipo === "comodo" || elemento.tipo === "traco" ? elemento.pontos
+    // O arco pela tessellation: a caixa do centro mais o raio abraçaria o círculo inteiro
+    // e um arco de 20° ficaria com uma área de clique vinte vezes maior do que o traço.
+    : elemento.tipo === "arco" ? pontosDoArco(elemento)
     : [elemento.posicao];
   const xs = pontos.map((ponto) => ponto.x);
   const ys = pontos.map((ponto) => ponto.y);
   const folga = elemento.tipo === "mobilia" || elemento.tipo === "imagem"
     ? { x: elemento.larguraMm / 2, y: elemento.alturaMm / 2 }
     : elemento.tipo === "abertura" ? { x: elemento.larguraMm / 2, y: 100 }
-    : elemento.tipo === "parede" || elemento.tipo === "traco" ? { x: elemento.espessuraMm / 2, y: elemento.espessuraMm / 2 }
+    : elemento.tipo === "parede" || elemento.tipo === "traco" || elemento.tipo === "arco"
+      ? { x: elemento.espessuraMm / 2, y: elemento.espessuraMm / 2 }
     : { x: 250, y: 250 };
   return {
     x1: Math.min(...xs) - folga.x, y1: Math.min(...ys) - folga.y,
@@ -331,6 +373,8 @@ function elementoParaSvg(elemento: Elemento): string {
     }
     case "traco":
       return `<polyline points="${elemento.pontos.map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="#1C190F" stroke-width="${elemento.espessuraMm}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    case "arco":
+      return `<polyline points="${pontosDoArco(elemento).map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="#1C190F" stroke-width="${elemento.espessuraMm}" stroke-linecap="round" stroke-linejoin="round"/>`;
   }
 }
 

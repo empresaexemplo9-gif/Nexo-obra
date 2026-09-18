@@ -96,26 +96,40 @@ test("polilinha fechada volta ao primeiro ponto", () => {
   assert.deepEqual(pontos[4], pontos[0]);
 });
 
-test("círculo vira polígono fechado com o raio certo", () => {
+test("círculo entra como círculo, com centro e raio preservados", () => {
+  // Antes virava polilinha, e uma vez achatado o raio não voltava mais: quem recebesse o
+  // arquivo de volta não teria como cotá-lo nem prolongá-lo.
   const resultado = lerDxf(arquivo(secao("ENTITIES",
     ["0", "CIRCLE", "8", "0", "10", "1000", "20", "1000", "40", "500"])), { unidade: "mm" });
-  const pontos = tracos(resultado)[0].pontos;
-  assert.ok(pontos.length > 12, "poucos segmentos deixariam o círculo poligonal à vista");
-  for (const ponto of pontos) {
-    const raio = Math.hypot(ponto.x - 1000, ponto.y + 1000);
-    assert.ok(Math.abs(raio - 500) <= 1, `ponto a ${raio} mm do centro, fora da tolerância de 1 mm`);
-  }
+  const [circulo] = resultado.elementos.filter((elemento) => elemento.tipo === "arco");
+  assert.deepEqual(circulo.centro, { x: 1000, y: -1000 }, "o centro acompanha a inversão do eixo");
+  assert.equal(circulo.raioMm, 500);
+  assert.equal(circulo.varreduraGraus, 360);
 });
 
-test("arco cobre só o trecho pedido", () => {
+test("o raio do círculo é convertido pela unidade do desenho", () => {
+  const resultado = lerDxf(arquivo(cabecalho(6), secao("ENTITIES",
+    ["0", "CIRCLE", "8", "0", "10", "0", "20", "0", "40", "1.5"])));
+  assert.equal(resultado.elementos[0].raioMm, 1500);
+});
+
+test("arco guarda o trecho pedido, e não o complementar", () => {
   const resultado = lerDxf(arquivo(secao("ENTITIES",
     ["0", "ARC", "8", "0", "10", "0", "20", "0", "40", "1000", "50", "0", "51", "90"])), { unidade: "mm" });
-  const pontos = tracos(resultado)[0].pontos;
-  assert.deepEqual(pontos[0], { x: 1000, y: 0 });
-  // 90° no DXF é o topo; com o eixo invertido, y negativo.
-  assert.equal(pontos[pontos.length - 1].x, 0);
-  assert.equal(pontos[pontos.length - 1].y, -1000);
-  assert.ok(pontos.every((ponto) => ponto.x >= -1 && ponto.y <= 1), "o arco vazou para fora do quadrante pedido");
+  const [arco] = resultado.elementos.filter((elemento) => elemento.tipo === "arco");
+  assert.equal(arco.inicioGraus, 0);
+  assert.equal(arco.varreduraGraus, 90);
+  assert.equal(arco.raioMm, 1000);
+});
+
+test("arco que atravessa o zero não vira o arco de 270°", () => {
+  // De 300° a 30° são 90°. Subtrair sem normalizar daria -270, e o desenho sairia com
+  // tudo menos o trecho que o arquivo pedia.
+  const resultado = lerDxf(arquivo(secao("ENTITIES",
+    ["0", "ARC", "8", "0", "10", "0", "20", "0", "40", "1000", "50", "300", "51", "30"])), { unidade: "mm" });
+  const [arco] = resultado.elementos.filter((elemento) => elemento.tipo === "arco");
+  assert.equal(arco.inicioGraus, 300);
+  assert.equal(arco.varreduraGraus, 90);
 });
 
 test("texto entra com o conteúdo, a altura e o giro corrigido pelo eixo", () => {

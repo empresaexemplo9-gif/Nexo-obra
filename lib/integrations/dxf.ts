@@ -88,25 +88,6 @@ function vertices(entidade: Entidade): { x: number; y: number }[] {
   return pontos;
 }
 
-/** Arco e círculo viram segmentos. O passo é escolhido pela flecha: com 1 mm de desvio
- *  máximo, a curva impressa não se distingue de uma curva de verdade, e o arquivo não
- *  incha com mil pontos por circunferência. */
-function arco(centro: { x: number; y: number }, raio: number, grausInicio: number, grausFim: number, escala: number) {
-  const raioMm = Math.abs(raio) * escala;
-  if (raioMm <= 0) return [];
-  const passos = Math.min(180, Math.max(8, Math.ceil(Math.PI / Math.acos(Math.max(-1, Math.min(1, 1 - 1 / raioMm))))));
-  // Varredura zero significa circunferência inteira: é assim que CIRCLE chega aqui.
-  const bruto = ((grausFim - grausInicio) % 360 + 360) % 360;
-  const varredura = bruto === 0 ? 360 : bruto;
-  const quantos = Math.max(2, Math.ceil(passos * varredura / 360));
-  const pontos: { x: number; y: number }[] = [];
-  for (let i = 0; i <= quantos; i += 1) {
-    const angulo = (grausInicio + varredura * i / quantos) * Math.PI / 180;
-    pontos.push({ x: centro.x + raio * Math.cos(angulo), y: centro.y + raio * Math.sin(angulo) });
-  }
-  return pontos;
-}
-
 // Nome de camada do CAD costuma dizer a disciplina: A-PAREDE, ELE-TOMADAS, ILU-TETO.
 // O palpite adianta o trabalho e fica visível no painel de camadas, onde é corrigido em
 // um clique — diferente de um palpite escondido, que ninguém descobre que existe.
@@ -297,13 +278,24 @@ export function lerDxf(texto: string, opcoes: { unidade?: Unidade } = {}): Impor
       case "SEQEND":
         return; // Já lidos junto da POLYLINE.
       case "CIRCLE":
-        traco(arco({ x: numeroDe(entidade, 10, 0), y: numeroDe(entidade, 20, 0) },
-          numeroDe(entidade, 40, 0), 0, 360, escala).map((p) => ponto(p, desvio)), camada);
+      case "ARC": {
+        // Curva entra como curva. Antes virava polilinha, e uma vez achatada o raio não
+        // voltava mais: quem recebesse o arquivo de volta não teria como cotá-lo.
+        const centro = ponto({ x: numeroDe(entidade, 10, 0), y: numeroDe(entidade, 20, 0) }, desvio);
+        const raioMm = Math.round(Math.abs(numeroDe(entidade, 40, 0)) * escala);
+        if (raioMm < 1) { ignorados["arco sem raio"] = (ignorados["arco sem raio"] ?? 0) + 1; return; }
+        const circulo = entidade.tipo === "CIRCLE";
+        const inicio = circulo ? 0 : numeroDe(entidade, 50, 0);
+        const fim = circulo ? 0 : numeroDe(entidade, 51, 0);
+        const bruta = ((fim - inicio) % 360 + 360) % 360;
+        guardarElemento({
+          id: proximoId(), camada, tipo: "arco", centro, raioMm,
+          inicioGraus: ((Math.round(inicio) % 360) + 360) % 360,
+          varreduraGraus: circulo || bruta === 0 ? 360 : Math.max(1, Math.round(bruta)),
+          espessuraMm: 25,
+        });
         return;
-      case "ARC":
-        traco(arco({ x: numeroDe(entidade, 10, 0), y: numeroDe(entidade, 20, 0) }, numeroDe(entidade, 40, 0),
-          numeroDe(entidade, 50, 0), numeroDe(entidade, 51, 0), escala).map((p) => ponto(p, desvio)), camada);
-        return;
+      }
       case "POINT": {
         const centro = ponto({ x: numeroDe(entidade, 10, 0), y: numeroDe(entidade, 20, 0) }, desvio);
         traco([{ x: centro.x - 50, y: centro.y }, { x: centro.x + 50, y: centro.y }], camada, 20);
@@ -535,6 +527,24 @@ export function exportarDxf(documento: { camadas: Camada[]; elementos: Elemento[
         escrever(10, ex(elemento.posicao.x)); escrever(20, ey(elemento.posicao.y)); escrever(30, 0);
         escrever(40, 120);
         texto(camada, { x: elemento.posicao.x + 180, y: elemento.posicao.y }, elemento.rotulo ?? elemento.familia, 150, 0);
+        break;
+      }
+      case "arco": {
+        // Sai como curva de verdade, não como cem segmentos: o outro programa precisa
+        // poder cotar o raio e prolongar o arco.
+        if (elemento.varreduraGraus >= 360) {
+          escrever(0, "CIRCLE"); escrever(8, camada);
+          escrever(10, ex(elemento.centro.x)); escrever(20, ey(elemento.centro.y)); escrever(30, 0);
+          escrever(40, numeroDxf(elemento.raioMm));
+        } else {
+          escrever(0, "ARC"); escrever(8, camada);
+          escrever(10, ex(elemento.centro.x)); escrever(20, ey(elemento.centro.y)); escrever(30, 0);
+          escrever(40, numeroDxf(elemento.raioMm));
+          // O ângulo do desenho já é anti-horário a partir do +X, igual ao do DXF: o que
+          // muda entre os dois é só o sentido do Y, e esse é desfeito acima.
+          escrever(50, numeroDxf(elemento.inicioGraus));
+          escrever(51, numeroDxf((elemento.inicioGraus + elemento.varreduraGraus) % 360));
+        }
         break;
       }
       case "texto":

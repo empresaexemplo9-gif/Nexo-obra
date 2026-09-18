@@ -1,4 +1,4 @@
-import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar } from "@/lib/prancheta";
+import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, pontosDoArco } from "@/lib/prancheta";
 
 // O que separa desenhar de chutar.
 //
@@ -43,15 +43,14 @@ export function segmentosDo(documento: Documento): Segmento[] {
       saida.push({ a: elemento.a, b: elemento.b, elementoId: elemento.id });
       continue;
     }
-    if (elemento.tipo === "comodo" || elemento.tipo === "traco") {
+    if (elemento.tipo === "comodo" || elemento.tipo === "traco" || elemento.tipo === "arco") {
+      // O arco entra pela mesma tessellation que a tela desenha, então o encaixe cai onde
+      // o traço de fato está — e não numa curva ideal que ninguém vê.
+      const pontos = elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
       const fechado = elemento.tipo === "comodo";
-      const quantos = fechado ? elemento.pontos.length : elemento.pontos.length - 1;
+      const quantos = fechado ? pontos.length : pontos.length - 1;
       for (let i = 0; i < quantos; i += 1) {
-        saida.push({
-          a: elemento.pontos[i],
-          b: elemento.pontos[(i + 1) % elemento.pontos.length],
-          elementoId: elemento.id,
-        });
+        saida.push({ a: pontos[i], b: pontos[(i + 1) % pontos.length], elementoId: elemento.id });
       }
     }
   }
@@ -61,7 +60,17 @@ export function segmentosDo(documento: Documento): Segmento[] {
 /** Pontos notáveis do desenho: extremo, meio e centro. */
 export function pontosNotaveis(documento: Documento): Encaixe[] {
   const saida: Encaixe[] = [];
+  // Um arco vira dezenas de cordas na tessellation. Oferecer extremo e meio de cada uma
+  // encheria a tela de candidatos falsos: no arco, o que se usa é a ponta e o centro.
+  const doArco = new Set(documento.elementos.filter((elemento) => elemento.tipo === "arco").map((elemento) => elemento.id));
+  const porElemento = new Map<string, Segmento[]>();
   for (const segmento of segmentosDo(documento)) {
+    if (doArco.has(segmento.elementoId)) {
+      const lista = porElemento.get(segmento.elementoId) ?? [];
+      lista.push(segmento);
+      porElemento.set(segmento.elementoId, lista);
+      continue;
+    }
     saida.push({ tipo: "extremo", ponto: segmento.a, elementoId: segmento.elementoId });
     saida.push({ tipo: "extremo", ponto: segmento.b, elementoId: segmento.elementoId });
     saida.push({
@@ -70,9 +79,15 @@ export function pontosNotaveis(documento: Documento): Encaixe[] {
       elementoId: segmento.elementoId,
     });
   }
+  for (const [elementoId, cordas] of porElemento) {
+    saida.push({ tipo: "extremo", ponto: cordas[0].a, elementoId });
+    saida.push({ tipo: "extremo", ponto: cordas[cordas.length - 1].b, elementoId });
+    saida.push({ tipo: "meio", ponto: cordas[Math.floor(cordas.length / 2)].a, elementoId });
+  }
   for (const elemento of elementosVisiveis(documento)) {
     if (camadaBloqueada(documento, elemento.camada)) continue;
-    if ("posicao" in elemento) saida.push({ tipo: "centro", ponto: elemento.posicao, elementoId: elemento.id });
+    if (elemento.tipo === "arco") saida.push({ tipo: "centro", ponto: elemento.centro, elementoId: elemento.id });
+    else if ("posicao" in elemento) saida.push({ tipo: "centro", ponto: elemento.posicao, elementoId: elemento.id });
   }
   return saida;
 }
@@ -273,4 +288,137 @@ export function moverVertice(elemento: Elemento, indice: number, destino: Ponto)
 export function verticesDe(elemento: Elemento): { indice: number; ponto: Ponto }[] {
   if (elemento.tipo !== "comodo" && elemento.tipo !== "traco") return [];
   return elemento.pontos.map((ponto, indice) => ({ indice, ponto }));
+}
+
+// ## Paralela
+//
+// Desenhar a face interna de uma parede de 15 cm medindo 150 mm em cada canto é trabalho
+// de escriba. A paralela resolve num comando, e é a operação que transforma um eixo de
+// parede em parede com duas faces.
+//
+// O método é o clássico: desloca cada segmento pela normal e cruza as retas vizinhas para
+// achar o canto novo. Em polígono bem-comportado — que é o que uma planta tem — sai
+// exato. Em canto muito fechado a emenda dispara para longe, e aí ela é cortada: um
+// espeto de dez metros saindo de um cômodo é pior do que um canto levemente arredondado.
+
+const LIMITE_EMENDA = 6;
+
+/** Normal unitária do segmento, apontando para a esquerda de quem caminha de `a` para
+ *  `b`. Distância positiva vai para esse lado; negativa, para o outro. */
+function normal(a: Ponto, b: Ponto): Ponto | null {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const modulo = Math.hypot(dx, dy);
+  if (modulo === 0) return null;
+  return { x: dy / modulo, y: -dx / modulo };
+}
+
+/** Cruzamento das RETAS que contêm os dois segmentos — inclusive no prolongamento.
+ *  Diferente de `interseccao`, que só aceita o cruzamento dentro dos dois: aqui o
+ *  prolongamento é exatamente o que forma o canto da paralela. */
+function cruzamentoDeRetas(um: Segmento, outro: Segmento): Ponto | null {
+  const r = { x: um.b.x - um.a.x, y: um.b.y - um.a.y };
+  const s = { x: outro.b.x - outro.a.x, y: outro.b.y - outro.a.y };
+  const denominador = r.x * s.y - r.y * s.x;
+  if (Math.abs(denominador) < 1e-9) return null;
+  const diferenca = { x: outro.a.x - um.a.x, y: outro.a.y - um.a.y };
+  const t = (diferenca.x * s.y - diferenca.y * s.x) / denominador;
+  return { x: um.a.x + t * r.x, y: um.a.y + t * r.y };
+}
+
+/** Polilinha deslocada. `fechada` liga o último ponto ao primeiro, como num cômodo. */
+export function paralelaDePolilinha(pontos: Ponto[], distanciaMm: number, fechada: boolean): Ponto[] | null {
+  const limpos = pontos.filter((ponto, i, todos) => i === 0 || ponto.x !== todos[i - 1].x || ponto.y !== todos[i - 1].y);
+  if (limpos.length < 2 || distanciaMm === 0) return null;
+
+  const deslocados: Segmento[] = [];
+  const quantos = fechada ? limpos.length : limpos.length - 1;
+  for (let i = 0; i < quantos; i += 1) {
+    const a = limpos[i];
+    const b = limpos[(i + 1) % limpos.length];
+    const n = normal(a, b);
+    if (!n) continue;
+    deslocados.push({
+      a: { x: a.x + n.x * distanciaMm, y: a.y + n.y * distanciaMm },
+      b: { x: b.x + n.x * distanciaMm, y: b.y + n.y * distanciaMm },
+      elementoId: "",
+    });
+  }
+  if (!deslocados.length) return null;
+
+  const saida: Ponto[] = [];
+  const emenda = (anterior: Segmento, proximo: Segmento, recuo: Ponto) => {
+    const cruzamento = cruzamentoDeRetas(anterior, proximo);
+    // Canto fechado demais joga o cruzamento longe: aí vale mais cortar e aceitar o
+    // pequeno chanfro do que deixar um espeto atravessando o desenho.
+    if (!cruzamento || distancia(cruzamento, recuo) > Math.abs(distanciaMm) * LIMITE_EMENDA) return recuo;
+    return cruzamento;
+  };
+
+  if (!fechada) saida.push(inteiro(deslocados[0].a));
+  for (let i = 0; i < deslocados.length; i += 1) {
+    const atual = deslocados[i];
+    const seguinte = deslocados[(i + 1) % deslocados.length];
+    if (!fechada && i === deslocados.length - 1) { saida.push(inteiro(atual.b)); break; }
+    saida.push(inteiro(emenda(atual, seguinte, atual.b)));
+  }
+  if (fechada && saida.length) {
+    // No fechado o primeiro canto é o cruzamento do último com o primeiro, que acabou de
+    // ser calculado: basta girar a lista para ela começar onde o original começa.
+    saida.unshift(saida.pop()!);
+  }
+  return saida.length >= 2 ? saida : null;
+}
+
+/**
+ * Paralela de um elemento, à distância dada em milímetros.
+ *
+ * O sinal escolhe o lado: positivo para a esquerda de quem percorre o desenho no sentido
+ * em que ele foi feito, negativo para a direita. O `id` fica vazio — quem chama dá um
+ * novo, porque dois elementos com o mesmo identificador se apagam mutuamente.
+ *
+ * Devolve `null` quando a operação não faz sentido para aquele tipo, em vez de inventar
+ * um resultado: cota e texto não têm paralela.
+ */
+export function paralelaDe(elemento: Elemento, distanciaMm: number): Elemento | null {
+  if (!Number.isFinite(distanciaMm) || Math.round(distanciaMm) === 0) return null;
+  const distancia = Math.round(distanciaMm);
+  switch (elemento.tipo) {
+    case "parede": {
+      const n = normal(elemento.a, elemento.b);
+      if (!n) return null;
+      return {
+        ...elemento,
+        a: inteiro({ x: elemento.a.x + n.x * distancia, y: elemento.a.y + n.y * distancia }),
+        b: inteiro({ x: elemento.b.x + n.x * distancia, y: elemento.b.y + n.y * distancia }),
+      };
+    }
+    case "comodo": {
+      const pontos = paralelaDePolilinha(elemento.pontos, distancia, true);
+      return pontos && pontos.length >= 3 ? { ...elemento, pontos } : null;
+    }
+    case "traco": {
+      const pontos = paralelaDePolilinha(elemento.pontos, distancia, false);
+      return pontos ? { ...elemento, pontos } : null;
+    }
+    case "arco": {
+      // Paralela de arco é arco concêntrico. O sinal segue a mesma convenção: positivo
+      // para fora só quando o arco é percorrido no sentido anti-horário.
+      const raioMm = elemento.raioMm - distancia;
+      if (raioMm < 1) return null;
+      return { ...elemento, raioMm };
+    }
+    default:
+      return null;
+  }
+}
+
+/** Dobra a parede: devolve as duas faces de uma parede desenhada pelo eixo. É o que
+ *  transforma um traço de estudo em parede com espessura desenhada. */
+export function facesDaParede(elemento: Elemento): [Elemento, Elemento] | null {
+  if (elemento.tipo !== "parede") return null;
+  const meia = Math.round(elemento.espessuraMm / 2);
+  const um = paralelaDe(elemento, meia);
+  const outro = paralelaDe(elemento, -meia);
+  return um && outro ? [um, outro] : null;
 }

@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowLeft, Blinds, Circle, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
+  ArrowLeft, Blinds, Circle, CircleDashed, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
   Lock, LockOpen, Minus, MousePointer2, PencilLine, Plug, Redo2, Ruler, Save, Sofa,
-  Magnet, Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
+  Copy, Magnet, Spline, Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,17 +16,19 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Encaixe, TIPOS_ENCAIXE, TipoEncaixe, encaixeLabels, encaixePerto, moverVertice,
-  ortogonal, resolverEntrada, verticesDe,
+  lerMedida, ortogonal, paralelaDe, resolverEntrada, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
   Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada,
   comprimentoM, disciplinaLabels, elementosVisiveis, encaixar, exportarSvg, glifoDoSimbolo,
+  pontosDoArco,
   limitesDoElemento, moverElemento, quantitativo, simboloLabels,
 } from "@/lib/prancheta";
 
 type Ferramenta =
   | "selecionar" | "parede" | "comodo" | "porta" | "janela" | "passagem"
-  | "simbolo" | "mobilia" | "imagem" | "texto" | "cota" | "traco";
+  | "simbolo" | "mobilia" | "imagem" | "texto" | "cota" | "traco"
+  | "circulo" | "arco";
 
 type ItemBiblioteca = {
   id: string; nome: string; categoria: string; larguraMm: number | null;
@@ -52,6 +54,8 @@ const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2
   { id: "texto", rotulo: "Texto", icone: Type, atalho: "T" },
   { id: "cota", rotulo: "Cota", icone: Ruler, atalho: "K" },
   { id: "traco", rotulo: "Traço livre", icone: PencilLine, atalho: "L" },
+  { id: "circulo", rotulo: "Círculo — centro e depois raio", icone: CircleDashed, atalho: "R" },
+  { id: "arco", rotulo: "Arco — centro, início e fim", icone: Spline, atalho: "A" },
 ];
 
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
@@ -60,6 +64,7 @@ const camadaDaFerramenta: Record<Ferramenta, string> = {
   selecionar: "layout", parede: "layout", comodo: "layout", porta: "layout",
   janela: "layout", passagem: "layout", simbolo: "eletrico", mobilia: "mobiliario",
   imagem: "mobiliario", texto: "anotacao", cota: "anotacao", traco: "anotacao",
+  circulo: "layout", arco: "layout",
 };
 
 type Importado = {
@@ -91,6 +96,13 @@ function alturaPelaProporcao(url: string, larguraMm: number): Promise<number> {
     imagem.onerror = () => rejeitar(new Error("não abriu"));
     imagem.src = url;
   });
+}
+
+/** Ângulo do desenho técnico entre dois pontos: 0° à direita, crescendo no anti-horário.
+ *  O Y da tela aponta para baixo, por isso ele entra negado. */
+function anguloDe(centro: { x: number; y: number }, ponto: { x: number; y: number }) {
+  const graus = Math.round(Math.atan2(-(ponto.y - centro.y), ponto.x - centro.x) * 180 / Math.PI);
+  return ((graus % 360) + 360) % 360;
 }
 
 function novoId() {
@@ -190,7 +202,10 @@ function DesenhoElemento({ elemento, selecionado }: { elemento: Elemento; seleci
       <text x={meio.x} y={meio.y - 80} fontSize={180} textAnchor="middle" fill="#846100" stroke="none">{metros(comprimentoM(elemento.a, elemento.b))}</text>
     </g>;
   }
-  return <polyline points={elemento.pontos.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} fill="none"
+  // Arco e traço desenham a mesma coisa: uma polilinha. O arco chega em pontos pela
+  // mesma tessellation que alimenta o arquivo exportado, então tela e papel concordam.
+  const linha = elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
+  return <polyline points={linha.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} fill="none"
     stroke={selecionado ? "#846100" : "#1C190F"} strokeWidth={elemento.espessuraMm} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
@@ -460,6 +475,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       definirPendentes((anterior) => [...anterior, ponto]);
       return;
     }
+    if (ferramenta === "circulo" || ferramenta === "arco") {
+      // Centro, depois um ponto do raio; no arco, um terceiro clique fecha a varredura.
+      // A ordem é a de todo CAD, e é a única em que o raio já aparece enquanto se move.
+      const marcados = [...pendentes, ponto];
+      const precisa = ferramenta === "arco" ? 3 : 2;
+      if (marcados.length < precisa) { definirPendentes(marcados); return; }
+      const [centro, inicio, fim] = marcados;
+      const raioMm = Math.round(Math.hypot(inicio.x - centro.x, inicio.y - centro.y));
+      if (raioMm < 1) { toast.error("O raio ficou em zero. Marque o centro e depois um ponto afastado dele."); definirPendentes([]); return; }
+      const inicioGraus = anguloDe(centro, inicio);
+      const varreduraGraus = ferramenta === "circulo"
+        ? 360
+        : Math.max(1, ((anguloDe(centro, fim) - inicioGraus) % 360 + 360) % 360 || 360);
+      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "arco", centro, raioMm, inicioGraus, varreduraGraus, espessuraMm: 25 });
+      definirPendentes([]);
+      return;
+    }
     if (ferramenta === "traco") {
       definirPendentes([ponto]);
       (evento.target as Element).setPointerCapture?.(evento.pointerId);
@@ -552,6 +584,22 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       return;
     }
     definirEntrada("");
+  }
+
+  /** Paralela do elemento selecionado. A distância vem do campo de medida, porque é o
+   *  mesmo gesto: dizer quanto. */
+  function criarParalela(sinal: 1 | -1) {
+    if (!selecionado || !canEdit) return;
+    const distancia = lerMedida(entrada) ?? Math.round(documento.malhaMm);
+    const nova = paralelaDe(selecionado, Math.abs(distancia) * sinal);
+    if (!nova) {
+      toast.error("Este elemento não tem paralela. Vale para parede, cômodo, traço e arco.");
+      return;
+    }
+    const id = novoId();
+    aplicar({ ...documento, elementos: [...documento.elementos, { ...nova, id }] });
+    definirSelecao(id);
+    toast.success(`Paralela a ${Math.abs(distancia)} mm.`);
   }
 
   function alternarEncaixe(tipo: TipoEncaixe) {
@@ -888,9 +936,30 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
           {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={elemento.id === selecao} />)}
-          {pendentes.length > 0 && <polyline
-            points={[...pendentes, ...(cursor ? [cursor] : [])].map((ponto) => `${ponto.x},${ponto.y}`).join(" ")}
-            fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140" />}
+          {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
+              cursor não diria nada sobre o raio que está sendo marcado. */}
+          {pendentes.length > 0 && (ferramenta === "circulo" || ferramenta === "arco")
+            ? (() => {
+              const centro = pendentes[0];
+              const referencia = pendentes[1] ?? cursor;
+              if (!referencia) return null;
+              const raio = Math.round(Math.hypot(referencia.x - centro.x, referencia.y - centro.y));
+              if (raio < 1) return null;
+              const varredura = ferramenta === "circulo" || pendentes.length < 2 || !cursor
+                ? 360
+                : Math.max(1, ((anguloDe(centro, cursor) - anguloDe(centro, pendentes[1])) % 360 + 360) % 360 || 360);
+              const previa = pontosDoArco({
+                id: "previa", camada: camadaAtiva, tipo: "arco", centro, raioMm: raio,
+                inicioGraus: anguloDe(centro, referencia), varreduraGraus: varredura, espessuraMm: 25,
+              });
+              return <g fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140">
+                <polyline points={previa.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} />
+                <line x1={centro.x} y1={centro.y} x2={referencia.x} y2={referencia.y} strokeWidth={30} />
+              </g>;
+            })()
+            : pendentes.length > 0 && <polyline
+              points={[...pendentes, ...(cursor ? [cursor] : [])].map((ponto) => `${ponto.x},${ponto.y}`).join(" ")}
+              fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140" />}
           {/* Alças dos vértices do elemento selecionado: corrigir um canto sem refazer o
               cômodo inteiro é o que faz alguém de fato corrigir o canto. */}
           {canEdit && selecionado && verticesDe(selecionado).map((vertice) => <rect key={vertice.indice}
@@ -919,7 +988,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
           {encaixeAtual && encaixeAtual.tipo !== "malha" && <span className="font-medium text-hoikos-gold">{encaixeLabels[encaixeAtual.tipo]}</span>}
           {orto && <span className="font-medium text-hoikos-gold">Ortogonal</span>}
           {pendentes.length > 0 && cursor && <span>
-            {metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
+            {ferramenta === "circulo" || ferramenta === "arco"
+              ? `raio ${metros(comprimentoM(pendentes[0], pendentes[1] ?? cursor))}`
+              : metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
           </span>}
           {canEdit && <form className="ml-auto flex items-center gap-2"
             onSubmit={(evento) => { evento.preventDefault(); confirmarEntrada(); }}>
@@ -993,7 +1064,37 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
                     if (Number.isFinite(valor)) trocar(selecionado.id, { rotacaoGraus: ((valor % 360) + 360) % 360 } as Partial<Elemento>);
                   }} />
               </div>}
+              {selecionado.tipo === "arco" && <>
+                <div className="space-y-1">
+                  <Label htmlFor="prop-raio" className="text-xs">Raio (mm)</Label>
+                  <Input id="prop-raio" type="number" inputMode="numeric" value={selecionado.raioMm} disabled={!canEdit}
+                    onChange={(evento) => {
+                      const valor = Math.round(Number(evento.target.value));
+                      if (Number.isFinite(valor) && valor >= 1) trocar(selecionado.id, { raioMm: valor } as Partial<Elemento>);
+                    }} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="prop-varredura" className="text-xs">Varredura (graus)</Label>
+                  <Input id="prop-varredura" type="number" inputMode="numeric" min={1} max={360} value={selecionado.varreduraGraus} disabled={!canEdit}
+                    onChange={(evento) => {
+                      const valor = Math.round(Number(evento.target.value));
+                      if (Number.isFinite(valor) && valor >= 1 && valor <= 360) trocar(selecionado.id, { varreduraGraus: valor } as Partial<Elemento>);
+                    }} />
+                </div>
+                <p className="text-xs text-hoikos-500">
+                  {selecionado.varreduraGraus >= 360 ? "Círculo completo." : `Arco de ${selecionado.varreduraGraus}° a partir de ${selecionado.inicioGraus}°.`}
+                </p>
+              </>}
               {selecionado.tipo === "parede" && <p className="text-xs text-hoikos-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
+              {canEdit && paralelaDe(selecionado, 1) && <div className="space-y-1 border-t border-hoikos-200 pt-3">
+                <p className="text-xs text-hoikos-600">
+                  Paralela à distância digitada no campo Medida (hoje {lerMedida(entrada) ?? documento.malhaMm} mm).
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => criarParalela(1)}><Copy />Um lado</Button>
+                  <Button variant="outline" size="sm" className="flex-1" onClick={() => criarParalela(-1)}><Copy />Outro lado</Button>
+                </div>
+              </div>}
               {canEdit && <Button variant="outline" size="sm" onClick={() => apagar(selecionado.id)}><Trash2 />Apagar elemento</Button>}
             </>}
           </TabsContent>
