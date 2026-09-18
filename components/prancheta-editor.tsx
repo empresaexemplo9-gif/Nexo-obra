@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft, Blinds, Circle, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
   Lock, LockOpen, Minus, MousePointer2, PencilLine, Plug, Redo2, Ruler, Save, Sofa,
-  Square, Trash2, Type, Undo2, ZoomIn, ZoomOut,
+  Square, Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -55,6 +55,15 @@ const camadaDaFerramenta: Record<Ferramenta, string> = {
   selecionar: "layout", parede: "layout", comodo: "layout", porta: "layout",
   janela: "layout", passagem: "layout", simbolo: "eletrico", mobilia: "mobiliario",
   imagem: "mobiliario", texto: "anotacao", cota: "anotacao", traco: "anotacao",
+};
+
+type Importado = {
+  nomeArquivo: string; unidade: string; unidadeDeclarada: boolean;
+  camadas: Camada[]; elementos: Elemento[]; avisos: string[]; truncado: boolean;
+};
+
+const UNIDADES_ROTULO: Record<string, string> = {
+  mm: "Milímetro", cm: "Centímetro", m: "Metro", polegada: "Polegada", pe: "Pé",
 };
 
 const MALHAS = [10, 25, 50, 100, 250, 500];
@@ -200,6 +209,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const [sujo, definirSujo] = useState(false);
   const [salvando, definirSalvando] = useState(false);
   const [conflito, definirConflito] = useState(false);
+  const [importado, definirImportado] = useState<Importado | null>(null);
+  const [importando, definirImportando] = useState(false);
+  const [unidadeImportacao, definirUnidadeImportacao] = useState("");
+  const arquivoDxf = useRef<HTMLInputElement | null>(null);
+  // O arquivo fica guardado aqui, e não no input: o input é limpo logo após a leitura
+  // para aceitar o mesmo arquivo duas vezes seguidas, e sem esta cópia trocar a unidade
+  // não teria o que reler.
+  const dxfEscolhido = useRef<File | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const arrastando = useRef<{ id: string; de: { x: number; y: number } } | null>(null);
   const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
@@ -493,6 +510,53 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     definirSujo(true);
   }
 
+  async function importar(arquivo: File, unidade: string) {
+    definirImportando(true);
+    try {
+      const formulario = new FormData();
+      formulario.append("file", arquivo);
+      if (unidade) formulario.append("unidade", unidade);
+      const resposta = await fetch("/api/studio/importar", { method: "POST", body: formulario });
+      const corpo = await resposta.json().catch(() => ({})) as Importado & { error?: string };
+      if (!resposta.ok) throw new Error(corpo.error ?? "Não foi possível ler o arquivo.");
+      definirImportado(corpo);
+      definirUnidadeImportacao(corpo.unidade);
+    } catch (causa) {
+      definirImportado(null);
+      toast.error(causa instanceof Error ? causa.message : "Não foi possível ler o arquivo.");
+    } finally {
+      definirImportando(false);
+    }
+  }
+
+  // A importação só entra no desenho depois que alguém confirma a unidade. Um arquivo
+  // lido em metro quando era centímetro entra cem vezes maior, e nada na tela denuncia
+  // isso antes de a cota ser medida.
+  function aceitarImportacao() {
+    if (!importado) return;
+    const existentes = new Set(documento.camadas.map((camada) => camada.id));
+    const novas = importado.camadas.filter((camada) => !existentes.has(camada.id));
+    const cabem = Math.max(0, 60 - documento.camadas.length);
+    if (novas.length > cabem) {
+      toast.error(`O arquivo traz ${novas.length} camadas e só cabem mais ${cabem} nesta prancha. Importe para uma prancha nova.`);
+      return;
+    }
+    const existentesElementos = new Set(documento.elementos.map((elemento) => elemento.id));
+    const chegando = importado.elementos.filter((elemento) => !existentesElementos.has(elemento.id));
+    if (documento.elementos.length + chegando.length > 20000) {
+      toast.error("O desenho ficaria acima do limite de 20 mil elementos. Importe para uma prancha nova.");
+      return;
+    }
+    aplicar({
+      ...documento,
+      camadas: [...documento.camadas, ...novas],
+      elementos: [...documento.elementos, ...chegando],
+    });
+    definirImportado(null);
+    dxfEscolhido.current = null;
+    toast.success(`${chegando.length} elemento(s) importados em ${novas.length} camada(s) novas.`);
+  }
+
   async function salvar() {
     if (!canEdit) return;
     definirSalvando(true); definirConflito(false);
@@ -540,6 +604,19 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={desfazer} disabled={!historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
         <Button variant="outline" size="sm" onClick={refazer} disabled={!refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
+        {canEdit && <>
+          <input ref={arquivoDxf} type="file" accept=".dxf,text/plain,application/dxf,image/vnd.dxf,.dwg" className="sr-only"
+            aria-label="Arquivo DXF para importar"
+            onChange={(evento) => {
+              const arquivo = evento.target.files?.[0] ?? null;
+              evento.target.value = "";
+              dxfEscolhido.current = arquivo;
+              if (arquivo) void importar(arquivo, "");
+            }} />
+          <Button variant="outline" size="sm" onClick={() => arquivoDxf.current?.click()} disabled={importando}>
+            {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar DXF
+          </Button>
+        </>}
         <Button variant="outline" size="sm" onClick={exportar}><Download />Exportar SVG</Button>
         {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>
           {salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Gravar
@@ -550,6 +627,41 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     {conflito && <p role="alert" className="rounded-md border border-hoikos-gold bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">
       Esta prancha foi alterada em outro lugar depois que você abriu. Exporte o seu desenho antes de recarregar, para não perder o que fez aqui.
     </p>}
+
+    {importado && <section aria-label="Revisão da importação"
+      className="space-y-3 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3">
+      <div>
+        <p className="eyebrow text-hoikos-600">Importação pronta para revisão</p>
+        <p className="mt-1 text-sm text-hoikos-800">
+          <strong>{importado.nomeArquivo}</strong> — {importado.elementos.length} elemento(s) em {importado.camadas.length} camada(s).
+        </p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="importacao-unidade" className="text-xs">Unidade do desenho no arquivo</Label>
+          <NativeSelect id="importacao-unidade" value={unidadeImportacao} className="h-10 w-44"
+            onChange={(evento) => {
+              const escolhida = evento.target.value;
+              definirUnidadeImportacao(escolhida);
+              if (dxfEscolhido.current) void importar(dxfEscolhido.current, escolhida);
+            }}>
+            {Object.entries(UNIDADES_ROTULO).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+          </NativeSelect>
+        </div>
+        <Button size="sm" onClick={aceitarImportacao} disabled={importando || !importado.elementos.length}>
+          Colocar na prancha
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => { definirImportado(null); dxfEscolhido.current = null; }}>Descartar</Button>
+      </div>
+      <p className="text-xs leading-5 text-hoikos-600">
+        {importado.unidadeDeclarada
+          ? `O arquivo declara ${UNIDADES_ROTULO[importado.unidade]?.toLowerCase() ?? importado.unidade}. Trocar aqui recalcula tudo.`
+          : "O arquivo não declara a unidade. Confira a escolha antes de colocar na prancha: em metro quando era centímetro, o desenho entra cem vezes maior."}
+      </p>
+      {importado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-hoikos-700">
+        {importado.avisos.map((aviso) => <li key={aviso}>· {aviso}</li>)}
+      </ul>}
+    </section>}
 
     <div className="prancheta-area grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">

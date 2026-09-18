@@ -18,6 +18,7 @@ const indice = await vite.ssrLoadModule("/app/api/studio/route.ts");
 const prancha = await vite.ssrLoadModule("/app/api/studio/[drawingId]/route.ts");
 const biblioteca = await vite.ssrLoadModule("/app/api/studio/assets/route.ts");
 const item = await vite.ssrLoadModule("/app/api/studio/assets/[assetId]/route.ts");
+const importacao = await vite.ssrLoadModule("/app/api/studio/importar/route.ts");
 const { CURRENT_TERMS_VERSION } = await vite.ssrLoadModule("/lib/terms.ts");
 const { documentoVazio } = await vite.ssrLoadModule("/lib/prancheta.ts");
 const migracoes = await Promise.all((await readdir(`${root}/drizzle`)).filter((arquivo) => arquivo.endsWith(".sql")).sort()
@@ -338,4 +339,91 @@ test("fundo sem proporção declarada não entra: traçar sobre planta esticada 
   }), parametros(criada.id));
   assert.equal(recusado.status, 400);
   assert.equal(db.sqlite.prepare("SELECT revisao FROM studio_drawings WHERE id = ?").get(criada.id).revisao, 1);
+});
+
+// ## Importação de DXF
+const dxfSimples = [
+  "0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "6", "0", "ENDSEC",
+  "0", "SECTION", "2", "ENTITIES",
+  "0", "LINE", "8", "A-PAREDES", "10", "0", "20", "0", "11", "4", "21", "0",
+  "0", "ENDSEC", "0", "EOF",
+].join("\n");
+
+function formularioDxf({ conteudo = dxfSimples, nome = "planta.dxf", tipo = "image/vnd.dxf", unidade } = {}) {
+  const form = new FormData();
+  form.append("file", new Blob([conteudo], { type: tipo }), nome);
+  if (unidade !== undefined) form.append("unidade", unidade);
+  return form;
+}
+
+test("importar DXF exige sessão e permissão de edição", async () => {
+  assert.equal((await importacao.POST(pedido("/api/studio/importar", { user: null, method: "POST", ...comArquivo(formularioDxf()) }))).status, 401);
+  assert.equal((await importacao.POST(pedido("/api/studio/importar", { user: "negado", method: "POST", ...comArquivo(formularioDxf()) }))).status, 403);
+  assert.equal((await importacao.POST(pedido("/api/studio/importar", { user: "leitor", method: "POST", ...comArquivo(formularioDxf()) }))).status, 403,
+    "ler a prancha não é o mesmo que despejar um desenho inteiro nela");
+});
+
+test("importar DXF devolve geometria em milímetro sem gravar nada", async () => {
+  const resposta = await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(formularioDxf()) }));
+  assert.equal(resposta.status, 200, JSON.stringify(await resposta.clone().json()));
+  const corpo = await resposta.json();
+  assert.equal(corpo.unidade, "m");
+  assert.equal(corpo.unidadeDeclarada, true);
+  assert.equal(corpo.nomeArquivo, "planta.dxf");
+  assert.equal(corpo.elementos.length, 1);
+  assert.deepEqual(corpo.elementos[0].pontos, [{ x: 0, y: 0 }, { x: 4000, y: 0 }]);
+  assert.equal(corpo.camadas[0].nome, "A-PAREDES");
+  assert.equal(resposta.headers.get("cache-control"), "private, no-store");
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM studio_drawings").get().n, 0,
+    "a importação é para revisão; quem grava é a pessoa");
+});
+
+test("a unidade pedida no formulário vence a do arquivo, e unidade inventada é recusada", async () => {
+  const emCm = await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(formularioDxf({ unidade: "cm" })) }));
+  assert.equal((await emCm.json()).elementos[0].pontos[1].x, 40);
+  const invalida = await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(formularioDxf({ unidade: "cubito" })) }));
+  assert.equal(invalida.status, 400);
+  assert.equal((await invalida.json()).code, "invalid_unit");
+});
+
+test("DWG é recusado dizendo a versão do arquivo e o caminho da saída", async () => {
+  const dwg = Buffer.concat([Buffer.from("AC1032", "ascii"), Buffer.alloc(64)]);
+  const resposta = await importacao.POST(pedido("/api/studio/importar", {
+    method: "POST", ...comArquivo(formularioDxf({ conteudo: dwg, nome: "planta.dwg", tipo: "image/vnd.dwg" })),
+  }));
+  assert.equal(resposta.status, 415);
+  const corpo = await resposta.json();
+  assert.equal(corpo.code, "dwg_nao_suportado");
+  assert.match(corpo.error, /AutoCAD 2018/);
+  assert.match(corpo.error, /DXF ASCII/, "recusar sem dizer o que fazer não ajuda ninguém");
+  assert.equal(corpo.details.versao, "AC1032");
+});
+
+test("arquivo que não é DXF é recusado com motivo, não com erro genérico", async () => {
+  const resposta = await importacao.POST(pedido("/api/studio/importar", {
+    method: "POST", ...comArquivo(formularioDxf({ conteudo: "isto é um texto qualquer", nome: "nota.txt", tipo: "text/plain" })),
+  }));
+  assert.equal(resposta.status, 415);
+  assert.equal((await resposta.json()).code, "dxf_invalido");
+});
+
+test("arquivo vazio e envio sem arquivo não passam", async () => {
+  const vazio = new FormData();
+  vazio.append("file", new Blob([], { type: "image/vnd.dxf" }), "vazio.dxf");
+  assert.equal((await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(vazio) }))).status, 400);
+  assert.equal((await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(new FormData()) }))).status, 400);
+});
+
+test("o desenho importado pode ser gravado sem o servidor recusar nenhum elemento", async () => {
+  const criada = await criar();
+  const lido = await (await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(formularioDxf()) }))).json();
+  const base = documentoVazio();
+  const salva = await prancha.PUT(pedido(`/api/studio/${criada.id}`, {
+    method: "PUT",
+    json: { documento: { ...base, camadas: [...base.camadas, ...lido.camadas], elementos: lido.elementos }, revisao: 1 },
+  }), parametros(criada.id));
+  assert.equal(salva.status, 200, JSON.stringify(await salva.clone().json()));
+  const aberta = await (await prancha.GET(pedido(`/api/studio/${criada.id}`), parametros(criada.id))).json();
+  assert.equal(aberta.prancha.documento.elementos.length, 1);
+  assert.equal(aberta.prancha.documento.camadas.length, 6);
 });
