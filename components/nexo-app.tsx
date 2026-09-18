@@ -287,7 +287,7 @@ function Kpi({ icon: Icon, label, value, detail, attention = false }: { icon: Lu
 
 function PageIntro({ module, action, actionLabel }: { module: ModuleId; action?: () => void; actionLabel?: string }) {
   const copy = moduleTitles[module];
-  return <div className="hoikos-page-intro flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow text-hoikos-600">Empresa atual</p><h1 className="display-heading mt-2 text-4xl text-hoikos-950">{copy.title}</h1><p className="mt-2 text-sm text-hoikos-500">{copy.description}</p></div>{action ? <Button onClick={action} className="rounded-md"><Plus />{actionLabel}</Button> : null}</div>;
+  return <div className="hoikos-page-intro hoikos-module-heading flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow text-hoikos-600">Empresa atual</p><h1 className="display-heading mt-2 text-4xl text-hoikos-950">{copy.title}</h1><p className="mt-2 text-sm text-hoikos-500">{copy.description}</p></div>{action ? <Button onClick={action} className="rounded-md"><Plus />{actionLabel}</Button> : null}</div>;
 }
 
 function HonestEmpty({ icon: Icon, title, description, action, actionLabel }: { icon: LucideIcon; title: string; description: string; action?: () => void; actionLabel?: string }) {

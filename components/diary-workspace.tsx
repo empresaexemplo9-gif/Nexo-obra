@@ -106,7 +106,7 @@ export function DiaryWorkspace({ projectId, canEdit, query = "" }: { projectId?:
   }, [filterString, page, requestKey]);
 
   return <section className="space-y-5">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+    <div className="hoikos-module-heading flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
       <div><h2 className="display-heading flex items-center gap-3 text-3xl text-hoikos-950"><span className="grid size-11 place-items-center rounded-md bg-primary text-hoikos-300"><BookOpenText className="size-5" /></span>Diário de obra</h2><p className="mt-2 text-sm text-hoikos-500">Atividades, ocorrências e fotos, no contexto de cada trabalho.</p></div>
       <div className="flex flex-wrap gap-2"><Button variant="outline" size="icon" aria-label="Atualizar diário" onClick={refresh}><RefreshCw className="size-4" /></Button>{data.total > 0 && data.total <= 31 && !error && <Button variant="outline" asChild><a href={`/api/diary/report?${filterString}`} target="_blank" rel="noopener noreferrer"><FileText className="size-4" />Relatório / PDF</a></Button>}{canEdit && <Button disabled={!projects.length || Boolean(optionsError)} onClick={() => setEditor("new")}><Plus className="size-4" />Novo registro</Button>}</div>
     </div>

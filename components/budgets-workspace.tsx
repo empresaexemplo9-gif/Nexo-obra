@@ -232,7 +232,7 @@ export function BudgetsWorkspace({ projects, query, canEdit }: { projects: Proje
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow text-hoikos-600">Empresa atual</p><h1 className="display-heading mt-2 text-4xl text-hoikos-950">Orçamentos</h1><p className="mt-2 text-sm text-hoikos-500">Versões, composições e preços padronizados por projeto.</p></div>{canEdit ? <Button onClick={() => setNewBudgetOpen(true)} disabled={!projects.length} className="rounded-md"><Plus />Novo orçamento</Button> : null}</div>
+      <div className="hoikos-module-heading flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow text-hoikos-600">Empresa atual</p><h1 className="display-heading mt-2 text-4xl text-hoikos-950">Orçamentos</h1><p className="mt-2 text-sm text-hoikos-500">Versões, composições e preços padronizados por projeto.</p></div>{canEdit ? <Button onClick={() => setNewBudgetOpen(true)} disabled={!projects.length} className="rounded-md"><Plus />Novo orçamento</Button> : null}</div>
 
       <Tabs defaultValue="budgets">
         <TabsList className="rounded-md"><TabsTrigger value="budgets"><Calculator />Orçamentos</TabsTrigger><TabsTrigger value="library"><LibraryBig />Biblioteca <Badge variant="secondary">{library.length}</Badge></TabsTrigger></TabsList>

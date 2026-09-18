@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./hoikos-polish.css";
+import "./hoikos-workspaces.css";
 
 export const metadata: Metadata = {
   title: "H.OIKOS | Ecossistema para arquitetos",
