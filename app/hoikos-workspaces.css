@@ -78,3 +78,77 @@
   .nexo-canvas [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { padding-inline: .85rem; }
   .hoikos-finance-metric { min-height: 128px; }
 }
+
+/* Architectural identity: drawing-board framing, editorial scale and material layers. */
+.nexo-canvas { background: var(--hoikos-white); }
+.hoikos-workspace-content { max-width: 1600px; }
+.hoikos-module-heading, .hoikos-focus {
+  isolation: isolate; position: relative; overflow: hidden;
+  min-height: 250px; border-radius: 2px; border: 1px solid var(--hoikos-stone);
+  border-top: 3px solid var(--hoikos-earth);
+  box-shadow: 6px 6px 0 var(--hoikos-linen), 0 16px 36px color-mix(in srgb, var(--hoikos-earth) 7%, transparent);
+}
+.hoikos-module-heading { align-items: flex-start; padding: 2.5rem 3rem; background: var(--hoikos-paper); }
+.hoikos-module-heading::after, .hoikos-focus::after {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  width: 48%; height: 100%; right: 0; top: 0;
+  background: url('/brand/architectural-study.svg') center / cover no-repeat;
+  opacity: .65;
+}
+.hoikos-module-heading::before {
+  content: ""; position: absolute; bottom: 1.25rem; left: 3rem;
+  width: 3rem; height: 5px; border-block: 1px solid var(--hoikos-gold);
+}
+.hoikos-module-heading > div:first-child { max-width: 60%; }
+.hoikos-module-heading > div:last-child:not(:first-child), .hoikos-module-heading > button, .hoikos-module-heading > select {
+  align-self: flex-end; position: relative; z-index: 1;
+}
+.hoikos-module-heading .display-heading { font-size: clamp(2.5rem, 4.2vw, 4.5rem); margin-top: 1.1rem; }
+.hoikos-module-heading .eyebrow, .hoikos-overview-heading .eyebrow { display: flex; align-items: center; gap: .75rem; }
+.hoikos-module-heading .eyebrow::before, .hoikos-overview-heading .eyebrow::before { content: ""; width: 1.5rem; height: 1px; background: var(--hoikos-gold); }
+.hoikos-module-heading > div:first-child > p:last-child { max-width: 47ch; }
+.hoikos-overview-heading { border-bottom: 1px solid var(--hoikos-stone); padding-bottom: 1.5rem; }
+.hoikos-overview-heading h1 { font-size: clamp(3rem, 4.5vw, 4.75rem); }
+.hoikos-focus { min-height: 310px; padding: 3rem; align-items: flex-start; background: var(--hoikos-earth); border-color: var(--hoikos-earth); }
+.hoikos-focus::after { width: 47%; opacity: .5; }
+.hoikos-focus-copy { max-width: 53%; }
+.hoikos-focus h2 { font-size: clamp(2rem, 3.5vw, 3.6rem); line-height: 1.16; }
+.hoikos-focus-action { align-self: flex-end; position: relative; z-index: 1; padding: 1rem; background: var(--hoikos-earth); border: 1px solid var(--hoikos-gold); }
+.hoikos-focus-action > span { color: var(--hoikos-paper); }
+.hoikos-metrics { border-radius: 0; box-shadow: none; border-inline: 0; border-bottom: 2px solid var(--hoikos-earth); }
+.hoikos-metric { position: relative; padding: 1.6rem 2rem; }
+.hoikos-metric-value { font-size: 3.5rem; font-weight: 300; }
+.hoikos-step { position: relative; border-radius: 1px; background: var(--hoikos-white); padding: 1.75rem; border-top: 2px solid var(--hoikos-gold); }
+.hoikos-step-top > span { font-size: 2.2rem; font-weight: 300; line-height: 1; border: 0; color: var(--hoikos-stone); }
+.hoikos-step h3 { font-size: 1.2rem; }
+.hoikos-panel { background: var(--hoikos-paper); border-radius: 1px; box-shadow: none; }
+.nexo-canvas [data-slot="card"] { border-radius: 3px; box-shadow: 0 6px 18px color-mix(in srgb, var(--hoikos-earth) 6%, transparent); }
+.nexo-canvas [data-slot="card-header"] { background: var(--hoikos-paper); padding-top: 1.25rem; margin-top: -1.5rem; }
+.nexo-canvas [data-slot="tabs-list"] { border-radius: 2px; border-bottom: 2px solid var(--hoikos-earth); }
+.nexo-canvas [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { border-radius: 2px; }
+.hoikos-finance-metric { min-height: 170px; }
+.hoikos-finance-metric::after { width: calc(100% - 2.5rem); height: 1px; bottom: 1.2rem; }
+.hoikos-finance-metric .hoikos-metric-icon { border-radius: 50%; background: transparent; }
+.nexo-canvas [data-slot="empty-icon"][data-variant="icon"] { border-radius: 1px; transform: rotate(-4deg); }
+.nexo-canvas [data-slot="empty-icon"] svg { transform: rotate(4deg); }
+@media (max-width: 1100px) {
+  .hoikos-focus { flex-direction: column; }
+  .hoikos-focus-copy { max-width: 70%; }
+  .hoikos-focus-action { align-self: flex-start; }
+  .hoikos-module-heading { padding: 2rem; }
+  .hoikos-module-heading::before { left: 2rem; }
+}
+@media (max-width: 640px) {
+  .hoikos-module-heading { padding: 1.5rem; min-height: 280px; }
+  .hoikos-module-heading::after { width: 65%; opacity: .14; }
+  .hoikos-module-heading > div:first-child { max-width: 100%; }
+  .hoikos-module-heading > div:last-child:not(:first-child), .hoikos-module-heading > button, .hoikos-module-heading > select { align-self: flex-start; }
+  .hoikos-module-heading::before { display: none; }
+  .hoikos-module-heading .display-heading { font-size: 2.8rem; }
+  .hoikos-focus { padding: 1.5rem; }
+  .hoikos-focus::after { width: 100%; opacity: .12; }
+  .hoikos-focus-copy { max-width: 100%; }
+  .hoikos-focus-action { padding: .75rem; }
+  .hoikos-metric { padding: 1rem; }
+  .hoikos-metric-value { font-size: 2.5rem; }
+}
