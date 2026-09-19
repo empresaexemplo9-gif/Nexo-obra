@@ -150,6 +150,55 @@ const comDados = { columns: 4, rows: 4, content: {
   analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] },
 } };
 
+async function clickCell(key, modifiers = {}) {
+  const cell = container.querySelector(`#cell-${key}`);
+  // Reproduz a ordem do navegador: mousedown, foco, mouseup, click.
+  await act(async () => {
+    cell.dispatchEvent(new window.MouseEvent("mousedown", { bubbles: true, ...modifiers }));
+    cell.focus();
+  });
+  await act(async () => {
+    cell.dispatchEvent(new window.MouseEvent("mouseup", { bubbles: true, ...modifiers }));
+    cell.dispatchEvent(new window.MouseEvent("click", { bubbles: true, ...modifiers }));
+  });
+}
+
+test("Ctrl mantém células separadas e soma apenas a seleção, sem duplicar parcelas", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await clickCell("C1", { ctrlKey: true });
+  assert.equal(container.querySelector("#cell-A1").getAttribute("aria-pressed"), "true");
+  assert.equal(container.querySelector("#cell-C1").getAttribute("aria-pressed"), "true");
+  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*40/);
+  await clickCell("A2", { metaKey: true });
+  assert.match(textOf(container), /Soma da seleção \(3 células\):\s*45/);
+  await clickCell("C1", { ctrlKey: true });
+  assert.equal(container.querySelector("#cell-C1").getAttribute("aria-pressed"), "false");
+  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*15/);
+  await clickCell("B1");
+  assert.equal(container.querySelector("#cell-A1").getAttribute("aria-pressed"), "false");
+  assert.equal(container.querySelector("#cell-B1").getAttribute("aria-pressed"), "true");
+});
+
+test("SOMA da seleção preserva parcelas e grava fórmula numa célula livre", async () => {
+  await openWorksheet({ ...comDados, content: { ...comDados.content,
+    cells: { A1: "1.234,56", B1: "ignorar", C1: "R$ 765,44", C2: "ocupada" },
+  } });
+  await clickCell("A1");
+  await clickCell("C1", { ctrlKey: true });
+  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*2\.000/);
+  await act(async () => {
+    const functions = container.querySelector('[aria-label="Inserir função"]');
+    functions.value = "SOMA";
+    functions.dispatchEvent(new window.Event("change", { bubbles: true }));
+  });
+  assert.equal(container.querySelector('[aria-label="Conteúdo da célula"]').value, "=SOMA(A1;C1)");
+  assert.equal(container.querySelector("#cell-C3").textContent, "2.000");
+  assert.equal(container.querySelector("#cell-C2").textContent, "ocupada");
+  assert.equal(container.querySelector("#cell-A1").textContent, "1.234,56");
+  assert.equal(container.querySelector("#cell-C1").textContent, "765,44");
+});
+
 test("clicar no cabeçalho seleciona a linha e soma a linha, não a coluna", async () => {
   await openWorksheet(comDados);
 

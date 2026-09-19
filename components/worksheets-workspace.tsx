@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
   insertColumn, insertRow, moveAnalysis, parseCellKey, sheetToCsv, sortRows,
-  axisLastFilled, axisRange, axisTotal,
+  axisLastFilled, axisRange, axisTotal, exact,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetAxis, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
@@ -56,14 +56,15 @@ function download(name: string, content: string, type: string) {
 type AxisSelection = { kind: SheetAxis; index: number };
 
 function Grid({
-  cells, columns, rows, computed, active, axis, onActive, onAxis, onChange,
+  cells, columns, rows, computed, active, selected, axis, onActive, onAxis, onChange,
 }: {
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
-  active: string; axis: AxisSelection | null; onActive: (key: string) => void;
+  active: string; selected: string[]; axis: AxisSelection | null; onActive: (key: string, additive?: boolean) => void;
   onAxis: (kind: SheetAxis, index: number) => void; onChange: (key: string, value: string) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const pointerFocus = useRef(false);
 
   function commit() {
     if (editing) onChange(editing, draft);
@@ -114,7 +115,8 @@ function Grid({
               const isActive = active === key;
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
-              return <td key={key} className={`border p-0 ${inAxis ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
+              const isSelected = selected.includes(key);
+              return <td key={key} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -131,8 +133,13 @@ function Grid({
                   <button
                     type="button" id={`cell-${key}`}
                     aria-label={`Célula ${key}${result?.display ? `, ${result.display}` : ", vazia"}`}
-                    onFocus={() => onActive(key)}
-                    onClick={() => onActive(key)}
+                    aria-pressed={isSelected || inAxis}
+                    onMouseDown={() => { pointerFocus.current = true; }}
+                    onFocus={() => { if (!pointerFocus.current) onActive(key); }}
+                    onClick={(event) => {
+                      pointerFocus.current = false;
+                      onActive(key, event.ctrlKey || event.metaKey);
+                    }}
                     onDoubleClick={() => { setDraft(cells[key] ?? ""); setEditing(key); }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
@@ -168,6 +175,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [canGovern, setCanGovern] = useState(false);
   const [sources, setSources] = useState<DataSource[]>([]);
   const [active, setActive] = useState("A1");
+  const [selected, setSelected] = useState<string[]>([]);
   const [axis, setAxis] = useState<AxisSelection | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -189,6 +197,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setCurrent(result.worksheet);
     setAccess(result.access);
     setActive("A1");
+    setSelected([]);
     setAxis(null);
     setDirty(false);
   }, []);
@@ -214,7 +223,18 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   const computed = useMemo(() => evaluateSheet(current?.content.cells ?? {}), [current]);
 
-  const selectCell = useCallback((key: string) => { setActive(key); setAxis(null); }, []);
+  const selectCell = useCallback((key: string, additive = false) => {
+    setActive(key);
+    setAxis(null);
+    setSelected((previous) => additive
+      ? previous.includes(key) ? previous.filter((cell) => cell !== key) : [...previous, key]
+      : [key]);
+  }, []);
+
+  const selectedSum = useMemo(() => exact(selected.reduce((total, key) => {
+    const result = computed[key];
+    return total + (!result?.error && typeof result?.value === "number" ? result.value : 0);
+  }, 0)), [computed, selected]);
 
   // Clicar no cabeçalho seleciona o eixo inteiro e leva o cursor para a primeira
   // célula livre dele, que é onde o total entra.
@@ -223,6 +243,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const limit = kind === "row" ? current.columns : current.rows;
     const next = Math.min(axisLastFilled(current.content.cells, kind, index) + 1, limit - 1);
     setAxis({ kind, index });
+    setSelected([]);
     setActive(kind === "row" ? cellKey({ column: next, row: index }) : cellKey({ column: index, row: next }));
   }
 
@@ -298,7 +319,10 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     }
     // Inserir ou remover desloca os índices. Manter o eixo selecionado faria o
     // total passar a somar outra linha sem aviso nenhum na tela.
-    if (operation !== "fill-down") setAxis(null);
+    if (operation !== "fill-down") {
+      setAxis(null);
+      setSelected([cellKey({ column: Math.min(address.column, nextColumns - 1), row: Math.min(address.row, nextRows - 1) })]);
+    }
     setDirty(true);
   }
 
@@ -417,6 +441,18 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     if (!name || !current || readOnly) return;
     const address = parseCellKey(active);
     const rangeFunctions = new Set(["SOMA", "MEDIA", "MIN", "MAX", "CONT.NUM", "CONT.VALORES", "MEDIANA"]);
+    if (!axis && selected.length > 1 && rangeFunctions.has(name) && address) {
+      // O resultado fica numa célula livre abaixo da seleção, sem substituir
+      // uma parcela ou incluir a própria fórmula na soma.
+      let row = Math.max(...selected.map((key) => parseCellKey(key)!.row)) + 1;
+      while (row < SHEET_MAX_ROWS && current.content.cells[cellKey({ column: address.column, row })]?.trim()) row += 1;
+      if (row >= SHEET_MAX_ROWS) { toast.error("Não há célula livre abaixo da seleção para inserir o resultado."); return; }
+      const destination = cellKey({ column: address.column, row });
+      updateCell(destination, `=${name}(${selected.join(";")})`);
+      setCurrent((sheet) => sheet ? { ...sheet, rows: Math.max(sheet.rows, row + 1) } : sheet);
+      selectCell(destination);
+      return;
+    }
     // O intervalo segue o eixo selecionado. Antes os dois extremos usavam
     // address.column, então a faixa era sempre vertical e a linha selecionada
     // recebia a soma de uma coluna.
@@ -569,13 +605,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               )}
               <Grid
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
-                computed={computed} active={active} axis={axis}
+                computed={computed} active={active} selected={selected} axis={axis}
                 onActive={selectCell} onAxis={selectAxis} onChange={updateCell}
               />
               <p className="text-xs leading-5 text-hoikos-500">
                 Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Clique no cabeçalho para selecionar a
-                linha ou a coluna inteira. Total da {axisSum.kind === "row" ? `linha ${axisSum.index + 1}` : `coluna ${columnName(axisSum.index)}`}:{" "}
-                <strong className="tabular-nums">{displayValue(axisSum.total)}</strong>
+                linha ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células da seleção.{" "}
+                {!axis && selected.length > 0 ? `Soma da seleção (${selected.length} células):` : `Total da ${axisSum.kind === "row" ? `linha ${axisSum.index + 1}` : `coluna ${columnName(axisSum.index)}`}:`}{" "}
+                <strong className="tabular-nums">{displayValue(!axis && selected.length > 0 ? selectedSum : axisSum.total)}</strong>
               </p>
             </TabsContent>
 
