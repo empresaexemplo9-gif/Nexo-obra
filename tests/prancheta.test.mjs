@@ -196,10 +196,10 @@ test("cômodo sem nome aparece identificado, não some do resumo", () => {
   assert.equal(resumo.comodos[0].nome, "Sem nome");
 });
 
-test("coordenada fracionária é recusada na borda", () => {
-  // Milímetro inteiro é a garantia de que a cota fecha depois de mover e copiar.
+test("coordenada CAD preserva fração de milímetro e recusa valores não finitos", () => {
   const fracionaria = parede("p1", { x: 0.5, y: 0 }, { x: 1000, y: 0 });
-  assert.equal(elementoSchema.safeParse(fracionaria).success, false);
+  assert.equal(elementoSchema.safeParse(fracionaria).success, true);
+  assert.equal(elementoSchema.safeParse(parede("p1", { x: Infinity, y: 0 }, { x: 1000, y: 0 })).success, false);
   assert.equal(elementoSchema.safeParse(parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 })).success, true);
 });
 

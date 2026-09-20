@@ -5,7 +5,7 @@ import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, 
 
 export const dynamic = "force-dynamic";
 
-export const ESPECIES = ["planta", "corte", "elevacao", "detalhe", "apresentacao"] as const;
+import { ESPECIES, resposta } from "@/lib/server/studio-response";
 
 const criarSchema = z.object({
   nome: z.string().trim().min(1).max(120),
@@ -29,20 +29,7 @@ const selecao = `SELECT d.id, d.nome, d.especie, d.revisao, d.project_id,
   LEFT JOIN projects p ON p.id = d.project_id AND p.organization_id = d.organization_id
   LEFT JOIN members m ON m.id = d.atualizado_por_membro_id AND m.organization_id = d.organization_id`;
 
-export function resposta(linha: Linha) {
-  return {
-    id: linha.id,
-    nome: linha.nome,
-    especie: linha.especie,
-    revisao: linha.revisao,
-    projectId: linha.project_id,
-    projectName: linha.project_name,
-    projectCode: linha.project_code,
-    autor: linha.autor,
-    criadoEm: linha.created_at,
-    atualizadoEm: linha.updated_at,
-  };
-}
+
 
 // A lista não carrega o desenho. Uma prancha cheia tem centenas de kB de JSON, e a tela
 // de índice só precisa de nome, projeto e data — trazer tudo tornaria a abertura lenta

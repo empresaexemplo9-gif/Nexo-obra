@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { documentoSchema } from "@/lib/prancheta";
-import { ESPECIES, resposta } from "@/app/api/studio/route";
+import { ESPECIES, resposta } from "@/lib/server/studio-response";
 import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";

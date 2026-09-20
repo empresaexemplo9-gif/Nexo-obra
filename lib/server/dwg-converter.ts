@@ -60,10 +60,29 @@ export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
     throw new DwgConversorIndisponivel(`O conversor DWG respondeu HTTP ${resposta.status}.`);
   }
 
-  const corpo = await resposta.arrayBuffer();
-  if (!corpo.byteLength) throw new DwgConversorIndisponivel("O conversor DWG devolveu uma resposta vazia.");
-  if (corpo.byteLength > MAX_OUTPUT_BYTES) throw new DwgConversorIndisponivel("A conversão DWG excedeu o limite de 48 MB.");
-  return new TextDecoder("utf-8", { fatal: false }).decode(corpo);
+  if (!resposta.body) throw new DwgConversorIndisponivel("O conversor DWG devolveu uma resposta vazia.");
+  const reader = resposta.body.getReader();
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  const parts: string[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_OUTPUT_BYTES) {
+        await reader.cancel();
+        throw new DwgConversorIndisponivel("A conversão DWG excedeu o limite de 48 MB.");
+      }
+      parts.push(decoder.decode(value, { stream: true }));
+    }
+  } catch (error) {
+    if (error instanceof DwgConversorIndisponivel) throw error;
+    throw new DwgConversorIndisponivel("A resposta do conversor DWG foi interrompida.");
+  } finally { reader.releaseLock(); }
+  if (!total) throw new DwgConversorIndisponivel("O conversor DWG devolveu uma resposta vazia.");
+  parts.push(decoder.decode());
+  return parts.join("");
 }
 
 export function estadoDoConversorDwg(): "ok" | "nao_configurado" | "configuracao_invalida" {

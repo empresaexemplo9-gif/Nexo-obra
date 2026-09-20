@@ -1,4 +1,5 @@
 import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, moverElemento, pontosDoArco } from "@/lib/prancheta";
+import { nearestOnSegment, tangentPoints } from "@/packages/cad-core";
 
 // O que separa desenhar de chutar.
 //
@@ -16,7 +17,7 @@ export type Segmento = { a: Ponto; b: Ponto; elementoId: string };
 
 // A ordem aqui é a ordem de preferência, e ela importa: com dois candidatos à mesma
 // distância, o extremo vence o meio, porque é nele que paredes se encontram.
-export const TIPOS_ENCAIXE = ["extremo", "interseccao", "perpendicular", "meio", "centro", "malha"] as const;
+export const TIPOS_ENCAIXE = ["extremo", "interseccao", "perpendicular", "meio", "centro", "quadrante", "tangente", "proximo", "malha"] as const;
 export type TipoEncaixe = typeof TIPOS_ENCAIXE[number];
 
 export const encaixeLabels: Record<TipoEncaixe, string> = {
@@ -26,6 +27,9 @@ export const encaixeLabels: Record<TipoEncaixe, string> = {
   meio: "Meio",
   centro: "Centro",
   malha: "Malha",
+  quadrante: "Quadrante",
+  tangente: "Tangente",
+  proximo: "Mais próximo",
 };
 
 export type Encaixe = { tipo: TipoEncaixe; ponto: Ponto; elementoId?: string };
@@ -173,6 +177,29 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
     for (const segmento of proximos) {
       const pe = pePerpendicular(opcoes.origem, segmento);
       if (pe && perto(pe)) candidatos.push({ tipo: "perpendicular", ponto: pe, elementoId: segmento.elementoId });
+    }
+  }
+
+  if (ativos.includes("proximo")) {
+    for (const segment of segmentosDo(documento)) {
+      const point = nearestOnSegment(alvo, segment.a, segment.b);
+      if (perto(point)) candidatos.push({ tipo: "proximo", ponto: point, elementoId: segment.elementoId });
+    }
+  }
+  for (const element of elementosVisiveis(documento)) {
+    if (element.tipo !== "arco" || camadaBloqueada(documento, element.camada)) continue;
+    const onArc = (p: Ponto) => {
+      const angle = ((Math.atan2(element.centro.y - p.y, p.x - element.centro.x) * 180 / Math.PI - element.inicioGraus) % 360 + 360) % 360;
+      return angle <= element.varreduraGraus + 1e-9;
+    };
+    const add = (tipo: TipoEncaixe, point: Ponto) => { if (onArc(point) && perto(point)) candidatos.push({ tipo, ponto: point, elementoId: element.id }); };
+    if (ativos.includes("quadrante")) {
+      for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) add("quadrante", { x: element.centro.x + dx * element.raioMm, y: element.centro.y + dy * element.raioMm });
+    }
+    if (ativos.includes("tangente") && opcoes.origem) for (const point of tangentPoints(opcoes.origem, element.centro, element.raioMm)) add("tangente", point);
+    if (ativos.includes("proximo")) {
+      const dx = alvo.x - element.centro.x, dy = alvo.y - element.centro.y, length = Math.hypot(dx, dy);
+      if (length) add("proximo", { x: element.centro.x + dx / length * element.raioMm, y: element.centro.y + dy / length * element.raioMm });
     }
   }
 

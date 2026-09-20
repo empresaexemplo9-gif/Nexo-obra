@@ -4,10 +4,8 @@ import { z } from "zod";
 //
 // Duas decisões moldam tudo aqui.
 //
-// 1. Coordenada é MILÍMETRO INTEIRO. Um desenho arquitetônico é medida, não pintura: uma
-//    parede de 3,15 m tem que continuar 3150 mm depois de mover, copiar e reescalar mil
-//    vezes. Ponto flutuante acumula erro e a cota deixa de fechar — o mesmo motivo pelo
-//    qual dinheiro fica em centavos neste projeto.
+// 1. Coordenadas em milímetros de precisão dupla. Arquivos existentes com medidas
+//    inteiras continuam válidos; comandos CAD também preservam frações de milímetro.
 //
 // 2. Elemento pertence a uma CAMADA, e camada tem disciplina. É o que permite entregar a
 //    mesma planta como layout, elétrico, luminotécnico ou mobiliário sem desenhar quatro
@@ -39,8 +37,9 @@ export const simboloLabels: Record<string, string> = {
   "fita-led": "Fita de LED", sanca: "Sanca iluminada", poste: "Poste", refletor: "Refletor",
 };
 
-const mm = z.number().int().finite();
-const ponto = z.object({ x: mm, y: mm }).strict();
+const mm = z.number().finite();
+const coordenada = z.number().finite().min(-2_000_000_000).max(2_000_000_000);
+const ponto = z.object({ x: coordenada, y: coordenada }).strict();
 const idSchema = z.string().min(1).max(64);
 
 // Cada elemento carrega a camada a que pertence. Sem isso não há como ligar e desligar
@@ -54,12 +53,12 @@ export const elementoSchema = z.discriminatedUnion("tipo", [
   // Cômodo: polígono fechado com nome. A área é derivada do polígono, nunca digitada —
   // número digitado à mão e desenho divergem em silêncio.
   z.object({ ...base, tipo: z.literal("comodo"), pontos: z.array(ponto).min(3).max(200), nome: z.string().max(60) }).strict(),
-  z.object({ ...base, tipo: z.literal("abertura"), especie: z.enum(["porta", "janela", "passagem"]), posicao: ponto, larguraMm: mm.min(100).max(10000), rotacaoGraus: z.number().int().min(0).max(359) }).strict(),
-  z.object({ ...base, tipo: z.literal("simbolo"), familia: z.string().min(1).max(40), posicao: ponto, rotacaoGraus: z.number().int().min(0).max(359), rotulo: z.string().max(40).optional() }).strict(),
+  z.object({ ...base, tipo: z.literal("abertura"), especie: z.enum(["porta", "janela", "passagem"]), posicao: ponto, larguraMm: mm.min(100).max(10000), rotacaoGraus: z.number().finite().min(0).lt(360) }).strict(),
+  z.object({ ...base, tipo: z.literal("simbolo"), familia: z.string().min(1).max(40), posicao: ponto, rotacaoGraus: z.number().finite().min(0).lt(360), rotulo: z.string().max(40).optional() }).strict(),
   // Mobília e imagem: o interior. `chave` aponta para o arquivo cifrado no armazenamento.
-  z.object({ ...base, tipo: z.literal("mobilia"), posicao: ponto, larguraMm: mm.min(10).max(50000), alturaMm: mm.min(10).max(50000), rotacaoGraus: z.number().int().min(0).max(359), rotulo: z.string().max(60), chave: z.string().max(400).optional() }).strict(),
-  z.object({ ...base, tipo: z.literal("imagem"), posicao: ponto, larguraMm: mm.min(10).max(200000), alturaMm: mm.min(10).max(200000), rotacaoGraus: z.number().int().min(0).max(359), chave: z.string().min(1).max(400), rotulo: z.string().max(60).optional() }).strict(),
-  z.object({ ...base, tipo: z.literal("texto"), posicao: ponto, texto: z.string().min(1).max(500), alturaMm: mm.min(10).max(5000), rotacaoGraus: z.number().int().min(0).max(359) }).strict(),
+  z.object({ ...base, tipo: z.literal("mobilia"), posicao: ponto, larguraMm: mm.min(10).max(50000), alturaMm: mm.min(10).max(50000), rotacaoGraus: z.number().finite().min(0).lt(360), rotulo: z.string().max(60), chave: z.string().max(400).optional() }).strict(),
+  z.object({ ...base, tipo: z.literal("imagem"), posicao: ponto, larguraMm: mm.min(10).max(200000), alturaMm: mm.min(10).max(200000), rotacaoGraus: z.number().finite().min(0).lt(360), chave: z.string().min(1).max(400), rotulo: z.string().max(60).optional() }).strict(),
+  z.object({ ...base, tipo: z.literal("texto"), posicao: ponto, texto: z.string().min(1).max(500), alturaMm: mm.min(10).max(5000), rotacaoGraus: z.number().finite().min(0).lt(360) }).strict(),
   z.object({ ...base, tipo: z.literal("cota"), a: ponto, b: ponto, deslocamentoMm: mm.min(-5000).max(5000) }).strict(),
   z.object({ ...base, tipo: z.literal("traco"), pontos: z.array(ponto).min(2).max(2000), espessuraMm: mm.min(1).max(200) }).strict(),
   // Arco guardado por centro, raio, ângulo de partida e VARREDURA — não por ângulo final.
@@ -69,8 +68,8 @@ export const elementoSchema = z.discriminatedUnion("tipo", [
   z.object({
     ...base, tipo: z.literal("arco"), centro: ponto,
     raioMm: mm.min(1).max(1_000_000),
-    inicioGraus: z.number().int().min(0).max(359),
-    varreduraGraus: z.number().int().min(1).max(360),
+    inicioGraus: z.number().finite().min(0).lt(360),
+    varreduraGraus: z.number().finite().gt(0).max(360),
     espessuraMm: mm.min(1).max(1000),
   }).strict(),
 ]);
@@ -241,9 +240,13 @@ export function quantitativo(documento: Documento): Quantitativo {
  *  exportado precisam concordar até o milímetro, então a conta mora aqui e não no
  *  componente. Camada e identidade não mudam: mover não é recriar. */
 export function moverElemento(elemento: Elemento, dx: number, dy: number, malhaMm: number): Elemento {
+  // Snap the displacement once, not each vertex: snapping every vertex deforms
+  // rotated geometry and destroys fractional measurements after a drag.
+  const offsetX = malhaMm <= 1 ? dx : encaixar(dx, malhaMm);
+  const offsetY = malhaMm <= 1 ? dy : encaixar(dy, malhaMm);
   const p = (ponto: { x: number; y: number }) => ({
-    x: encaixar(ponto.x + dx, malhaMm),
-    y: encaixar(ponto.y + dy, malhaMm),
+    x: ponto.x + offsetX,
+    y: ponto.y + offsetY,
   });
   switch (elemento.tipo) {
     case "parede":

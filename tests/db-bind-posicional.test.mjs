@@ -10,19 +10,18 @@
 // A garantia aqui é do FORMATO entregue ao driver, que é o que difere entre os clientes.
 import assert from "node:assert/strict";
 import { createClient } from "@libsql/client";
-import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test, { after } from "node:test";
 import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const arquivo = `${root}.sites-runtime/teste-bind.db`;
+const arquivo = ":memory:";
 const runtime = { DATABASE_URL: `file:${arquivo}` };
 globalThis.__platformEnvOverride = runtime;
 
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true } });
-const { getDatabase } = await vite.ssrLoadModule("/db/index.ts");
-after(async () => { await vite.close(); await rm(arquivo, { force: true }); });
+const { getDatabase, closeDatabase } = await vite.ssrLoadModule("/db/index.ts");
+after(async () => { closeDatabase(); await vite.close(); });
 
 test("a consulta com parâmetros atravessa o adaptador de ponta a ponta", async () => {
   const db = getDatabase();
@@ -47,6 +46,7 @@ test("o formato dos argumentos é array — objeto vira parâmetro nomeado e que
   const preparada = db.prepare("SELECT a FROM forma WHERE a = ?1").bind("v");
   assert.ok(Array.isArray(preparada.__args), `__args deveria ser array, veio ${JSON.stringify(preparada.__args)}`);
   assert.deepEqual(preparada.__args, ["v"]);
+  cliente.close();
 });
 
 test("batch também leva array posicional", async () => {

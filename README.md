@@ -19,6 +19,8 @@ flowchart TD
 
 ## O que já está no código
 
+- CAD integrado à Prancheta: linha de comandos, medidas fracionárias, importação NEXO/DXF e conexão ao conversor DWG configurado. [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.
+
 - Ativador de assinatura por API e painel de parceiros/acessos no superadmin: **preço 1:1 com a Drap, sem acréscimo da H.OIKOS** (`pricingMultiplierBps: 10000`), confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. Cada plataforma carrega o próprio custo, isolado: a H.OIKOS não revende a mensalidade da Drap com margem. O multiplicador de 1,5 foi descontinuado e só permanece no código para reconhecer callbacks de ativações antigas já emitidas. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
 - Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em branco, marrom e off-white, com profundidade e acentos dourados.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.

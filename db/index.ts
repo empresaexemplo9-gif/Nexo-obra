@@ -57,6 +57,13 @@ export function databaseSettings(env: Record<string, string | undefined> = runti
 let client: Client | null = null;
 let openedUrl = "";
 
+/** Release the cached connection during shutdown or after an embedded database test. */
+export function closeDatabase(): void {
+  client?.close();
+  client = null;
+  openedUrl = "";
+}
+
 async function libsql(): Promise<Client> {
   const settings = databaseSettings();
   if (!settings) unconfigured();

@@ -355,7 +355,7 @@ test("o arco é aceito e guarda varredura, não ângulo final", () => {
   assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 1000, 0, 0)).success, false, "varredura zero não é arco");
   assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 1000, 0, 361)).success, false);
   assert.equal(elementoSchema.safeParse(arco("a1", { x: 0, y: 0 }, 0, 0, 90)).success, false, "raio zero não é arco");
-  assert.equal(elementoSchema.safeParse({ ...arco("a1", { x: 0, y: 0 }, 1000, 0, 90), raioMm: 10.5 }).success, false);
+  assert.equal(elementoSchema.safeParse({ ...arco("a1", { x: 0, y: 0 }, 1000, 0, 90), raioMm: 10.5 }).success, true, "CAD preserva raio fracionário");
 });
 
 test("os pontos do arco ficam no raio e cobrem só a varredura", () => {

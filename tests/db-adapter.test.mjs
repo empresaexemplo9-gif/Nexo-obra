@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test, { after, before } from "node:test";
 import { createServer } from "vite";
@@ -9,23 +8,22 @@ import { createServer } from "vite";
 // se o contrato não fosse idêntico, ele quebraria aqui.
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const arquivo = `${root}/.sites-runtime/tmp/adaptador-teste.db`;
+// A real embedded libSQL database, without a filesystem lock surviving teardown on Windows.
+const arquivo = ":memory:";
 
 const vite = await createServer({ appType: "custom", configFile: false, root, resolve: { alias: { "@": root } }, server: { middlewareMode: true } });
-const { getDatabase, databaseSettings } = await vite.ssrLoadModule("/db/index.ts");
+const { getDatabase, databaseSettings, closeDatabase } = await vite.ssrLoadModule("/db/index.ts");
 const { apiRoute } = await vite.ssrLoadModule("/lib/server/backend.ts");
 const { applyMigrations, migrationStatus } = await vite.ssrLoadModule("/lib/server/migrations.ts");
 
 before(async () => {
-  await rm(arquivo, { force: true });
-  await rm(`${arquivo}-journal`, { force: true });
   // Nenhum DB injetado: o adaptador abre a conexão real.
   globalThis.__platformEnvOverride = { DATABASE_URL: `file:${arquivo}` };
 });
 after(async () => {
+  closeDatabase();
   await vite.close();
   delete globalThis.__platformEnvOverride;
-  await rm(arquivo, { force: true });
 });
 
 test("o adaptador aplica as 15 migrações num banco libSQL real", async () => {

@@ -10,6 +10,9 @@ import {
 import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
+import { nearestOnSegment } from "@/packages/cad-core";
+import { CAD_COMMANDS, executeCadCommand } from "@/lib/cad-commands";
+import { exportNative, mergeCadImport, type ImportReport } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +79,7 @@ const camadaDaFerramenta: Record<Ferramenta, string> = {
 type Importado = {
   nomeArquivo: string; unidade: string; unidadeDeclarada: boolean;
   camadas: Camada[]; elementos: Elemento[]; avisos: string[]; truncado: boolean;
+  report?: ImportReport;
 };
 
 const UNIDADES_ROTULO: Record<string, string> = {
@@ -129,13 +133,20 @@ function novoId() {
 /** Acerto de clique: o elemento mais acima na ordem de desenho que contém o ponto. Mais
  *  acima primeiro porque é o que a pessoa enxerga — selecionar o que está por baixo de
  *  algo visível é a origem de metade da frustração em editor de desenho. */
-function elementoNoPonto(documento: Documento, x: number, y: number): Elemento | null {
+function elementoNoPonto(documento: Documento, x: number, y: number, tolerance: number): Elemento | null {
   const visiveis = elementosVisiveis(documento);
   for (let i = visiveis.length - 1; i >= 0; i -= 1) {
     const elemento = visiveis[i];
     if (camadaBloqueada(documento, elemento.camada)) continue;
     const caixa = limitesDoElemento(elemento);
-    if (x >= caixa.x1 && x <= caixa.x2 && y >= caixa.y1 && y <= caixa.y2) return elemento;
+    if (x < caixa.x1 - tolerance || x > caixa.x2 + tolerance || y < caixa.y1 - tolerance || y > caixa.y2 + tolerance) continue;
+    if (elemento.tipo === "parede" || elemento.tipo === "cota" || elemento.tipo === "traco" || elemento.tipo === "arco") {
+      const points = elemento.tipo === "parede" || elemento.tipo === "cota" ? [elemento.a, elemento.b] : elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
+      const margin = tolerance + ("espessuraMm" in elemento ? elemento.espessuraMm / 2 : 0);
+      if (points.slice(1).some((b, index) => { const near = nearestOnSegment({ x, y }, points[index], b); return Math.hypot(near.x - x, near.y - y) <= margin; })) return elemento;
+      continue;
+    }
+    return elemento;
   }
   return null;
 }
@@ -147,7 +158,7 @@ function Glifo({ familia }: { familia: string }) {
   </svg>;
 }
 
-function DesenhoElemento({ elemento, selecionado }: { elemento: Elemento; selecionado: boolean }) {
+function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: Elemento; selecionado: boolean; minimumStroke: number }) {
   const realce = selecionado ? { stroke: "#846100", strokeWidth: 60, strokeOpacity: 0.35 } : null;
   const giro = "rotacaoGraus" in elemento && elemento.rotacaoGraus
     ? `rotate(${elemento.rotacaoGraus} ${elemento.posicao.x} ${elemento.posicao.y})` : undefined;
@@ -223,7 +234,7 @@ function DesenhoElemento({ elemento, selecionado }: { elemento: Elemento; seleci
   // mesma tessellation que alimenta o arquivo exportado, então tela e papel concordam.
   const linha = elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
   return <polyline points={linha.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} fill="none"
-    stroke={selecionado ? "#846100" : "#1C190F"} strokeWidth={elemento.espessuraMm} strokeLinecap="round" strokeLinejoin="round" />;
+    stroke={selecionado ? "#846100" : "#1C190F"} strokeWidth={Math.max(elemento.espessuraMm, minimumStroke)} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
 export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
@@ -249,6 +260,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>([...TIPOS_ENCAIXE]);
   const [orto, definirOrto] = useState(false);
   const [entrada, definirEntrada] = useState("");
+  const [comando, definirComando] = useState("");
+  const [mensagemComando, definirMensagemComando] = useState("Coordenadas em mm. Exemplo: L 0,0 3000,0");
   const [matriz, definirMatriz] = useState({ colunas: 3, linhas: 1, passoXMm: 1000, passoYMm: 1000 });
   const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
@@ -273,11 +286,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const visiveis = useMemo(() => elementosVisiveis(documento), [documento]);
 
   const aplicar = useCallback((proximo: Documento) => {
+    if (!canEdit) return;
     definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
     definirRefeitos([]);
     definirDocumento(proximo);
     definirSujo(true);
-  }, [documento]);
+  }, [documento, canEdit]);
 
   /** Um ponto de desfazer antes de um arrasto. O arrasto em si altera sem empilhar a
    *  cada quadro, senão desfazer voltaria um pixel por vez; sem esta marca no começo,
@@ -292,16 +306,20 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   }, [aplicar, documento]);
 
   const trocar = useCallback((id: string, mudanca: Partial<Elemento>) => {
+    const target = documento.elementos.find((element) => element.id === id);
+    if (!canEdit || !target || camadaBloqueada(documento, target.camada)) return;
     aplicar({
       ...documento,
       elementos: documento.elementos.map((elemento) => elemento.id === id ? { ...elemento, ...mudanca } as Elemento : elemento),
     });
-  }, [aplicar, documento]);
+  }, [aplicar, documento, canEdit]);
 
   const apagar = useCallback((id: string) => {
+    const target = documento.elementos.find((element) => element.id === id);
+    if (!canEdit || !target || camadaBloqueada(documento, target.camada)) return;
     aplicar({ ...documento, elementos: documento.elementos.filter((elemento) => elemento.id !== id) });
     definirSelecao(null);
-  }, [aplicar, documento]);
+  }, [aplicar, documento, canEdit]);
 
   const desfazer = useCallback(() => {
     definirHistorico((anterior) => {
@@ -462,7 +480,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
           return;
         }
       }
-      const alvo = elementoNoPonto(documento, bruto.x, bruto.y);
+      const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
       definirSelecao(alvo?.id ?? null);
       if (alvo && canEdit) {
         marcarHistorico();
@@ -651,7 +669,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   /** Paralela do elemento selecionado. A distância vem do campo de medida, porque é o
    *  mesmo gesto: dizer quanto. */
   function criarParalela(sinal: 1 | -1) {
-    if (!selecionado || !canEdit) return;
+    if (!selecionado || !canEdit || camadaBloqueada(documento, selecionado.camada)) return;
     const distancia = lerMedida(entrada) ?? Math.round(documento.malhaMm);
     const nova = paralelaDe(selecionado, Math.abs(distancia) * sinal);
     if (!nova) {
@@ -665,7 +683,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   }
 
   function repetirEmMatriz() {
-    if (!selecionado || !canEdit) return;
+    if (!selecionado || !canEdit || camadaBloqueada(documento, selecionado.camada)) return;
     const copias = matrizRetangular(selecionado, matriz, novoId);
     if (!copias.length) {
       toast.error("Revise a matriz: precisa de pelo menos uma repetição, com passo diferente de zero e no máximo 400 cópias.");
@@ -751,28 +769,42 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   // lido em metro quando era centímetro entra cem vezes maior, e nada na tela denuncia
   // isso antes de a cota ser medida.
   function aceitarImportacao() {
-    if (!importado) return;
-    const existentes = new Set(documento.camadas.map((camada) => camada.id));
-    const novas = importado.camadas.filter((camada) => !existentes.has(camada.id));
-    const cabem = Math.max(0, 60 - documento.camadas.length);
-    if (novas.length > cabem) {
-      toast.error(`O arquivo traz ${novas.length} camadas e só cabem mais ${cabem} nesta prancha. Importe para uma prancha nova.`);
-      return;
+    if (!importado || !canEdit) return;
+    try {
+      aplicar(mergeCadImport(documento, importado));
+      toast.success(`${importado.elementos.length} elemento(s) importados.`);
+      definirImportado(null);
+      dxfEscolhido.current = null;
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível importar."); }
+  }
+
+  function executarComando() {
+    if (!canEdit) return;
+    try {
+      const normalized = comando.trim().toUpperCase();
+      if (normalized === "Z" || normalized === "ZOOM") { enquadrar(); definirMensagemComando("Desenho enquadrado."); }
+      else if (normalized === "U" || normalized === "UNDO") { desfazer(); definirMensagemComando("Desfazer concluído."); }
+      else if (normalized === "REDO") { refazer(); definirMensagemComando("Refazer concluído."); }
+      else {
+        const result = executeCadCommand(documento, comando, selecao);
+        aplicar(result.document);
+        definirSelecao(result.selectedId);
+        definirMensagemComando(result.message);
+      }
+      definirComando("");
+    } catch (error) { definirMensagemComando(error instanceof Error ? error.message : "Comando inválido."); }
+  }
+
+  function enquadrar() {
+    if (!visiveis.length) return;
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const element of visiveis) {
+      const bounds = limitesDoElemento(element);
+      x1 = Math.min(x1, bounds.x1); y1 = Math.min(y1, bounds.y1);
+      x2 = Math.max(x2, bounds.x2); y2 = Math.max(y2, bounds.y2);
     }
-    const existentesElementos = new Set(documento.elementos.map((elemento) => elemento.id));
-    const chegando = importado.elementos.filter((elemento) => !existentesElementos.has(elemento.id));
-    if (documento.elementos.length + chegando.length > 20000) {
-      toast.error("O desenho ficaria acima do limite de 20 mil elementos. Importe para uma prancha nova.");
-      return;
-    }
-    aplicar({
-      ...documento,
-      camadas: [...documento.camadas, ...novas],
-      elementos: [...documento.elementos, ...chegando],
-    });
-    definirImportado(null);
-    dxfEscolhido.current = null;
-    toast.success(`${chegando.length} elemento(s) importados em ${novas.length} camada(s) novas.`);
+    const width = Math.max(1000, x2 - x1, (y2 - y1) / 0.62) * 1.2;
+    definirVista({ x: (x1 + x2 - width) / 2, y: (y1 + y2 - width * 0.62) / 2, largura: width });
   }
 
   async function salvar() {
@@ -820,6 +852,29 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     baixar(exportarSvg(documento, { titulo: nome, origem: window.location.origin }), "image/svg+xml", "svg");
   }
 
+  async function exportarPng() {
+    // Private images require authenticated fetching and a separate compositing path.
+    if (documento.fundo || documento.elementos.some(e => e.tipo === "imagem")) { toast.error("Para PNG, exporte uma prancha sem imagens de referência. O SVG preserva essas referências."); return; }
+    const svg = exportarSvg(documento, { titulo: nome, origem: window.location.origin });
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    try {
+      const image = new Image(); image.src = url; await image.decode();
+      const canvas = document.createElement("canvas");
+      const ratio = image.naturalHeight / image.naturalWidth;
+      if (!Number.isFinite(ratio) || ratio <= 0) throw new Error("Dimensões inválidas.");
+      canvas.width = Math.min(4096, Math.round(4096 / ratio));
+      canvas.height = Math.min(4096, Math.round(4096 * ratio));
+      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas indisponível.");
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error("Não foi possível exportar.")), "image/png"));
+      const download = URL.createObjectURL(blob), link = document.createElement("a");
+      link.href = download; link.download = `${nome.replace(/[^\p{L}\p{N}_-]/gu, "-")}.png`; link.click();
+      setTimeout(() => URL.revokeObjectURL(download), 1000);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível exportar PNG."); }
+    finally { URL.revokeObjectURL(url); }
+  }
+
   const faltas = conferencia.achados.filter((achado) => achado.severidade === "falta").length;
   const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
 
@@ -833,8 +888,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         <Button variant="outline" size="sm" onClick={desfazer} disabled={!historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
         <Button variant="outline" size="sm" onClick={refazer} disabled={!refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
         {canEdit && <>
-          <input ref={arquivoDxf} type="file" accept=".dxf,text/plain,application/dxf,image/vnd.dxf,.dwg" className="sr-only"
-            aria-label="Arquivo DXF para importar"
+          <input ref={arquivoDxf} type="file" accept=".nexo,.dxf,text/plain,application/dxf,image/vnd.dxf,.dwg,application/json" className="sr-only"
+            aria-label="Arquivo CAD para importar"
             onChange={(evento) => {
               const arquivo = evento.target.files?.[0] ?? null;
               evento.target.value = "";
@@ -842,11 +897,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
               if (arquivo) void importar(arquivo, "");
             }} />
           <Button variant="outline" size="sm" onClick={() => arquivoDxf.current?.click()} disabled={importando}>
-            {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar DXF
+            {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar CAD
           </Button>
         </>}
         <Button variant="outline" size="sm" onClick={exportarParaCad}><Download />Exportar DXF</Button>
+        <Button variant="outline" size="sm" onClick={() => baixar(exportNative(documento), "application/json", "nexo")}><Download />NEXO</Button>
+        <a href="/formatos" target="_blank" rel="noreferrer" className="self-center text-xs underline">Formatos aceitos</a>
         <Button variant="outline" size="sm" onClick={exportar}><Download />SVG</Button>
+        <Button variant="outline" size="sm" onClick={() => void exportarPng()}><Download />PNG</Button>
         {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>
           {salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Gravar
         </Button>}
@@ -868,7 +926,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1">
           <Label htmlFor="importacao-unidade" className="text-xs">Unidade do desenho no arquivo</Label>
-          <NativeSelect id="importacao-unidade" value={unidadeImportacao} className="h-10 w-44"
+          <NativeSelect id="importacao-unidade" value={unidadeImportacao} className="h-10 w-44" disabled={importando || importado.report?.format === "nexo"}
             onChange={(evento) => {
               const escolhida = evento.target.value;
               definirUnidadeImportacao(escolhida);
@@ -883,15 +941,26 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         <Button variant="outline" size="sm" onClick={() => { definirImportado(null); dxfEscolhido.current = null; }}>Descartar</Button>
       </div>
       <p className="text-xs leading-5 text-hoikos-600">
-        {importado.unidadeDeclarada
+        {importado.report?.format === "nexo" ? "Documento Nexo: coordenadas em milímetros, sem conversão de unidade." : importado.unidadeDeclarada
           ? `O arquivo declara ${UNIDADES_ROTULO[importado.unidade]?.toLowerCase() ?? importado.unidade}. Trocar aqui recalcula tudo.`
           : "O arquivo não declara a unidade. Confira a escolha antes de colocar na prancha: em metro quando era centímetro, o desenho entra cem vezes maior."}
       </p>
       {importado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-hoikos-700">
         {importado.avisos.map((aviso) => <li key={aviso}>· {aviso}</li>)}
       </ul>}
+      {importado.report && <p className="text-xs font-medium">Relatório {importado.report.format.toUpperCase()}: {importado.report.imported} elemento(s) convertido(s), {importado.report.discarded} descartado(s){importado.truncado ? "; arquivo truncado pelo limite de importação" : ""}.</p>}
     </section>}
 
+    <section aria-label="Linha de comando CAD" className="rounded-xl border border-hoikos-200 bg-hoikos-50 p-3 space-y-2">
+      <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); executarComando(); }}>
+        <Label htmlFor="cad-command">Comando CAD</Label>
+        <Input id="cad-command" list="cad-command-options" value={comando} onChange={(event) => definirComando(event.target.value)} disabled={!canEdit} autoComplete="off" placeholder="L 0,0 3000,0" className="min-w-60 flex-1 font-mono" />
+        <datalist id="cad-command-options">{CAD_COMMANDS.map((item) => <option key={item.alias} value={item.syntax}>{item.description}</option>)}</datalist>
+        <Button type="submit" disabled={!canEdit || !comando.trim()}>Executar</Button>
+      </form>
+      <p role="status" aria-live="polite" className="text-xs">{mensagemComando}</p>
+      <details className="text-xs"><summary className="cursor-pointer">Comandos e exemplos</summary><div className="grid gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-3">{CAD_COMMANDS.map((item) => <button key={item.alias} type="button" className="rounded border p-2 text-left" onClick={() => definirComando(item.syntax)} disabled={!canEdit}><code>{item.syntax}</code><span className="block pt-1">{item.description}</span></button>)}</div></details>
+    </section>
     <div className="prancheta-area grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">
         <div className="grid grid-cols-4 gap-1 xl:grid-cols-3">
@@ -982,16 +1051,17 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
 
         <div className="space-y-2 border-t border-hoikos-200 pt-3">
           <Label htmlFor="prancheta-malha" className="text-xs">Malha de encaixe</Label>
-          <NativeSelect id="prancheta-malha" value={String(documento.malhaMm)}
+          <NativeSelect id="prancheta-malha" value={String(documento.malhaMm)} disabled={!canEdit}
             onChange={(evento) => { definirDocumento((anterior) => ({ ...anterior, malhaMm: Number(evento.target.value) })); definirSujo(true); }}>
             {MALHAS.map((malha) => <option key={malha} value={malha}>{malha} mm</option>)}
           </NativeSelect>
           <Label htmlFor="prancheta-escala" className="text-xs">Escala de impressão</Label>
-          <NativeSelect id="prancheta-escala" value={String(documento.escala)}
+          <NativeSelect id="prancheta-escala" value={String(documento.escala)} disabled={!canEdit}
             onChange={(evento) => { definirDocumento((anterior) => ({ ...anterior, escala: Number(evento.target.value) })); definirSujo(true); }}>
             {ESCALAS.map((escala) => <option key={escala} value={escala}>1:{escala}</option>)}
           </NativeSelect>
           <div className="flex gap-1">
+            <Button variant="outline" size="sm" className="flex-1" onClick={enquadrar} aria-label="Enquadrar desenho"><Grid2x2 /></Button>
             <Button variant="outline" size="sm" className="flex-1" onClick={() => ampliar(0.8)} aria-label="Aproximar"><ZoomIn /></Button>
             <Button variant="outline" size="sm" className="flex-1" onClick={() => ampliar(1.25)} aria-label="Afastar"><ZoomOut /></Button>
           </div>
@@ -1013,7 +1083,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
           {documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
-          {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={elemento.id === selecao} />)}
+          {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={elemento.id === selecao} minimumStroke={vista.largura / 800} />)}
           {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
               cursor não diria nada sobre o raio que está sendo marcado. */}
           {pendentes.length > 0 && (ferramenta === "circulo" || ferramenta === "arco")

@@ -232,11 +232,11 @@ test("duas abas abertas não se sobrescrevem em silêncio", async () => {
 
 test("desenho inválido é recusado na borda, com o campo que falhou", async () => {
   const criada = await criar();
-  const fracionario = {
+  const foraDeFaixa = {
     ...documentoVazio(),
-    elementos: [{ id: "p1", camada: "layout", tipo: "parede", a: { x: 0.5, y: 0 }, b: { x: 3000, y: 0 }, espessuraMm: 150 }],
+    elementos: [{ id: "p1", camada: "layout", tipo: "parede", a: { x: 3e9, y: 0 }, b: { x: 3000, y: 0 }, espessuraMm: 150 }],
   };
-  const recusado = await prancha.PUT(pedido(`/api/studio/${criada.id}`, { method: "PUT", json: { documento: fracionario, revisao: 1 } }), parametros(criada.id));
+  const recusado = await prancha.PUT(pedido(`/api/studio/${criada.id}`, { method: "PUT", json: { documento: foraDeFaixa, revisao: 1 } }), parametros(criada.id));
   assert.equal(recusado.status, 400);
   const corpo = await recusado.json();
   assert.equal(corpo.code, "validation_error");
@@ -386,17 +386,16 @@ test("a unidade pedida no formulário vence a do arquivo, e unidade inventada é
   assert.equal((await invalida.json()).code, "invalid_unit");
 });
 
-test("DWG é recusado dizendo a versão do arquivo e o caminho da saída", async () => {
+test("DWG sem conversor configurado informa indisponibilidade e alternativa", async () => {
   const dwg = Buffer.concat([Buffer.from("AC1032", "ascii"), Buffer.alloc(64)]);
   const resposta = await importacao.POST(pedido("/api/studio/importar", {
     method: "POST", ...comArquivo(formularioDxf({ conteudo: dwg, nome: "planta.dwg", tipo: "image/vnd.dwg" })),
   }));
-  assert.equal(resposta.status, 415);
+  assert.equal(resposta.status, 503);
   const corpo = await resposta.json();
-  assert.equal(corpo.code, "dwg_nao_suportado");
-  assert.match(corpo.error, /AutoCAD 2018/);
+  assert.equal(corpo.code, "dwg_converter_unavailable");
+  assert.match(corpo.error, /não está configurado/);
   assert.match(corpo.error, /DXF ASCII/, "recusar sem dizer o que fazer não ajuda ninguém");
-  assert.equal(corpo.details.versao, "AC1032");
 });
 
 test("arquivo que não é DXF é recusado com motivo, não com erro genérico", async () => {
@@ -404,7 +403,21 @@ test("arquivo que não é DXF é recusado com motivo, não com erro genérico", 
     method: "POST", ...comArquivo(formularioDxf({ conteudo: "isto é um texto qualquer", nome: "nota.txt", tipo: "text/plain" })),
   }));
   assert.equal(resposta.status, 415);
-  assert.equal((await resposta.json()).code, "dxf_invalido");
+  assert.equal((await resposta.json()).code, "cad_invalido");
+});
+
+test("arquivo NEXO renomeado importa e persiste coordenadas fracionárias", async () => {
+  const doc = { ...documentoVazio(), elementos: [{ id: "decimal", camada: "layout", tipo: "traco", pontos: [{ x: 0.125, y: 0 }, { x: 3000.25, y: -100.5 }], espessuraMm: 1 }] };
+  const content = JSON.stringify({ format: "nexo", version: 1, unit: "mm", document: doc });
+  const response = await importacao.POST(pedido("/api/studio/importar", { method: "POST", ...comArquivo(formularioDxf({ conteudo: content, nome: "renomeado.dxf", tipo: "application/json" })) }));
+  assert.equal(response.status, 200);
+  const imported = await response.json();
+  assert.equal(imported.report.format, "nexo");
+  assert.equal(imported.elementos[0].pontos[0].x, 0.125);
+  const created = await criar();
+  const saved = await prancha.PUT(pedido(`/api/studio/${created.id}`, { method: "PUT", json: { documento: doc, revisao: 1 } }), parametros(created.id));
+  assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).prancha.documento.elementos[0].pontos[1].x, 3000.25);
 });
 
 test("arquivo vazio e envio sem arquivo não passam", async () => {
