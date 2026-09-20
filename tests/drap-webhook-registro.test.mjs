@@ -30,7 +30,11 @@ function fetchFalso(respostas) {
     chamadas.push({ url: String(url), method: init.method ?? "GET", body: init.body ? JSON.parse(init.body) : null });
     const proxima = respostas.shift();
     if (typeof proxima === "function") return proxima();
-    return new Response(JSON.stringify(proxima.corpo ?? {}), { status: proxima.status ?? 200 });
+    const status = proxima.status ?? 200;
+    // 204 não pode carregar corpo: `new Response(corpo, { status: 204 })` lança, e o
+    // teste passaria a exercitar o catch em vez do caminho que quer medir.
+    const corpo = status === 204 || status === 304 ? null : JSON.stringify(proxima.corpo ?? {});
+    return new Response(corpo, { status });
   };
   return chamadas;
 }
@@ -193,16 +197,81 @@ test("assina só os eventos que a plataforma trata", async () => {
   assert.equal(registro.EVENTOS_ASSINADOS.includes("cobranca.paga"), true);
 });
 
-test("a chave da empresa pede os escopos de webhook explicitamente", async () => {
-  // São recursos sensíveis na Drap: não vêm no escopo padrão do parceiro. Pedir aqui, no
-  // código que os usa, em vez de alargar o padrão de lá para todo parceiro futuro.
-  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("webhooks:write"), true);
-  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("webhooks:read"), true);
-  // Remover assinatura é do dono da empresa, no painel da Drap.
-  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("webhooks:delete"), false);
+test("a chave da empresa pede os escopos sensíveis explicitamente", async () => {
+  // Não vêm no escopo padrão do parceiro. Pedir aqui, no código que os usa, em vez de
+  // alargar o padrão da Drap para todo parceiro que ela vier a ter.
+  for (const escopo of ["webhooks:read", "webhooks:write", "cobrancas:read", "cobrancas:write"]) {
+    assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes(escopo), true, `falta ${escopo}`);
+  }
 
   const parceiro = semComentarios(await source("lib/integrations/drap-partner.ts"));
   assert.equal(parceiro.includes("ESCOPOS_DA_PLATAFORMA"), true);
+});
+
+test("pede webhooks:delete porque é ela que cria a assinatura", () => {
+  // Quem cria precisa conseguir remover: sem isto, desconectar deixaria a Drap postando o
+  // financeiro de uma empresa para um endereço que ninguém mais opera.
+  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("webhooks:delete"), true);
+});
+
+test("não pede escopo de apagar o que nunca apaga", () => {
+  // Escopo que ninguém usa só aumenta o estrago de uma chave vazada.
+  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("lancamentos:delete"), false);
+  assert.equal(registro.ESCOPOS_DA_PLATAFORMA.includes("parceiros:delete"), false);
+});
+
+test("desconectar remove só a assinatura desta plataforma", async () => {
+  // A empresa pode ter assinaturas próprias, criadas pelo dono dela para outros sistemas.
+  // Sair da H.OIKOS não é motivo para derrubá-las.
+  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  const nossa = "https://app.hoikos.com.br/api/integrations/drap/webhook";
+  const chamadas = fetchFalso([
+    { corpo: { items: [{ id: "outro", url: "https://outro.com/hook" }, { id: "nosso", url: nossa }] } },
+    { status: 204, corpo: {} },
+  ]);
+
+  const resultado = await registro.removerWebhookNaDrap("drap_live_x");
+
+  assert.equal(resultado.removido, true);
+  assert.equal(chamadas[1].method, "DELETE");
+  assert.equal(chamadas[1].url.includes("nosso"), true);
+  assert.equal(chamadas[1].url.includes("outro"), false);
+});
+
+test("sem assinatura nossa, desconectar não apaga nada", async () => {
+  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  const chamadas = fetchFalso([{ corpo: { items: [{ id: "outro", url: "https://outro.com/hook" }] } }]);
+
+  const resultado = await registro.removerWebhookNaDrap("drap_live_x");
+
+  assert.equal(resultado.removido, false);
+  assert.equal(chamadas.length, 1);
+});
+
+test("Drap fora do ar não prende o usuário à conexão", async () => {
+  // Travar aqui deixaria alguém preso a um vínculo que mandou desfazer. A falha é dita,
+  // com o que fazer à mão.
+  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  fetchFalso([() => { throw new Error("ECONNRESET"); }]);
+
+  const resultado = await registro.removerWebhookNaDrap("drap_live_x");
+
+  assert.equal(resultado.removido, false);
+  assert.equal(resultado.motivo.includes("Configurações"), true);
+});
+
+test("a rota de desconectar remove o webhook antes de descartar a credencial", async () => {
+  // Na ordem inversa não haveria com o que removê-lo, e a Drap seguiria postando para um
+  // endereço que ninguém mais opera.
+  const rota = await source("app/api/integrations/drap/desconectar/route.ts");
+  assert.equal(rota.indexOf("removerWebhookNaDrap(") < rota.indexOf("DELETE FROM integration_connections"), true);
+});
+
+test("desconectar exige administrador e resolve a empresa pela sessão", async () => {
+  const rota = semComentarios(await source("app/api/integrations/drap/desconectar/route.ts"));
+  assert.equal(rota.includes('requireOrganizationContext(request, ["owner", "admin"])'), true);
+  assert.equal(rota.includes("organization_id = ?2"), true);
+  assert.equal(rota.includes("jsonBody"), false);
 });
 
 test("o segredo do webhook não chega ao navegador nem à auditoria", async () => {

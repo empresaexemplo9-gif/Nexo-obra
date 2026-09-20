@@ -35,21 +35,29 @@ export const EVENTOS_ASSINADOS = [
 /**
  * Escopos pedidos para a chave de cada empresa.
  *
- * `webhooks:read` e `webhooks:write` são recursos sensíveis na Drap: não vêm no escopo
- * padrão do parceiro, e nenhum preset da interface de lá os concede. São pedidos aqui, de
- * forma explícita, porque assinar webhook é dizer "mande o dado desta empresa para esta
- * URL" — uma concessão que merece aparecer no código que a pede, não herdada em silêncio
- * por toda chave que a Drap emitir para qualquer parceiro no futuro.
+ * `cobrancas:*` e `webhooks:*` são recursos sensíveis na Drap: não vêm no escopo padrão
+ * do parceiro, e nenhum preset da interface de lá os concede. São pedidos aqui, de forma
+ * explícita, porque cada um é uma concessão real — emitir cobrança mexe em dinheiro,
+ * assinar webhook é dizer "mande o dado desta empresa para esta URL". Pedir no código que
+ * usa mantém a concessão à vista, em vez de alargar o padrão da Drap para todo parceiro
+ * que ela vier a ter.
  *
- * `webhooks:delete` NÃO é pedido: remover assinatura é operação do dono da empresa, no
- * painel da Drap. A plataforma cria a dela e vive com isso.
+ * `webhooks:delete` entra porque a plataforma agora CRIA a assinatura ao conectar: quem
+ * cria precisa conseguir remover. Sem ele, desconectar deixaria a Drap postando o
+ * financeiro de uma empresa para um endereço que ninguém mais opera.
+ *
+ * `lancamentos:delete` e `parceiros:delete` ficam de fora: a plataforma não apaga nenhum
+ * dos dois, e escopo que ninguém usa só aumenta o estrago de uma chave vazada.
  */
 export const ESCOPOS_DA_PLATAFORMA = [
   "lancamentos:write",
   "parceiros:write",
   "categorias:read",
+  "cobrancas:read",
+  "cobrancas:write",
   "webhooks:read",
   "webhooks:write",
+  "webhooks:delete",
 ] as const;
 
 const NOME_DA_ASSINATURA = "H.OIKOS";
@@ -199,5 +207,51 @@ export async function registrarWebhookNaDrap(token: string): Promise<RegistroRes
     return { ok: true, segredo, url };
   } catch {
     return { ok: false, codigo: "drap-indisponivel", motivo: "A Drap não respondeu ao registro do webhook." };
+  }
+}
+
+/**
+ * Remove a assinatura que a plataforma criou para esta empresa.
+ *
+ * Só apaga a que aponta para o receptor desta instalação. Uma empresa pode ter assinaturas
+ * próprias, criadas pelo dono dela no painel da Drap para outros sistemas; desconectar da
+ * H.OIKOS não é motivo para derrubá-las.
+ *
+ * Não lança, pela mesma razão do registro: quem chama está desfazendo a conexão a pedido
+ * do usuário, e uma Drap fora do ar não pode prender ninguém a um vínculo que ele mandou
+ * desfazer. A falha volta como valor para virar instrução na tela.
+ */
+export async function removerWebhookNaDrap(token: string): Promise<{ removido: boolean; motivo?: string }> {
+  const url = urlDoReceptor();
+  const listar = api("/api/v1/webhooks");
+  if (!url || !listar) return { removido: false, motivo: "Sem endereço público configurado para identificar a assinatura." };
+
+  const cabecalhos = new Headers({ Accept: "application/json", Authorization: `Bearer ${token}` });
+
+  try {
+    const existentes = await fetch(listar, { headers: cabecalhos, signal: AbortSignal.timeout(15000) });
+    if (!existentes.ok) {
+      return { removido: false, motivo: `A Drap recusou a consulta de webhooks (HTTP ${existentes.status}).` };
+    }
+
+    const lista = await lerJson(existentes);
+    const itens = Array.isArray(lista.items) ? (lista.items as Record<string, unknown>[]) : [];
+    const nossa = itens.find((item) => typeof item.url === "string" && item.url === url);
+    if (!nossa || typeof nossa.id !== "string") return { removido: false, motivo: "Nenhuma assinatura desta plataforma encontrada na Drap." };
+
+    const apagar = api(`/api/v1/webhooks/${encodeURIComponent(nossa.id)}`);
+    if (!apagar) return { removido: false, motivo: "DRAP_API_URL não está configurada." };
+
+    const resposta = await fetch(apagar, { method: "DELETE", headers: cabecalhos, signal: AbortSignal.timeout(15000) });
+    if (!resposta.ok) {
+      const dados = await lerJson(resposta);
+      return {
+        removido: false,
+        motivo: detalhe(dados, `A Drap recusou remover a assinatura (HTTP ${resposta.status}). Remova-a na Drap, em Configurações → Integrações.`),
+      };
+    }
+    return { removido: true };
+  } catch {
+    return { removido: false, motivo: "A Drap não respondeu. Remova a assinatura na Drap, em Configurações → Integrações." };
   }
 }
