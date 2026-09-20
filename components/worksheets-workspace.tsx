@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownAZ, ArrowDownWideNarrow, ChartNoAxesCombined, CircleAlert, Columns3, Download, FileSpreadsheet,
-  FileText, LoaderCircle, Plus, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2,
+  FileText, LoaderCircle, Plus, Redo2, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +20,11 @@ import {
   axisLastFilled, axisRange, axisTotal,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetAxis, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
+import {
+  criarHistorico, desfazer, podeDesfazer, podeRefazer, refazer, registrar,
+  rotuloDoProximoDesfazer, rotuloDoProximoRefazer, type HistoricoPlanilha, type MovimentoHistorico,
+} from "@/lib/sheet-history";
+import { analisarColagem, aplicarColagem, rotuloDaColagem } from "@/lib/sheet-clipboard";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
@@ -37,6 +42,19 @@ type WorksheetContent = {
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
 type DataSource = { id: string; label: string; headers: string[] };
+
+/**
+ * O que precisa voltar junto com as células quando alguém desfaz.
+ *
+ * Excluir uma coluna não mexe só no conteúdo: mexe em `columns`, e mexe na análise, que
+ * guarda POSIÇÕES — qual linha é o cabeçalho, qual coluna é o custo. Desfazer só as
+ * células devolveria a coluna numa grade que continua encolhida, com o papel "Custo"
+ * apontando para a vizinha e nenhum erro na tela.
+ */
+type FormaDaGrade = { rows: number; columns: number; analysis: AnalysisSettings };
+const formaDe = (sheet: Worksheet): FormaDaGrade => ({
+  rows: sheet.rows, columns: sheet.columns, analysis: sheet.content.analysis,
+});
 
 /** Erro de API que preserva o código, para o chamador distinguir conflito de queda. */
 class ErroDeApi extends Error {
@@ -74,13 +92,17 @@ function arredondarExibicao(valor: number | null) {
 type AxisSelection = { kind: SheetAxis; index: number };
 
 function Grid({
-  cells, columns, rows, computed, active, selected, axis, onActive, onEstender, onAxis, onChange,
+  cells, columns, rows, computed, active, selected, axis,
+  onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
 }: {
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
   active: string; selected: Set<string>; axis: AxisSelection | null;
   onActive: (key: string, additive?: boolean) => void;
   onEstender: (key: string) => void;
   onAxis: (kind: SheetAxis, index: number) => void; onChange: (key: string, value: string) => void;
+  onColar: (texto: string) => void;
+  onDesfazer: () => void;
+  onRefazer: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -116,7 +138,21 @@ function Grid({
 
   // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
   // o gesto já existia e produzia um efeito feio e sem função nenhuma.
-  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }}>
+  return <div
+    className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white"
+    style={{ maxHeight: "62vh" }}
+    // O paste sobe da célula focada até aqui. Fica no contêiner, e não em cada célula,
+    // porque o alvo do evento muda conforme o que está focado — inclusive o input de
+    // edição, onde colar texto simples é o comportamento certo do navegador e não deve
+    // virar colagem de bloco.
+    onPaste={(event) => {
+      if (editing) return;
+      const texto = event.clipboardData.getData("text/plain");
+      if (!texto) return;
+      event.preventDefault();
+      onColar(texto);
+    }}
+  >
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
@@ -200,6 +236,17 @@ function Grid({
                     }}
                     onDoubleClick={() => { setDraft(cells[key] ?? ""); setEditing(key); }}
                     onKeyDown={(event) => {
+                      // Desfazer/refazer antes de tudo: é atalho com modificador, e o
+                      // resto do handler trata tecla solta. Ficam presos à grade de
+                      // propósito — Ctrl+Z no campo de nome da planilha tem que
+                      // continuar desfazendo o que a pessoa digitou lá.
+                      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+                        const tecla = event.key.toLowerCase();
+                        if (tecla === "z" && !event.shiftKey) { event.preventDefault(); onDesfazer(); return; }
+                        // Ctrl+Shift+Z e Ctrl+Y: o primeiro é o de quem veio do Google
+                        // Sheets, o segundo o de quem veio do Excel no Windows.
+                        if ((tecla === "z" && event.shiftKey) || tecla === "y") { event.preventDefault(); onRefazer(); return; }
+                      }
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
                       if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
                       // Com Shift a seta ESTENDE a faixa em vez de mover o cursor. É o que
@@ -246,6 +293,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  // `null` enquanto nenhuma planilha está aberta. O histórico é POR PLANILHA: trocar de
+  // planilha sem zerar faria desfazer aplicar as células de uma na outra.
+  const [historico, setHistorico] = useState<HistoricoPlanilha<FormaDaGrade> | null>(null);
   // Conflito de edição: a planilha mudou em outro acesso. Guardamos a versão do servidor
   // para a pessoa DECIDIR, em vez de escolher por ela — o trabalho na tela é dela.
   const [conflito, setConflito] = useState<Worksheet | null>(null);
@@ -288,6 +338,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setAvulsas([]);
     setAxis(null);
     setDirty(false);
+    // Histórico novo a cada planilha aberta. Herdar o da anterior faria desfazer
+    // escrever as células de uma planilha dentro de outra.
+    setHistorico(criarHistorico({ cells: result.worksheet.content.cells, forma: formaDe(result.worksheet) }));
   }, []);
 
   const readOnly = access ? !access.canEdit : false;
@@ -385,9 +438,102 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return { raw: current.content.cells[active] ?? "", result };
   }, [computed, current, active]);
 
-  function updateContent(change: (content: WorksheetContent) => WorksheetContent) {
-    setCurrent((sheet) => (sheet ? { ...sheet, content: change(sheet.content) } : sheet));
+  /**
+   * Toda alteração da planilha passa por aqui — é o que garante que ela vire um passo
+   * do histórico.
+   *
+   * O `setCurrent` funcional foi embora de propósito: para registrar o passo é preciso
+   * ter o próximo estado EM MÃOS, e dentro do updater ele só existe depois do commit.
+   * Como toda mutação aqui nasce de um gesto do usuário (clique, tecla, colagem), não há
+   * o encadeamento rápido que justificaria a forma funcional.
+   */
+  function aplicar(rotulo: string, produzir: (sheet: Worksheet) => Worksheet) {
+    if (!current || readOnly) return;
+    const proximo = produzir(current);
+    setCurrent(proximo);
+    setHistorico((anterior) => (anterior
+      ? registrar(anterior, { cells: proximo.content.cells, forma: formaDe(proximo) }, rotulo)
+      : anterior));
     setDirty(true);
+  }
+
+  function updateContent(rotulo: string, change: (content: WorksheetContent) => WorksheetContent) {
+    aplicar(rotulo, (sheet) => ({ ...sheet, content: change(sheet.content) }));
+  }
+
+  /** Aplica um passo do histórico — o mesmo caminho para desfazer e refazer. */
+  function irPara(movimento: MovimentoHistorico<FormaDaGrade> | null, verbo: "Desfeito" | "Refeito") {
+    if (!movimento || !current) return;
+    const { rows, columns, analysis } = movimento.forma;
+    setCurrent({ ...current, rows, columns, content: { ...current.content, cells: movimento.cells, analysis } });
+    setHistorico(movimento.historico);
+    setDirty(true);
+
+    // A grade pode ter encolhido: desfazer "inserir coluna" tira a coluna em que o
+    // cursor talvez esteja. Marcar célula fora da grade deixa a barra de fórmula
+    // apontando para o nada e o teclado sem para onde andar.
+    const endereco = parseCellKey(active);
+    const dentro = cellKey({
+      column: Math.min(endereco?.column ?? 0, columns - 1),
+      row: Math.min(endereco?.row ?? 0, rows - 1),
+    });
+    setActive(dentro);
+    setFaixa({ ancora: dentro, foco: dentro });
+    setAvulsas([]);
+    setAxis(null);
+
+    toast.success(movimento.rotulo ? `${verbo}: ${movimento.rotulo}` : `${verbo} a última alteração`);
+  }
+
+  function desfazerAgora() {
+    if (!historico || readOnly) return;
+    irPara(desfazer(historico), "Desfeito");
+  }
+
+  function refazerAgora() {
+    if (!historico || readOnly) return;
+    irPara(refazer(historico), "Refeito");
+  }
+
+  /**
+   * Colar do Excel ou do Google Sheets a partir da célula marcada.
+   *
+   * A grade CRESCE para caber o que foi colado, até o teto do produto. Truncar em
+   * silêncio um bloco de trinta linhas coladas numa planilha de dez seria perder vinte
+   * linhas de orçamento sem ninguém ver — e o que não couber nem assim é dito na tela.
+   */
+  function colar(texto: string) {
+    if (!current || readOnly) return;
+    const matriz = analisarColagem(texto);
+    if (matriz.length === 0) return;
+
+    const ancora = parseCellKey(active);
+    if (!ancora) return;
+
+    const largura = matriz.reduce((maior, linha) => Math.max(maior, linha.length), 0);
+    const colunas = Math.min(SHEET_MAX_COLUMNS, Math.max(current.columns, ancora.column + largura));
+    const linhas = Math.min(SHEET_MAX_ROWS, Math.max(current.rows, ancora.row + matriz.length));
+
+    const resultado = aplicarColagem(current.content.cells, active, matriz, { colunas, linhas });
+    if (resultado.alterados.length === 0 && !resultado.truncado) return;
+
+    aplicar(`Colar ${rotuloDaColagem(matriz)}`, (sheet) => ({
+      ...sheet, rows: linhas, columns: colunas,
+      content: { ...sheet.content, cells: resultado.cells },
+    }));
+
+    if (resultado.truncado) {
+      const { colunas: sobraram, linhas: sobrando } = resultado.truncado;
+      const partes = [
+        sobrando > 0 ? `${sobrando} linha(s)` : "",
+        sobraram > 0 ? `${sobraram} coluna(s)` : "",
+      ].filter(Boolean).join(" e ");
+      toast.error(`${partes} não couberam no limite da planilha e ficaram de fora.`);
+    } else if (resultado.cortadas.length > 0) {
+      toast.error(`${resultado.cortadas.length} célula(s) tinham texto longo demais e foram cortadas.`);
+    } else {
+      toast.success(`Colado: ${rotuloDaColagem(matriz)}`);
+    }
   }
 
   // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
@@ -412,8 +558,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const nextColumns = operation === "insert-column" ? current.columns + 1
       : operation === "delete-column" ? current.columns - 1 : current.columns;
 
-    setCurrent((sheet) => {
-      if (!sheet) return sheet;
+    const rotulo =
+      operation === "insert-row" ? `Inserir linha ${address.row + 1}`
+      : operation === "delete-row" ? `Excluir linha ${address.row + 1}`
+      : operation === "insert-column" ? `Inserir coluna ${columnName(address.column)}`
+      : operation === "delete-column" ? `Excluir coluna ${columnName(address.column)}`
+      : "Preencher para baixo";
+
+    aplicar(rotulo, (sheet) => {
       const cells = sheet.content.cells;
       const next =
         operation === "insert-row" ? insertRow(cells, address.row)
@@ -450,7 +602,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       setFaixa({ ancora: dentro, foco: dentro });
       setAvulsas([]);
     }
-    setDirty(true);
   }
 
   function sort(direction: "asc" | "desc") {
@@ -464,19 +615,19 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       toast.error("Há fórmula nas linhas a ordenar. Ordenar moveria as referências para o lugar errado.");
       return;
     }
-    updateContent((content) => ({ ...content, cells: result.cells }));
+    updateContent(
+      `Ordenar por ${columnName(address.column)} (${direction === "asc" ? "crescente" : "decrescente"})`,
+      (content) => ({ ...content, cells: result.cells }),
+    );
     toast.success("Linhas reordenadas");
   }
 
   function updateCell(key: string, value: string) {
-    if (readOnly) return;
-    setCurrent((sheet) => {
-      if (!sheet) return sheet;
+    aplicar(value.trim() === "" ? `Apagar ${key}` : `Editar ${key}`, (sheet) => {
       const cells = { ...sheet.content.cells };
       if (value.trim() === "") delete cells[key]; else cells[key] = value;
       return { ...sheet, content: { ...sheet.content, cells } };
     });
-    setDirty(true);
   }
 
   async function create(kind: WorksheetKind, templateId?: string) {
@@ -584,8 +735,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const result = await api<{ headers: string[]; rows: Array<Array<string | number>> }>(
         `/api/worksheets/data?source=${sourceId}&startLine=${anchor.row + 1}`);
       if (!result.rows.length) { toast.info("Não há dados reais para essa origem ainda."); return; }
-      setCurrent((sheet) => {
-        if (!sheet) return sheet;
+      aplicar(`Inserir ${result.rows.length} linha(s) de dados`, (sheet) => {
         const cells = { ...sheet.content.cells };
         result.headers.forEach((header, column) => { cells[cellKey({ column: anchor.column + column, row: anchor.row })] = header; });
         result.rows.forEach((row, line) => row.forEach((value, column) => {
@@ -601,7 +751,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           content: { ...sheet.content, cells },
         };
       });
-      setDirty(true);
       toast.success(`${result.rows.length} linha(s) reais inseridas`);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trazer os dados."); }
   }
@@ -617,8 +766,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       while (row < SHEET_MAX_ROWS && current.content.cells[cellKey({ column: address.column, row })]?.trim()) row += 1;
       if (row >= SHEET_MAX_ROWS) { toast.error("Não há célula livre abaixo da seleção para inserir o resultado."); return; }
       const destination = cellKey({ column: address.column, row });
-      updateCell(destination, `=${name}(${selected.join(";")})`);
-      setCurrent((sheet) => sheet ? { ...sheet, rows: Math.max(sheet.rows, row + 1) } : sheet);
+      // Célula e altura numa alteração só: em duas, desfazer uma vez tiraria a fórmula
+      // e deixaria a linha extra, e seriam necessários dois cliques para voltar.
+      aplicar(`Inserir ${name} em ${destination}`, (sheet) => ({
+        ...sheet,
+        rows: Math.max(sheet.rows, row + 1),
+        content: {
+          ...sheet.content,
+          cells: { ...sheet.content.cells, [destination]: `=${name}(${selected.join(";")})` },
+        },
+      }));
       selectCell(destination);
       return;
     }
@@ -760,7 +917,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         {current.kind === "document" ? <DocumentEditor
           body={current.content.body}
           cells={current.content.cells}
-          onChange={(body) => { updateContent((content) => ({ ...content, body })); }}
+          onChange={(body) => { updateContent("Editar o texto", (content) => ({ ...content, body })); }}
         /> : (
           <Tabs defaultValue="grade">
             <TabsList>
@@ -774,6 +931,26 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
                 <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-hoikos-50 p-2">
+                  {/*
+                    Desfazer e refazer abrem a barra porque são a saída de todo o resto
+                    dela: remover coluna e ordenar são as ações que a pessoa mais erra, e
+                    até agora errar significava perder. O título diz O QUE vai voltar —
+                    botão que só diz "desfazer" obriga a clicar para descobrir, e
+                    descobrir errado é outra perda.
+                  */}
+                  <Button
+                    size="sm" variant="ghost" onClick={desfazerAgora}
+                    disabled={!historico || !podeDesfazer(historico)}
+                    title={historico ? rotuloDoProximoDesfazer(historico) : "Nada para desfazer"}
+                    aria-label={historico ? rotuloDoProximoDesfazer(historico) : "Nada para desfazer"}
+                  ><Undo2 />Desfazer</Button>
+                  <Button
+                    size="sm" variant="ghost" onClick={refazerAgora}
+                    disabled={!historico || !podeRefazer(historico)}
+                    title={historico ? rotuloDoProximoRefazer(historico) : "Nada para refazer"}
+                    aria-label={historico ? rotuloDoProximoRefazer(historico) : "Nada para refazer"}
+                  ><Redo2 />Refazer</Button>
+                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-row")}><Rows3 />Inserir linha</Button>
                   <Button size="sm" variant="ghost" onClick={() => structural("delete-row")}>Remover linha</Button>
                   <span className="mx-1 h-5 w-px bg-hoikos-200" />
@@ -789,6 +966,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
+                onColar={colar} onDesfazer={desfazerAgora} onRefazer={refazerAgora}
               />
               {/*
                 A barra de resumo. Antes era uma frase de ajuda com uma soma grudada no
@@ -840,7 +1018,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               <AnalysisPanel
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 settings={current.content.analysis} canEdit={!readOnly}
-                onChange={(analysis) => updateContent((content) => ({ ...content, analysis }))}
+                onChange={(analysis) => updateContent("Alterar a leitura financeira", (content) => ({ ...content, analysis }))}
               />
             </TabsContent>
 

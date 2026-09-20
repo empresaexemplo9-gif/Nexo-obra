@@ -344,3 +344,108 @@ test("célula com erro é contada à parte e fica fora da soma", async () => {
   assert.match(texto, /1 com erro, fora das contas/);
   assert.match(texto, /Soma\s*10/, "o erro não entra como zero na conta");
 });
+
+/**
+ * Desfazer, refazer e colar.
+ *
+ * Até aqui a planilha só tinha o estado atual: remover a coluna errada ou errar o
+ * preenchimento para baixo era perda definitiva, e a pessoa só descobria depois de
+ * salvar. E colar um bloco do Excel simplesmente não existia — o orçamento vinha de lá
+ * e tinha que ser redigitado célula por célula.
+ */
+
+function apertar(elemento, key, modifiers = {}) {
+  return act(async () => {
+    elemento.dispatchEvent(new window.KeyboardEvent("keydown", { bubbles: true, key, ...modifiers }));
+  });
+}
+
+function colarNaGrade(texto) {
+  // Pelo contêiner, não por uma célula: com o editor aberto a célula vira input e o
+  // `#cell-A1` deixa de existir — que é justamente um dos casos testados.
+  const grade = container.querySelector("div.select-none");
+  const evento = new window.Event("paste", { bubbles: true, cancelable: true });
+  evento.clipboardData = { getData: () => texto };
+  return act(async () => { grade.dispatchEvent(evento); });
+}
+
+test("desfazer devolve a coluna excluída — e a grade volta a caber nela", async () => {
+  // O defeito que isto tranca: um histórico só de células devolveria B1 numa grade que
+  // continua com três colunas. A coluna volta e não aparece.
+  await openWorksheet(comDados);
+  await clickCell("B1");
+
+  await act(async () => { findByText(container, /Remover coluna/).click(); });
+  assert.equal(container.querySelector("#cell-D1"), null, "a grade encolheu");
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "30", "C tomou o lugar de B");
+
+  await act(async () => { findByText(container, /Desfazer/).click(); });
+  assert.ok(container.querySelector("#cell-D1"), "a quarta coluna voltou a existir");
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "20", "e o conteúdo voltou para o lugar");
+  assert.equal(container.querySelector("#cell-C1").textContent.trim(), "30");
+});
+
+test("o botão diz o que vai desfazer, sem obrigar a clicar para descobrir", async () => {
+  await openWorksheet(comDados);
+  await clickCell("B1");
+  await act(async () => { findByText(container, /Remover coluna/).click(); });
+
+  assert.match(findByText(container, /Desfazer/).getAttribute("title"), /Desfazer excluir coluna B/);
+});
+
+test("com a planilha recém-aberta não há o que desfazer", async () => {
+  // Botão aceso prometendo uma ação que não acontece é pior do que botão apagado.
+  await openWorksheet(comDados);
+  assert.equal(findByText(container, /Desfazer/).disabled, true);
+  assert.equal(findByText(container, /Refazer/).disabled, true);
+});
+
+test("Ctrl+Z na grade desfaz, e Ctrl+Shift+Z refaz", async () => {
+  await openWorksheet(comDados);
+  await clickCell("B1");
+  await act(async () => { findByText(container, /Remover coluna/).click(); });
+
+  await apertar(container.querySelector("#cell-A1"), "z", { ctrlKey: true });
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "20", "Ctrl+Z desfez");
+
+  await apertar(container.querySelector("#cell-A1"), "z", { ctrlKey: true, shiftKey: true });
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "30", "Ctrl+Shift+Z refez");
+});
+
+test("colar do Excel faz a grade crescer em vez de cortar o que foi colado", async () => {
+  // Truncar em silêncio um bloco de trinta linhas numa planilha de quatro seria perder
+  // vinte e seis linhas de orçamento sem ninguém ver.
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await colarNaGrade("Etapa\tCusto\nAlvenaria\t1200\nPintura\t800\nEsquadria\t950\nLouças\t400");
+
+  assert.ok(container.querySelector("#cell-A5"), "a grade cresceu para caber as cinco linhas");
+  assert.equal(container.querySelector("#cell-A1").textContent.trim(), "Etapa");
+  assert.equal(container.querySelector("#cell-B4").textContent.trim(), "950");
+});
+
+test("a colagem entra como um passo só do histórico", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await colarNaGrade("Etapa\tCusto\nAlvenaria\t1200");
+
+  assert.match(findByText(container, /Desfazer/).getAttribute("title"), /Desfazer colar 2 linhas × 2 colunas/);
+
+  await act(async () => { findByText(container, /Desfazer/).click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent.trim(), "10", "um clique devolve a planilha inteira");
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "20");
+});
+
+test("colar dentro da célula em edição continua sendo colar texto", async () => {
+  // Quem está digitando uma fórmula e cola um trecho espera o texto no campo, não a
+  // planilha reescrita a partir dali.
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await apertar(container.querySelector("#cell-A1"), "F2");
+  await colarNaGrade("Etapa\tCusto\nAlvenaria\t1200");
+  await apertar(container.querySelector("input[aria-label='Célula A1']"), "Escape");
+
+  assert.equal(container.querySelector("#cell-A1").textContent.trim(), "10", "a planilha não foi reescrita a partir de A1");
+  assert.equal(container.querySelector("#cell-B1").textContent.trim(), "20");
+  assert.equal(findByText(container, /Desfazer/).disabled, true, "e nada entrou no histórico");
+});
