@@ -88,6 +88,14 @@ test("XLSX importa datas, decimais e resultados salvos; não inventa resultado d
   await assert.rejects(importXlsx(Buffer.from(await workbook.xlsx.writeBuffer())), /sem resultado salvo/);
 });
 
+test("XLSX trata nomes de abas reservados, truncados e aspas sem conflito", async () => {
+  const content = contentSchema.parse({ cells: { A1: "=1+1" } });
+  for (const name of ["fórmulas de referência", "'".repeat(10), "a".repeat(30) + "'fim", "Obra\u0000Sul"]) {
+    const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(await exportXlsx(name, content, 1));
+    assert.equal(workbook.worksheets.length, 2); assert.equal(workbook.worksheets[0].getCell("A1").value, 2);
+  }
+});
+
 test("XLSX recusa truncamento, dimensões, payload excessivo e limites reais de descompressão", async () => {
   await assert.rejects(importXlsx(Buffer.from("invalid")), /ZIP/);
   await assert.rejects(importXlsx(Buffer.alloc(4 * 1024 * 1024 + 1)), /4 MB/);

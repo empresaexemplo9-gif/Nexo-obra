@@ -57,7 +57,7 @@ export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
 export async function exportXlsx(name: string, content: z.infer<typeof contentSchema>, columns: number) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "H.OIKOS";
-  const sheet = workbook.addWorksheet(name.replace(/[\\/*?:[\]]/g, " ").replace(/^'|'$/g, "").trim().slice(0, 31) || "Planilha");
+  const sheet = workbook.addWorksheet(name.replace(/[\\/*?:[\]\u0000-\u001f]/g, " ").trim().slice(0, 31).replace(/^'+|'+$/g, "") || "Planilha");
   const computed = evaluateSheet(content.cells), colors = conditionalColors(computed, content.advanced ?? emptyAdvanced);
   for (let column = 1; column <= columns; column++) {
     const key = cellKey({ row: 0, column: column - 1 }).replace(/1$/, "");
@@ -75,7 +75,7 @@ export async function exportXlsx(name: string, content: z.infer<typeof contentSc
   }
   const formulas = Object.entries(content.cells).filter(([, raw]) => raw.startsWith("="));
   if (formulas.length) {
-    const reference = workbook.addWorksheet(sheet.name === "Fórmulas de referência" ? "Referência das fórmulas" : "Fórmulas de referência");
+    const reference = workbook.addWorksheet(sheet.name.toLocaleLowerCase("pt-BR") === "fórmulas de referência" ? "Referência das fórmulas" : "Fórmulas de referência");
     reference.addRow(["Célula", "Fórmula original (texto)"]);
     for (const [key, raw] of formulas) reference.addRow([key, raw]);
     reference.getColumn(2).width = 70;
