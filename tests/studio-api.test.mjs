@@ -230,11 +230,11 @@ test("duas abas abertas não se sobrescrevem em silêncio", async () => {
   assert.equal(guardado.elementos.length, 1, "o desenho da primeira aba foi perdido");
 });
 
-test("desenho inválido é recusado na borda, com o campo que falhou", async () => {
+test("desenho fisicamente inválido é recusado na borda, com o campo que falhou", async () => {
   const criada = await criar();
   const fracionario = {
     ...documentoVazio(),
-    elementos: [{ id: "p1", camada: "layout", tipo: "parede", a: { x: 0.5, y: 0 }, b: { x: 3000, y: 0 }, espessuraMm: 150 }],
+    elementos: [{ id: "p1", camada: "layout", tipo: "parede", a: { x: 0.5, y: 0 }, b: { x: 3000, y: 0 }, espessuraMm: 5 }],
   };
   const recusado = await prancha.PUT(pedido(`/api/studio/${criada.id}`, { method: "PUT", json: { documento: fracionario, revisao: 1 } }), parametros(criada.id));
   assert.equal(recusado.status, 400);
@@ -386,25 +386,23 @@ test("a unidade pedida no formulário vence a do arquivo, e unidade inventada é
   assert.equal((await invalida.json()).code, "invalid_unit");
 });
 
-test("DWG é recusado dizendo a versão do arquivo e o caminho da saída", async () => {
+test("DWG usa o conversor isolado e avisa quando ele não está configurado", async () => {
   const dwg = Buffer.concat([Buffer.from("AC1032", "ascii"), Buffer.alloc(64)]);
   const resposta = await importacao.POST(pedido("/api/studio/importar", {
     method: "POST", ...comArquivo(formularioDxf({ conteudo: dwg, nome: "planta.dwg", tipo: "image/vnd.dwg" })),
   }));
-  assert.equal(resposta.status, 415);
+  assert.equal(resposta.status, 503);
   const corpo = await resposta.json();
-  assert.equal(corpo.code, "dwg_nao_suportado");
-  assert.match(corpo.error, /AutoCAD 2018/);
-  assert.match(corpo.error, /DXF ASCII/, "recusar sem dizer o que fazer não ajuda ninguém");
-  assert.equal(corpo.details.versao, "AC1032");
+  assert.equal(corpo.code, "dwg_converter_unavailable");
+  assert.match(corpo.error, /conversor DWG/i);
 });
 
-test("arquivo que não é DXF é recusado com motivo, não com erro genérico", async () => {
+test("arquivo de formato desconhecido é recusado com motivo, não com erro genérico", async () => {
   const resposta = await importacao.POST(pedido("/api/studio/importar", {
     method: "POST", ...comArquivo(formularioDxf({ conteudo: "isto é um texto qualquer", nome: "nota.txt", tipo: "text/plain" })),
   }));
   assert.equal(resposta.status, 415);
-  assert.equal((await resposta.json()).code, "dxf_invalido");
+  assert.equal((await resposta.json()).code, "formato_desconhecido");
 });
 
 test("arquivo vazio e envio sem arquivo não passam", async () => {

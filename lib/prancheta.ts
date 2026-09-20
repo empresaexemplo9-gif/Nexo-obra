@@ -4,10 +4,8 @@ import { z } from "zod";
 //
 // Duas decisões moldam tudo aqui.
 //
-// 1. Coordenada é MILÍMETRO INTEIRO. Um desenho arquitetônico é medida, não pintura: uma
-//    parede de 3,15 m tem que continuar 3150 mm depois de mover, copiar e reescalar mil
-//    vezes. Ponto flutuante acumula erro e a cota deixa de fechar — o mesmo motivo pelo
-//    qual dinheiro fica em centavos neste projeto.
+// 1. Coordenada usa milímetros em ponto flutuante de 64 bits. Isso preserva arquivos CAD
+//    com frações de milímetro; arredondar na borda destruiria a geometria importada.
 //
 // 2. Elemento pertence a uma CAMADA, e camada tem disciplina. É o que permite entregar a
 //    mesma planta como layout, elétrico, luminotécnico ou mobiliário sem desenhar quatro
@@ -39,7 +37,7 @@ export const simboloLabels: Record<string, string> = {
   "fita-led": "Fita de LED", sanca: "Sanca iluminada", poste: "Poste", refletor: "Refletor",
 };
 
-const mm = z.number().int().finite();
+const mm = z.number().finite();
 const ponto = z.object({ x: mm, y: mm }).strict();
 const idSchema = z.string().min(1).max(64);
 
@@ -124,7 +122,7 @@ export function documentoVazio(): Documento {
 /** Encaixe na malha. Desenhar à mão livre e depois cotar não fecha: o encaixe é o que faz
  *  parede encontrar parede. Malha 1 desliga o encaixe sem caso especial. */
 export function encaixar(valor: number, malhaMm: number): number {
-  if (malhaMm <= 1) return Math.round(valor);
+  if (malhaMm <= 1) return valor;
   return Math.round(valor / malhaMm) * malhaMm;
 }
 

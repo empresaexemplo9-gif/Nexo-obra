@@ -58,16 +58,16 @@ test("encaixe leva o traço ao passo da malha", () => {
   assert.equal(encaixar(37, 50), 50);
 });
 
-test("malha 1 desliga o encaixe mas devolve inteiro", () => {
-  assert.equal(encaixar(1234.7, 1), 1235);
-  assert.equal(encaixar(1234.2, 0), 1234);
-  assert.ok(Number.isInteger(encaixar(999.5, 1)));
+test("malha 1 desliga o encaixe e preserva a precisão importada", () => {
+  assert.equal(encaixar(1234.7, 1), 1234.7);
+  assert.equal(encaixar(1234.2, 0), 1234.2);
+  assert.equal(encaixar(999.5, 1), 999.5);
 });
 
-test("encaixe nunca devolve fração, em qualquer malha", () => {
-  for (const malha of [1, 10, 25, 50, 100, 250, 1000]) {
+test("encaixe devolve múltiplos exatos quando a malha está ativa", () => {
+  for (const malha of [10, 25, 50, 100, 250, 1000]) {
     for (const valor of [0, 3, 77.4, 1234.6, -812.3, 99999]) {
-      assert.ok(Number.isInteger(encaixar(valor, malha)), `${valor} na malha ${malha} saiu fracionado`);
+      assert.ok(Math.abs(encaixar(valor, malha) % malha) < Number.EPSILON, `${valor} não encaixou na malha ${malha}`);
     }
   }
 });
@@ -196,10 +196,10 @@ test("cômodo sem nome aparece identificado, não some do resumo", () => {
   assert.equal(resumo.comodos[0].nome, "Sem nome");
 });
 
-test("coordenada fracionária é recusada na borda", () => {
-  // Milímetro inteiro é a garantia de que a cota fecha depois de mover e copiar.
+test("coordenada fracionária é preservada na borda", () => {
+  // Arquivos CAD reais usam frações de milímetro; arredondar aqui alteraria a geometria.
   const fracionaria = parede("p1", { x: 0.5, y: 0 }, { x: 1000, y: 0 });
-  assert.equal(elementoSchema.safeParse(fracionaria).success, false);
+  assert.equal(elementoSchema.safeParse(fracionaria).success, true);
   assert.equal(elementoSchema.safeParse(parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 })).success, true);
 });
 

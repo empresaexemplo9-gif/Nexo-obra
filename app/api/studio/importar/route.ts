@@ -1,4 +1,6 @@
 import { DxfInvalido, UNIDADES, Unidade, lerDxf, versaoDoDwg } from "@/lib/integrations/dxf";
+import { detectCadFormat, importNexo } from "@/lib/cad-formats";
+import { converterDwgParaDxf, DwgConversorIndisponivel } from "@/lib/server/dwg-converter";
 import { ApiError, apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +36,17 @@ export async function POST(request: Request) {
 
     // DWG chega aqui com frequência, porque é o que o cliente manda. Em vez de um
     // "formato não suportado", a pessoa ouve qual é o arquivo dela e o que fazer.
-    const dwg = versaoDoDwg(bytes);
-    if (dwg) {
-      throw new ApiError(415, "dwg_nao_suportado",
-        `Este é um arquivo DWG (${dwg.nome}). O DWG é formato fechado e sem especificação publicada; ler por engenharia reversa erraria medidas em silêncio. Abra o arquivo no CAD e exporte como DXF ASCII — a geometria vem inteira por lá.`,
-        { versao: dwg.codigo });
+    const formato = detectCadFormat(arquivo.name, bytes);
+    if (!formato) throw new ApiError(415, "formato_desconhecido", "Não foi possível identificar o formato do arquivo.");
+
+    if (formato.id === "nexo") {
+      try {
+        const documento = importNexo(new TextDecoder().decode(bytes));
+        return Response.json({ nomeArquivo: arquivo.name.slice(0, 180), unidade: "mm", unidadeDeclarada: true,
+          camadas: documento.camadas, elementos: documento.elementos, avisos: [], truncado: false });
+      } catch {
+        throw new ApiError(415, "nexo_invalido", "O documento Nexo é inválido ou usa uma versão não suportada.");
+      }
     }
 
     const pedida = String(formulario.get("unidade") ?? "").trim();
@@ -47,7 +55,10 @@ export async function POST(request: Request) {
     }
 
     try {
-      const importacao = lerDxf(new TextDecoder("utf-8", { fatal: false }).decode(bytes),
+      let texto = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+      const dwg = versaoDoDwg(bytes);
+      if (dwg) texto = await converterDwgParaDxf(bytes);
+      const importacao = lerDxf(texto,
         pedida ? { unidade: pedida as Unidade } : {});
       return Response.json({
         nomeArquivo: arquivo.name.slice(0, 180),
@@ -59,6 +70,7 @@ export async function POST(request: Request) {
         truncado: importacao.truncado,
       }, { headers: { "Cache-Control": "private, no-store" } });
     } catch (erro) {
+      if (erro instanceof DwgConversorIndisponivel) throw new ApiError(503, "dwg_converter_unavailable", erro.message);
       if (erro instanceof DxfInvalido) throw new ApiError(415, "dxf_invalido", erro.message);
       throw erro;
     }

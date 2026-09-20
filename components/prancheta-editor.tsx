@@ -10,6 +10,8 @@ import {
 import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
+import { executeCadCommand } from "@/lib/cad-commands";
+import { exportNexo } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -249,6 +251,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>([...TIPOS_ENCAIXE]);
   const [orto, definirOrto] = useState(false);
   const [entrada, definirEntrada] = useState("");
+  const [comando, definirComando] = useState("");
   const [matriz, definirMatriz] = useState({ colunas: 3, linhas: 1, passoXMm: 1000, passoYMm: 1000 });
   const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
@@ -648,6 +651,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     definirEntrada("");
   }
 
+  function executarComando() {
+    if (!canEdit || !comando.trim()) return;
+    try {
+      const resultado = executeCadCommand(comando, {
+        document: documento, selectedId: selecao, layerId: camadaAtiva, createId: novoId,
+      });
+      if (resultado.document !== documento) aplicar(resultado.document);
+      definirSelecao(resultado.selectedId);
+      definirComando("");
+      toast.success(resultado.message);
+    } catch (causa) {
+      toast.error(causa instanceof Error ? causa.message : "Não foi possível executar o comando.");
+    }
+  }
+
   /** Paralela do elemento selecionado. A distância vem do campo de medida, porque é o
    *  mesmo gesto: dizer quanto. */
   function criarParalela(sinal: 1 | -1) {
@@ -760,7 +778,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       return;
     }
     const existentesElementos = new Set(documento.elementos.map((elemento) => elemento.id));
-    const chegando = importado.elementos.filter((elemento) => !existentesElementos.has(elemento.id));
+    const chegando = importado.elementos.map((elemento) => {
+      if (!existentesElementos.has(elemento.id)) { existentesElementos.add(elemento.id); return elemento; }
+      const id = novoId(); existentesElementos.add(id); return { ...elemento, id };
+    });
     if (documento.elementos.length + chegando.length > 20000) {
       toast.error("O desenho ficaria acima do limite de 20 mil elementos. Importe para uma prancha nova.");
       return;
@@ -833,8 +854,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         <Button variant="outline" size="sm" onClick={desfazer} disabled={!historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
         <Button variant="outline" size="sm" onClick={refazer} disabled={!refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
         {canEdit && <>
-          <input ref={arquivoDxf} type="file" accept=".dxf,text/plain,application/dxf,image/vnd.dxf,.dwg" className="sr-only"
-            aria-label="Arquivo DXF para importar"
+          <input ref={arquivoDxf} type="file" accept=".dxf,.dwg,.nexo,text/plain,application/dxf,image/vnd.dxf,application/json" className="sr-only"
+            aria-label="Arquivo CAD para importar"
             onChange={(evento) => {
               const arquivo = evento.target.files?.[0] ?? null;
               evento.target.value = "";
@@ -842,10 +863,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
               if (arquivo) void importar(arquivo, "");
             }} />
           <Button variant="outline" size="sm" onClick={() => arquivoDxf.current?.click()} disabled={importando}>
-            {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar DXF
+            {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar CAD
           </Button>
         </>}
         <Button variant="outline" size="sm" onClick={exportarParaCad}><Download />Exportar DXF</Button>
+        <Button variant="outline" size="sm" onClick={() => baixar(exportNexo(documento), "application/json", "nexo")}><Download />NEXO</Button>
         <Button variant="outline" size="sm" onClick={exportar}><Download />SVG</Button>
         {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>
           {salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Gravar
@@ -1070,7 +1092,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
               ? `raio ${metros(comprimentoM(pendentes[0], pendentes[1] ?? cursor))}`
               : metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
           </span>}
-          {canEdit && <form className="ml-auto flex items-center gap-2"
+          {canEdit && <form className="flex items-center gap-2"
             onSubmit={(evento) => { evento.preventDefault(); confirmarEntrada(); }}>
             <Label htmlFor="prancheta-medida" className="text-xs">Medida</Label>
             <Input id="prancheta-medida" value={entrada} onChange={(evento) => definirEntrada(evento.target.value)}
@@ -1079,6 +1101,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
             <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!pendentes.length || !entrada.trim()}>
               Aplicar
             </Button>
+          </form>}
+          {canEdit && <form className="ml-auto flex items-center gap-2" onSubmit={(evento) => { evento.preventDefault(); executarComando(); }}>
+            <Label htmlFor="prancheta-comando" className="text-xs">Comando</Label>
+            <Input id="prancheta-comando" value={comando} onChange={(evento) => definirComando(evento.target.value)}
+              placeholder="L 0,0 3000,0 · C 1500,1500 500" className="h-8 w-72 text-xs" />
+            <Button type="submit" size="sm" className="h-8" disabled={!comando.trim()}>Executar</Button>
           </form>}
         </div>
       </div>
