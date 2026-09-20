@@ -12,13 +12,14 @@ import { getDatabase } from "@/db";
 import { requestEvidenceHashes } from "@/lib/server/terms";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { permissionsForRole } from "@/lib/permissions";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
 const onboardingSchema = z.object({
   organizationName: z.string().trim().min(2).max(120),
   acceptTerms: z.literal(true),
-});
+}).strict();
 
 function slugify(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -27,6 +28,7 @@ function slugify(value: string) {
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
+    rejectCrossSiteMutation(request);
     const user = await authenticatedIdentity(request);
     if (user.scope === "maintenance") throw new ApiError(403, "maintenance_scope", "O acesso de manutenção não cria empresas contratantes.");
     if (user.scope === "superadmin") throw new ApiError(403, "superadmin_scope", "Cadastre a empresa pelo painel do superadministrador.");

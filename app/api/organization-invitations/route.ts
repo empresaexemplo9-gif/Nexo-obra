@@ -55,6 +55,7 @@ export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "team", "view");
+    if (!canManageOrganizationAccess(context)) throw new ApiError(403, "access_management_denied", "Somente administradores da empresa consultam os convites de acesso.");
     const result = await context.db.prepare(
       `SELECT id, email, role, permissions_json, expires_at, accepted_at, revoked_at, created_at
        FROM organization_invitations WHERE organization_id = ?1

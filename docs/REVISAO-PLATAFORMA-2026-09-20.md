@@ -74,3 +74,13 @@ Esta entrega corrige as falhas imediatas e acrescenta os recursos acima. Os iten
 - Revisão de dependências: Next.js/eslint-config-next 16.3.5 e dependências transitivas corrigidas. Override de uuid 11.1.1 para a dependência ExcelJS, mantendo CommonJS e API v4 compatíveis. `npm audit --omit=dev` retornou zero vulnerabilidades conhecidas após a atualização.
 - Esta fase não exige migração SQL. Configurações ficam no conteúdo versionado da planilha. Não foram inseridos dados fictícios em produção. A lista dos outros módulos e homologações continua aberta conforme o inventário acima.
 - Arquivos e respostas XLSX/JSON limitados a 4 MB para permanecer abaixo do limite de 4,5 MB das funções Vercel. Arquivos ZIP mantêm o limite adicional de 32 MB descomprimidos. Referência: https://vercel.com/docs/functions/limitations#request-body-size.
+
+## Hierarquia, comissionamento e documentação jurídica
+
+- Contexto de empresa não autorizado é recusado, sem troca silenciosa para outro vínculo. A sessão oferece seleção explícita apenas entre empresas autorizadas.
+- Administradores autorizados podem criar coadministradores e editar/desativar/restaurar a equipe da própria empresa, com conflito de revisão, auditoria e proteção do proprietário e do próprio acesso. Administradores restritos não alteram acessos mais poderosos. Leitores de Equipe não consultam convites.
+- Proteção de origem nas mutações administrativas, cadastro, vinculação Drap e aceite. Aceites repetidos não sobrescrevem a evidência original.
+- Preço-base Drap obrigatório, acréscimo opcional reservado ao superadministrador; políticas e preço congelado têm histórico. Comissão mensal confirmada é apresentada como pendente de conciliação, sem tratar evento de assinatura como pagamento.
+- Seleção de módulos é salva por empresa sem simular contratação. Criação/vinculação embutida usa o adaptador existente quando configurado. Integração real e homologação aguardam a Drap por instrução do responsável; não foram criadas cobranças nem contas de teste em produção.
+- Minuta jurídica em `/termos/proposta` e `docs/TERMOS-HOIKOS-2026-09-20.md`, distinguindo Drap desenvolvedora/vendedora da futura operadora H.OIKOS. Não entrou em vigor nem foi vinculada a aceite. Dados da adquirente, política de privacidade, divisão operacional e revisão jurídica permanecem necessários, conforme `docs/ENTREGA-JURIDICA-HOIKOS.md`.
+- Sem alteração de schema ou migração de dados nesta fase. As verificações incluem SQL real em SQLite local, rotas autenticadas, permissões e componentes React; integração externa foi simulada nos testes e não é declarada homologada.

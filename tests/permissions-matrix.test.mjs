@@ -45,6 +45,11 @@ const inviteRoute = await vite.ssrLoadModule("/app/api/organization-invitations/
 const accept = await vite.ssrLoadModule("/app/api/invitations/[token]/accept/route.ts");
 const clients = await vite.ssrLoadModule("/app/api/clients/route.ts");
 const finance = await vite.ssrLoadModule("/app/api/integrations/drap/summary/route.ts");
+const memberRoute = await vite.ssrLoadModule("/app/api/members/route.ts");
+const catalogRoute = await vite.ssrLoadModule("/app/api/integrations/drap/catalog/route.ts");
+const selectionRoute = await vite.ssrLoadModule("/app/api/integrations/drap/selection/route.ts");
+const termsRoute = await vite.ssrLoadModule("/app/api/terms/accept/route.ts");
+const sessionRoute = await vite.ssrLoadModule("/app/api/session/route.ts");
 
 const org = "11111111-1111-4111-8111-111111111111";
 const full = () => Object.fromEntries(permissions.permissionModules.map((m) => [m, { view: true, edit: true }]));
@@ -68,6 +73,68 @@ beforeEach(async () => {
   Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true" });
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
+
+test("administrador gerencia outro administrador somente na própria empresa com revisão e auditoria", async () => {
+  addMember("admin1", "admin"); addMember("admin2", "admin"); addMember("owner", "owner");
+  const snapshot = await (await memberRoute.GET(as("admin1", "/api/members"))).json();
+  const member = snapshot.members.find(member => member.id === "admin2");
+  const body = { id: member.id, updatedAt: member.updatedAt, role: "manager", permissions: permissions.permissionsForRole("manager"), active: false, weeklyCapacityMinutes: 1200 };
+  const patch = (actor, changes = {}) => memberRoute.PATCH(as(actor, "/api/members", { method: "PATCH", body: JSON.stringify({ ...body, ...changes }) }));
+  assert.equal((await patch("admin1", { id: "foreign-member" })).status, 404);
+  assert.equal((await patch("admin1", { id: "owner" })).status, 403);
+  assert.equal((await patch("admin1", { id: "admin1" })).status, 403);
+  assert.equal((await patch("admin1", { role: "superadmin" })).status, 400);
+  const result = await patch("admin1"); assert.equal(result.status, 200, await result.clone().text());
+  assert.equal((await patch("admin1")).status, 409);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='member.access_updated'").get().n, 1);
+  assert.equal((await memberRoute.GET(as("admin2", "/api/members"))).status, 403);
+  const all = await (await memberRoute.GET(as("admin1", "/api/members?includeInactive=true"))).json();
+  const disabled = all.members.find(member => member.id === "admin2"); assert.equal(disabled.active, false);
+  assert.equal((await patch("admin1", { updatedAt: disabled.updatedAt, active: true })).status, 200);
+});
+
+test("administrador restrito não altera acesso mais poderoso e RH não lista convites", async () => {
+  addMember("restricted", "admin", { ...permissions.permissionsForRole("member"), team: { view: true, edit: true } });
+  addMember("full-admin", "admin"); addMember("hr", "hr");
+  const target = db.sqlite.prepare("SELECT updated_at FROM members WHERE id='full-admin'").get();
+  assert.equal((await memberRoute.PATCH(as("restricted", "/api/members", { method: "PATCH", body: JSON.stringify({ id: "full-admin", role: "member", permissions: permissions.permissionsForRole("member"), active: true, weeklyCapacityMinutes: 2400, updatedAt: target.updated_at }) }))).status, 403);
+  assert.equal((await inviteRoute.GET(as("hr", "/api/organization-invitations"))).status, 403);
+});
+
+test("cookie de outra empresa não cai silenciosamente em uma empresa autorizada", async () => {
+  addMember("admin", "admin");
+  const response = await memberRoute.GET(as("admin", "/api/members", { headers: { cookie: "__Host-nexo-organization=22222222-2222-4222-8222-222222222222" } }));
+  assert.equal(response.status, 403); assert.equal((await response.json()).code, "organization_forbidden");
+  const recovery = await sessionRoute.GET(as("admin", "/api/session", { headers: { cookie: "__Host-nexo-organization=22222222-2222-4222-8222-222222222222" } }));
+  assert.equal(recovery.status, 200); const body = await recovery.json();
+  assert.equal(body.organizationSelectionRequired, true); assert.deepEqual(body.organizations.map(item => item.id), [org]); assert.equal(body.organization, undefined);
+});
+
+test("seleção Drap usa preços do servidor, não contrata e não aceita preços ou empresa do cliente", async () => {
+  addMember("admin", "admin"); addMember("finance", "finance");
+  const save = (actor, body) => selectionRoute.POST(as(actor, "/api/integrations/drap/selection", { method: "POST", body: JSON.stringify(body) }));
+  assert.equal((await save("finance", { itemIds: ["cobrancas"] })).status, 403);
+  assert.equal((await save("admin", { itemIds: ["cobrancas"], monthlyCents: 1 })).status, 400);
+  assert.equal((await save("admin", { itemIds: ["invalid"] })).status, 400);
+  const response = await save("admin", { itemIds: ["cobrancas", "cobrancas", "dashboards-pro"] });
+  assert.equal(response.status, 200); assert.equal((await response.json()).contracted, false);
+  const catalog = await (await catalogRoute.GET(as("admin", "/api/integrations/drap/catalog"))).json();
+  assert.deepEqual(catalog.selection, ["cobrancas", "dashboards-pro"]);
+  for (const item of catalog.catalog) for (const key of ["baseCents", "commissionCents", "multiplierBps", "revision"]) assert.equal(key in item, false);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM drap_activations").get().n, 0);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM financial_charge_requests").get().n, 0);
+});
+
+test("aceite repetido preserva a evidência original e não aceita uma minuta nem origem externa", async () => {
+  addMember("owner", "owner");
+  const before = db.sqlite.prepare("SELECT * FROM terms_acceptances WHERE external_user_id='owner'").get();
+  const accept = (version, headers = {}) => termsRoute.POST(as("owner", "/api/terms/accept", { method: "POST", body: JSON.stringify({ accepted: true, version }), headers }));
+  const response = await accept(CURRENT_TERMS_VERSION); assert.equal(response.status, 200);
+  assert.equal((await response.json()).acceptedAt, before.accepted_at);
+  assert.deepEqual(db.sqlite.prepare("SELECT * FROM terms_acceptances WHERE external_user_id='owner'").get(), before);
+  assert.equal((await accept("2026-09-20")).status, 400);
+  assert.equal((await accept(CURRENT_TERMS_VERSION, { origin: "https://attacker.test" })).status, 403);
+});
 
 test("cada perfil nasce com a matriz que o produto promete", () => {
   const matrix = (role) => Object.fromEntries(Object.entries(permissions.permissionsForRole(role))

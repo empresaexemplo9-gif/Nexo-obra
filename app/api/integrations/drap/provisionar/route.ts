@@ -5,6 +5,7 @@ import { DrapPartnerError, isDrapPartnerConfigured, provisionarEmpresaNaDrap, vi
 import { instrucoesParaGuardarCredenciais } from "@/lib/server/drap-credenciais";
 import { guardaDeSegredosConfigurada } from "@/lib/server/segredos";
 import { conectarWebhook } from "@/lib/server/drap-webhook-conectar";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
@@ -31,15 +32,16 @@ const corpoSchema = z.discriminatedUnion("modo", [
     // Só dígitos: 11 (CPF) ou 14 (CNPJ). É o documento que impede empresa duplicada na
     // Drap, e o 409 que ele gera é o que manda para o caminho do vínculo.
     documentoNumero: z.string().trim().regex(/^\d{11}$|^\d{14}$/, "Informe CPF (11 dígitos) ou CNPJ (14 dígitos), só números."),
-  }),
+  }).strict(),
   z.object({
     modo: z.literal("vincular"),
     codigo: z.string().trim().min(6).max(16),
-  }),
-]);
+  }).strict(),
+]).refine(data => data.modo !== "provisionar" || data.documentoNumero.length === (data.documentoTipo === "cpf" ? 11 : 14), "O documento não corresponde ao tipo selecionado.");
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
+    rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request, ["owner", "admin"]);
     requireModulePermission(context, "finance", "edit");
 
@@ -124,7 +126,7 @@ export async function POST(request: Request) {
         const status = causa.status === 409 || causa.status === 403 ? causa.status : 502;
         throw new ApiError(status, causa.codigo, causa.detalhe);
       }
-      throw new ApiError(502, "drap_unavailable", "A Drap não respondeu. Nenhuma empresa foi criada por esta tentativa.");
+      throw new ApiError(502, "drap_unavailable", "Não foi possível confirmar a resposta da Drap. Tente novamente: a mesma referência será reutilizada para evitar duplicar a empresa.");
     }
 
     await context.db.batch([

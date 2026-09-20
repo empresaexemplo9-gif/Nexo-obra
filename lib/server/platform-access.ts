@@ -7,7 +7,7 @@ export function ruleDenies(rule: AccessRule, now = Date.now()) {
 }
 
 // Every request checks current rules; a previously issued session cannot bypass a block.
-export async function assertPlatformAccess(organizationId: string, email: string, userId?: string, checkBilling = true) {
+export async function assertPlatformAccess(organizationId: string, email: string, userId?: string, checkBilling = false) {
   const db = getDatabase();
   const rules = await db.prepare(`SELECT r.* FROM platform_access_rules r WHERE r.organization_id = ?1
     AND (r.subject = '*' OR r.subject = ?2 OR r.subject IN

@@ -1,6 +1,6 @@
 # DRAP embutida na H.OIKOS
 
-Atualizado em 2026-09-16 a partir da documentação pública da DRAP em:
+Atualizado em 2026-09-20. Contratação real aguardando conclusão da vinculação pela Drap, conforme orientação expressa do responsável. Fontes públicas:
 
 - `https://empresa.drap.app.br/api-docs`
 - `https://empresa.drap.app.br/precos`
@@ -9,9 +9,9 @@ Atualizado em 2026-09-16 a partir da documentação pública da DRAP em:
 
 O usuário deve permanecer dentro da H.OIKOS para usar os recursos DRAP. A identidade humana continua sendo a conta H.OIKOS; tokens, API keys e secrets DRAP ficam somente no servidor. A H.OIKOS não deve exigir que o usuário abra o portal DRAP para operar lançamentos, parceiros, categorias ou webhooks.
 
-A regra comercial é simples: **o preço apresentado ao usuário da H.OIKOS é o mesmo preço publicado pela DRAP, sem acréscimo**.
+Regra comercial atual: **o preço oficial Drap é o mínimo; apenas o superadministrador H.OIKOS pode definir acréscimo opcional por empresa e item do catálogo**. Sem política explícita, o acréscimo é zero. Todo pagamento permanece diretamente na Drap.
 
-O contrato antigo que multiplicava a mensalidade por 1,5 foi descontinuado. O código ainda aceita callbacks históricos `drap_architector` somente para não quebrar ativações antigas já emitidas. Toda nova solicitação usa `product: "drap_embedded"` e `pricingMultiplierBps: 10000`.
+O contrato antigo que multiplicava a mensalidade por 1,5 foi descontinuado. O código ainda aceita callbacks históricos `drap_architector` somente para não quebrar ativações antigas já emitidas. Novas solicitações usam `product: "drap_embedded"` e multiplicador congelado no primeiro envio (padrão `10000`). Alterar a política não modifica solicitações enviadas. Uma confirmação não pode trocar o plano congelado.
 
 ## O que a API pública DRAP confirma
 
@@ -102,9 +102,9 @@ GET /api/integrations/drap/catalog
 
 A resposta informa:
 
-- `pricing: "same_as_drap"`;
+- `pricing: "company_offer"`;
 - `embeddedExperience: true`;
-- `requiresRedirect: false`;
+- `requiresRedirect`: verdadeiro quando ainda não há empresa Drap vinculada; a criação embutida é oferecida quando parceiro e criptografia estão configurados;
 - `checkoutAvailable`: se existe ou não um endpoint DRAP de contratação service-to-service homologado;
 - estado do tenant/conexão e da assinatura quando já existem.
 
@@ -175,7 +175,7 @@ Nova solicitação H.OIKOS → DRAP:
 
 Esse endpoint de serviço **não aparece na API pública atual**. Portanto ele não deve ser apontado para uma rota privada descoberta por inspeção do navegador. A DRAP precisa homologar uma rota service-to-service própria para o fluxo embutido.
 
-A confirmação DRAP → H.OIKOS usa HMAC, timestamp, revisão crescente e valor confirmado. Para `product: "drap_embedded"`, `monthlyCents` precisa ser exatamente igual a `baseMonthlyCents`. O callback legado `drap_architector` continua aceito apenas para eventos históricos gerados pelo contrato anterior.
+A confirmação DRAP → H.OIKOS usa HMAC, timestamp, revisão crescente e valor confirmado. Para `product: "drap_embedded"`, `monthlyCents` deve ser igual ao valor-base multiplicado pela política congelada, arredondado em centavos; sem política congelada, vale 1:1. O callback legado `drap_architector` continua aceito apenas para eventos históricos gerados pelo contrato anterior.
 
 ## O que falta para zero conta e zero redirecionamento
 
@@ -189,3 +189,13 @@ Para um usuário H.OIKOS que nunca teve tenant DRAP, o backend DRAP precisa forn
 6. retornar estado idempotente para reconciliação.
 
 Quando esse contrato existir, a H.OIKOS já tem os componentes necessários do outro lado: catálogo, tenant mapping, armazenamento server-side das credenciais, API operacional, HMAC, idempotência e estado de ativação.
+
+## Implementação e limites em 20/09/2026
+
+- `/api/superadmin/drap-pricing` permite exclusivamente ao superadministrador ler/alterar políticas. Eventos imutáveis em `platform_audit_events` registram revisões e congelamentos; conflitos de edição retornam 409. Não exige migração SQL.
+- A oferta empresarial omite multiplicador, base e comissão internos. O navegador não informa preços à rota de seleção. Administradores podem salvar uma seleção por empresa, explicitamente sem contratação, fatura ou ativação.
+- O painel administrativo apresenta a comissão mensal confirmada e o histórico, sem somar eventos repetidos ou chamar o valor de saldo pago. Liquidação e reconciliação de pagamentos ainda dependem do contrato da Drap.
+- Pendência de assinatura restringe recursos Drap; os módulos H.OIKOS não são bloqueados automaticamente por ela. Bloqueios administrativos continuam válidos.
+- As variáveis de parceiro e criptografia constam da Vercel. Seus valores não foram revelados. Nenhuma conta, assinatura, cobrança ou comissão real foi criada durante os testes.
+- O responsável informou que a Drap está finalizando a vinculação e pediu aguardar. Não configurar endpoint, simular provedor, enviar ativação ou inventar contrato enquanto esse trabalho estiver pendente.
+- O adaptador de ativação existente representa uma assinatura por empresa. Cesta com múltiplos módulos, mudanças de plano, checkout, faturas pagas, estornos e acerto de comissões exigem contrato homologado e testes próprios antes de liberação.

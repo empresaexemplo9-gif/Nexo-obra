@@ -27,7 +27,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 
 - CAD integrado à Prancheta: linha de comandos, medidas fracionárias e importação NEXO, DXF e DWG (conversão local em WebAssembly, sem configuração externa obrigatória). [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.
 
-- Ativador de assinatura por API e painel de parceiros/acessos no superadmin: **preço 1:1 com a Drap, sem acréscimo da H.OIKOS** (`pricingMultiplierBps: 10000`), confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. Cada plataforma carrega o próprio custo, isolado: a H.OIKOS não revende a mensalidade da Drap com margem. O multiplicador de 1,5 foi descontinuado e só permanece no código para reconhecer callbacks de ativações antigas já emitidas. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
+- Política Drap por empresa e módulo: preço oficial como mínimo, acréscimo opcional exclusivo do superadministrador, revisão concorrente e preço congelado por solicitação. Confirmação HMAC registra base, total e comissão mensal para conciliação; não comprova pagamento. Contratação real aguarda conclusão/homologação pela Drap, por orientação do responsável. Consulte [Ativação e controle](docs/DRAP-ACTIVATION.md).
 - Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em branco, marrom e off-white, com profundidade e acentos dourados.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
@@ -51,7 +51,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 - Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).
 - Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
-- Termos de Uso versionados, aceite eletrônico registrado e bloqueio do produto até a versão vigente ser aceita.
+- Termos de Uso versionados e aceite eletrônico com evidência original preservada. Nova [minuta jurídica para a futura operadora](docs/TERMOS-HOIKOS-2026-09-20.md) em `/termos/proposta`, sem vigência nem coleta de aceite. A Drap desenvolve para venda à adquirente; não foi identificada como operadora H.OIKOS.
 - Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
 - Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado. O superadmin opera o mesmo ambiente pela sessão da plataforma, com recursos que a manutenção não tem.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.

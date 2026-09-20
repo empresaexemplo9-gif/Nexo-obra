@@ -1,6 +1,10 @@
 import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { activationConfigured, activationFor } from "@/lib/server/activation";
-import { DRAP_CATALOG, DRAP_CATALOG_CHECKED_AT, DRAP_CATALOG_SOURCE } from "@/lib/integrations/drap-catalog";
+import { DRAP_CATALOG_CHECKED_AT, DRAP_CATALOG_SOURCE } from "@/lib/integrations/drap-catalog";
+import { drapPrice, pricingCatalog } from "@/lib/server/drap-pricing";
+import { isDrapPartnerConfigured } from "@/lib/integrations/drap-partner";
+import { guardaDeSegredosConfigurada } from "@/lib/server/segredos";
+import { podeAdministrarEmpresa } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -14,12 +18,17 @@ export async function GET(request: Request) {
         .bind(context.organization.id).first<{ external_company_id: string; status: string }>(),
     ]);
     const tenantProvisioned = Boolean(connection?.external_company_id);
+    const prices = await pricingCatalog(context.organization.id);
+    const selection = await context.db.prepare("SELECT metadata_json FROM audit_events WHERE organization_id = ?1 AND action = 'drap.selection_saved' ORDER BY created_at DESC, id DESC LIMIT 1").bind(context.organization.id).first<{ metadata_json: string }>();
 
     return Response.json({
-      catalog: DRAP_CATALOG,
+      catalog: prices.map(item => ({ id: item.id, name: item.name, kind: item.kind, monthlyCents: item.monthlyCents, trialDays: item.trialDays, modules: item.modules, description: item.description, ...(item.annualCents ? { annualCents: drapPrice(item.annualCents, item.multiplierBps).monthlyCents } : {}) })),
       source: DRAP_CATALOG_SOURCE,
       checkedAt: DRAP_CATALOG_CHECKED_AT,
-      pricing: "same_as_drap",
+      pricing: "company_offer",
+      canManage: podeAdministrarEmpresa(context.member.role) && context.member.permissions.finance.edit,
+      provisioningAvailable: isDrapPartnerConfigured() && guardaDeSegredosConfigurada(),
+      selection: selection ? JSON.parse(selection.metadata_json).itemIds : [],
       embeddedExperience: true,
       requiresRedirect: !tenantProvisioned,
       signupAvailable: true,
