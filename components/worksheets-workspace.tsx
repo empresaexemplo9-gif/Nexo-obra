@@ -20,15 +20,14 @@ import {
   axisLastFilled, axisRange, axisTotal,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetAxis, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
-import {
-  criarHistorico, desfazer, podeDesfazer, podeRefazer, refazer, registrar,
-  rotuloDoProximoDesfazer, rotuloDoProximoRefazer, type HistoricoPlanilha, type MovimentoHistorico,
-} from "@/lib/sheet-history";
-import { analisarColagem, aplicarColagem, rotuloDaColagem } from "@/lib/sheet-clipboard";
+import { analisarColagem, rotuloDaColagem } from "@/lib/sheet-clipboard";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
+import { formattedCell, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
+import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
 type WorksheetSummary = {
@@ -38,23 +37,11 @@ type WorksheetSummary = {
 type WorksheetContent = {
   cells: SheetCells; body: string; widths: Record<string, number>;
   formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
+  recipes?: WorksheetRecipe[];
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
 type DataSource = { id: string; label: string; headers: string[] };
-
-/**
- * O que precisa voltar junto com as células quando alguém desfaz.
- *
- * Excluir uma coluna não mexe só no conteúdo: mexe em `columns`, e mexe na análise, que
- * guarda POSIÇÕES — qual linha é o cabeçalho, qual coluna é o custo. Desfazer só as
- * células devolveria a coluna numa grade que continua encolhida, com o papel "Custo"
- * apontando para a vizinha e nenhum erro na tela.
- */
-type FormaDaGrade = { rows: number; columns: number; analysis: AnalysisSettings };
-const formaDe = (sheet: Worksheet): FormaDaGrade => ({
-  rows: sheet.rows, columns: sheet.columns, analysis: sheet.content.analysis,
-});
 
 /** Erro de API que preserva o código, para o chamador distinguir conflito de queda. */
 class ErroDeApi extends Error {
@@ -94,7 +81,10 @@ type AxisSelection = { kind: SheetAxis; index: number };
 function Grid({
   cells, columns, rows, computed, active, selected, axis,
   onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
+  formats, bold, widths, filter, readOnly, onCopyCells,
 }: {
+  formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
+  onCopyCells: () => string;
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
   active: string; selected: Set<string>; axis: AxisSelection | null;
   onActive: (key: string, additive?: boolean) => void;
@@ -138,21 +128,16 @@ function Grid({
 
   // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
   // o gesto já existia e produzia um efeito feio e sem função nenhuma.
-  return <div
-    className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white"
-    style={{ maxHeight: "62vh" }}
-    // O paste sobe da célula focada até aqui. Fica no contêiner, e não em cada célula,
-    // porque o alvo do evento muda conforme o que está focado — inclusive o input de
-    // edição, onde colar texto simples é o comportamento certo do navegador e não deve
-    // virar colagem de bloco.
-    onPaste={(event) => {
-      if (editing) return;
-      const texto = event.clipboardData.getData("text/plain");
-      if (!texto) return;
-      event.preventDefault();
-      onColar(texto);
-    }}
-  >
+  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
+    if (editing) return;
+    event.preventDefault(); event.clipboardData.setData("text/plain", onCopyCells());
+  }} onPaste={event => {
+    if (readOnly || editing) return;
+    const text = event.clipboardData.getData("text/plain");
+    if (!text) return;
+    event.preventDefault();
+    try { onColar(text); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível colar."); }
+  }}>
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
@@ -171,7 +156,7 @@ function Grid({
       </thead>
       <tbody>
         {Array.from({ length: rows }, (_, row) => (
-          <tr key={row}>
+          <tr key={row} hidden={!!filter.trim() && !Array.from({ length: columns }, (_, column) => formattedCell(computed[cellKey({ column, row })], formats[columnName(column)])).join(" ").toLocaleLowerCase("pt-BR").includes(filter.trim().toLocaleLowerCase("pt-BR"))}>
             <th className="sticky left-0 z-10 border border-hoikos-200 p-0 text-xs font-medium">
               <button
                 type="button" onClick={() => onAxis("row", row)}
@@ -187,7 +172,7 @@ function Grid({
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
               const isSelected = selected.has(key);
-              return <td key={key} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
+              return <td key={key} style={{ minWidth: widths[columnName(column)] ?? 120, fontWeight: bold.includes(key) ? 700 : undefined }} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -234,8 +219,9 @@ function Grid({
                       if (event.shiftKey) { onEstender(key); return; }
                       onActive(key, event.ctrlKey || event.metaKey);
                     }}
-                    onDoubleClick={() => { setDraft(cells[key] ?? ""); setEditing(key); }}
+                    onDoubleClick={() => { if (!readOnly) { setDraft(cells[key] ?? ""); setEditing(key); } }}
                     onKeyDown={(event) => {
+                      if (readOnly && !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(event.key)) return;
                       // Desfazer/refazer antes de tudo: é atalho com modificador, e o
                       // resto do handler trata tecla solta. Ficam presos à grade de
                       // propósito — Ctrl+Z no campo de nome da planilha tem que
@@ -265,7 +251,7 @@ function Grid({
                       }
                     }}
                     className={`h-8 w-full min-w-[7.5rem] truncate px-2 text-left ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""}`}
-                  >{result?.display ?? ""}</button>
+                  >{formattedCell(result, formats[columnName(column)])}</button>
                 )}
               </td>;
             })}
@@ -278,7 +264,9 @@ function Grid({
 
 export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [list, setList] = useState<WorksheetSummary[]>([]);
-  const [current, setCurrent] = useState<Worksheet | null>(null);
+  const history = useWorksheetHistory<Worksheet>();
+  const { current, set: setCurrent, reset: resetCurrent } = history;
+  const [rowFilter, setRowFilter] = useState("");
   const [access, setAccess] = useState<Access | null>(null);
   const [canGovern, setCanGovern] = useState(false);
   const [sources, setSources] = useState<DataSource[]>([]);
@@ -293,9 +281,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
-  // `null` enquanto nenhuma planilha está aberta. O histórico é POR PLANILHA: trocar de
-  // planilha sem zerar faria desfazer aplicar as células de uma na outra.
-  const [historico, setHistorico] = useState<HistoricoPlanilha<FormaDaGrade> | null>(null);
   // Conflito de edição: a planilha mudou em outro acesso. Guardamos a versão do servidor
   // para a pessoa DECIDIR, em vez de escolher por ela — o trabalho na tela é dela.
   const [conflito, setConflito] = useState<Worksheet | null>(null);
@@ -331,17 +316,15 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setError("");
     setConflito(null);
     const result = await api<{ worksheet: Worksheet; access: Access }>(`/api/worksheets/${id}`);
-    setCurrent(result.worksheet);
+    resetCurrent(result.worksheet);
     setAccess(result.access);
     setActive("A1");
     setFaixa({ ancora: "A1", foco: "A1" });
     setAvulsas([]);
     setAxis(null);
     setDirty(false);
-    // Histórico novo a cada planilha aberta. Herdar o da anterior faria desfazer
-    // escrever as células de uma planilha dentro de outra.
-    setHistorico(criarHistorico({ cells: result.worksheet.content.cells, forma: formaDe(result.worksheet) }));
-  }, []);
+    setRowFilter("");
+  }, [resetCurrent]);
 
   const readOnly = access ? !access.canEdit : false;
 
@@ -438,103 +421,39 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return { raw: current.content.cells[active] ?? "", result };
   }, [computed, current, active]);
 
-  /**
-   * Toda alteração da planilha passa por aqui — é o que garante que ela vire um passo
-   * do histórico.
-   *
-   * O `setCurrent` funcional foi embora de propósito: para registrar o passo é preciso
-   * ter o próximo estado EM MÃOS, e dentro do updater ele só existe depois do commit.
-   * Como toda mutação aqui nasce de um gesto do usuário (clique, tecla, colagem), não há
-   * o encadeamento rápido que justificaria a forma funcional.
-   */
-  function aplicar(rotulo: string, produzir: (sheet: Worksheet) => Worksheet) {
-    if (!current || readOnly) return;
-    const proximo = produzir(current);
-    setCurrent(proximo);
-    setHistorico((anterior) => (anterior
-      ? registrar(anterior, { cells: proximo.content.cells, forma: formaDe(proximo) }, rotulo)
-      : anterior));
-    setDirty(true);
+  function aplicar(label: string, change: (sheet: Worksheet) => Worksheet) {
+    if (!current || readOnly || saving) return;
+    setCurrent(sheet => sheet ? change(sheet) : sheet, label); setDirty(true);
   }
-
-  function updateContent(rotulo: string, change: (content: WorksheetContent) => WorksheetContent) {
-    aplicar(rotulo, (sheet) => ({ ...sheet, content: change(sheet.content) }));
+  function updateContent(label: string, change: (content: WorksheetContent) => WorksheetContent): void;
+  function updateContent(change: (content: WorksheetContent) => WorksheetContent): void;
+  function updateContent(labelOrChange: string | ((content: WorksheetContent) => WorksheetContent), change?: (content: WorksheetContent) => WorksheetContent) {
+    const label = typeof labelOrChange === "string" ? labelOrChange : "Alterar ferramentas da planilha";
+    const update = typeof labelOrChange === "function" ? labelOrChange : change!;
+    aplicar(label, sheet => ({ ...sheet, content: update(sheet.content) }));
   }
-
-  /** Aplica um passo do histórico — o mesmo caminho para desfazer e refazer. */
-  function irPara(movimento: MovimentoHistorico<FormaDaGrade> | null, verbo: "Desfeito" | "Refeito") {
-    if (!movimento || !current) return;
-    const { rows, columns, analysis } = movimento.forma;
-    setCurrent({ ...current, rows, columns, content: { ...current.content, cells: movimento.cells, analysis } });
-    setHistorico(movimento.historico);
-    setDirty(true);
-
-    // A grade pode ter encolhido: desfazer "inserir coluna" tira a coluna em que o
-    // cursor talvez esteja. Marcar célula fora da grade deixa a barra de fórmula
-    // apontando para o nada e o teclado sem para onde andar.
-    const endereco = parseCellKey(active);
-    const dentro = cellKey({
-      column: Math.min(endereco?.column ?? 0, columns - 1),
-      row: Math.min(endereco?.row ?? 0, rows - 1),
-    });
-    setActive(dentro);
-    setFaixa({ ancora: dentro, foco: dentro });
-    setAvulsas([]);
-    setAxis(null);
-
-    toast.success(movimento.rotulo ? `${verbo}: ${movimento.rotulo}` : `${verbo} a última alteração`);
+  function insertTable(table: string[][]) {
+    if (!current || readOnly || saving) return;
+    try {
+      const result = placeTable(current.content.cells, active, table);
+      aplicar(`Colar ${rotuloDaColagem(table)}`, sheet => ({ ...sheet, columns: Math.max(sheet.columns, result.columns), rows: Math.max(sheet.rows, result.rows), content: { ...sheet.content, cells: result.cells } }));
+      toast.success(`Colado: ${rotuloDaColagem(table)}`);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível inserir."); }
   }
-
-  function desfazerAgora() {
-    if (!historico || readOnly) return;
-    irPara(desfazer(historico), "Desfeito");
+  function colar(text: string) {
+    if (text.length > 2_000_000) { toast.error("A colagem excede 2 MB."); return; }
+    // Clipboard from Excel/Sheets is TSV. Guessing commas corrupts decimal values,
+    // and guessing semicolons splits formulas. CSV has an explicit delimiter in Tools.
+    const table = analisarColagem(text, "\t");
+    if (table.length) insertTable(table);
   }
-
-  function refazerAgora() {
-    if (!historico || readOnly) return;
-    irPara(refazer(historico), "Refeito");
+  function travelHistory(direction: "undo" | "redo") {
+    if (readOnly || saving) return;
+    history[direction](); setDirty(true); setActive("A1"); setAxis(null);
+    setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]);
   }
-
-  /**
-   * Colar do Excel ou do Google Sheets a partir da célula marcada.
-   *
-   * A grade CRESCE para caber o que foi colado, até o teto do produto. Truncar em
-   * silêncio um bloco de trinta linhas coladas numa planilha de dez seria perder vinte
-   * linhas de orçamento sem ninguém ver — e o que não couber nem assim é dito na tela.
-   */
-  function colar(texto: string) {
-    if (!current || readOnly) return;
-    const matriz = analisarColagem(texto);
-    if (matriz.length === 0) return;
-
-    const ancora = parseCellKey(active);
-    if (!ancora) return;
-
-    const largura = matriz.reduce((maior, linha) => Math.max(maior, linha.length), 0);
-    const colunas = Math.min(SHEET_MAX_COLUMNS, Math.max(current.columns, ancora.column + largura));
-    const linhas = Math.min(SHEET_MAX_ROWS, Math.max(current.rows, ancora.row + matriz.length));
-
-    const resultado = aplicarColagem(current.content.cells, active, matriz, { colunas, linhas });
-    if (resultado.alterados.length === 0 && !resultado.truncado) return;
-
-    aplicar(`Colar ${rotuloDaColagem(matriz)}`, (sheet) => ({
-      ...sheet, rows: linhas, columns: colunas,
-      content: { ...sheet.content, cells: resultado.cells },
-    }));
-
-    if (resultado.truncado) {
-      const { colunas: sobraram, linhas: sobrando } = resultado.truncado;
-      const partes = [
-        sobrando > 0 ? `${sobrando} linha(s)` : "",
-        sobraram > 0 ? `${sobraram} coluna(s)` : "",
-      ].filter(Boolean).join(" e ");
-      toast.error(`${partes} não couberam no limite da planilha e ficaram de fora.`);
-    } else if (resultado.cortadas.length > 0) {
-      toast.error(`${resultado.cortadas.length} célula(s) tinham texto longo demais e foram cortadas.`);
-    } else {
-      toast.success(`Colado: ${rotuloDaColagem(matriz)}`);
-    }
-  }
+  const desfazerAgora = () => travelHistory("undo");
+  const refazerAgora = () => travelHistory("redo");
 
   // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
   function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column" | "fill-down") {
@@ -572,7 +491,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         : operation === "delete-row" ? deleteRow(cells, address.row)
         : operation === "insert-column" ? insertColumn(cells, address.column)
         : operation === "delete-column" ? deleteColumn(cells, address.column)
-        : fillDown(cells, active, sheet.rows - 1);
+        : fillDown(cells, selected.length > 1 && faixa ? cellKey({ column: address.column, row: Math.min(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) }) : active,
+          selected.length > 1 && faixa ? Math.max(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) : sheet.rows - 1);
       // Os parâmetros guardam posições (letra de coluna, índice de linha). Sem deslocá-los
       // junto, a coluna marcada como "Custo" passa a apontar para a vizinha e a leitura
       // financeira lê a coluna errada, sem erro nenhum na tela.
@@ -581,11 +501,25 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const passo = operation === "insert-row" || operation === "insert-column" ? 1 : -1;
       const analysis = operation === "fill-down" ? sheet.content.analysis
         : moveAnalysis(sheet.content.analysis, eixo, alvo, passo);
+      const boldCells = Object.fromEntries(sheet.content.bold.map(key => [key, "1"]));
+      const bold = operation === "fill-down" ? sheet.content.bold : Object.keys(
+        operation === "insert-row" ? insertRow(boldCells, address.row) : operation === "delete-row" ? deleteRow(boldCells, address.row)
+        : operation === "insert-column" ? insertColumn(boldCells, address.column) : deleteColumn(boldCells, address.column));
+      const moveColumns = <T,>(values: Record<string, T>) => {
+        if (eixo !== "column" || operation === "fill-down") return values;
+        const output: Record<string, T> = {};
+        for (const [key, value] of Object.entries(values)) {
+          const index = parseCellKey(`${key}1`)?.column;
+          if (index === undefined || (passo < 0 && index === alvo)) continue;
+          output[columnName(index < alvo ? index : index + passo)] = value;
+        }
+        return output;
+      };
       return {
         ...sheet,
         rows: nextRows,
         columns: nextColumns,
-        content: { ...sheet.content, cells: next, analysis },
+        content: { ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths) },
       };
     });
     if (operation === "delete-row" || operation === "delete-column") {
@@ -700,7 +634,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   /** Desiste do que está na tela e assume a versão do servidor. */
   function usarVersaoDoServidor() {
     if (!conflito) return;
-    setCurrent(conflito);
+    resetCurrent(conflito);
     setConflito(null);
     setDirty(false);
     toast.success("Versão do servidor carregada");
@@ -735,12 +669,15 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const result = await api<{ headers: string[]; rows: Array<Array<string | number>> }>(
         `/api/worksheets/data?source=${sourceId}&startLine=${anchor.row + 1}`);
       if (!result.rows.length) { toast.info("Não há dados reais para essa origem ainda."); return; }
+      if (anchor.column + result.headers.length > SHEET_MAX_COLUMNS || anchor.row + result.rows.length + 1 > SHEET_MAX_ROWS) {
+        toast.error("Os dados não cabem a partir desta célula. Escolha uma célula mais acima ou à esquerda."); return;
+      }
       aplicar(`Inserir ${result.rows.length} linha(s) de dados`, (sheet) => {
         const cells = { ...sheet.content.cells };
         result.headers.forEach((header, column) => { cells[cellKey({ column: anchor.column + column, row: anchor.row })] = header; });
         result.rows.forEach((row, line) => row.forEach((value, column) => {
           const key = cellKey({ column: anchor.column + column, row: anchor.row + line + 1 });
-          cells[key] = typeof value === "number" ? String(value) : String(value ?? "");
+          cells[key] = typeof value === "number" ? String(value).replace(".", ",") : String(value ?? "");
         }));
         const widest = anchor.column + result.headers.length;
         const tallest = anchor.row + result.rows.length + 1;
@@ -802,7 +739,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   if (loading) return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></CardContent></Card>;
 
-  return <div className="space-y-5">
+  return <fieldset disabled={saving} className="min-w-0 space-y-5 border-0 p-0">
     <Card className="workspace-card">
       <CardHeader className="gap-3">
         <CardTitle className="flex items-center gap-2 text-base"><Sigma className="size-4 text-hoikos-600" />Planilha e documento</CardTitle>
@@ -917,6 +854,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         {current.kind === "document" ? <DocumentEditor
           body={current.content.body}
           cells={current.content.cells}
+          readOnly={readOnly}
           onChange={(body) => { updateContent("Editar o texto", (content) => ({ ...content, body })); }}
         /> : (
           <Tabs defaultValue="grade">
@@ -927,6 +865,35 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
             </TabsList>
 
             <TabsContent value="grade" className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input aria-label="Filtrar linhas" placeholder="Filtrar linhas por conteúdo…" value={rowFilter} onChange={event => setRowFilter(event.target.value)} className="max-w-sm" />
+                {rowFilter && <Button size="sm" variant="ghost" onClick={() => setRowFilter("")}>Limpar filtro</Button>}
+                {!readOnly && <>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const chosen = chavesDoResumo;
+                    updateContent(content => {
+                      const bold = new Set(content.bold); const remove = chosen.every(key => bold.has(key));
+                      chosen.forEach(key => { if (remove) bold.delete(key); else bold.add(key); });
+                      if (bold.size > 5000) { toast.error("Selecione até 5.000 células para negrito."); return content; }
+                      return { ...content, bold: [...bold] };
+                    });
+                  }}>Negrito</Button>
+                  <NativeSelect aria-label="Formato das colunas selecionadas" value="" onChange={event => {
+                    const format = event.target.value;
+                    updateContent(content => {
+                      const formats = { ...content.formats };
+                      chavesDoResumo.forEach(key => { const address = parseCellKey(key); if (address) formats[columnName(address.column)] = format; });
+                      return { ...content, formats };
+                    });
+                  }}>
+                    <option value="">Formato da coluna…</option><option value="texto">Geral</option><option value="numero">Número (2 casas)</option><option value="moeda">Moeda (R$)</option><option value="percentual">Percentual (%)</option>
+                  </NativeSelect>
+                </>}
+              </div>
+              {rowFilter && <p className="text-xs text-hoikos-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
+              {!readOnly && <WorksheetToolsPanel key={current.id} cells={current.content.cells} keys={chavesDoResumo} recipes={current.content.recipes ?? []}
+                onCells={cells => updateContent(content => ({ ...content, cells }))} onTable={insertTable}
+                onRecipes={recipes => updateContent(content => ({ ...content, recipes }))} />}
               {readOnly ? <p className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
@@ -940,15 +907,15 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   */}
                   <Button
                     size="sm" variant="ghost" onClick={desfazerAgora}
-                    disabled={!historico || !podeDesfazer(historico)}
-                    title={historico ? rotuloDoProximoDesfazer(historico) : "Nada para desfazer"}
-                    aria-label={historico ? rotuloDoProximoDesfazer(historico) : "Nada para desfazer"}
+                    disabled={!history.canUndo}
+                    title={history.undoLabel}
+                    aria-label={history.undoLabel}
                   ><Undo2 />Desfazer</Button>
                   <Button
                     size="sm" variant="ghost" onClick={refazerAgora}
-                    disabled={!historico || !podeRefazer(historico)}
-                    title={historico ? rotuloDoProximoRefazer(historico) : "Nada para refazer"}
-                    aria-label={historico ? rotuloDoProximoRefazer(historico) : "Nada para refazer"}
+                    disabled={!history.canRedo}
+                    title={history.redoLabel}
+                    aria-label={history.redoLabel}
                   ><Redo2 />Refazer</Button>
                   <span className="mx-1 h-5 w-px bg-hoikos-200" />
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-row")}><Rows3 />Inserir linha</Button>
@@ -963,6 +930,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 </div>
               )}
               <Grid
+                formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
+                onCopyCells={() => selectionToTsv(current.content.cells, chavesDoResumo)}
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
@@ -1010,6 +979,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Arraste com o mouse ou use
                   Shift + clique e Shift + setas para marcar um intervalo. Clique no cabeçalho para selecionar a linha
                   ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células avulsas.
+                  Ctrl + C copia os valores selecionados; Ctrl + V cola tabelas do Excel ou Google Planilhas a partir da célula ativa.
+                  Referências como $A$1 ficam fixas ao preencher para baixo. Selecione um intervalo para limitar o preenchimento.
                 </p>
               </details>
             </TabsContent>
@@ -1027,11 +998,11 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         )}
       </CardContent>
     </Card>}
-  </div>;
+  </fieldset>;
 }
 
 // O documento aceita os mesmos cálculos: {{=SOMA(A1:A9)}} vira o número já somado.
-function DocumentEditor({ body, cells, onChange }: { body: string; cells: SheetCells; onChange: (body: string) => void }) {
+function DocumentEditor({ body, cells, onChange, readOnly }: { body: string; cells: SheetCells; onChange: (body: string) => void; readOnly: boolean }) {
   const preview = useMemo(() => {
     const computed = evaluateSheet(cells);
     return body.replace(/\{\{(.+?)\}\}/g, (_match, expression: string) => {
@@ -1047,7 +1018,7 @@ function DocumentEditor({ body, cells, onChange }: { body: string; cells: SheetC
     <div>
       <label className="mb-2 block text-sm font-medium" htmlFor="document-body">Texto</label>
       <Textarea
-        id="document-body" value={body} onChange={(event) => onChange(event.target.value)}
+        id="document-body" value={body} readOnly={readOnly} onChange={(event) => onChange(event.target.value)}
         placeholder={"Proposta comercial\n\nTotal dos serviços: {{=SOMA(A1:A20)}}\nValor por m²: {{=ARRED(B1/B2;2)}}"}
         className="min-h-[46vh] font-mono text-[13px]"
       />

@@ -184,7 +184,7 @@ function inicialMinuscula(texto: string) {
   return texto[0].toLocaleLowerCase("pt-BR") + texto.slice(1);
 }
 
-function frase(verbo: "Desfazer" | "Refazer", rotulo: string) {
+export function frase(verbo: "Desfazer" | "Refazer", rotulo: string) {
   const texto = rotulo.trim();
   return texto ? `${verbo} ${inicialMinuscula(texto)}` : `${verbo} a última alteração`;
 }

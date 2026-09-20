@@ -1,8 +1,11 @@
 "use client";
 
 import { BrandLogo, type BrandVariant } from "@/components/brand-logo";
+import { TeamWorkload } from "@/components/team-workload";
+import { TasksWorkspace } from "@/components/tasks-workspace";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useLatestRequest } from "@/hooks/use-latest-request";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowUpRight,
@@ -130,7 +133,7 @@ type Project = {
 };
 type Task = {
   id: string; projectId: string; projectName: string; title: string; status: string;
-  priority: string; assigneeName: string | null; dueAt: string | null;
+  description?: string; assigneeMemberId?: string | null; priority: string; assigneeName: string | null; dueAt: string | null;
   parentTaskId: string | null; startsAt: string | null; estimatedMinutes: number;
 };
 type Member = TeamMember;
@@ -355,7 +358,8 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const [activeModule, setActiveModule] = useState<ModuleId>("overview");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loadErrors, setLoadErrors] = useState<Partial<Record<"clients" | "projects" | "tasks" | "members", string>>>({});
+  const startRequest = useLatestRequest();
   const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -370,24 +374,31 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   useEffect(() => { const timer = window.setTimeout(() => { const requested = new URLSearchParams(window.location.search).get("module"); if (requested && Object.hasOwn(modulePermissionMap, requested)) { const requestedModule = requested as ModuleId; if (canView(requestedModule)) setActiveModule(requestedModule); } }, 0); return () => window.clearTimeout(timer); }, [canView]);
 
   const loadData = useCallback(async () => {
-    await Promise.resolve(); setLoading(true); setError("");
-    try {
-      const [clientData, projectData, taskData, memberData] = await Promise.all([
+    const isLatest = startRequest();
+    await Promise.resolve(); setLoading(true);
+      const [clientData, projectData, taskData, memberData] = await Promise.allSettled([
         canView("crm") ? requestJson<{ clients: Client[] }>("/api/clients") : Promise.resolve({ clients: [] }),
         canView("projects") ? requestJson<{ projects: Project[] }>("/api/projects") : Promise.resolve({ projects: [] }),
-        canView("tasks") || canView("schedule") ? requestJson<{ tasks: Task[] }>("/api/tasks") : Promise.resolve({ tasks: [] }),
-        canView("team") || canView("crm") ? requestJson<{ members: Member[] }>("/api/members") : Promise.resolve({ members: [] }),
+        canView("tasks") || canView("schedule") ? requestJson<{ tasks: Task[] }>(canView("tasks") ? "/api/tasks" : "/api/schedule") : Promise.resolve({ tasks: [] }),
+        canView("team") ? requestJson<{ members: Member[] }>("/api/members") : Promise.resolve({ members: [] }),
       ]);
-      setClients(clientData.clients); setProjects(projectData.projects); setTasks(taskData.tasks); setMembers(memberData.members);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar os dados."); }
-    finally { setLoading(false); }
-  }, [canView]);
+      if (!isLatest()) return;
+      setClients(clientData.status === "fulfilled" ? clientData.value.clients : []);
+      setProjects(projectData.status === "fulfilled" ? projectData.value.projects : []);
+      setTasks(taskData.status === "fulfilled" ? taskData.value.tasks : []);
+      setMembers(memberData.status === "fulfilled" ? memberData.value.members : []);
+      const errors: Partial<Record<"clients" | "projects" | "tasks" | "members", string>> = {};
+      for (const [key, result] of [["clients", clientData], ["projects", projectData], ["tasks", taskData], ["members", memberData]] as const) {
+        if (result.status === "rejected") errors[key] = result.reason instanceof Error ? result.reason.message : "Não foi possível carregar os dados.";
+      }
+      setLoadErrors(errors); setLoading(false);
+  }, [canView, startRequest]);
   useEffect(() => { const timer = window.setTimeout(() => { void loadData(); }, 0); return () => window.clearTimeout(timer); }, [loadData, session.organization?.id]);
   useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
 
   async function switchOrganization(organizationId: string) { try { await requestJson("/api/session", { method: "POST", body: JSON.stringify({ organizationId }) }); await reloadSession(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trocar de empresa."); } }
   function openCreate(kind: CreateKind) { setQuickKind(kind); setQuickOpen(true); }
-  async function completeTask(task: Task) { try { await requestJson(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }) }); toast.success("Tarefa concluída"); await loadData(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível concluir a tarefa."); } }
+  const completeTask = useCallback(async (task: Task) => { if (!canEdit("tasks")) return; try { await requestJson(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: "done" }) }); toast.success("Tarefa concluída"); await loadData(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível concluir a tarefa."); } }, [canEdit, loadData]);
   async function logoutMaintenance() { await requestJson("/api/maintenance/session", { method: "DELETE" }).catch(() => undefined); window.location.assign("/manutencao"); }
   async function logoutAccount() { await requestJson("/api/auth/session", { method: "DELETE" }).catch(() => undefined); window.location.assign("/"); }
 
@@ -400,6 +411,12 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "sheets", label: "Planilha e documento", icon: Sigma }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[]).map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) })).filter((section) => section.items.length);
 
+  const dependencies: Partial<Record<ModuleId, (keyof typeof loadErrors)[]>> = {
+    overview: ["clients", "projects", "tasks", "members"], projects: ["projects"], works: ["projects"],
+    crm: ["clients"], tasks: ["tasks"], schedule: ["tasks"], team: ["members", "tasks"],
+    files: ["projects"], studio: ["projects"], finance: ["projects"], budgets: ["projects"],
+  };
+  const error = (dependencies[activeModule] ?? []).map(key => loadErrors[key]).filter(Boolean).join(" ");
   const content = loading ? <Card><Empty className="min-h-72 border-0"><LoaderCircle className="size-7 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando dados da empresa…</p></Empty></Card> : error ? <HonestEmpty icon={CircleAlert} title="Não foi possível carregar" description={error} action={loadData} actionLabel="Tentar novamente" /> : (() => {
     if (activeModule === "overview") {
       const openTasks = tasks.filter((task) => task.status !== "done")
@@ -438,13 +455,13 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
         </div>
       </div>;
     }
-    if (activeModule === "projects" || activeModule === "works") { const filtered = projects.filter((project) => activeModule === "works" ? project.kind === "work" : project.kind === "project"); return <div className="space-y-5"><PageIntro module={activeModule} action={() => openCreate("project")} actionLabel={activeModule === "works" ? "Nova obra" : "Novo projeto"} />{filtered.length ? <ProjectTable projects={filtered} query={query} /> : <HonestEmpty icon={activeModule === "works" ? Building2 : FolderKanban} title={activeModule === "works" ? "Nenhuma obra cadastrada" : "Nenhum projeto cadastrado"} description="Cadastre o primeiro trabalho real desta empresa." action={() => openCreate("project")} actionLabel={activeModule === "works" ? "Cadastrar obra" : "Cadastrar projeto"} />}</div>; }
-    if (activeModule === "crm") return <CrmWorkspace clients={clients} members={members.map((member) => ({ id: member.id, name: member.name }))} query={query} canEdit={canEdit("crm")} onProjectsChanged={loadData} />;
+    if (activeModule === "projects" || activeModule === "works") { const filtered = projects.filter((project) => activeModule === "works" ? project.kind === "work" : project.kind === "project"); return <div className="space-y-5"><PageIntro module={activeModule} action={canEdit("projects") ? () => openCreate("project") : undefined} actionLabel={activeModule === "works" ? "Nova obra" : "Novo projeto"} />{filtered.length ? <ProjectTable projects={filtered} query={query} /> : <HonestEmpty icon={activeModule === "works" ? Building2 : FolderKanban} title={activeModule === "works" ? "Nenhuma obra cadastrada" : "Nenhum projeto cadastrado"} description="Cadastre o primeiro trabalho real desta empresa." action={canEdit("projects") ? () => openCreate("project") : undefined} actionLabel={activeModule === "works" ? "Cadastrar obra" : "Cadastrar projeto"} />}</div>; }
+    if (activeModule === "crm") return <CrmWorkspace clients={clients} members={members.map((member) => ({ id: member.id, name: member.name }))} query={query} canEdit={canEdit("crm")} canConvert={canEdit("projects")} onProjectsChanged={loadData} />;
     if (activeModule === "schedule") return <ScheduleWorkspace projects={projects} tasks={tasks} query={query} canEdit={canEdit("schedule") && canEdit("tasks")} onChanged={loadData} />;
     if (activeModule === "files") return <FilesWorkspace projects={projects} query={query} canEdit={canEdit("files")} />;
     if (activeModule === "studio") return <div className="space-y-5"><PageIntro module="studio" /><PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("studio")} /></div>;
-    if (activeModule === "tasks") return <div className="space-y-5"><PageIntro module="tasks" action={() => openCreate("task")} actionLabel="Nova tarefa" />{tasks.length ? <Card><CardContent className="divide-y p-0">{tasks.map((task) => <div key={task.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"><button disabled={task.status === "done"} onClick={() => void completeTask(task)} aria-label={`Concluir ${task.title}`} className="grid size-6 shrink-0 place-items-center rounded-full border border-hoikos-300 text-transparent enabled:hover:border-hoikos-500 enabled:hover:text-hoikos-600 disabled:bg-hoikos-50 disabled:text-hoikos-600"><Check className="size-3.5" /></button><div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-hoikos-500">{task.projectName}{task.assigneeName ? ` · ${task.assigneeName}` : ""}</p></div><StatusBadge status={task.status} /></div>)}</CardContent></Card> : <HonestEmpty icon={ListChecks} title="Nenhuma tarefa cadastrada" description={projects.length ? "Crie a primeira tarefa ligada a um projeto." : "Cadastre um projeto antes de criar tarefas."} action={projects.length ? () => openCreate("task") : () => openCreate("project")} actionLabel={projects.length ? "Criar tarefa" : "Cadastrar projeto"} />}</div>;
-    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
+    if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
+    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;

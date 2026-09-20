@@ -27,6 +27,10 @@ export const contentSchema = z.object({
   widths: z.record(z.string(), z.number().int().min(60).max(600)).default({}),
   formats: z.record(columnLetter, z.enum(["texto", "numero", "moeda", "percentual"])).default({}),
   bold: z.array(z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,3}$/)).max(5000).default([]),
+  recipes: z.array(z.object({
+    name: z.string().trim().min(1).max(80),
+    actions: z.array(z.enum(["trim", "upper", "lower", "number", "values", "clear"])).min(1).max(12),
+  }).strict()).max(20).default([]),
   analysis: analysisSettingsSchema.default({ headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] }),
 }).strict();
 

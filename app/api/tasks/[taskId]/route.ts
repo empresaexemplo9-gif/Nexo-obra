@@ -11,6 +11,7 @@ import {
   validationError,
 } from "@/lib/server/backend";
 import { taskResponse, taskSelect, type TaskRow } from "@/lib/server/tasks-records";
+import { validateTaskPlanning } from "@/lib/server/task-planning";
 
 export const dynamic = "force-dynamic";
 
@@ -53,10 +54,16 @@ export async function PATCH(request: Request, route: RouteContext) {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "tasks", "edit");
     const { taskId } = await route.params;
-    ensureFound(await ownedRecord(context.db, "tasks", taskId, context.organization.id), "Tarefa");
+    const current = ensureFound(await ownedRecord(context.db, "tasks", taskId, context.organization.id), "Tarefa");
     const parsed = updateTaskSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    await validateTaskPlanning(context.db, context.organization.id, {
+      id: taskId, projectId: data.projectId ?? current.project_id!,
+      parentTaskId: data.parentTaskId === undefined ? current.parent_task_id : data.parentTaskId,
+      startsAt: data.startsAt === undefined ? current.starts_at : data.startsAt,
+      dueAt: data.dueAt === undefined ? current.due_at : data.dueAt,
+    });
     if (data.projectId && !await ownedRecord(context.db, "projects", data.projectId, context.organization.id)) {
       throw new ApiError(400, "invalid_project", "O projeto não pertence à empresa atual.");
     }

@@ -152,10 +152,10 @@ function separarCampos(texto: string, separador: Separador): string[][] {
  * Aceita o TSV do Excel e do Google Sheets e o CSV de arquivo aberto no bloco de notas,
  * com célula entre aspas guardando TAB, `;`, `,` e quebra de linha.
  */
-export function analisarColagem(texto: string): string[][] {
+export function analisarColagem(texto: string, separador?: Separador): string[][] {
   if (!texto || !texto.trim()) return [];
 
-  const linhas = separarCampos(texto, escolherSeparador(texto));
+  const linhas = separarCampos(texto, separador ?? escolherSeparador(texto));
 
   // Excel e Google Sheets terminam o bloco copiado com uma quebra de linha. Sem descartar
   // essa última linha vazia, colar três linhas apagaria a quarta.

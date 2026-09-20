@@ -129,10 +129,10 @@ function tokenize(formula: string): Token[] {
     if (["<=", ">=", "<>"].includes(twoChar)) { tokens.push({ kind: "operator", value: twoChar }); index += 2; continue; }
     if ("+-*/^%=<>&".includes(character)) { tokens.push({ kind: "operator", value: character }); index += 1; continue; }
     const rest = formula.slice(index);
-    const range = /^([A-Za-z]{1,2}\d{1,4}):([A-Za-z]{1,2}\d{1,4})/.exec(rest);
-    if (range) { tokens.push({ kind: "range", from: range[1].toUpperCase(), to: range[2].toUpperCase() }); index += range[0].length; continue; }
-    const reference = /^[A-Za-z]{1,2}\d{1,4}(?![A-Za-z0-9_.])/.exec(rest);
-    if (reference) { tokens.push({ kind: "ref", value: reference[0].toUpperCase() }); index += reference[0].length; continue; }
+    const range = /^(\$?[A-Za-z]{1,2}\$?\d{1,4}):(\$?[A-Za-z]{1,2}\$?\d{1,4})/.exec(rest);
+    if (range) { tokens.push({ kind: "range", from: range[1].replaceAll("$", "").toUpperCase(), to: range[2].replaceAll("$", "").toUpperCase() }); index += range[0].length; continue; }
+    const reference = /^\$?[A-Za-z]{1,2}\$?\d{1,4}(?![A-Za-z0-9_.])/.exec(rest);
+    if (reference) { tokens.push({ kind: "ref", value: reference[0].replaceAll("$", "").toUpperCase() }); index += reference[0].length; continue; }
     // Em português a vírgula é o separador decimal e `;` separa argumentos. O ponto
     // também é aceito como decimal, então 1,5 e 1.5 valem o mesmo.
     const numeric = /^(\d+(?:[.,]\d+)?|[.,]\d+)/.exec(rest);
@@ -522,6 +522,11 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
 
   function computeRaw(raw: string): CellResult {
     if (!raw.startsWith("=")) {
+      if (raw.startsWith("'")) return { value: raw.slice(1), error: null, display: raw.slice(1) };
+      if (["VERDADEIRO", "FALSO", "TRUE", "FALSE"].includes(raw.trim().toUpperCase())) {
+        const value = ["VERDADEIRO", "TRUE"].includes(raw.trim().toUpperCase());
+        return { value, error: null, display: displayValue(value) };
+      }
       const parsed = parseNumber(raw);
       const value = parsed === null ? raw : parsed;
       return { value, error: null, display: displayValue(value) };
@@ -567,7 +572,7 @@ export function sheetToCsv(cells: SheetCells, columns: number, rows: number) {
 type Axis = "row" | "column";
 
 // Reescreve os endereços de um texto de fórmula, sem tocar no que estiver entre aspas.
-function rewriteReferences(formula: string, rewrite: (address: CellAddress) => string | null) {
+function rewriteReferences(formula: string, rewrite: (address: CellAddress, locked: { column: boolean; row: boolean }) => string | null) {
   let result = "";
   let index = 0;
   while (index < formula.length) {
@@ -579,11 +584,12 @@ function rewriteReferences(formula: string, rewrite: (address: CellAddress) => s
       index = stop;
       continue;
     }
-    const match = /^([A-Za-z]{1,2})(\d{1,4})(?![A-Za-z0-9_.])/.exec(formula.slice(index));
+    const match = /^(\$?)([A-Za-z]{1,2})(\$?)(\d{1,4})(?![A-Za-z0-9_.])/.exec(formula.slice(index));
     if (match) {
-      const address = parseCellKey(match[0]);
-      const replaced = address ? rewrite(address) : null;
-      result += replaced ?? "#REF!";
+      const address = parseCellKey(`${match[2]}${match[4]}`);
+      const replaced = address ? rewrite(address, { column: !!match[1], row: !!match[3] }) : null;
+      const target = replaced ? parseCellKey(replaced) : null;
+      result += target ? `${match[1]}${columnName(target.column)}${match[3]}${target.row + 1}` : "#REF!";
       index += match[0].length;
       continue;
     }
@@ -632,8 +638,8 @@ export function fillDown(cells: SheetCells, fromKey: string, untilRow: number): 
   for (let row = origin.row + 1; row <= untilRow; row += 1) {
     const offset = row - origin.row;
     next[cellKey({ column: origin.column, row })] = raw.startsWith("=")
-      ? `=${rewriteReferences(raw.slice(1), (address) => {
-        const moved = { column: address.column, row: address.row + offset };
+      ? `=${rewriteReferences(raw.slice(1), (address, locked) => {
+        const moved = { column: address.column, row: address.row + (locked.row ? 0 : offset) };
         return moved.row < 0 ? null : cellKey(moved);
       })}`
       : raw;
