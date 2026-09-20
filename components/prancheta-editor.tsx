@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
 import { nearestOnSegment } from "@/packages/cad-core";
+import { zoomNaVista } from "@/lib/prancheta-viewport";
 import { CAD_COMMANDS, executeCadCommand } from "@/lib/cad-commands";
 import { exportNative, mergeCadImport, type ImportReport } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
@@ -732,13 +733,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
 
   function ampliar(fator: number) {
     definirVista((anterior) => {
-      const largura = Math.min(400000, Math.max(800, Math.round(anterior.largura * fator)));
-      const centro = { x: anterior.x + anterior.largura / 2, y: anterior.y + anterior.largura / 2 };
-      return { x: Math.round(centro.x - largura / 2), y: Math.round(centro.y - largura / 2), largura };
+      const centro = { x: anterior.x + anterior.largura / 2, y: anterior.y + anterior.largura * 0.62 / 2 };
+      return zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, centro);
     });
   }
 
   function trocarCamada(id: string, mudanca: Partial<Camada>) {
+    if (!canEdit) return;
     definirDocumento((anterior) => ({
       ...anterior,
       camadas: anterior.camadas.map((camada) => camada.id === id ? { ...camada, ...mudanca } : camada),

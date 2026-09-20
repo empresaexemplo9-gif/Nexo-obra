@@ -90,3 +90,52 @@ export async function instrucoesParaGuardarCredenciais(entrada: {
     entrada.origem,
   );
 }
+
+/**
+ * Todas as empresas com segredo de webhook guardado, já decifrados.
+ *
+ * O receptor precisa disto porque a assinatura chega antes de qualquer identificação: o
+ * POST da Drap traz o HMAC e o corpo, não traz "de quem". Descobrir a empresa é justamente
+ * achar qual segredo confere a assinatura — por isso a lista, e não uma busca por id.
+ *
+ * Envelope que não abre com a chave atual é descartado em silêncio aqui: para o receptor,
+ * uma empresa cujo segredo não se consegue ler é indistinguível de uma empresa sem
+ * segredo. O sintoma aparece na tela de conexão, que mostra o webhook como pendente.
+ */
+export async function segredosDeWebhookGuardados(): Promise<{ externalCompanyId: string; secret: string }[]> {
+  const db = getDatabase();
+  const { results } = await db
+    .prepare(
+      `SELECT external_company_id, webhook_secret_encrypted
+       FROM integration_connections
+       WHERE provider = 'drap' AND status = 'active' AND webhook_secret_encrypted IS NOT NULL`,
+    )
+    .all<{ external_company_id: string; webhook_secret_encrypted: string }>();
+
+  const candidatos: { externalCompanyId: string; secret: string }[] = [];
+  for (const linha of results ?? []) {
+    const secret = await decifrarSegredo(linha.webhook_secret_encrypted);
+    if (secret) candidatos.push({ externalCompanyId: linha.external_company_id, secret });
+  }
+  return candidatos;
+}
+
+/**
+ * Grava só o segredo de webhook de uma empresa já conectada.
+ *
+ * Separado de `instrucoesParaGuardarCredenciais` porque o registro do webhook acontece
+ * DEPOIS de a conexão existir: registrar antes deixaria, numa falha de gravação, uma
+ * assinatura viva na Drap apontando para cá sem nada aqui que a reconheça.
+ */
+export async function instrucoesParaGuardarSegredoDeWebhook(entrada: {
+  db: ReturnType<typeof getDatabase>;
+  organizationId: string;
+  webhookSecret: string;
+}) {
+  const cifrado = await cifrarSegredo(entrada.webhookSecret);
+  return entrada.db.prepare(
+    `UPDATE integration_connections
+     SET webhook_secret_encrypted = ?1, updated_at = CURRENT_TIMESTAMP
+     WHERE organization_id = ?2 AND provider = 'drap'`,
+  ).bind(cifrado, entrada.organizationId);
+}

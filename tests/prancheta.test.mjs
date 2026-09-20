@@ -58,14 +58,14 @@ test("encaixe leva o traço ao passo da malha", () => {
   assert.equal(encaixar(37, 50), 50);
 });
 
-test("malha 1 desliga o encaixe mas devolve inteiro", () => {
-  assert.equal(encaixar(1234.7, 1), 1235);
-  assert.equal(encaixar(1234.2, 0), 1234);
-  assert.ok(Number.isInteger(encaixar(999.5, 1)));
+test("malha desligada preserva precisão submilimétrica", () => {
+  assert.equal(encaixar(1234.7, 1), 1234.7);
+  assert.equal(encaixar(1234.2, 0), 1234.2);
+  assert.equal(encaixar(-999.5, 1), -999.5);
 });
 
-test("encaixe nunca devolve fração, em qualquer malha", () => {
-  for (const malha of [1, 10, 25, 50, 100, 250, 1000]) {
+test("encaixe ativo devolve múltiplo do passo", () => {
+  for (const malha of [10, 25, 50, 100, 250, 1000]) {
     for (const valor of [0, 3, 77.4, 1234.6, -812.3, 99999]) {
       assert.ok(Number.isInteger(encaixar(valor, malha)), `${valor} na malha ${malha} saiu fracionado`);
     }

@@ -123,7 +123,7 @@ export function documentoVazio(): Documento {
 /** Encaixe na malha. Desenhar à mão livre e depois cotar não fecha: o encaixe é o que faz
  *  parede encontrar parede. Malha 1 desliga o encaixe sem caso especial. */
 export function encaixar(valor: number, malhaMm: number): number {
-  if (malhaMm <= 1) return Math.round(valor);
+  if (malhaMm <= 1) return valor;
   return Math.round(valor / malhaMm) * malhaMm;
 }
 

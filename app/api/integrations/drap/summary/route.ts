@@ -1,5 +1,5 @@
 import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
-import { fetchDrapFinancialSummary, isDrapConfigured } from "@/lib/integrations/drap";
+import { DrapIntegrationError, fetchDrapFinancialSummary, isDrapConfigured } from "@/lib/integrations/drap";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +42,21 @@ export async function GET(request: Request) {
       return Response.json(summary, {
         headers: { "Cache-Control": "private, no-store" },
       });
-    } catch {
+    } catch (causa) {
+      // Trocar toda falha pela mesma frase escondia justamente o que resolve: "não
+      // respondeu" mandava esperar, quando o problema era credencial, escopo ou caminho
+      // configurado errado — e nenhum dos três melhora com o tempo.
+      const conhecida = causa instanceof DrapIntegrationError;
+      const codigo = conhecida ? causa.codigo : "erro-inesperado";
+      const detalhe = conhecida ? causa.detalhe : "Falha inesperada ao consultar a Drap.";
+
+      // No log do servidor para quem opera a plataforma; no corpo para quem administra a
+      // empresa. Token não passa por nenhum dos dois.
+      console.error(`[drap/summary] ${codigo}: ${detalhe}`);
+
       return Response.json(
-        {
-          error: "A Drap não respondeu. Tente novamente em alguns instantes.",
-          code: "drap_unavailable",
-        },
-        { status: 502, headers: { "Cache-Control": "private, no-store" } },
+        { error: detalhe, code: codigo },
+        { status: codigo === "sem-credencial" ? 409 : 502, headers: { "Cache-Control": "private, no-store" } },
       );
     }
   });

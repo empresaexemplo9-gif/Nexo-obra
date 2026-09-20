@@ -1,6 +1,7 @@
 import { documentoSchema, camadaBloqueada, type Documento, type Elemento } from "@/lib/prancheta";
 import { lerMedida, paralelaDe, espelhar } from "@/lib/prancheta-cad";
 import { rotation, scaling, transform, type Matrix, type Point } from "@/packages/cad-core";
+import { executeCadCommand as executeLegacy, type CadCommandContext } from "@/lib/cad-commands-legacy";
 
 export const CAD_COMMANDS = [
   { alias: "L", name: "LINE", syntax: "L 0,0 3000,0", description: "Linha por dois pontos" },
@@ -25,6 +26,8 @@ export const CAD_COMMANDS = [
   { alias: "AP", name: "ARRAYPOLAR", syntax: "AP 6 0,0 360", description: "Matriz polar da seleção" },
   { alias: "E", name: "ERASE", syntax: "E", description: "Apagar a seleção" },
   { alias: "J", name: "CLOSE", syntax: "J", description: "Fechar a polilinha selecionada" },
+  { alias: "TR", name: "TRIM", syntax: "TR 2500,-1000 2500,1000 3800,0", description: "Aparar seleção pelo limite e ponto indicado" },
+  { alias: "EX", name: "EXTEND", syntax: "EX 6000,-1000 6000,1000 3900,0", description: "Estender seleção até o limite" },
 ] as const;
 
 function point(text: string | undefined, previous?: Point): Point {
@@ -58,13 +61,24 @@ function transformed(element: Elemento, matrix: Matrix, factor = 1, angle = 0): 
   if (element.tipo === "cota") return { ...element, a: p(element.a), b: p(element.b), deslocamentoMm: element.deslocamentoMm * factor };
   if (element.tipo === "traco" || element.tipo === "comodo") return { ...element, pontos: element.pontos.map(p) };
   if (element.tipo === "arco") return { ...element, centro: p(element.centro), raioMm: element.raioMm * factor, inicioGraus: rotationOf(element.inicioGraus) };
-  const result = { ...element, posicao: p(element.posicao), rotacaoGraus: rotationOf(element.rotacaoGraus) };
+  const result = { ...element, posicao: p(element.posicao), rotacaoGraus: ((element.rotacaoGraus - angle) % 360 + 360) % 360 };
   if ("larguraMm" in result) result.larguraMm *= factor;
   if ("alturaMm" in result) result.alturaMm *= factor;
   return result;
 }
-export function executeCadCommand(document: Documento, input: string, selectedId: string | null, id: () => string = () => crypto.randomUUID()): { document: Documento; message: string; selectedId: string | null } {
+type Result = { document: Documento; message: string; selectedId: string | null };
+export function executeCadCommand(input: string, context: CadCommandContext): Result;
+export function executeCadCommand(document: Documento, input: string, selectedId: string | null, id?: () => string): Result;
+export function executeCadCommand(documentOrInput: Documento | string, inputOrContext: string | CadCommandContext, selectedId: string | null = null, id: () => string = () => crypto.randomUUID()): Result {
+  if (typeof documentOrInput === "string") return executeLegacy(documentOrInput, inputOrContext as CadCommandContext);
+  const document = documentOrInput;
+  const input = inputOrContext as string;
   const [raw, ...args] = input.trim().split(/\s+/);
+  if (["TR", "TRIM", "EX", "EXTEND"].includes(raw.toUpperCase())) {
+    if (args.length < 2 || args.length > 3) throw new Error("Use TR/EX x1,y1 x2,y2 [ponto].");
+    return executeLegacy(input, { document, selectedId, layerId: "layout", createId: id });
+  }
+  if (["RO", "ROTATE", "SC", "SCALE"].includes(raw.toUpperCase()) && args[0]?.includes(",")) args.reverse();
   const command = CAD_COMMANDS.find((c) => c.alias === raw.toUpperCase() || c.name === raw.toUpperCase());
   if (!command) throw new Error("Comando desconhecido. Consulte as sugestões abaixo do campo.");
   let added: Elemento | undefined;

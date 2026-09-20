@@ -115,6 +115,30 @@ export function getDrapWebhookCandidates() {
   return config.DRAP_WEBHOOK_SECRET ? [{ externalCompanyId: "", secret: config.DRAP_WEBHOOK_SECRET }] : [];
 }
 
+/**
+ * Os segredos com que a Drap pode ter assinado a entrega que acabou de chegar: os do
+ * ambiente mais os das empresas que registraram o webhook sozinhas ao conectar.
+ *
+ * Sem a parte do banco, o registro automático não serviria de nada: a assinatura chegaria
+ * correta e o receptor a recusaria com 401, porque só conheceria os segredos colados à
+ * mão no painel de publicação.
+ *
+ * O ambiente vem primeiro pela mesma razão de sempre — é a saída de emergência, e quem
+ * trocou um segredo lá espera que ele valha. Empresa que aparece nos dois lugares é
+ * conferida primeiro pelo do ambiente; como o receptor exige que exatamente um candidato
+ * confira, um segredo velho no banco não cria ambiguidade: ele simplesmente não confere.
+ *
+ * O `import` é dinâmico para o grafo estático deste módulo continuar sem banco.
+ */
+export async function getDrapWebhookCandidatesAsync() {
+  const doAmbiente = getDrapWebhookCandidates();
+  const { segredosDeWebhookGuardados } = await import("@/lib/server/drap-credenciais");
+  const doBanco = await segredosDeWebhookGuardados().catch(() => []);
+
+  const vistos = new Set(doAmbiente.map((c) => `${c.externalCompanyId}:${c.secret}`));
+  return [...doAmbiente, ...doBanco.filter((c) => !vistos.has(`${c.externalCompanyId}:${c.secret}`))];
+}
+
 export function isDrapConfigured() {
   const config = runtimeEnv();
   const hasTenantToken = Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken));
@@ -320,16 +344,60 @@ type DrapResumo = {
   atualizado_em?: unknown;
 };
 
+/**
+ * Erro de integração com a causa preservada.
+ *
+ * Existe porque o `catch` da rota trocava toda falha pela mesma frase — "A Drap não
+ * respondeu" — inclusive quando a Drap respondia. Quem opera precisa distinguir credencial
+ * ausente de escopo faltando, de caminho errado, de indisponibilidade real: as quatro
+ * pedem ações diferentes e só uma delas é "tente de novo em alguns instantes".
+ *
+ * `detalhe` é escrito para ser lido por quem administra a empresa. Nunca carrega token.
+ */
+export class DrapIntegrationError extends Error {
+  constructor(public codigo: string, public detalhe: string, public status?: number) {
+    super(`${codigo}: ${detalhe}`);
+    this.name = "DrapIntegrationError";
+  }
+}
+
 /** `null` = endpoint ainda não existe neste ambiente (404). Qualquer outra
  *  falha sobe como erro. */
 async function fetchDrapResumo(externalCompanyId: string): Promise<FinancialSummary | null> {
   const config = runtimeEnv();
-  if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
+  if (!isDrapConfigured()) throw new DrapIntegrationError("nao-configurada", "A integração com a Drap não está configurada nesta instalação.");
 
-  const url = drapUrl(config.DRAP_SUMMARY_PATH ?? "/api/v1/resumo");
-  const response = await fetch(url, { headers: await requestHeaders(externalCompanyId), signal: AbortSignal.timeout(8000) });
+  const caminho = config.DRAP_SUMMARY_PATH ?? "/api/v1/resumo";
+  const url = drapUrl(caminho);
+
+  let headers: Headers;
+  try {
+    headers = await requestHeaders(externalCompanyId);
+  } catch {
+    // `apiTokenFor` lança quando não acha token nem no ambiente nem no banco. É o caso
+    // mais confundido com "a Drap caiu", e o mais diferente dele: nada foi enviado.
+    throw new DrapIntegrationError(
+      "sem-credencial",
+      "Esta empresa não tem credencial da Drap guardada aqui. Reconecte a empresa em Conexão DRAP.",
+    );
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
+  } catch {
+    throw new DrapIntegrationError("indisponivel", `A Drap não respondeu a ${caminho} em 8 segundos.`);
+  }
+
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`DRAP summary request failed with status ${response.status}`);
+  if (!response.ok) {
+    const corpo = await response.text().catch(() => "");
+    throw new DrapIntegrationError(
+      response.status === 403 ? "sem-escopo" : `http-${response.status}`,
+      `A Drap recusou ${caminho} com HTTP ${response.status}.${corpo ? ` Resposta: ${corpo.slice(0, 200)}` : ""}`,
+      response.status,
+    );
+  }
 
   const corpo = (await response.json()) as DrapResumo;
   // Sem `realizado` no corpo não é a resposta que esperamos. Tratar como 404

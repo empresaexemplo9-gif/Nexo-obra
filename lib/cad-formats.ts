@@ -32,10 +32,17 @@ export class FormatRegistry {
   }
 }
 
-const nativeSchema = z.object({ format: z.literal("nexo"), version: z.literal(1), unit: z.literal("mm"), document: documentoSchema }).strict();
+const nativeSchema = z.object({ format: z.literal("nexo"), version: z.literal(1), unit: z.literal("mm").default("mm"), document: documentoSchema }).strict();
 export function exportNative(document: Documento): string {
   return JSON.stringify(nativeSchema.parse({ format: "nexo", version: 1, unit: "mm", document }));
 }
+export const exportNexo = exportNative;
+export function importNexo(source: string): Documento {
+  const parsed = nativeSchema.parse(JSON.parse(source));
+  checkReferences(parsed.document);
+  return parsed.document;
+}
+export function detectCadFormat(_name: string, bytes: Uint8Array) { return createFormatRegistry().detect(bytes) ?? null; }
 function checkReferences(document: Documento) {
   const layers = new Set(document.camadas.map((c) => c.id));
   if (layers.size !== document.camadas.length || new Set(document.elementos.map((e) => e.id)).size !== document.elementos.length) throw new Error("O arquivo contém identificadores duplicados.");

@@ -51,7 +51,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TeamAccessManager, type TeamMember } from "@/components/team-access-manager";
-import { accessProfileLabels, type PermissionModule, type PermissionSet } from "@/lib/permissions";
+import { accessProfileLabels, podeAdministrarEmpresa, type PermissionModule, type PermissionSet } from "@/lib/permissions";
 import {
   Dialog,
   DialogContent,
@@ -444,14 +444,14 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "files") return <FilesWorkspace projects={projects} query={query} canEdit={canEdit("files")} />;
     if (activeModule === "studio") return <div className="space-y-5"><PageIntro module="studio" /><PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("studio")} /></div>;
     if (activeModule === "tasks") return <div className="space-y-5"><PageIntro module="tasks" action={() => openCreate("task")} actionLabel="Nova tarefa" />{tasks.length ? <Card><CardContent className="divide-y p-0">{tasks.map((task) => <div key={task.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center"><button disabled={task.status === "done"} onClick={() => void completeTask(task)} aria-label={`Concluir ${task.title}`} className="grid size-6 shrink-0 place-items-center rounded-full border border-hoikos-300 text-transparent enabled:hover:border-hoikos-500 enabled:hover:text-hoikos-600 disabled:bg-hoikos-50 disabled:text-hoikos-600"><Check className="size-3.5" /></button><div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-hoikos-500">{task.projectName}{task.assigneeName ? ` · ${task.assigneeName}` : ""}</p></div><StatusBadge status={task.status} /></div>)}</CardContent></Card> : <HonestEmpty icon={ListChecks} title="Nenhuma tarefa cadastrada" description={projects.length ? "Crie a primeira tarefa ligada a um projeto." : "Cadastre um projeto antes de criar tarefas."} action={projects.length ? () => openCreate("task") : () => openCreate("project")} actionLabel={projects.length ? "Criar tarefa" : "Cadastrar projeto"} />}</div>;
-    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("team")} /></div>;
-    if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={(session.member?.role === "owner" || session.member?.role === "admin") && canEdit("finance")} onProjectsChanged={loadData} />;
+    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" /><TeamAccessManager members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
+    if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
     if (activeModule === "reminders") return <div className="space-y-5"><PageIntro module="reminders" /><RemindersWorkspace agenda={agenda} error={remindersError} reload={reloadReminders} mark={markReminder} members={members.map((member) => ({ id: member.id, name: member.name }))} /></div>;
     if (activeModule === "sheets") return <div className="space-y-5"><PageIntro module="sheets" /><WorksheetsWorkspace query={query} /></div>;
     if (activeModule === "usage") return <div className="space-y-5"><PageIntro module="usage" /><UsageWorkspace query={query} /></div>;
-    if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
+    if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || session.member?.role === "superadmin" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
     return null;
   })();
 

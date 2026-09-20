@@ -19,3 +19,17 @@ Use o campo **Comando CAD** na Prancheta. Coordenadas em milímetros, x para a d
 | REDO | `REDO` | Refazer |
 
 Exemplo polar: `PL 0,0 3000<90 @2000,0`. Os comandos M/CO/RO/SC/MI/O usam o elemento selecionado na tela. Camadas bloqueadas são protegidas. Os atalhos de ferramenta existentes fora do campo não mudam.
+
+| Comando adicional | Exemplo | Ação |
+|---|---|---|
+| REC | `REC 0,0 4000,3000` | Retângulo |
+| A | `A 0,0 1000 0 90` | Arco |
+| EL | `EL 0,0 2000 1000` | Elipse aproximada por polilinha |
+| POL | `POL 6 0,0 1000` | Polígono regular |
+| AR | `AR 3 2 1000 1000` | Matriz retangular |
+| AP | `AP 6 0,0 360` | Matriz polar |
+| E | `E` | Apagar seleção |
+| J | `J` | Fechar polilinha |
+| TR | `TR 2500,-1000 2500,1000 3800,0` | Aparar pelo limite |
+| EX | `EX 6000,-1000 6000,1000 3900,0` | Estender até limite |
+| Z | `Z` | Enquadrar desenho |

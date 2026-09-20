@@ -9,7 +9,11 @@ export const dynamic = "force-dynamic";
 
 const connectionSchema = z.object({ externalCompanyId: z.string().trim().min(1).max(160) });
 
-type ConnectionRow = { id: string; external_company_id: string; status: string; last_synced_at: string | null; last_error: string | null };
+type ConnectionRow = {
+  id: string; external_company_id: string; status: string;
+  last_synced_at: string | null; last_error: string | null;
+  webhook_secret_encrypted: string | null;
+};
 
 async function verifyDrapConnection(externalCompanyId: string) {
   try {
@@ -27,7 +31,7 @@ export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "finance", "view");
-    const connection = await context.db.prepare("SELECT id, external_company_id, status, last_synced_at, last_error FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1")
+    const connection = await context.db.prepare("SELECT id, external_company_id, status, last_synced_at, last_error, webhook_secret_encrypted FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1")
       .bind(context.organization.id).first<ConnectionRow>();
     const chargesProbe = connection?.status === "active"
       ? await probeDrapResource(connection.external_company_id, "cobrancas")
@@ -39,6 +43,9 @@ export async function GET(request: Request) {
         status: connection.status,
         lastSyncedAt: connection.last_synced_at,
         lastError: connection.last_error,
+        // Só o fato, nunca o segredo: a tela precisa saber se a empresa avisa quando
+        // muda, para oferecer a nova tentativa quando não avisa.
+        webhookRegistrado: Boolean(connection.webhook_secret_encrypted),
       } : null,
       capabilities: {
         summary: isDrapConfigured(),
@@ -63,7 +70,7 @@ export async function PUT(request: Request) {
     }
 
     const existing = await context.db.prepare(
-      "SELECT id, external_company_id, status, last_synced_at, last_error FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1",
+      "SELECT id, external_company_id, status, last_synced_at, last_error, webhook_secret_encrypted FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1",
     ).bind(context.organization.id).first<ConnectionRow>();
     const id = existing?.id ?? crypto.randomUUID();
     const sameActiveConnection = existing?.external_company_id === externalCompanyId && existing.status === "active";
@@ -95,6 +102,9 @@ export async function PUT(request: Request) {
         status: verification.status,
         lastSyncedAt: verification.status === "active" ? new Date().toISOString() : null,
         lastError: verification.lastError,
+        // Este caminho é o manual, por variável de ambiente: ali o segredo do webhook
+        // também é colado à mão, e não há registro automático a reportar.
+        webhookRegistrado: Boolean(existing?.webhook_secret_encrypted),
       },
     }, { headers: { "Cache-Control": "private, no-store" } });
   });
