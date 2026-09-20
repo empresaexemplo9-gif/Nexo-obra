@@ -90,11 +90,11 @@ test("XLSX importa datas, decimais e resultados salvos; não inventa resultado d
 
 test("XLSX recusa truncamento, dimensões, payload excessivo e limites reais de descompressão", async () => {
   await assert.rejects(importXlsx(Buffer.from("invalid")), /ZIP/);
-  await assert.rejects(importXlsx(Buffer.alloc(10 * 1024 * 1024 + 1)), /10 MB/);
+  await assert.rejects(importXlsx(Buffer.alloc(4 * 1024 * 1024 + 1)), /4 MB/);
   const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet("Grande"); sheet.getCell("BA1").value = 1;
   await assert.rejects(importXlsx(Buffer.from(await workbook.xlsx.writeBuffer())), /52 colunas/);
-  const request = new Request("https://local.test", { method: "POST", body: new Uint8Array(10 * 1024 * 1024 + 1) });
-  await assert.rejects(readXlsxBody(request), /10 MB/);
+  const request = new Request("https://local.test", { method: "POST", body: new Uint8Array(4 * 1024 * 1024 + 1) });
+  await assert.rejects(readXlsxBody(request), /4 MB/);
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip(); zip.file("xl/workbook.xml", "x".repeat(8 * 1024 * 1024 + 1));
   const compressed = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });

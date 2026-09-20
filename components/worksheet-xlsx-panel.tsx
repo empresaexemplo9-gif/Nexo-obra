@@ -25,13 +25,13 @@ export function WorksheetXlsxPanel({ id, name, revision, dirty, readOnly, onImpo
       const url = URL.createObjectURL(await response.blob()); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `${name}.xlsx`; anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     })}>Baixar XLSX salvo</Button>
     {dirty && <p className="text-xs">Salve as alterações antes de exportar XLSX.</p>}
-    {!readOnly && <><label className="block">Selecionar XLSX (até 10 MB)<input aria-label="Importar arquivo XLSX" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} className="mt-1 block w-full min-w-0 text-xs" onChange={event => {
+    {!readOnly && <><label className="block">Selecionar XLSX (até 4 MB)<input aria-label="Importar arquivo XLSX" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={busy} className="mt-1 block w-full min-w-0 text-xs" onChange={event => {
       const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
       setSheets([]); setSelected(0);
-      if (file.size > 10 * 1024 * 1024 || !file.name.toLowerCase().endsWith(".xlsx")) { toast.error("Escolha um XLSX de até 10 MB."); return; }
+      if (file.size > 4 * 1024 * 1024 || !file.name.toLowerCase().endsWith(".xlsx")) { toast.error("Escolha um XLSX de até 4 MB."); return; }
       void run(async () => {
         const response = await fetch(`/api/worksheets/${id}/xlsx`, { method: "POST", body: file });
-        const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Não foi possível importar."); setSheets(body.sheets);
+        const body = await response.json().catch(() => ({})); if (!response.ok) throw new Error(body.error ?? "Não foi possível importar. Verifique o tamanho do arquivo e tente novamente."); setSheets(body.sheets);
       });
     }} /></label>
       {sheet && <div className="space-y-2 rounded border p-3">

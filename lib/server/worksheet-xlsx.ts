@@ -6,10 +6,10 @@ import { contentSchema } from "@/lib/worksheets";
 import type { z } from "zod";
 
 export type ImportedSheet = { name: string; cells: SheetCells; rows: number; columns: number; warnings: string[] };
-const MAX_FILE = 10 * 1024 * 1024;
+const MAX_FILE = 4 * 1024 * 1024;
 
 export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
-  if (bytes.length > MAX_FILE) throw new Error("O arquivo XLSX excede 10 MB.");
+  if (bytes.length > MAX_FILE) throw new Error("O arquivo XLSX excede 4 MB.");
   const zip = abrirZip(bytes, 8 * 1024 * 1024);
   if (zip.entradas.length > 1000) throw new Error("O arquivo contém entradas demais.");
   let total = 0;
@@ -84,12 +84,12 @@ export async function exportXlsx(name: string, content: z.infer<typeof contentSc
 }
 
 export async function readXlsxBody(request: Request) {
-  if (Number(request.headers.get("content-length")) > MAX_FILE) throw new Error("O arquivo XLSX excede 10 MB.");
+  if (Number(request.headers.get("content-length")) > MAX_FILE) throw new Error("O arquivo XLSX excede 4 MB.");
   const reader = request.body?.getReader();
   if (!reader) throw new Error("Selecione um arquivo XLSX.");
   const parts: Uint8Array[] = []; let total = 0;
   try {
-    while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > MAX_FILE) { await reader.cancel(); throw new Error("O arquivo XLSX excede 10 MB."); } parts.push(part.value); }
+    while (true) { const part = await reader.read(); if (part.done) break; total += part.value.byteLength; if (total > MAX_FILE) { await reader.cancel(); throw new Error("O arquivo XLSX excede 4 MB."); } parts.push(part.value); }
   } finally { reader.releaseLock(); }
   return Buffer.concat(parts);
 }
