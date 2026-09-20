@@ -1,6 +1,6 @@
 import { UNIDADES, Unidade } from "@/lib/integrations/dxf";
 import { createFormatRegistry } from "@/lib/cad-formats";
-import { converterDwgParaDxf, DwgConversorIndisponivel } from "@/lib/server/dwg-converter";
+import { converterDwgParaDxf, DwgConversaoFalhou, DwgConversorIndisponivel } from "@/lib/server/dwg-converter";
 import { ApiError, apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +69,7 @@ export async function POST(request: Request) {
       }, { headers: { "Cache-Control": "private, no-store" } });
     } catch (erro) {
       if (erro instanceof DwgConversorIndisponivel) throw new ApiError(503, "dwg_converter_unavailable", `${erro.message} Como alternativa, exporte como DXF ASCII no programa de origem.`);
+      if (erro instanceof DwgConversaoFalhou) throw new ApiError(415, "dwg_conversion_failed", erro.message);
       if (erro instanceof Error) throw new ApiError(415, "cad_invalido", erro instanceof SyntaxError ? "O arquivo contém dados inválidos." : erro.message);
       throw erro;
     }

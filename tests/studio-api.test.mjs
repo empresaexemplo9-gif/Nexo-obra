@@ -386,16 +386,15 @@ test("a unidade pedida no formulário vence a do arquivo, e unidade inventada é
   assert.equal((await invalida.json()).code, "invalid_unit");
 });
 
-test("DWG sem conversor configurado informa indisponibilidade e alternativa", async () => {
+test("DWG inválido passa pelo conversor local sem exigir configuração externa", async () => {
   const dwg = Buffer.concat([Buffer.from("AC1032", "ascii"), Buffer.alloc(64)]);
   const resposta = await importacao.POST(pedido("/api/studio/importar", {
     method: "POST", ...comArquivo(formularioDxf({ conteudo: dwg, nome: "planta.dwg", tipo: "image/vnd.dwg" })),
   }));
-  assert.equal(resposta.status, 503);
+  assert.equal(resposta.status, 415);
   const corpo = await resposta.json();
-  assert.equal(corpo.code, "dwg_converter_unavailable");
-  assert.match(corpo.error, /não está configurado/);
-  assert.match(corpo.error, /DXF ASCII/, "recusar sem dizer o que fazer não ajuda ninguém");
+  assert.equal(corpo.code, "dwg_conversion_failed");
+  assert.doesNotMatch(corpo.error, /configurad[oa]/i);
 });
 
 test("arquivo que não é DXF é recusado com motivo, não com erro genérico", async () => {

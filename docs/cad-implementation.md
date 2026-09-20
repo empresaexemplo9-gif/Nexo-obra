@@ -34,4 +34,4 @@ O histórico gráfico existente continua limitado a 60 estados. O núcleo transa
 
 `node node_modules/next/dist/bin/next build --webpack`
 
-Os testes incluem comandos, camadas bloqueadas, precisão, histórico, ida/volta NEXO, conversão DWG simulada, detecção DXF e entrada inválida. A conversão DWG real depende de um serviço autorizado/licenciado configurado na publicação.
+Os testes incluem comandos, camadas bloqueadas, precisão, histórico, ida/volta NEXO, conversão DWG, detecção DXF e entrada inválida. A conversão DWG real roda localmente no servidor com LibreDWG em WebAssembly; um serviço HTTP externo pode ser configurado, mas não é obrigatório.

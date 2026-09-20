@@ -1,4 +1,8 @@
 import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { convertDwgToDxf } from "dwg2dxf-converter";
 
 type DwgRuntimeEnv = {
   DWG_CONVERTER_URL?: string;
@@ -9,9 +13,16 @@ const MAX_OUTPUT_BYTES = 48 * 1024 * 1024;
 const TIMEOUT_MS = 45_000;
 
 export class DwgConversorIndisponivel extends Error {
-  constructor(message = "O conversor DWG não está configurado nesta publicação.") {
+  constructor(message = "O conversor DWG não está disponível nesta publicação.") {
     super(message);
     this.name = "DwgConversorIndisponivel";
+  }
+}
+
+export class DwgConversaoFalhou extends Error {
+  constructor(message = "Não foi possível converter este arquivo DWG.") {
+    super(message);
+    this.name = "DwgConversaoFalhou";
   }
 }
 
@@ -19,12 +30,7 @@ function configuracao(): DwgRuntimeEnv {
   return platformEnv() as unknown as DwgRuntimeEnv;
 }
 
-/** Envia o DWG bruto a um conversor isolado e devolve DXF ASCII para o leitor CAD interno. */
-export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
-  const env = configuracao();
-  const url = env.DWG_CONVERTER_URL?.trim();
-  if (!url) throw new DwgConversorIndisponivel();
-
+async function converterRemotamente(bytes: Uint8Array, url: string, token?: string): Promise<string> {
   let destino: URL;
   try {
     destino = new URL(url);
@@ -39,8 +45,8 @@ export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
     "Content-Type": "application/acad",
     Accept: "text/plain, application/dxf",
   });
-  if (env.DWG_CONVERTER_TOKEN?.trim()) {
-    headers.set("Authorization", `Bearer ${env.DWG_CONVERTER_TOKEN.trim()}`);
+  if (token?.trim()) {
+    headers.set("Authorization", `Bearer ${token.trim()}`);
   }
 
   let resposta: Response;
@@ -85,9 +91,48 @@ export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
   return parts.join("");
 }
 
+/**
+ * Converte dentro da própria função usando LibreDWG em WebAssembly. O diretório temporário
+ * é exclusivo por pedido e sempre removido; nenhum desenho do cliente fica persistido no
+ * servidor. O serviço HTTP continua opcional para instalações que prefiram isolar a carga.
+ */
+async function converterLocalmente(bytes: Uint8Array): Promise<string> {
+  const pasta = await mkdtemp(join(tmpdir(), "nexo-dwg-"));
+  const origem = join(pasta, "entrada.dwg");
+  const destino = join(pasta, "saida.dxf");
+  try {
+    await writeFile(origem, bytes);
+    const resultado = await convertDwgToDxf(origem, destino, { timeout: TIMEOUT_MS });
+    if (!resultado.success) {
+      throw new DwgConversaoFalhou(resultado.error?.trim() || "O arquivo DWG é inválido ou usa recursos não suportados.");
+    }
+    if (resultado.fileSize > MAX_OUTPUT_BYTES) {
+      throw new DwgConversaoFalhou("A conversão DWG excedeu o limite de 48 MB.");
+    }
+    const dxf = await readFile(destino);
+    if (!dxf.byteLength) throw new DwgConversaoFalhou("O conversor DWG devolveu uma resposta vazia.");
+    if (dxf.byteLength > MAX_OUTPUT_BYTES) throw new DwgConversaoFalhou("A conversão DWG excedeu o limite de 48 MB.");
+    return new TextDecoder("utf-8", { fatal: false }).decode(dxf);
+  } catch (erro) {
+    if (erro instanceof DwgConversaoFalhou) throw erro;
+    throw new DwgConversorIndisponivel("Não foi possível iniciar o conversor DWG local.");
+  } finally {
+    await rm(pasta, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+/** Converte DWG bruto em DXF ASCII para o leitor CAD interno. */
+export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
+  const env = configuracao();
+  const url = env.DWG_CONVERTER_URL?.trim();
+  return url
+    ? converterRemotamente(bytes, url, env.DWG_CONVERTER_TOKEN)
+    : converterLocalmente(bytes);
+}
+
 export function estadoDoConversorDwg(): "ok" | "nao_configurado" | "configuracao_invalida" {
   const url = configuracao().DWG_CONVERTER_URL?.trim();
-  if (!url) return "nao_configurado";
+  if (!url) return "ok";
   try {
     const protocolo = new URL(url).protocol;
     return protocolo === "http:" || protocolo === "https:" ? "ok" : "configuracao_invalida";

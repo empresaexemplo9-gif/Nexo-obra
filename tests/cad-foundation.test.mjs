@@ -132,7 +132,7 @@ test("DXF content and DWG conversion share the import report pipeline", async ()
   assert.equal(imported.report.format, "dxf");
   assert.equal(imported.elementos.length, 1);
   const dwg = bytes("AC1032example");
-  await assert.rejects(formats.createFormatRegistry().import(dwg), /não configurado/);
+  await assert.rejects(formats.createFormatRegistry().import(dwg), /indisponível/);
   const converted = await formats.createFormatRegistry(async () => dxf).import(dwg);
   assert.equal(converted.report.format, "dwg");
   assert.match(converted.avisos[0], /convertido/);

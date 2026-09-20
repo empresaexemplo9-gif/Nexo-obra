@@ -6,4 +6,4 @@
 4. Registre o adaptador em `createFormatRegistry`. Atualize `FORMAT_SUPPORT` com o nível de suporte comprovado.
 5. Cubra arquivo válido, vazio, corrompido, extensão incorreta, limites e dados maliciosos. Não declare suporte completo com base em um arquivo mínimo.
 
-O pipeline atual é síncrono no servidor para NEXO e DXF; o conversor DWG é um serviço externo. Antes de adicionar parsers pesados, implemente isolamento real com limite de tempo/memória. A interface atual ainda não oferece importação incremental, workers locais nem fila.
+O pipeline atual roda no servidor para NEXO e DXF. DWG usa LibreDWG em WebAssembly, com diretório temporário exclusivo, limite de tempo e tamanho; opcionalmente pode usar um serviço HTTP externo. Antes de adicionar outros parsers pesados, mantenha o mesmo isolamento e limites. A interface atual ainda não oferece importação incremental nem fila.

@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   // O cliente libSQL carrega um pacote nativo para atender `file:`. Empacotá-lo numa
   // função serverless é onde binário nativo costuma se perder no rastreamento e derrubar
   // todas as rotas de uma vez. Mantido externo, ele é resolvido de node_modules.
-  serverExternalPackages: ["@libsql/client", "libsql"],
+  serverExternalPackages: ["@libsql/client", "libsql", "dwg2dxf-converter"],
   // `env` é embutido no bundle do servidor e do navegador durante o build.
   env: {
     PLATFORM_BUILD: buildStamp(),

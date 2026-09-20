@@ -74,14 +74,14 @@ export const dxfAdapter: FormatAdapter = {
 };
 export function createFormatRegistry(convertDwg?: (bytes: Uint8Array) => Promise<string>) {
   return new FormatRegistry().register(nativeAdapter).register(dxfAdapter).register({
-    id: "dwg", label: "DWG via conversor", extensions: ["dwg"],
+    id: "dwg", label: "DWG", extensions: ["dwg"],
     capabilities: { read: Boolean(convertDwg), write: false, editable: true, is3D: false },
     detect: (head) => versaoDoDwg(head) ? 1 : 0,
     async import(bytes, unit) {
-      if (!convertDwg) throw new Error("Conversor DWG não configurado. Exporte como DXF ASCII no programa de origem.");
+      if (!convertDwg) throw new Error("Conversor DWG indisponível. Exporte como DXF ASCII no programa de origem.");
       const converted = await convertDwg(bytes);
       const result = await dxfAdapter.import(new TextEncoder().encode(converted), unit);
-      const warnings = ["DWG convertido para DXF pelo serviço configurado. Confira a fidelidade antes de salvar.", ...result.avisos];
+      const warnings = ["DWG convertido para DXF pelo motor do servidor. Confira a fidelidade antes de salvar.", ...result.avisos];
       return { ...result, avisos: warnings, report: { ...result.report, format: "dwg", warnings } };
     },
   });
@@ -110,7 +110,7 @@ export function mergeCadImport(document: Documento, imported: Pick<CadImport, "c
 export const FORMAT_SUPPORT = [
   ["NEXO v1", "Leitura e exportação 2D", "Geometria e camadas; imagens privadas devem ser reinseridas pela biblioteca."],
   ["DXF ASCII", "Leitura e exportação 2D", "Subconjunto de entidades; perdas indicadas no relatório. DXF binário não suportado."],
-  ["DWG", "Leitura com conversor", "Exige serviço DWG configurado pelo administrador. Alternativa: DXF ASCII."],
+  ["DWG", "Leitura e conversão 2D", "Convertido no servidor e revisado pelo mesmo leitor DXF; confira medidas e avisos antes de salvar."],
   ["SVG", "Exportação", "Para importar, converta para DXF. A importação SVG ainda não está implementada."],
   ["PDF, HPGL/PLT, CGM, EMF/WMF", "Não suportados como geometria", "Converta para DXF em uma ferramenta externa."],
   ["DGN, DWF/DWFx", "Não suportados", "Converta para DXF com ferramenta licenciada."],
