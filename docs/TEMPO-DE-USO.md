@@ -39,12 +39,15 @@ reconferido a partir dessas linhas.
 
 | Acesso | Alcance |
 | --- | --- |
-| Colaborador, parceiro, prestador, financeiro, contabilidade, cliente do portal | apenas o próprio histórico |
-| Contratante (`owner`) e administrador (`admin` com edição em Equipe) | o próprio e todos os acessos da empresa aberta |
+| Colaborador, parceiro, prestador, gestor, contabilidade, cliente do portal | apenas o próprio histórico |
+| Contratante (`owner`) e administrador (`admin`) | o próprio e todos os acessos da empresa aberta |
+| Financeiro (`finance`) e RH (`hr`) | o próprio e os dependentes da empresa aberta: gestor, colaborador, parceiro, prestador, contabilidade e cliente do portal. Não veem o contratante, administradores nem outros acessos de Financeiro/RH. |
 | Superadministrador | todos os acessos de todas as empresas, incluindo o próprio |
 
-A regra é aplicada no servidor. Pedir `subjectId` de outra pessoa sem alcance, ou
-`organizationId` de outra empresa sem ser superadministrador, responde `403`.
+A regra é aplicada no servidor. Pedir `organizationId` de outra empresa sem ser
+superadministrador responde `403`. Um `subjectId` fora da hierarquia de Financeiro/RH
+não retorna registros. O cargo atual também é conferido para não expor o histórico de
+quem foi promovido.
 
 ## Ações
 

@@ -128,7 +128,20 @@ export function closeStaleUsageSessions(db: D1Database, now = Date.now()) {
     .bind(now - USAGE_GAP_LIMIT_MS);
 }
 
-export type UsageQuery = { from: string; to: string; timeZone: string; organizationId?: string; subjectId?: string; excludePlatformSubjects?: boolean };
+export type UsageQuery = { from: string; to: string; timeZone: string; organizationId?: string; subjectId?: string; excludePlatformSubjects?: boolean; dependentViewerId?: string };
+
+// Financeiro/RH acompanham o próprio uso e os perfis subordinados. O cargo atual
+// também é consultado para não expor o histórico de alguém promovido.
+const dependentRoles = "'manager','member','partner','service_provider','accounting','client'";
+function dependentFilter(alias: string, viewerParameter: string) {
+  return `(${alias}.subject_id = ${viewerParameter} OR (
+    ${alias}.role IN (${dependentRoles}) AND NOT EXISTS (
+      SELECT 1 FROM members m WHERE m.organization_id = ${alias}.organization_id
+        AND m.external_user_id = ${alias}.subject_id
+        AND m.role NOT IN (${dependentRoles})
+    )
+  ))`;
+}
 
 export function parseUsageRange(url: URL, timeZone: string, now = Date.now()) {
   const iso = /^\d{4}-\d{2}-\d{2}$/;
@@ -150,6 +163,7 @@ export async function usageReport(db: D1Database, query: UsageQuery) {
   const bindings: unknown[] = [query.from, query.to];
   if (query.organizationId) { bindings.push(query.organizationId); filters.push(`d.organization_id = ?${bindings.length}`); }
   if (query.subjectId) { bindings.push(query.subjectId); filters.push(`d.subject_id = ?${bindings.length}`); }
+  if (query.dependentViewerId) { bindings.push(query.dependentViewerId); filters.push(dependentFilter("d", `?${bindings.length}`)); }
   if (query.excludePlatformSubjects) filters.push("d.subject_kind NOT IN ('superadmin', 'maintenance')");
 
   const days = await db.prepare(
@@ -169,6 +183,11 @@ export async function usageReport(db: D1Database, query: UsageQuery) {
   const actionBindings: unknown[] = [periodStart, periodEnd];
   if (query.organizationId) { actionBindings.push(query.organizationId); actionFilters.push(`a.organization_id = ?${actionBindings.length}`); }
   if (query.subjectId) { actionBindings.push(query.subjectId); actionFilters.push(`a.actor_user_id = ?${actionBindings.length}`); }
+  if (query.dependentViewerId) {
+    actionBindings.push(query.dependentViewerId);
+    actionFilters.push(`EXISTS (SELECT 1 FROM usage_days d WHERE d.organization_id = a.organization_id
+      AND d.subject_id = a.actor_user_id AND ${dependentFilter("d", `?${actionBindings.length}`)})`);
+  }
   if (query.excludePlatformSubjects) actionFilters.push("EXISTS (SELECT 1 FROM usage_days u WHERE u.organization_id = a.organization_id AND u.subject_id = a.actor_user_id AND u.subject_kind NOT IN ('superadmin', 'maintenance'))");
   const actions = await db.prepare(
     `SELECT a.organization_id, a.actor_user_id, COUNT(*) AS total

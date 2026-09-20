@@ -18,7 +18,7 @@ type UsageDay = {
 export type UsageReport = {
   range: { from: string; to: string };
   today: string;
-  scope: "self" | "organization" | "platform";
+  scope: "self" | "organization" | "dependents" | "platform";
   beatMs: number;
   gapLimitMs: number;
   viewer: { subjectId: string; role: string; displayName: string };
@@ -139,7 +139,8 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
   if (!report) return null;
 
   const scopeLabel = report.scope === "platform" ? "Todos os acessos da plataforma"
-    : report.scope === "organization" ? "Todos os acessos desta empresa" : "Somente o seu histórico";
+    : report.scope === "organization" ? "Todos os acessos desta empresa"
+    : report.scope === "dependents" ? "Seu acesso e os dependentes desta empresa" : "Somente o seu histórico";
   const totalMs = people.reduce((sum, entry) => sum + entry.totalMs, 0);
 
   return <div className="space-y-5">

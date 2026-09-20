@@ -40,7 +40,7 @@ export function podeAdministrarEmpresa(role: string | undefined): boolean {
 
 // Ler o tempo da equipe não concede poder de administrar acessos.
 export function podeConsultarUsoDaEmpresa(role: string): boolean {
-  return ["owner", "admin", "finance", "hr"].includes(role);
+  return ["owner", "admin"].includes(role);
 }
 
 export const accessProfileLabels: Record<string, string> = {

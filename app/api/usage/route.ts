@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 }
 
 // Quem vê o quê: cada acesso vê o próprio histórico; o contratante e o administrador
-// e o Financeiro/RH veem sua empresa; o superadministrador tem a visão da plataforma.
+// veem sua empresa; Financeiro/RH veem os dependentes; o superadministrador vê a plataforma.
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
@@ -77,13 +77,14 @@ export async function GET(request: Request) {
     const range = parseUsageRange(url, context.organization.timezone);
     const platform = isPlatformSuperAdmin(context);
     const wholeCompany = platform || podeConsultarUsoDaEmpresa(context.member.role);
+    const dependents = !wholeCompany && ["finance", "hr"].includes(context.member.role);
     const requestedOrganization = url.searchParams.get("organizationId");
     const requestedSubject = url.searchParams.get("subjectId");
 
     if (requestedOrganization && requestedOrganization !== context.organization.id && !platform) {
       throw new ApiError(403, "usage_scope_denied", "Você só acompanha o uso da empresa aberta.");
     }
-    if (requestedSubject && requestedSubject !== context.member.externalUserId && !wholeCompany) {
+    if (requestedSubject && requestedSubject !== context.member.externalUserId && !wholeCompany && !dependents) {
       throw new ApiError(403, "usage_scope_denied", "Seu acesso mostra apenas o seu próprio histórico.");
     }
 
@@ -92,14 +93,15 @@ export async function GET(request: Request) {
       ...range,
       timeZone: context.organization.timezone,
       organizationId: platform ? requestedOrganization ?? undefined : context.organization.id,
-      subjectId: wholeCompany ? requestedSubject ?? undefined : context.member.externalUserId,
+      subjectId: wholeCompany || dependents ? requestedSubject ?? undefined : context.member.externalUserId,
+      dependentViewerId: dependents ? context.member.externalUserId : undefined,
       excludePlatformSubjects: !platform,
     });
 
     return Response.json({
       ...report,
       today: usageDayKey(Date.now(), context.organization.timezone),
-      scope: platform ? "platform" : wholeCompany ? "organization" : "self",
+      scope: platform ? "platform" : wholeCompany ? "organization" : dependents ? "dependents" : "self",
       viewer: { subjectId: context.member.externalUserId, role: context.member.role, displayName: context.user.displayName },
     }, { headers: { "Cache-Control": "private, no-store" } });
   });

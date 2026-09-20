@@ -204,18 +204,53 @@ test("perfis de empresa respeitam hierarquia e isolamento também ao filtrar por
     const response = await route.GET(as("colab", "colab@example.test"));
     assert.equal(response.status, 200, role);
     const report = await response.json();
-    const company = ["admin", "finance", "hr"].includes(role);
-    assert.equal(report.scope, company ? "organization" : "self", role);
+    const company = role === "admin";
+    const dependents = ["finance", "hr"].includes(role);
+    assert.equal(report.scope, company ? "organization" : dependents ? "dependents" : "self", role);
     assert.ok(report.days.every(d => d.organizationId === orgA && d.subjectId !== "platform"), role);
     assert.deepEqual([...new Set(report.days.map(d => d.subjectId))].sort(), company ? ["colab", "owner"] : ["colab"], role);
     const other = await route.GET(as("colab", "colab@example.test", orgA, "/api/usage?subjectId=owner"));
-    assert.equal(other.status, company ? 200 : 403, role);
+    assert.equal(other.status, company || dependents ? 200 : 403, role);
     const foreign = await route.GET(as("colab", "colab@example.test", orgA, `/api/usage?organizationId=${orgB}`));
     assert.equal(foreign.status, 403, role);
     const foreignSubject = await route.GET(as("colab", "colab@example.test", orgA, "/api/usage?subjectId=owner-b"));
-    if (company) assert.deepEqual((await foreignSubject.json()).days, [], role);
+    if (company || dependents) assert.deepEqual((await foreignSubject.json()).days, [], role);
     else assert.equal(foreignSubject.status, 403, role);
   }
+});
+
+test("Financeiro e RH veem dependentes, mas não proprietário, administradores nem pares", async () => {
+  for (const [id, role] of [["financeiro", "finance"], ["rh", "hr"], ["gestor", "manager"], ["admin-local", "admin"]]) {
+    db.sqlite.prepare("INSERT INTO users(id,email,display_name,created_at,updated_at) VALUES (?,?,?,0,0)").run(id, `${id}@example.test`, id);
+    db.sqlite.prepare("INSERT INTO members(id,organization_id,external_user_id,name,email,role,permissions_json) VALUES (?,?,?,?,?,?,'{}')")
+      .run(id, orgA, id, id, `${id}@example.test`, role);
+  }
+  const now = Date.now();
+  for (const person of [subject(), subject({ subjectId: "colab", email: "colab@example.test", role: "member" }),
+    ...[["financeiro", "finance"], ["rh", "hr"], ["gestor", "manager"], ["admin-local", "admin"]]
+      .map(([subjectId, role]) => subject({ subjectId, email: `${subjectId}@example.test`, role })),
+    subject({ organizationId: orgB, subjectId: "owner-b", email: "owner-b@example.test" })]) {
+    await usage.recordUsageHeartbeat(db, person, now - 30_000);
+    await usage.recordUsageHeartbeat(db, person, now);
+    db.sqlite.prepare("INSERT INTO audit_events(id,organization_id,actor_user_id,action,entity_type,entity_id,metadata_json,created_at) VALUES (?,?,?,?,?,'record','{}',?)")
+      .run(crypto.randomUUID(), person.organizationId, person.subjectId, "test.action", "test", now);
+  }
+  for (const id of ["financeiro", "rh"]) {
+    const report = await (await route.GET(as(id, `${id}@example.test`))).json();
+    assert.equal(report.scope, "dependents");
+    assert.deepEqual([...new Set(report.days.map((d) => d.subjectId))].sort(), [id, "colab", "gestor"].sort());
+    assert.deepEqual([...new Set(report.actions.map((a) => a.subjectId))].sort(), [id, "colab", "gestor"].sort());
+    for (const subjectId of ["owner", "admin-local", id === "rh" ? "financeiro" : "rh"]) {
+      const filtered = await (await route.GET(as(id, `${id}@example.test`, orgA, `/api/usage?subjectId=${subjectId}`))).json();
+      assert.deepEqual(filtered.days, []);
+      assert.deepEqual(filtered.actions, []);
+    }
+    assert.equal((await route.GET(as(id, `${id}@example.test`, orgA, `/api/usage?organizationId=${orgB}`))).status, 403);
+  }
+  db.sqlite.prepare("UPDATE members SET role = 'admin' WHERE id = 'gestor'").run();
+  const afterPromotion = await (await route.GET(as("rh", "rh@example.test"))).json();
+  assert.equal(afterPromotion.days.some((d) => d.subjectId === "gestor"), false);
+  assert.equal(afterPromotion.actions.some((a) => a.subjectId === "gestor"), false);
 });
 
 test("um acesso comum não consegue pedir o histórico de outra pessoa nem de outra empresa", async () => {
