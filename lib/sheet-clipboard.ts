@@ -1,37 +1,14 @@
-// Colar um bloco copiado do Excel ou do Google Sheets na grade. Camada pura: sem React e
-// sem DOM, para rodar igual no navegador, no servidor e no teste.
+// Ler um bloco copiado do Excel ou do Google Sheets e transformá-lo em matriz. Camada
+// pura: sem React e sem DOM, para rodar igual no navegador, no servidor e no teste.
+//
+// Só ANÁLISE. Escrever a matriz na grade é de `placeTable`, em `lib/worksheet-tools.ts`,
+// que também decide o que fazer quando o bloco não cabe. A separação vale a pena porque o
+// difícil aqui é o formato — aspas, quebra de linha dentro da célula, polegada no meio do
+// texto — e o difícil lá é o limite da planilha.
 //
 // O que chega do clipboard é texto, e só texto. Nada aqui converte número: `evaluateSheet`
 // já decide o que é número, o que é data e o que é fórmula. Converter duas vezes, com duas
 // regras diferentes, é como um "1.500" colado vira 1,5 em silêncio.
-
-import {
-  SHEET_MAX_COLUMNS,
-  SHEET_MAX_ROWS,
-  cellKey,
-  parseCellKey,
-  type SheetCells,
-} from "@/lib/spreadsheet";
-
-/** Quanto texto uma célula aceita, igual ao `cellsSchema` de `lib/worksheets.ts`. */
-export const LIMITE_CARACTERES_CELULA = 2000;
-
-export type LimitesColagem = {
-  /** Colunas visíveis da planilha. Nunca passa de `SHEET_MAX_COLUMNS`. */
-  colunas?: number;
-  /** Linhas visíveis da planilha. Nunca passa de `SHEET_MAX_ROWS`. */
-  linhas?: number;
-};
-
-export type ResultadoColagem = {
-  cells: SheetCells;
-  /** Só as chaves que mudaram de valor — inclusive as que foram apagadas. */
-  alterados: string[];
-  /** Quantas colunas e linhas não couberam na grade, ou `null` quando coube tudo. */
-  truncado: { colunas: number; linhas: number } | null;
-  /** Chaves cujo texto passava de `LIMITE_CARACTERES_CELULA` e foi cortado. */
-  cortadas: string[];
-};
 
 type Separador = "\t" | ";" | ",";
 
@@ -167,80 +144,6 @@ export function analisarColagem(texto: string, separador?: Separador): string[][
   if (linhas.length === 1 && linhas[0].length === 1 && linhas[0][0].trim() === "") return [];
 
   return linhas;
-}
-
-function dentroDoLimite(valor: number | undefined, maximo: number) {
-  if (!Number.isFinite(valor) || valor === undefined) return maximo;
-  return Math.max(0, Math.min(Math.floor(valor), maximo));
-}
-
-/**
- * Escreve a matriz a partir da âncora e devolve a grade nova.
- *
- * O que passa de `SHEET_MAX_COLUMNS`/`SHEET_MAX_ROWS` é descartado e contado em
- * `truncado`, para a interface avisar. Colar 40 linhas e gravar 12 sem dizer nada é a
- * forma mais cara de perder dado: a pessoa fecha a planilha achando que copiou tudo.
- */
-export function aplicarColagem(
-  cells: SheetCells,
-  ancora: string,
-  matriz: string[][],
-  limites: LimitesColagem = {},
-): ResultadoColagem {
-  const vazio: ResultadoColagem = { cells, alterados: [], truncado: null, cortadas: [] };
-  const inicio = parseCellKey(ancora);
-  if (!inicio || matriz.length === 0) return vazio;
-
-  // O limite vem da interface, e interface não define teto: mesmo que peça 999 colunas, a
-  // grade continua sendo a que `cellKey` e o schema de persistência sabem endereçar.
-  const maximoColunas = dentroDoLimite(limites.colunas, SHEET_MAX_COLUMNS);
-  const maximoLinhas = dentroDoLimite(limites.linhas, SHEET_MAX_ROWS);
-
-  const largura = matriz.reduce((maior, linha) => Math.max(maior, linha.length), 0);
-  const colunasQueCabem = Math.max(0, maximoColunas - inicio.column);
-  const linhasQueCabem = Math.max(0, maximoLinhas - inicio.row);
-
-  const proximas: SheetCells = { ...cells };
-  const alterados: string[] = [];
-  const cortadas: string[] = [];
-
-  const linhasEscritas = Math.min(matriz.length, linhasQueCabem);
-  const colunasEscritas = Math.min(largura, colunasQueCabem);
-
-  for (let linha = 0; linha < linhasEscritas; linha += 1) {
-    for (let coluna = 0; coluna < colunasEscritas; coluna += 1) {
-      const chave = cellKey({ column: inicio.column + coluna, row: inicio.row + linha });
-      const bruto = matriz[linha][coluna] ?? "";
-      const anterior = proximas[chave];
-
-      // Célula vazia da matriz apaga o destino, como no Excel — mas some do objeto em vez
-      // de virar chave com string vazia, porque o resto do código lê ausência como vazio.
-      if (bruto.trim() === "") {
-        if (anterior !== undefined) { delete proximas[chave]; alterados.push(chave); }
-        continue;
-      }
-
-      // Uma célula acima de 2000 caracteres faz o schema recusar o salvamento inteiro: a
-      // colagem pareceria ter dado certo e todo o trabalho seguinte morreria no 400.
-      const valor = bruto.length > LIMITE_CARACTERES_CELULA ? bruto.slice(0, LIMITE_CARACTERES_CELULA) : bruto;
-      if (valor !== bruto) cortadas.push(chave);
-      if (anterior === valor) continue;
-      proximas[chave] = valor;
-      alterados.push(chave);
-    }
-  }
-
-  const colunasDescartadas = Math.max(0, largura - colunasQueCabem);
-  const linhasDescartadas = Math.max(0, matriz.length - linhasQueCabem);
-  const truncado = colunasDescartadas > 0 || linhasDescartadas > 0
-    ? { colunas: colunasDescartadas, linhas: linhasDescartadas }
-    : null;
-
-  // Nada mudou: devolver a mesma referência evita marcar a planilha como suja e disparar
-  // um salvamento que não tem o que salvar.
-  if (alterados.length === 0) return { cells, alterados, truncado, cortadas };
-
-  return { cells: proximas, alterados, truncado, cortadas };
 }
 
 /** `"3 linhas × 4 colunas"` — o tamanho do bloco, para confirmar antes ou depois de colar. */
