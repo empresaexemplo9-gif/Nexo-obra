@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
 import { nearestOnSegment } from "@/packages/cad-core";
-import { zoomNaVista } from "@/lib/prancheta-viewport";
+import { zoomNaVista, enquadrarElementos } from "@/lib/prancheta-viewport";
 import { CAD_COMMANDS, executeCadCommand } from "@/lib/cad-commands";
 import { exportNative, mergeCadImport, type ImportReport } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
@@ -371,8 +371,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     const matriz = svg.getScreenCTM();
     if (!matriz) return null;
     const ponto = new DOMPoint(evento.clientX, evento.clientY).matrixTransform(matriz.inverse());
-    return { x: Math.round(ponto.x), y: Math.round(ponto.y) };
+    return { x: ponto.x, y: ponto.y };
   }, []);
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const roda = (evento: WheelEvent) => {
+      const ancora = paraMilimetros(evento);
+      if (!ancora) return;
+      evento.preventDefault();
+      const delta = evento.deltaY * (evento.deltaMode === 1 ? 16 : evento.deltaMode === 2 ? 640 : 1);
+      const fator = Math.exp(Math.max(-1, Math.min(1, delta * 0.002)));
+      definirVista(anterior => zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, ancora));
+    };
+    svg.addEventListener("wheel", roda, { passive: false });
+    return () => svg.removeEventListener("wheel", roda);
+  }, [paraMilimetros]);
 
   /** Raio de captura em milímetros de desenho, derivado do zoom. O que a mão sente é a
    *  distância na TELA: um raio fixo em milímetros seria impossível de acertar afastado
@@ -772,7 +787,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   function aceitarImportacao() {
     if (!importado || !canEdit) return;
     try {
-      aplicar(mergeCadImport(documento, importado));
+      const proximo = mergeCadImport(documento, importado);
+      aplicar(proximo);
+      definirVista(enquadrarElementos(elementosVisiveis(proximo)));
       toast.success(`${importado.elementos.length} elemento(s) importados.`);
       definirImportado(null);
       dxfEscolhido.current = null;
@@ -797,15 +814,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   }
 
   function enquadrar() {
-    if (!visiveis.length) return;
-    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-    for (const element of visiveis) {
-      const bounds = limitesDoElemento(element);
-      x1 = Math.min(x1, bounds.x1); y1 = Math.min(y1, bounds.y1);
-      x2 = Math.max(x2, bounds.x2); y2 = Math.max(y2, bounds.y2);
-    }
-    const width = Math.max(1000, x2 - x1, (y2 - y1) / 0.62) * 1.2;
-    definirVista({ x: (x1 + x2 - width) / 2, y: (y1 + y2 - width * 0.62) / 2, largura: width });
+    definirVista(enquadrarElementos(visiveis));
   }
 
   async function salvar() {

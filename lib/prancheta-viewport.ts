@@ -9,8 +9,8 @@ export type VistaPrancheta = Readonly<{
 }>;
 
 export const PROPORCAO_VISTA_PRANCHETA = 0.62;
-export const LARGURA_VISTA_MINIMA = 800;
-export const LARGURA_VISTA_MAXIMA = 400_000;
+export const LARGURA_VISTA_MINIMA = 0.1;
+export const LARGURA_VISTA_MAXIMA = 40_000_000;
 
 export function criarVista(x = -2_000, y = -2_000, largura = 24_000): VistaPrancheta {
   return { x, y, largura: limitarLargura(largura), proporcao: PROPORCAO_VISTA_PRANCHETA };
@@ -18,7 +18,7 @@ export function criarVista(x = -2_000, y = -2_000, largura = 24_000): VistaPranc
 
 export function limitarLargura(largura: number): number {
   if (!Number.isFinite(largura)) return 24_000;
-  return Math.min(LARGURA_VISTA_MAXIMA, Math.max(LARGURA_VISTA_MINIMA, Math.round(largura)));
+  return Math.min(LARGURA_VISTA_MAXIMA, Math.max(LARGURA_VISTA_MINIMA, largura));
 }
 
 /** Zoom ancorado no ponto sob o cursor, para que a geometria não "escape" da mão. */
@@ -35,11 +35,12 @@ export function zoomNaVista(vista: VistaPrancheta, fator: number, ancora: { x: n
 }
 
 /** Enquadra o desenho inteiro, mantendo uma margem para seleção e novos traços. */
-export function enquadrarElementos(elementos: Elemento[], margem = 1_000): VistaPrancheta {
+export function enquadrarElementos(elementos: Elemento[], margem?: number): VistaPrancheta {
   const limites = limitesDoDesenho(elementos);
   if (!limites) return criarVista();
-  const folga = Math.max(100, Number.isFinite(margem) ? margem : 1_000);
-  const largura = Math.max(limites.x2 - limites.x1, (limites.y2 - limites.y1) / PROPORCAO_VISTA_PRANCHETA) + folga * 2;
+  const extensao = Math.max(limites.x2 - limites.x1, (limites.y2 - limites.y1) / PROPORCAO_VISTA_PRANCHETA);
+  const folga = margem !== undefined && Number.isFinite(margem) ? Math.max(0, margem) : extensao * 0.1;
+  const largura = limitarLargura(extensao + folga * 2);
   const centroX = (limites.x1 + limites.x2) / 2;
   const centroY = (limites.y1 + limites.y2) / 2;
   return {

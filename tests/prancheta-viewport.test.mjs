@@ -35,3 +35,26 @@ test("enquadramento inclui todo o desenho e margem", () => {
 test("enquadramento vazio volta para uma vista inicial segura", () => {
   assert.deepEqual(enquadrarElementos([]), criarVista());
 });
+
+test("desenho pequeno ocupa a vista sem margem mínima de milímetros", () => {
+  const linha = { id: "l", camada: "layout", tipo: "traco", pontos: [{ x: 10, y: 10 }, { x: 30, y: 20 }], espessuraMm: 0.1 };
+  const vista = enquadrarElementos([linha]);
+  assert.ok(vista.largura < 40);
+  assert.ok(vista.x < 10 && vista.x + vista.largura > 30);
+});
+
+test("zoom ultrapassa o antigo limite e mantém precisão e âncora", () => {
+  let vista = criarVista(1000, 2000, 800);
+  const ancora = { x: 1200, y: 2100 };
+  for (let i = 0; i < 25; i++) vista = zoomNaVista(vista, 0.8, ancora);
+  assert.ok(vista.largura < 4);
+  assert.ok(vista.largura > 0);
+  assert.ok(Math.abs((ancora.x - vista.x) / vista.largura - 0.25) < 1e-9);
+});
+
+test("enquadramento de ponto continua centrado quando atinge o limite", () => {
+  const linha = { id: "l", camada: "layout", tipo: "traco", pontos: [{ x: 1000, y: 2000 }, { x: 1000, y: 2000 }], espessuraMm: 0 };
+  const vista = enquadrarElementos([linha]);
+  assert.equal(vista.x + vista.largura / 2, 1000);
+  assert.equal(vista.y + vista.largura * vista.proporcao / 2, 2000);
+});
