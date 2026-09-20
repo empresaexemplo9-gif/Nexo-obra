@@ -164,3 +164,16 @@ test("o proxy genérico não emite nota fiscal", async () => {
   assert.doesNotMatch(escrevíveis, /"nfse"/);
   assert.match(recursos, /nfse: \[/, "a leitura continua: consultar nota não emite nada");
 });
+
+test("o resumo nunca devolve 'falha inesperada' sem dizer a causa", async () => {
+  // Foi a mensagem que apareceu em produção e não ajudou ninguém a agir. Todo caminho de
+  // falha do resumo precisa carregar código e motivo — inclusive os que lançam `Error`
+  // cru vindos do plano B, da montagem da URL e da resposta fora do formato.
+  const cliente = await source("lib/integrations/drap.ts");
+  const resumo = cliente.slice(cliente.indexOf("export async function fetchDrapFinancialSummary"), cliente.indexOf("async function somarResumoPelosLancamentos"));
+
+  assert.match(resumo, /caminho-invalido/, "URL mal formada tem código próprio");
+  assert.match(resumo, /resposta-nao-json/, "200 com HTML tem código próprio");
+  assert.match(resumo, /resumo-por-lancamentos/, "a falha do plano B tem código próprio");
+  assert.match(resumo, /DRAP_SUMMARY_PATH\?\.trim\(\) \|\| /, "caminho em branco cai no padrão");
+});

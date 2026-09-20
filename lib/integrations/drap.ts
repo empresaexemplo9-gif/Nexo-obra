@@ -332,7 +332,18 @@ export async function hasAnyDrapTransaction(externalCompanyId: string) {
 export async function fetchDrapFinancialSummary(externalCompanyId: string): Promise<FinancialSummary> {
   const oficial = await fetchDrapResumo(externalCompanyId);
   if (oficial) return oficial;
-  return somarResumoPelosLancamentos(externalCompanyId);
+  try {
+    return await somarResumoPelosLancamentos(externalCompanyId);
+  } catch (causa) {
+    // O plano B fala com `/api/v1/lancamentos` por caminhos que lançam `Error` cru
+    // (credencial ausente, URL inválida, resposta fora do formato). Deixar escapar assim
+    // faz a tela dizer "Falha inesperada", que é a única mensagem que não ajuda ninguém.
+    if (causa instanceof DrapIntegrationError) throw causa;
+    throw new DrapIntegrationError(
+      "resumo-por-lancamentos",
+      `A Drap não tem ${runtimeEnv().DRAP_SUMMARY_PATH ?? "/api/v1/resumo"} neste ambiente, e somar pelos lançamentos também falhou: ${causa instanceof Error ? causa.message : "erro desconhecido"}`,
+    );
+  }
 }
 
 type DrapResumo = {
@@ -367,8 +378,20 @@ async function fetchDrapResumo(externalCompanyId: string): Promise<FinancialSumm
   const config = runtimeEnv();
   if (!isDrapConfigured()) throw new DrapIntegrationError("nao-configurada", "A integração com a Drap não está configurada nesta instalação.");
 
-  const caminho = config.DRAP_SUMMARY_PATH ?? "/api/v1/resumo";
-  const url = drapUrl(caminho);
+  // `?? ` não cobre string vazia, e variável de ambiente colada em branco no painel de
+  // publicação é exatamente o que acontece quando alguém copia o `.env.example` inteiro.
+  // Com o caminho vazio a chamada ia para a raiz do site, voltava HTML e o `.json()`
+  // estourava com uma mensagem que não dizia nada.
+  const caminho = config.DRAP_SUMMARY_PATH?.trim() || "/api/v1/resumo";
+  let url: URL;
+  try {
+    url = drapUrl(caminho);
+  } catch {
+    throw new DrapIntegrationError(
+      "caminho-invalido",
+      `DRAP_SUMMARY_PATH (${caminho}) não forma um endereço válido com DRAP_API_URL. Confira as duas variáveis.`,
+    );
+  }
 
   let headers: Headers;
   try {
@@ -399,7 +422,17 @@ async function fetchDrapResumo(externalCompanyId: string): Promise<FinancialSumm
     );
   }
 
-  const corpo = (await response.json()) as DrapResumo;
+  let corpo: DrapResumo;
+  try {
+    corpo = (await response.json()) as DrapResumo;
+  } catch {
+    // Respondeu 200 mas não é JSON: quase sempre o caminho configurado aponta para uma
+    // página em vez do endpoint, e a página volta HTML. Dizer isso poupa a investigação.
+    throw new DrapIntegrationError(
+      "resposta-nao-json",
+      `${caminho} respondeu ${response.status} sem JSON. Confira DRAP_SUMMARY_PATH: o endereço parece apontar para uma página, não para a API.`,
+    );
+  }
   // Sem `realizado` no corpo não é a resposta que esperamos. Tratar como 404
   // em vez de somar zeros: zero é um número que a tela exibe sem desconfiar.
   if (!corpo || typeof corpo !== "object" || !corpo.realizado) return null;

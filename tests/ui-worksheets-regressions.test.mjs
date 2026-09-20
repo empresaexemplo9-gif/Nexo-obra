@@ -276,7 +276,10 @@ async function arrastar(de, ate) {
 
 test("arrastar marca o retângulo e a barra responde as cinco perguntas", async () => {
   await openWorksheet(comDados);
-  await clickCell("A1");
+  // Clicar em OUTRA célula antes é de propósito: a âncora tem que nascer onde o arrasto
+  // começa, não na seleção anterior. Com o clique na própria A1 este teste passava mesmo
+  // com a âncora vindo do lugar errado — que foi exatamente o defeito relatado.
+  await clickCell("C1");
   await arrastar("A1", ["A2", "A3"]);
 
   const texto = textOf(container);
