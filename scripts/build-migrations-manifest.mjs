@@ -16,7 +16,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const names = (await readdir(`${root}drizzle`)).filter((file) => file.endsWith(".sql")).sort();
 const entries = await Promise.all(names.map(async (name) => [
   name.replace(/\.sql$/, ""),
-  await readFile(`${root}drizzle/${name}`, "utf8"),
+  (await readFile(`${root}drizzle/${name}`, "utf8")).replaceAll("\r\n", "\n"),
 ]));
 
 const body = entries

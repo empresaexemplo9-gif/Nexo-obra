@@ -19,6 +19,8 @@ flowchart TD
 
 ## O que já está no código
 
+- Revisão operacional de 20/09/2026: edição de clientes, oportunidades, projetos/obras e tarefas; reabertura e filtros de tarefas; linha do tempo; carga estimada por responsável; cópia de orçamento e proposta imprimível. Carregamento isolado por módulo, validação de datas/dependências e correção de upload. [Inventário, validação e pendências por módulo](docs/REVISAO-PLATAFORMA-2026-09-20.md).
+
 - CAD integrado à Prancheta: linha de comandos, medidas fracionárias e importação NEXO, DXF e DWG (conversão local em WebAssembly, sem configuração externa obrigatória). [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.
 
 - Ativador de assinatura por API e painel de parceiros/acessos no superadmin: **preço 1:1 com a Drap, sem acréscimo da H.OIKOS** (`pricingMultiplierBps: 10000`), confirmação HMAC, bloqueios temporários/permanentes, exclusão lógica e histórico. Cada plataforma carrega o próprio custo, isolado: a H.OIKOS não revende a mensalidade da Drap com margem. O multiplicador de 1,5 foi descontinuado e só permanece no código para reconhecer callbacks de ativações antigas já emitidas. **Código preparado; contrato e credenciais do Empresa pendentes de homologação.** Consulte [Ativação e controle da plataforma](docs/DRAP-ACTIVATION.md).
@@ -351,15 +353,15 @@ CLAUDE.md
 ### Fase 2 — comercial e orçamento
 
 - Funil configurável e histórico de atividades.
-- Conversão de oportunidade em cliente e projeto sem recadastro.
+- Conversão de oportunidade em projeto/obra com o cliente existente. **Implementada, com edição do seguimento comercial.**
 - Biblioteca de serviços, insumos e composições. **Concluída para cadastro próprio.**
-- BDI, margem e versões numeradas. **Concluído no núcleo; bloqueio imutável após envio ainda pendente.**
-- PDF de proposta e aprovação digital.
+- BDI, margem e versões numeradas. **Implementados, com bloqueio após envio e cópia para novo rascunho.**
+- Proposta para impressão/PDF. **Implementada.** Aceite digital do cliente vinculado ao orçamento permanece pendente; registrar aprovação interna não substitui esse aceite.
 - Importação SINAPI dentro da plataforma e renovação automática implementadas para a UF/regime configurados; ativação inicial exige conferência do arquivo real no superadmin. Veja [SINAPI](docs/SINAPI-INTEGRATION.md).
 
 ### Fase 3 — planejamento e obra
 
-- Etapas, dependências e recálculo do cronograma.
+- Datas, estimativa, dependência única e linha do tempo. **Implementadas, com recusa de ciclos e vínculos entre projetos.** Recálculo de rede, calendário útil e caminho crítico permanecem pendentes.
 - Diário de obra com fotos, clima, equipe, ocorrências, histórico e relatórios. **Concluído; assinatura do cliente permanece pendente.**
 - Medições, compras, fornecedores e previsto x realizado.
 - Cronograma físico-financeiro e curva S.

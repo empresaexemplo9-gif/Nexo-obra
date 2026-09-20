@@ -74,6 +74,31 @@ async function abrir(session, extra) {
 const menu = () => [...container.querySelectorAll('[data-sidebar="menu-button"], nav a, nav button')]
   .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim()).filter(Boolean);
 
+test("falha de clientes não bloqueia projetos e CRM sem Equipe não consulta membros", async () => {
+  const session = sessionFor("manager"); session.member.permissions.team = { view: false, edit: false };
+  const calls = await abrir(session, {
+    "/api/clients": { __status: 503, error: "Clientes indisponíveis" },
+    "/api/projects": { projects: [{ id: "p1", code: "REV-01", name: "Trabalho disponível", kind: "project", status: "active", phase: "Executivo", progressPercent: 30 }] },
+  });
+  assert.match(textOf(container), /Clientes indisponíveis/);
+  assert.ok(!calls.some(call => call.path.includes("/api/members")));
+  const button = [...container.querySelectorAll('[data-sidebar="menu-button"]')].find(node => /^Projetos/.test(node.textContent.trim()));
+  assert.ok(button); await act(async () => button.click());
+  assert.match(textOf(container), /Trabalho disponível/);
+  assert.doesNotMatch(textOf(container), /Clientes indisponíveis/);
+});
+
+test("Cronograma com permissão independente carrega planejamento e mostra tarefas sem lista de projetos", async () => {
+  const session = sessionFor("partner");
+  session.member.permissions.tasks = { view: false, edit: false };
+  session.member.permissions.projects = { view: false, edit: false };
+  const calls = await abrir(session, { "/api/schedule": { tasks: [{ id: "t1", projectId: "p1", projectName: "Obra autorizada", title: "Entrega planejada", status: "todo", priority: "normal", startsAt: "2026-09-20", dueAt: "2026-09-25", parentTaskId: null, assigneeName: null, estimatedMinutes: 60 }] } });
+  assert.ok(!calls.some(call => call.path.includes("/api/tasks") || call.path.includes("/api/projects")));
+  const button = [...container.querySelectorAll('[data-sidebar="menu-button"]')].find(node => /Cronograma/.test(node.textContent));
+  assert.ok(button); await act(async () => button.click());
+  assert.match(textOf(container), /Entrega planejada/); assert.match(textOf(container), /Obra autorizada/);
+});
+
 test("visão geral prioriza tarefas vencidas e mostra projetos persistidos", async () => {
   await abrir(sessionFor("owner"), {
     "/api/projects": { projects: [{ id: "p1", name: "Projeto de teste", code: "T-01", kind: "project", status: "active", phase: "Executivo", progressPercent: 45 }] },

@@ -1,5 +1,6 @@
 import { taskResponse, taskSelect, type TaskRow } from "@/lib/server/tasks-records";
 import { z } from "zod";
+import { validateTaskPlanning } from "@/lib/server/task-planning";
 
 import {
   ApiError,
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
     }
 
     const taskId = crypto.randomUUID();
+    await validateTaskPlanning(context.db, context.organization.id, { id: taskId, ...data });
     const completedAt = data.status === "done" ? new Date().toISOString() : null;
     await context.db.batch([
       context.db.prepare(

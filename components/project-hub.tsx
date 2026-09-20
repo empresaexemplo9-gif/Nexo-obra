@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { ProjectEditor } from "@/components/project-editor";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -224,6 +225,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2"><Badge className="border-hoikos-300/20 bg-hoikos-300/10 text-hoikos-100">{project.kind === "work" ? <HardHat /> : <BriefcaseBusiness />}{project.kind === "work" ? "Obra" : "Projeto"}</Badge><StateBadge status={project.status} /><span className="text-xs font-semibold uppercase tracking-[0.18em] text-hoikos-500">{project.code}</span></div>
               <h1 className="display-heading mt-5 text-5xl sm:text-6xl">{project.name}</h1>
+              {session?.member?.permissions.projects.edit && <div className="mt-4"><ProjectEditor project={project} onChanged={load} /></div>}
               <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-hoikos-300"><span className="flex items-center gap-2"><Building2 className="size-4 text-hoikos-300" />{project.clientName ?? "Cliente não informado ou não liberado"}</span><span className="flex items-center gap-2"><UserRound className="size-4 text-hoikos-300" />{project.ownerName ?? "Responsável não definido"}</span></p>
             </div>
             <div className="w-full max-w-sm rounded-md border border-white/10 bg-white/[0.06] p-5 backdrop-blur"><div className="flex items-end justify-between"><div><p className="text-xs uppercase tracking-[0.16em] text-hoikos-500">Avanço informado</p><p className="metric-number mt-2 text-4xl font-semibold">{project.progressPercent}%</p></div><TargetMark value={project.progressPercent} /></div><Progress value={project.progressPercent} className="mt-5 h-2 bg-white/10 [&_[data-slot=progress-indicator]]:bg-hoikos-400" /></div>

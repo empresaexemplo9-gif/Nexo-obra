@@ -31,6 +31,7 @@ export function FilesWorkspace({ projects, query, canEdit }: { projects: Project
   const [projectId, setProjectId] = useState("all");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState("");
 
   const reload = useCallback(async () => {
@@ -53,31 +54,35 @@ export function FilesWorkspace({ projects, query, canEdit }: { projects: Project
   const filtered = useMemo(() => files.filter((item) => !normalized || `${item.name} ${item.projectName} ${item.projectCode}`.toLocaleLowerCase("pt-BR").includes(normalized)), [files, normalized]);
 
   async function upload(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setUploading(true);
-    const form = new FormData(event.currentTarget);
+    event.preventDefault(); if (!canEdit || uploading) return; setUploading(true);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       const file = form.get("file");
       if (!(file instanceof globalThis.File) || !file.size) throw new Error("Escolha um arquivo.");
       if (file.size > 15 * 1024 * 1024) throw new Error("Cada arquivo pode ter no máximo 15 MB.");
       const response = await fetch("/api/files", { method: "POST", body: form });
       if (!response.ok) throw new Error(await errorMessage(response));
-      event.currentTarget.reset(); toast.success("Arquivo enviado e cifrado"); await reload();
+      formElement.reset(); toast.success("Arquivo enviado e cifrado"); await reload();
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível enviar o arquivo."); }
     finally { setUploading(false); }
   }
 
   async function remove(item: ProjectFile) {
+    if (!canEdit || removingId) return;
     if (!window.confirm(`Excluir “${item.name}” do projeto ${item.projectCode}?`)) return;
+    setRemovingId(item.id);
     try {
       const response = await fetch(`/api/files/${item.id}`, { method: "DELETE" });
       if (!response.ok) throw new Error(await errorMessage(response));
       toast.success("Arquivo excluído"); await reload();
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível excluir o arquivo."); }
+    finally { setRemovingId(null); }
   }
 
   return <div className="space-y-5">
     <div className="hoikos-module-heading flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="eyebrow text-hoikos-600">Documentos</p><h1 className="display-heading mt-2 text-4xl text-hoikos-950">Arquivos</h1><p className="mt-2 text-sm text-hoikos-500">Arquivos por projeto, cifrados antes de chegar ao armazenamento e baixados somente após autorização.</p></div><select aria-label="Filtrar por projeto" value={projectId} onChange={(event) => setProjectId(event.target.value)} className="h-10 rounded-md border border-hoikos-200 bg-white px-3 text-sm"><option value="all">Todos os projetos</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}</select></div>
-    {canEdit ? <Card><CardContent className="p-5"><form onSubmit={upload} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-end"><div><label htmlFor="file-project" className="mb-1.5 block text-sm font-medium">Projeto/obra</label><select id="file-project" name="projectId" required defaultValue="" className="h-10 w-full rounded-md border border-hoikos-200 bg-white px-3 text-sm"><option value="" disabled>Selecione</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}</select></div><div><label htmlFor="project-file" className="mb-1.5 block text-sm font-medium">Arquivo</label><input id="project-file" name="file" type="file" required className="block h-10 w-full rounded-md border border-hoikos-200 bg-white px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-transparent file:font-medium" /></div><Button type="submit" disabled={uploading || !projects.length}>{uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}Enviar</Button></form><p className="mt-3 text-xs leading-5 text-hoikos-500">Até 15 MB. PDF, imagens, texto, CSV e documentos do Office. HTML, SVG e executáveis são recusados.</p></CardContent></Card> : null}
-    {loading ? <Card className="p-8 text-center text-sm text-hoikos-500"><LoaderCircle className="mx-auto mb-3 animate-spin" />Carregando arquivos…</Card> : error ? <Card className="p-6"><p className="text-sm text-hoikos-700">{error}</p><Button variant="outline" className="mt-4" onClick={() => void reload()}>Tentar novamente</Button></Card> : !filtered.length ? <Card className="p-8 text-center"><Files className="mx-auto size-8 text-hoikos-500" /><p className="mt-3 font-medium">Nenhum arquivo encontrado</p><p className="mt-1 text-sm text-hoikos-500">Envie o primeiro documento vinculado a um projeto ou obra.</p></Card> : <Card className="overflow-hidden"><div className="divide-y">{filtered.map((item) => <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"><span className="grid size-10 shrink-0 place-items-center rounded-md bg-hoikos-50 text-hoikos-700"><File className="size-5" /></span><div className="min-w-0 flex-1"><p className="truncate font-medium">{item.name}</p><p className="mt-1 text-xs text-hoikos-500">{item.projectCode} · {item.projectName} · {sizeLabel(item.sizeBytes)} · {item.uploaderName ?? "Usuário"}</p></div><Badge variant="outline">v{item.version}</Badge><Button asChild size="sm" variant="outline"><a href={item.downloadUrl}><Download />Baixar</a></Button>{canEdit ? <Button size="icon" variant="outline" aria-label={`Excluir ${item.name}`} onClick={() => void remove(item)}><Trash2 /></Button> : null}</div>)}</div></Card>}
+    {canEdit ? <Card><CardContent className="p-5"><form onSubmit={upload} className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] sm:items-end"><div><label htmlFor="file-project" className="mb-1.5 block text-sm font-medium">Projeto/obra</label><select id="file-project" name="projectId" disabled={uploading} required defaultValue="" className="h-10 w-full rounded-md border border-hoikos-200 bg-white px-3 text-sm"><option value="" disabled>Selecione</option>{projects.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}</select></div><div><label htmlFor="project-file" className="mb-1.5 block text-sm font-medium">Arquivo</label><input id="project-file" name="file" type="file" disabled={uploading} required className="block h-10 w-full rounded-md border border-hoikos-200 bg-white px-3 py-2 text-sm file:mr-3 file:border-0 file:bg-transparent file:font-medium" /></div><Button type="submit" disabled={uploading || !projects.length}>{uploading ? <LoaderCircle className="animate-spin" /> : <Upload />}Enviar</Button></form><p className="mt-3 text-xs leading-5 text-hoikos-500">Até 15 MB. PDF, imagens, texto, CSV e documentos do Office. HTML, SVG e executáveis são recusados.</p></CardContent></Card> : null}
+    {loading ? <Card className="p-8 text-center text-sm text-hoikos-500"><LoaderCircle className="mx-auto mb-3 animate-spin" />Carregando arquivos…</Card> : error ? <Card className="p-6"><p className="text-sm text-hoikos-700">{error}</p><Button variant="outline" className="mt-4" onClick={() => void reload()}>Tentar novamente</Button></Card> : !filtered.length ? <Card className="p-8 text-center"><Files className="mx-auto size-8 text-hoikos-500" /><p className="mt-3 font-medium">Nenhum arquivo encontrado</p><p className="mt-1 text-sm text-hoikos-500">Envie o primeiro documento vinculado a um projeto ou obra.</p></Card> : <Card className="overflow-hidden"><div className="divide-y">{filtered.map((item) => <div key={item.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center"><span className="grid size-10 shrink-0 place-items-center rounded-md bg-hoikos-50 text-hoikos-700"><File className="size-5" /></span><div className="min-w-0 flex-1"><p className="truncate font-medium">{item.name}</p><p className="mt-1 text-xs text-hoikos-500">{item.projectCode} · {item.projectName} · {sizeLabel(item.sizeBytes)} · {item.uploaderName ?? "Usuário"}</p></div><Badge variant="outline">v{item.version}</Badge><Button asChild size="sm" variant="outline"><a href={item.downloadUrl}><Download />Baixar</a></Button>{canEdit ? <Button size="icon" variant="outline" aria-label={`Excluir ${item.name}`} disabled={Boolean(removingId)} onClick={() => void remove(item)}><Trash2 /></Button> : null}</div>)}</div></Card>}
   </div>;
 }

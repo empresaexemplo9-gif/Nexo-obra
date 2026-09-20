@@ -1,5 +1,6 @@
 import { projectResponse, projectSelect, type ProjectRow } from "@/lib/server/projects-records";
 import { z } from "zod";
+import { validatePeriod } from "@/lib/server/task-planning";
 
 import {
   ApiError,
@@ -78,6 +79,7 @@ export async function POST(request: Request) {
     const parsed = createProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    validatePeriod(data.startDate, data.targetDate);
     await verifyRelation(context.db, "clients", data.clientId, context.organization.id, "O cliente");
     await verifyRelation(context.db, "members", data.ownerMemberId, context.organization.id, "O responsável");
 
