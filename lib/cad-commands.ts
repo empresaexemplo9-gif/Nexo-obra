@@ -140,6 +140,19 @@ function runCommand(input: string, context: CadCommandContext): CadCommandResult
     return { document: { ...document, elementos: [...document.elementos, { id, camada: context.layerId, tipo: "arco", centro, raioMm: raio, inicioGraus: 0, varreduraGraus: 360, espessuraMm: 20 }] }, selectedId: id, message: "Círculo criado." };
   }
 
+  if (alias === "DIM" || alias === "DIMENSION") {
+    requireLayer(document, context.layerId);
+    const a = point(tokens[0]); const b = point(tokens[1]);
+    const deslocamento = number(tokens[2]) ?? 400;
+    if (!a || !b || (a.x === b.x && a.y === b.y)) throw new Error("Use: DIM x1,y1 x2,y2 [deslocamento]");
+    const id = context.createId();
+    return { document: { ...document, elementos: [...document.elementos, { id, camada: context.layerId, tipo: "cota", a, b, deslocamentoMm: deslocamento }] }, selectedId: id, message: "Cota criada." };
+  }
+
+  // Daqui para baixo ficam os comandos que TRANSFORMAM um elemento existente. Os que
+  // criam geometria a partir de coordenadas — L, C, PL, DIM — ficam acima da barreira:
+  // exigir seleção deles faria cotar uma parede depender de ter uma parede selecionada,
+  // que não é o que o comando faz.
   const selected = requireSelected(context);
   if (camadaBloqueada(document, selected.camada)) throw new Error("A camada selecionada está bloqueada.");
 
@@ -194,15 +207,6 @@ function runCommand(input: string, context: CadCommandContext): CadCommandResult
     if (!espelhado) throw new Error("O eixo de espelhamento precisa ter comprimento.");
     const copia = { ...espelhado, id: context.createId() };
     return { document: { ...document, elementos: [...document.elementos, copia] }, selectedId: copia.id, message: "Cópia espelhada criada." };
-  }
-
-  if (alias === "DIM" || alias === "DIMENSION") {
-    requireLayer(document, context.layerId);
-    const a = point(tokens[0]); const b = point(tokens[1]);
-    const deslocamento = number(tokens[2]) ?? 400;
-    if (!a || !b || (a.x === b.x && a.y === b.y)) throw new Error("Use: DIM x1,y1 x2,y2 [deslocamento]");
-    const id = context.createId();
-    return { document: { ...document, elementos: [...document.elementos, { id, camada: context.layerId, tipo: "cota", a, b, deslocamentoMm: deslocamento }] }, selectedId: id, message: "Cota criada." };
   }
 
   if (alias === "TR" || alias === "TRIM") {
