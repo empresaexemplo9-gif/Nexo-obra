@@ -120,18 +120,37 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
   const [saving, setSaving] = useState(false);
   const [remindOnDueDate, setRemindOnDueDate] = useState(true);
 
+  /**
+   * Carrega o Financeiro. Cada consulta responde por si.
+   *
+   * Antes as três iam num `Promise.all` com `catch` só na do resumo: qualquer falha nas
+   * outras duas rejeitava o conjunto e o `catch` de fora nunca chegava a chamar
+   * `setConnection`. O efeito na tela era desproporcional ao defeito — a empresa aparecia
+   * como NÃO conectada, e com ela sumiam o botão de desfazer a conexão e o aviso de
+   * webhook pendente, que são justamente o que alguém procura quando algo deu errado.
+   *
+   * Uma consulta que falha agora só apaga a própria seção.
+   */
   const loadBase = useCallback(async () => {
     setLoading(true); setMessage("");
+    const seguro = async <T,>(promessa: Promise<T>) => {
+      try { return { valor: await promessa, erro: "" }; }
+      catch (causa) { return { valor: null, erro: causa instanceof Error ? causa.message : "Não foi possível carregar." }; }
+    };
     try {
-      const [connectionResult, summaryResult, chargeResult] = await Promise.all([
-        requestJson<{ connection: Connection | null; capabilities: Capabilities }>("/api/integrations/drap/connection"),
-        requestJson<FinancialSummary>("/api/integrations/drap/summary").then((value) => ({ value, error: "" })).catch((cause: Error) => ({ value: null, error: cause.message })),
-        requestJson<{ charges: Charge[] }>("/api/integrations/drap/charges"),
+      const [conexao, resumo, cobrancas] = await Promise.all([
+        seguro(requestJson<{ connection: Connection | null; capabilities: Capabilities }>("/api/integrations/drap/connection")),
+        seguro(requestJson<FinancialSummary>("/api/integrations/drap/summary")),
+        seguro(requestJson<{ charges: Charge[] }>("/api/integrations/drap/charges")),
       ]);
-      setConnection(connectionResult.connection); setCapabilities(connectionResult.capabilities);
-      setSummary(summaryResult.value); setMessage(summaryResult.error); setCharges(chargeResult.charges);
-    } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Não foi possível carregar o financeiro."); }
-    finally { setLoading(false); }
+
+      if (conexao.valor) { setConnection(conexao.valor.connection); setCapabilities(conexao.valor.capabilities); }
+      setSummary(resumo.valor);
+      setCharges(cobrancas.valor?.charges ?? []);
+      // A conexão é a que mais importa: sem ela a tela inteira fica sem ação. Por isso a
+      // mensagem dela vem primeiro.
+      setMessage(conexao.erro || resumo.erro || cobrancas.erro);
+    } finally { setLoading(false); }
   }, []);
 
   const loadTransactions = useCallback(async (projectId: string) => {

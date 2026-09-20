@@ -178,6 +178,12 @@ function Grid({
                       // Com modificador quem decide é o clique, que chega depois e é o
                       // mesmo caminho do teclado e do toque.
                       if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+                      // A ÂNCORA NASCE AQUI, onde o gesto começa. Deixá-la para o `click`
+                      // era o mesmo que não ter âncora: o clique só chega quando o botão
+                      // é solto, e num arrasto que termina em outra célula ele não chega
+                      // nunca. O retângulo saía da seleção anterior em vez da célula
+                      // apertada.
+                      onActive(key);
                       arrastando.current = true;
                     }}
                     // `pointerover`, não `pointerenter`: o React sintetiza o `enter` a
