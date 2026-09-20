@@ -25,6 +25,19 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
 // Perfil da plataforma, fora da matriz das empresas: leitura e edição total em todos os módulos.
 export const PLATFORM_SUPERADMIN_ROLE = "superadmin";
 
+/**
+ * Quem administra a empresa: define conexões, acessos e o portal.
+ *
+ * O superadministrador entra aqui porque o servidor já o trata assim —
+ * `requireOrganizationContext` devolve o contexto dele antes de conferir papel, de
+ * propósito. Sem esta função, cada tela repetia `role === "owner" || role === "admin"` e
+ * esquecia o superadmin: ele via o selo "acesso total" e não achava o botão, numa rota
+ * que o teria aceitado. Regra em um lugar só, igual dos dois lados.
+ */
+export function podeAdministrarEmpresa(role: string | undefined): boolean {
+  return role === "owner" || role === "admin" || role === PLATFORM_SUPERADMIN_ROLE;
+}
+
 export const accessProfileLabels: Record<string, string> = {
   superadmin: "Superadministrador da plataforma",
   owner: "Contratante · proprietário",
