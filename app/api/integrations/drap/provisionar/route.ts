@@ -4,6 +4,7 @@ import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, 
 import { DrapPartnerError, isDrapPartnerConfigured, provisionarEmpresaNaDrap, vincularEmpresaNaDrap } from "@/lib/integrations/drap-partner";
 import { instrucoesParaGuardarCredenciais } from "@/lib/server/drap-credenciais";
 import { guardaDeSegredosConfigurada } from "@/lib/server/segredos";
+import { conectarWebhook } from "@/lib/server/drap-webhook-conectar";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,10 @@ export const dynamic = "force-dynamic";
 //
 // A chave volta uma vez só, na resposta da Drap. Ela é cifrada e guardada aqui mesmo —
 // nunca chega ao navegador, nunca aparece em log, nunca vai para variável de ambiente.
+//
+// Conectar também registra o webhook desta empresa na Drap, para a plataforma saber de
+// mudança sem ficar perguntando. O segredo dessa assinatura segue o mesmo caminho da
+// chave: resposta da Drap, cifra, banco.
 
 const corpoSchema = z.discriminatedUnion("modo", [
   z.object({
@@ -137,8 +142,22 @@ export async function POST(request: Request) {
       }),
     ]);
 
+    // Registrar o webhook DEPOIS de a conexão existir, e nunca antes: registrar primeiro
+    // deixaria, numa falha de gravação, uma assinatura viva na Drap apontando para cá sem
+    // nada aqui capaz de reconhecê-la.
+    //
+    // A falha não derruba a conexão — ela é dita. Sem webhook a plataforma continua
+    // operando a empresa, só volta a depender de consulta para saber de mudança; chamar
+    // isso de erro mandaria o usuário desfazer o que acabou de dar certo.
+    const webhook = await conectarWebhook(context, empresaId);
+
     return Response.json(
-      { connection: { id, externalCompanyId: empresaId, status: "active", origem } },
+      {
+        connection: { id, externalCompanyId: empresaId, status: "active", origem },
+        webhook: webhook.ok
+          ? { registrado: true }
+          : { registrado: false, codigo: webhook.codigo, motivo: webhook.motivo },
+      },
       { status: 201, headers: { "Cache-Control": "private, no-store" } },
     );
   });

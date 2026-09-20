@@ -115,6 +115,30 @@ export function getDrapWebhookCandidates() {
   return config.DRAP_WEBHOOK_SECRET ? [{ externalCompanyId: "", secret: config.DRAP_WEBHOOK_SECRET }] : [];
 }
 
+/**
+ * Os segredos com que a Drap pode ter assinado a entrega que acabou de chegar: os do
+ * ambiente mais os das empresas que registraram o webhook sozinhas ao conectar.
+ *
+ * Sem a parte do banco, o registro automático não serviria de nada: a assinatura chegaria
+ * correta e o receptor a recusaria com 401, porque só conheceria os segredos colados à
+ * mão no painel de publicação.
+ *
+ * O ambiente vem primeiro pela mesma razão de sempre — é a saída de emergência, e quem
+ * trocou um segredo lá espera que ele valha. Empresa que aparece nos dois lugares é
+ * conferida primeiro pelo do ambiente; como o receptor exige que exatamente um candidato
+ * confira, um segredo velho no banco não cria ambiguidade: ele simplesmente não confere.
+ *
+ * O `import` é dinâmico para o grafo estático deste módulo continuar sem banco.
+ */
+export async function getDrapWebhookCandidatesAsync() {
+  const doAmbiente = getDrapWebhookCandidates();
+  const { segredosDeWebhookGuardados } = await import("@/lib/server/drap-credenciais");
+  const doBanco = await segredosDeWebhookGuardados().catch(() => []);
+
+  const vistos = new Set(doAmbiente.map((c) => `${c.externalCompanyId}:${c.secret}`));
+  return [...doAmbiente, ...doBanco.filter((c) => !vistos.has(`${c.externalCompanyId}:${c.secret}`))];
+}
+
 export function isDrapConfigured() {
   const config = runtimeEnv();
   const hasTenantToken = Object.values(tenantConfigs()).some((entry) => Boolean(entry.apiToken));
