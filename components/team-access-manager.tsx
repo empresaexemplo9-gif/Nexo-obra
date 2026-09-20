@@ -22,9 +22,9 @@ import {
 
 export type TeamMember = { id: string; name: string; email: string; role: string; permissions: PermissionSet; weeklyCapacityMinutes: number };
 type Invitation = { id: string; email: string; role: string; permissions: PermissionSet; expiresAt: number; status: "pending" | "accepted" | "expired" | "revoked" };
-type Profile = "admin" | "manager" | "member" | "partner" | "service_provider" | "finance" | "accounting";
+type Profile = "admin" | "manager" | "member" | "partner" | "service_provider" | "finance" | "hr" | "accounting";
 
-const profiles: Profile[] = ["member", "manager", "partner", "service_provider", "finance", "accounting", "admin"];
+const profiles: Profile[] = ["member", "manager", "partner", "service_provider", "finance", "hr", "accounting", "admin"];
 const statusLabels = { pending: "Pendente", accepted: "Aceito", expired: "Expirado", revoked: "Revogado" };
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {

@@ -450,7 +450,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
     if (activeModule === "reminders") return <div className="space-y-5"><PageIntro module="reminders" /><RemindersWorkspace agenda={agenda} error={remindersError} reload={reloadReminders} mark={markReminder} members={members.map((member) => ({ id: member.id, name: member.name }))} /></div>;
     if (activeModule === "sheets") return <div className="space-y-5"><PageIntro module="sheets" /><WorksheetsWorkspace query={query} /></div>;
-    if (activeModule === "usage") return <div className="space-y-5"><PageIntro module="usage" /><UsageWorkspace query={query} /></div>;
+    if (activeModule === "usage") return <div className="space-y-5"><PageIntro module="usage" /><UsageWorkspace key={session.organization?.id} query={query} /></div>;
     if (activeModule === "portal") return <PortalManager key={session.organization?.id} canEdit={canEdit("portal")} canManage={canEdit("portal") && (session.member?.role === "owner" || session.member?.role === "superadmin" || (session.member?.role === "admin" && canEdit("team")))} canReadDiary={canView("diary")} />;
     return null;
   })();

@@ -38,6 +38,11 @@ export function podeAdministrarEmpresa(role: string | undefined): boolean {
   return role === "owner" || role === "admin" || role === PLATFORM_SUPERADMIN_ROLE;
 }
 
+// Ler o tempo da equipe não concede poder de administrar acessos.
+export function podeConsultarUsoDaEmpresa(role: string): boolean {
+  return ["owner", "admin", "finance", "hr"].includes(role);
+}
+
 export const accessProfileLabels: Record<string, string> = {
   superadmin: "Superadministrador da plataforma",
   owner: "Contratante · proprietário",
@@ -47,6 +52,7 @@ export const accessProfileLabels: Record<string, string> = {
   partner: "Parceiro",
   service_provider: "Prestador de serviço",
   finance: "Financeiro",
+  hr: "Recursos Humanos (RH)",
   accounting: "Contabilidade",
 };
 
@@ -78,6 +84,8 @@ export function permissionsForRole(role: string): PermissionSet {
   } else if (role === "finance") {
     for (const area of ["overview", "budgets", "finance", "files"] as PermissionModule[]) set(area, true, true);
     set("projects", true);
+  } else if (role === "hr") {
+    for (const area of ["overview", "team"] as PermissionModule[]) set(area, true);
   } else if (role === "accounting") {
     for (const area of ["overview", "budgets", "finance", "files"] as PermissionModule[]) set(area, true);
   }

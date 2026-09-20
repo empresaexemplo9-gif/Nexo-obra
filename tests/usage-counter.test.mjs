@@ -193,6 +193,31 @@ test("cada acesso vê o próprio histórico; o contratante vê a empresa; o supe
   assert.deepEqual([...new Set(plataforma.days.map((d) => d.organizationId))].sort(), [orgA, orgB].sort());
 });
 
+test("perfis de empresa respeitam hierarquia e isolamento também ao filtrar por usuário", async () => {
+  const now = Date.now();
+  for (const person of [subject(), subject({ subjectId: "colab", role: "member", memberId: "colab" }), subject({ organizationId: orgB, subjectId: "owner-b", memberId: orgB }), subject({ subjectId: "platform", subjectKind: "superadmin", role: "superadmin", memberId: null })]) {
+    await usage.recordUsageHeartbeat(db, person, now - 30_000);
+    await usage.recordUsageHeartbeat(db, person, now);
+  }
+  for (const role of ["admin", "finance", "hr", "manager", "member", "partner", "service_provider", "accounting"]) {
+    db.sqlite.prepare("UPDATE members SET role = ? WHERE id = 'colab'").run(role);
+    const response = await route.GET(as("colab", "colab@example.test"));
+    assert.equal(response.status, 200, role);
+    const report = await response.json();
+    const company = ["admin", "finance", "hr"].includes(role);
+    assert.equal(report.scope, company ? "organization" : "self", role);
+    assert.ok(report.days.every(d => d.organizationId === orgA && d.subjectId !== "platform"), role);
+    assert.deepEqual([...new Set(report.days.map(d => d.subjectId))].sort(), company ? ["colab", "owner"] : ["colab"], role);
+    const other = await route.GET(as("colab", "colab@example.test", orgA, "/api/usage?subjectId=owner"));
+    assert.equal(other.status, company ? 200 : 403, role);
+    const foreign = await route.GET(as("colab", "colab@example.test", orgA, `/api/usage?organizationId=${orgB}`));
+    assert.equal(foreign.status, 403, role);
+    const foreignSubject = await route.GET(as("colab", "colab@example.test", orgA, "/api/usage?subjectId=owner-b"));
+    if (company) assert.deepEqual((await foreignSubject.json()).days, [], role);
+    else assert.equal(foreignSubject.status, 403, role);
+  }
+});
+
 test("um acesso comum não consegue pedir o histórico de outra pessoa nem de outra empresa", async () => {
   const negado = await route.GET(as("colab", "colab@example.test", orgA, "/api/usage?subjectId=owner"));
   assert.equal(negado.status, 403);

@@ -128,7 +128,7 @@ export function closeStaleUsageSessions(db: D1Database, now = Date.now()) {
     .bind(now - USAGE_GAP_LIMIT_MS);
 }
 
-export type UsageQuery = { from: string; to: string; timeZone: string; organizationId?: string; subjectId?: string };
+export type UsageQuery = { from: string; to: string; timeZone: string; organizationId?: string; subjectId?: string; excludePlatformSubjects?: boolean };
 
 export function parseUsageRange(url: URL, timeZone: string, now = Date.now()) {
   const iso = /^\d{4}-\d{2}-\d{2}$/;
@@ -150,6 +150,7 @@ export async function usageReport(db: D1Database, query: UsageQuery) {
   const bindings: unknown[] = [query.from, query.to];
   if (query.organizationId) { bindings.push(query.organizationId); filters.push(`d.organization_id = ?${bindings.length}`); }
   if (query.subjectId) { bindings.push(query.subjectId); filters.push(`d.subject_id = ?${bindings.length}`); }
+  if (query.excludePlatformSubjects) filters.push("d.subject_kind NOT IN ('superadmin', 'maintenance')");
 
   const days = await db.prepare(
     `SELECT d.organization_id, o.name AS organization_name, d.subject_id, d.day, d.subject_kind,
@@ -168,6 +169,7 @@ export async function usageReport(db: D1Database, query: UsageQuery) {
   const actionBindings: unknown[] = [periodStart, periodEnd];
   if (query.organizationId) { actionBindings.push(query.organizationId); actionFilters.push(`a.organization_id = ?${actionBindings.length}`); }
   if (query.subjectId) { actionBindings.push(query.subjectId); actionFilters.push(`a.actor_user_id = ?${actionBindings.length}`); }
+  if (query.excludePlatformSubjects) actionFilters.push("EXISTS (SELECT 1 FROM usage_days u WHERE u.organization_id = a.organization_id AND u.subject_id = a.actor_user_id AND u.subject_kind NOT IN ('superadmin', 'maintenance'))");
   const actions = await db.prepare(
     `SELECT a.organization_id, a.actor_user_id, COUNT(*) AS total
      FROM audit_events a WHERE ${actionFilters.join(" AND ")}

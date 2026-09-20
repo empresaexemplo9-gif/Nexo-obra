@@ -3,7 +3,6 @@ import { z } from "zod";
 import {
   ApiError,
   apiRoute,
-  canManageOrganizationAccess,
   isPlatformSuperAdmin,
   jsonBody,
   requireOrganizationContext,
@@ -11,6 +10,7 @@ import {
   type OrganizationContext,
 } from "@/lib/server/backend";
 import { clientAccess } from "@/lib/server/portal";
+import { podeConsultarUsoDaEmpresa } from "@/lib/permissions";
 import {
   closeStaleUsageSessions,
   parseUsageRange,
@@ -69,14 +69,14 @@ export async function POST(request: Request) {
 }
 
 // Quem vê o quê: cada acesso vê o próprio histórico; o contratante e o administrador
-// veem toda a empresa em que estão; o superadministrador vê qualquer empresa e todos.
+// e o Financeiro/RH veem sua empresa; o superadministrador tem a visão da plataforma.
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
     const url = new URL(request.url);
     const range = parseUsageRange(url, context.organization.timezone);
     const platform = isPlatformSuperAdmin(context);
-    const wholeCompany = platform || canManageOrganizationAccess(context);
+    const wholeCompany = platform || podeConsultarUsoDaEmpresa(context.member.role);
     const requestedOrganization = url.searchParams.get("organizationId");
     const requestedSubject = url.searchParams.get("subjectId");
 
@@ -93,6 +93,7 @@ export async function GET(request: Request) {
       timeZone: context.organization.timezone,
       organizationId: platform ? requestedOrganization ?? undefined : context.organization.id,
       subjectId: wholeCompany ? requestedSubject ?? undefined : context.member.externalUserId,
+      excludePlatformSubjects: !platform,
     });
 
     return Response.json({

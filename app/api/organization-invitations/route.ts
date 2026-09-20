@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 const invitationSchema = z.object({
   email: z.string().trim().email().max(160),
-  role: z.enum(["admin", "manager", "member", "partner", "service_provider", "finance", "accounting"]),
+  role: z.enum(["admin", "manager", "member", "partner", "service_provider", "finance", "hr", "accounting"]),
   permissions: z.record(z.string(), z.object({ view: z.boolean(), edit: z.boolean() })),
   expiresInDays: z.number().int().min(1).max(30).default(7),
 });
