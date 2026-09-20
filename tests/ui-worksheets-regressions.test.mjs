@@ -32,6 +32,44 @@ const settle = async () => {
   }
 };
 
+test("automação mostra prévia, aplica na seleção e permite desfazer e refazer", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { A1: "  obra   sul  ", B1: "preservar" } } });
+  const choose = container.querySelector('[aria-label="Adicionar ação"]');
+  await act(async () => { choose.value = "trim"; choose.dispatchEvent(new window.Event("change", { bubbles: true })); });
+  await act(async () => { choose.value = "upper"; choose.dispatchEvent(new window.Event("change", { bubbles: true })); });
+  await act(async () => { findByText(container, /Prévia da automação/, "button").click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "  obra   sul  ");
+  assert.match(textOf(container), /OBRA SUL/);
+  await act(async () => { findByText(container, /Aplicar alterações/, "button").click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "OBRA SUL");
+  assert.equal(container.querySelector("#cell-B1").textContent, "preservar");
+  await act(async () => { findByText(container, /^Desfazer$/, "button").click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "  obra   sul  ");
+  await act(async () => { findByText(container, /^Refazer$/, "button").click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "OBRA SUL");
+});
+
+test("colar tabela expande grade, recalcula e desfaz em uma operação", async () => {
+  await openWorksheet();
+  const paste = new window.Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", { value: { getData: () => "10\t20\n30\t=SOMA(A1:B1)" } });
+  await act(async () => { container.querySelector("#cell-A1").dispatchEvent(paste); });
+  assert.equal(paste.defaultPrevented, true);
+  assert.equal(container.querySelector("#cell-B2").textContent, "30");
+  await act(async () => { findByText(container, /^Desfazer$/, "button").click(); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "");
+  assert.equal(container.querySelector("#cell-B2").textContent, "");
+});
+
+test("formatação acompanha inserção de coluna e aparece no valor exibido", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { B1: "1250" }, formats: { B: "moeda" }, bold: ["B1"], widths: { B: 220 } } });
+  assert.match(container.querySelector("#cell-B1").textContent, /1.250,00/);
+  await act(async () => { findByText(container, /Inserir coluna/, "button").click(); });
+  assert.match(container.querySelector("#cell-C1").textContent, /R\$/);
+  assert.equal(container.querySelector("#cell-C1").parentElement.style.fontWeight, "700");
+  assert.equal(container.querySelector("#cell-C1").parentElement.style.minWidth, "220px");
+});
+
 function worksheet(overrides = {}) {
   return {
     id: "w1", kind: "sheet", name: "Teste", columns: 3, rows: 3,

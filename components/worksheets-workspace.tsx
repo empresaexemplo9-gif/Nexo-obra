@@ -24,6 +24,9 @@ import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
+import { formattedCell, parseTable, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
+import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
 type WorksheetSummary = {
@@ -33,6 +36,7 @@ type WorksheetSummary = {
 type WorksheetContent = {
   cells: SheetCells; body: string; widths: Record<string, number>;
   formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
+  recipes?: WorksheetRecipe[];
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
@@ -75,7 +79,11 @@ type AxisSelection = { kind: SheetAxis; index: number };
 
 function Grid({
   cells, columns, rows, computed, active, selected, axis, onActive, onEstender, onAxis, onChange,
+  formats, bold, widths, filter, readOnly, onPasteTable, onCopyCells,
 }: {
+  formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
+  onPasteTable: (table: string[][]) => void;
+  onCopyCells: () => string;
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
   active: string; selected: Set<string>; axis: AxisSelection | null;
   onActive: (key: string, additive?: boolean) => void;
@@ -116,7 +124,16 @@ function Grid({
 
   // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
   // o gesto já existia e produzia um efeito feio e sem função nenhuma.
-  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }}>
+  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
+    if (editing) return;
+    event.preventDefault(); event.clipboardData.setData("text/plain", onCopyCells());
+  }} onPaste={event => {
+    if (readOnly || editing) return;
+    const text = event.clipboardData.getData("text/plain");
+    if (!text) return;
+    event.preventDefault();
+    try { onPasteTable(parseTable(text, "\t")); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível colar."); }
+  }}>
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
@@ -135,7 +152,7 @@ function Grid({
       </thead>
       <tbody>
         {Array.from({ length: rows }, (_, row) => (
-          <tr key={row}>
+          <tr key={row} hidden={!!filter.trim() && !Array.from({ length: columns }, (_, column) => formattedCell(computed[cellKey({ column, row })], formats[columnName(column)])).join(" ").toLocaleLowerCase("pt-BR").includes(filter.trim().toLocaleLowerCase("pt-BR"))}>
             <th className="sticky left-0 z-10 border border-hoikos-200 p-0 text-xs font-medium">
               <button
                 type="button" onClick={() => onAxis("row", row)}
@@ -151,7 +168,7 @@ function Grid({
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
               const isSelected = selected.has(key);
-              return <td key={key} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
+              return <td key={key} style={{ minWidth: widths[columnName(column)] ?? 120, fontWeight: bold.includes(key) ? 700 : undefined }} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -198,8 +215,9 @@ function Grid({
                       if (event.shiftKey) { onEstender(key); return; }
                       onActive(key, event.ctrlKey || event.metaKey);
                     }}
-                    onDoubleClick={() => { setDraft(cells[key] ?? ""); setEditing(key); }}
+                    onDoubleClick={() => { if (!readOnly) { setDraft(cells[key] ?? ""); setEditing(key); } }}
                     onKeyDown={(event) => {
+                      if (readOnly && !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(event.key)) return;
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
                       if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
                       // Com Shift a seta ESTENDE a faixa em vez de mover o cursor. É o que
@@ -218,7 +236,7 @@ function Grid({
                       }
                     }}
                     className={`h-8 w-full min-w-[7.5rem] truncate px-2 text-left ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""}`}
-                  >{result?.display ?? ""}</button>
+                  >{formattedCell(result, formats[columnName(column)])}</button>
                 )}
               </td>;
             })}
@@ -231,7 +249,9 @@ function Grid({
 
 export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [list, setList] = useState<WorksheetSummary[]>([]);
-  const [current, setCurrent] = useState<Worksheet | null>(null);
+  const history = useWorksheetHistory<Worksheet>();
+  const { current, set: setCurrent } = history;
+  const [rowFilter, setRowFilter] = useState("");
   const [access, setAccess] = useState<Access | null>(null);
   const [canGovern, setCanGovern] = useState(false);
   const [sources, setSources] = useState<DataSource[]>([]);
@@ -288,7 +308,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setAvulsas([]);
     setAxis(null);
     setDirty(false);
-  }, []);
+    setRowFilter("");
+  }, [setCurrent]);
 
   const readOnly = access ? !access.canEdit : false;
 
@@ -386,8 +407,25 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }, [computed, current, active]);
 
   function updateContent(change: (content: WorksheetContent) => WorksheetContent) {
+    if (readOnly) return;
     setCurrent((sheet) => (sheet ? { ...sheet, content: change(sheet.content) } : sheet));
     setDirty(true);
+  }
+
+  function insertTable(table: string[][]) {
+    if (!current || readOnly) return;
+    try {
+      const result = placeTable(current.content.cells, active, table);
+      setCurrent({ ...current, columns: Math.max(current.columns, result.columns), rows: Math.max(current.rows, result.rows), content: { ...current.content, cells: result.cells } });
+      setDirty(true);
+      toast.success(`${table.length} linha(s) inseridas. Use Desfazer para reverter.`);
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível inserir."); }
+  }
+
+  function travelHistory(direction: "undo" | "redo") {
+    if (readOnly) return;
+    history[direction](); setDirty(true); setActive("A1"); setAxis(null);
+    setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]);
   }
 
   // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
@@ -420,7 +458,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         : operation === "delete-row" ? deleteRow(cells, address.row)
         : operation === "insert-column" ? insertColumn(cells, address.column)
         : operation === "delete-column" ? deleteColumn(cells, address.column)
-        : fillDown(cells, active, sheet.rows - 1);
+        : fillDown(cells, selected.length > 1 && faixa ? cellKey({ column: address.column, row: Math.min(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) }) : active,
+          selected.length > 1 && faixa ? Math.max(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) : sheet.rows - 1);
       // Os parâmetros guardam posições (letra de coluna, índice de linha). Sem deslocá-los
       // junto, a coluna marcada como "Custo" passa a apontar para a vizinha e a leitura
       // financeira lê a coluna errada, sem erro nenhum na tela.
@@ -429,11 +468,25 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const passo = operation === "insert-row" || operation === "insert-column" ? 1 : -1;
       const analysis = operation === "fill-down" ? sheet.content.analysis
         : moveAnalysis(sheet.content.analysis, eixo, alvo, passo);
+      const boldCells = Object.fromEntries(sheet.content.bold.map(key => [key, "1"]));
+      const bold = operation === "fill-down" ? sheet.content.bold : Object.keys(
+        operation === "insert-row" ? insertRow(boldCells, address.row) : operation === "delete-row" ? deleteRow(boldCells, address.row)
+        : operation === "insert-column" ? insertColumn(boldCells, address.column) : deleteColumn(boldCells, address.column));
+      const moveColumns = <T,>(values: Record<string, T>) => {
+        if (eixo !== "column" || operation === "fill-down") return values;
+        const output: Record<string, T> = {};
+        for (const [key, value] of Object.entries(values)) {
+          const index = parseCellKey(`${key}1`)?.column;
+          if (index === undefined || (passo < 0 && index === alvo)) continue;
+          output[columnName(index < alvo ? index : index + passo)] = value;
+        }
+        return output;
+      };
       return {
         ...sheet,
         rows: nextRows,
         columns: nextColumns,
-        content: { ...sheet.content, cells: next, analysis },
+        content: { ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths) },
       };
     });
     if (operation === "delete-row" || operation === "delete-column") {
@@ -584,13 +637,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       const result = await api<{ headers: string[]; rows: Array<Array<string | number>> }>(
         `/api/worksheets/data?source=${sourceId}&startLine=${anchor.row + 1}`);
       if (!result.rows.length) { toast.info("Não há dados reais para essa origem ainda."); return; }
+      if (anchor.column + result.headers.length > SHEET_MAX_COLUMNS || anchor.row + result.rows.length + 1 > SHEET_MAX_ROWS) {
+        toast.error("Os dados não cabem a partir desta célula. Escolha uma célula mais acima ou à esquerda."); return;
+      }
       setCurrent((sheet) => {
         if (!sheet) return sheet;
         const cells = { ...sheet.content.cells };
         result.headers.forEach((header, column) => { cells[cellKey({ column: anchor.column + column, row: anchor.row })] = header; });
         result.rows.forEach((row, line) => row.forEach((value, column) => {
           const key = cellKey({ column: anchor.column + column, row: anchor.row + line + 1 });
-          cells[key] = typeof value === "number" ? String(value) : String(value ?? "");
+          cells[key] = typeof value === "number" ? String(value).replace(".", ",") : String(value ?? "");
         }));
         const widest = anchor.column + result.headers.length;
         const tallest = anchor.row + result.rows.length + 1;
@@ -645,7 +701,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   if (loading) return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></CardContent></Card>;
 
-  return <div className="space-y-5">
+  return <fieldset disabled={saving} className="min-w-0 space-y-5 border-0 p-0">
     <Card className="workspace-card">
       <CardHeader className="gap-3">
         <CardTitle className="flex items-center gap-2 text-base"><Sigma className="size-4 text-hoikos-600" />Planilha e documento</CardTitle>
@@ -760,6 +816,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         {current.kind === "document" ? <DocumentEditor
           body={current.content.body}
           cells={current.content.cells}
+          readOnly={readOnly}
           onChange={(body) => { updateContent((content) => ({ ...content, body })); }}
         /> : (
           <Tabs defaultValue="grade">
@@ -770,6 +827,37 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
             </TabsList>
 
             <TabsContent value="grade" className="mt-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input aria-label="Filtrar linhas" placeholder="Filtrar linhas por conteúdo…" value={rowFilter} onChange={event => setRowFilter(event.target.value)} className="max-w-sm" />
+                {rowFilter && <Button size="sm" variant="ghost" onClick={() => setRowFilter("")}>Limpar filtro</Button>}
+                {!readOnly && <>
+                  <Button size="sm" variant="outline" disabled={!history.canUndo} onClick={() => travelHistory("undo")}>Desfazer</Button>
+                  <Button size="sm" variant="outline" disabled={!history.canRedo} onClick={() => travelHistory("redo")}>Refazer</Button>
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const chosen = chavesDoResumo;
+                    updateContent(content => {
+                      const bold = new Set(content.bold); const remove = chosen.every(key => bold.has(key));
+                      chosen.forEach(key => { if (remove) bold.delete(key); else bold.add(key); });
+                      if (bold.size > 5000) { toast.error("Selecione até 5.000 células para negrito."); return content; }
+                      return { ...content, bold: [...bold] };
+                    });
+                  }}>Negrito</Button>
+                  <NativeSelect aria-label="Formato das colunas selecionadas" value="" onChange={event => {
+                    const format = event.target.value;
+                    updateContent(content => {
+                      const formats = { ...content.formats };
+                      chavesDoResumo.forEach(key => { const address = parseCellKey(key); if (address) formats[columnName(address.column)] = format; });
+                      return { ...content, formats };
+                    });
+                  }}>
+                    <option value="">Formato da coluna…</option><option value="texto">Geral</option><option value="numero">Número (2 casas)</option><option value="moeda">Moeda (R$)</option><option value="percentual">Percentual (%)</option>
+                  </NativeSelect>
+                </>}
+              </div>
+              {rowFilter && <p className="text-xs text-hoikos-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
+              {!readOnly && <WorksheetToolsPanel key={current.id} cells={current.content.cells} keys={chavesDoResumo} recipes={current.content.recipes ?? []}
+                onCells={cells => updateContent(content => ({ ...content, cells }))} onTable={insertTable}
+                onRecipes={recipes => updateContent(content => ({ ...content, recipes }))} />}
               {readOnly ? <p className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
@@ -786,6 +874,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 </div>
               )}
               <Grid
+                formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
+                onPasteTable={insertTable}
+                onCopyCells={() => selectionToTsv(current.content.cells, chavesDoResumo)}
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
@@ -832,6 +923,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Arraste com o mouse ou use
                   Shift + clique e Shift + setas para marcar um intervalo. Clique no cabeçalho para selecionar a linha
                   ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células avulsas.
+                  Ctrl + C copia os valores selecionados; Ctrl + V cola tabelas do Excel ou Google Planilhas a partir da célula ativa.
+                  Referências como $A$1 ficam fixas ao preencher para baixo. Selecione um intervalo para limitar o preenchimento.
                 </p>
               </details>
             </TabsContent>
@@ -849,11 +942,11 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         )}
       </CardContent>
     </Card>}
-  </div>;
+  </fieldset>;
 }
 
 // O documento aceita os mesmos cálculos: {{=SOMA(A1:A9)}} vira o número já somado.
-function DocumentEditor({ body, cells, onChange }: { body: string; cells: SheetCells; onChange: (body: string) => void }) {
+function DocumentEditor({ body, cells, onChange, readOnly }: { body: string; cells: SheetCells; onChange: (body: string) => void; readOnly: boolean }) {
   const preview = useMemo(() => {
     const computed = evaluateSheet(cells);
     return body.replace(/\{\{(.+?)\}\}/g, (_match, expression: string) => {
@@ -869,7 +962,7 @@ function DocumentEditor({ body, cells, onChange }: { body: string; cells: SheetC
     <div>
       <label className="mb-2 block text-sm font-medium" htmlFor="document-body">Texto</label>
       <Textarea
-        id="document-body" value={body} onChange={(event) => onChange(event.target.value)}
+        id="document-body" value={body} readOnly={readOnly} onChange={(event) => onChange(event.target.value)}
         placeholder={"Proposta comercial\n\nTotal dos serviços: {{=SOMA(A1:A20)}}\nValor por m²: {{=ARRED(B1/B2;2)}}"}
         className="min-h-[46vh] font-mono text-[13px]"
       />

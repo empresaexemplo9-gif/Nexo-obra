@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       const template = templateById(data.templateId);
       if (!template) throw new ApiError(404, "template_not_found", "Modelo não encontrado.");
       const built = buildTemplateContent(template);
-      content = { cells: built.cells, body: built.body, widths: built.widths, formats: built.formats, bold: built.bold, analysis: built.analysis };
+      content = { cells: built.cells, body: built.body, widths: built.widths, formats: built.formats, bold: built.bold, analysis: built.analysis, recipes: [] };
       columns = built.columns;
       rows = built.rows;
     }
