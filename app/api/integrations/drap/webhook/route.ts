@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 
 import { getDatabase, getDb } from "@/db";
 import { integrationConnections, integrationEvents } from "@/db/schema";
-import { getDrapWebhookCandidates } from "@/lib/integrations/drap";
+import { getDrapWebhookCandidatesAsync } from "@/lib/integrations/drap";
 import { processDrapEvent } from "@/lib/server/drap-events";
 
 const MAX_WEBHOOK_BYTES = 256 * 1024;
@@ -64,7 +64,9 @@ async function boundedText(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const candidates = getDrapWebhookCandidates();
+  // Inclui os segredos das empresas que registraram o webhook sozinhas ao conectar, não
+  // só os colados à mão no painel de publicação.
+  const candidates = await getDrapWebhookCandidatesAsync();
   if (candidates.length === 0) return Response.json({ error: "Webhook secret is not configured" }, { status: 503 });
 
   const signature = request.headers.get("x-drap-signature");

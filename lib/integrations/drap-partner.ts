@@ -1,4 +1,5 @@
 import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
+import { ESCOPOS_DA_PLATAFORMA } from "@/lib/server/drap-webhook-registro";
 
 // Cliente da API de PARCEIRO da Drap — a que cria empresa e emite a chave dela.
 //
@@ -106,7 +107,10 @@ export async function provisionarEmpresaNaDrap(entrada: {
     documento_tipo: entrada.documentoTipo,
     documento_numero: entrada.documentoNumero,
     external_ref: entrada.externalRef,
-    ...(entrada.escopos ? { escopos: entrada.escopos } : {}),
+    // Pedidos sempre, não deixados no padrão da Drap: o padrão dela não inclui
+    // `webhooks:*`, e sem esse escopo a empresa nasce sem poder registrar o próprio
+    // webhook — que é o que faz a plataforma saber de mudança sem ficar perguntando.
+    escopos: entrada.escopos ?? [...ESCOPOS_DA_PLATAFORMA],
   }, entrada.idempotencyKey);
 
   const empresa = (dados.empresa ?? {}) as Record<string, unknown>;
@@ -135,7 +139,7 @@ export async function vincularEmpresaNaDrap(entrada: {
   const dados = await chamar("/api/partner/v1/vinculos", {
     codigo: entrada.codigo,
     external_ref: entrada.externalRef,
-    ...(entrada.escopos ? { escopos: entrada.escopos } : {}),
+    escopos: entrada.escopos ?? [...ESCOPOS_DA_PLATAFORMA],
   }, entrada.idempotencyKey);
 
   const empresa = (dados.empresa ?? {}) as Record<string, unknown>;
@@ -151,7 +155,7 @@ export async function vincularEmpresaNaDrap(entrada: {
  *  não abre mais — chave perdida não pode obrigar a recriar a empresa. */
 export async function emitirChaveNaDrap(tenantId: string, escopos?: string[]): Promise<string> {
   const dados = await chamar(`/api/partner/v1/empresas/${encodeURIComponent(tenantId)}/chaves`, {
-    ...(escopos ? { escopos } : {}),
+    escopos: escopos ?? [...ESCOPOS_DA_PLATAFORMA],
   });
   const chave = texto(dados.chave, "");
   if (!chave) throw new DrapPartnerError(502, "resposta-sem-chave", "A Drap respondeu sem a chave.");

@@ -21,6 +21,8 @@ import { Input } from "@/components/ui/input";
 
 type Modo = "provisionar" | "vincular";
 
+type Resposta = { webhook?: { registrado: boolean; motivo?: string } };
+
 /** A mensagem de erro da Drap é acionável (documento já cadastrado, código vencido,
  *  módulo faltando); é ela que sobe, não um texto genérico. */
 async function conectarNoServidor(corpo: unknown) {
@@ -30,7 +32,7 @@ async function conectarNoServidor(corpo: unknown) {
     body: JSON.stringify(corpo),
     cache: "no-store",
   });
-  const dados = await resposta.json().catch(() => ({})) as { error?: string };
+  const dados = await resposta.json().catch(() => ({})) as Resposta & { error?: string };
   if (!resposta.ok) throw new Error(dados.error ?? "Não foi possível conectar.");
   return dados;
 }
@@ -54,8 +56,19 @@ export function DrapConectar({ onConectado }: { onConectado: () => void }) {
           }
         : { modo, codigo: String(dados.get("codigo") ?? "").trim().toUpperCase() };
 
-      await conectarNoServidor(corpo);
-      toast.success(modo === "provisionar" ? "Empresa criada na Drap e conectada" : "Empresa vinculada");
+      const resposta = await conectarNoServidor(corpo);
+      const conectada = modo === "provisionar" ? "Empresa criada na Drap e conectada" : "Empresa vinculada";
+
+      // Conectar também liga os avisos automáticos. Quando essa parte falha, a conexão
+      // vale — mas dizer só "conectada" faria a tela afirmar algo que não aconteceu, e o
+      // usuário só descobriria ao estranhar que nada atualiza sozinho.
+      if (resposta.webhook && !resposta.webhook.registrado) {
+        toast.warning(`${conectada}, mas sem avisos automáticos`, {
+          description: resposta.webhook.motivo ?? "Ligue os avisos em Conexão DRAP.",
+        });
+      } else {
+        toast.success(conectada);
+      }
       onConectado();
     } catch (causa) {
       // A mensagem vem da Drap e é acionável: documento já cadastrado, código vencido,

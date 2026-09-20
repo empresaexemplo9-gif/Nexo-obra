@@ -171,9 +171,30 @@ empresa no banco e é **separada** da `MEDIA_ENCRYPTION_KEY` das fotos de propó
 propósitos diferentes, prazos de rotação diferentes. Trocar esta chave torna ilegíveis as
 credenciais já guardadas — as empresas precisam reconectar.
 
+### Avisos automáticos
+
+Conectar uma empresa também registra, sozinho, o webhook dela na Drap. Sem isso o
+Financeiro só descobria lançamento novo quando alguém abria a tela, e ligar o aviso exigia
+um humano colar URL e copiar segredo no painel da Drap, empresa por empresa — o mesmo
+"segundo login adiado" que o provisionamento existe para eliminar.
+
+Para isso funcionar, a instalação precisa saber o próprio endereço público: `HOIKOS_PUBLIC_URL`,
+ou o domínio de produção que a Vercel preenche sozinha. O endereço **não** é derivado do
+cabeçalho `Host` da requisição — esse cabeçalho vem do cliente, e aceitá-lo deixaria quem
+conecta escolher para onde o financeiro da empresa é enviado.
+
+A assinatura cobre só os eventos que a plataforma trata (`lancamento.*` e `cobranca.*`).
+O segredo devolvido pela Drap aparece uma vez e vai cifrado para o banco, junto da chave
+da empresa; é com ele que o receptor confere o `X-DRAP-Signature` de cada entrega.
+
+Quando o registro falha — Drap fora do ar, endereço público ausente, chave sem o escopo
+`webhooks:*` — a conexão continua válida e a tela diz que a empresa ficou sem avisos
+automáticos, com um botão para tentar de novo. Conexão parcial nunca é apresentada como
+completa.
+
 ### Importante
 
-A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros, categorias e resumo financeiro estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O que ainda não existe como endpoint público: provisionamento de empresa sem login humano.
+A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, parceiros, categorias, resumo financeiro, cobranças e webhooks estão confirmados, com autenticação por chave de tenant, escopos por recurso e webhooks assinados. O provisionamento de empresa sem login humano existe na API de parceiro da Drap (`/api/partner/v1`).
 
 Por isso:
 
