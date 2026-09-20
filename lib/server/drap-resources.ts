@@ -28,11 +28,25 @@ export type DrapResourceProbe = {
   retryAfter: string | null;
 };
 
+/**
+ * O que o proxy genérico pode ESCREVER na Drap.
+ *
+ * `nfse` saiu daqui. O proxy encaminha o corpo que vier do navegador, com a
+ * `Idempotency-Key` escolhida por ele e sem validação de campo fiscal nenhuma — desenho
+ * aceitável para recurso que a plataforma ainda vai descobrir, inadmissível para emissão
+ * de documento fiscal. A Drap não expõe NFS-e na API pública hoje (`/api/v1` tem
+ * categorias, cobrancas, lancamentos, parceiros, resumo e webhooks, e só), então o caminho
+ * está morto; no dia em que existir, ele nasceria como uma máquina de emitir nota em nome
+ * do cliente com payload de quem estiver logado.
+ *
+ * Nota autorizada não se apaga. Quando a emissão vier, vem por rota própria, com Zod na
+ * borda, chave de idempotência derivada no servidor e auditoria — não por aqui.
+ * Leitura continua permitida: descobrir e consultar nota não emite nada.
+ */
 const WRITABLE_RESOURCES = new Set<DrapResource>([
   "lancamentos",
   "parceiros",
   "categorias",
-  "nfse",
   "cobrancas",
   "orcamentos",
   "contas-bancarias",

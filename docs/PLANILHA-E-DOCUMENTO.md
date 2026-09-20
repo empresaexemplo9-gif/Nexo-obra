@@ -61,11 +61,28 @@ sobrescrever em silêncio o trabalho de outra pessoa.
   Orçamentos, a origem nem é oferecida, e pedir direto responde `403`.
 - Criação, alteração e exclusão entram na auditoria da empresa.
 
+## Seleção e barra de resumo
+
+Arraste com o mouse, use `Shift` + clique ou `Shift` + setas para marcar um intervalo.
+`Ctrl` + clique (ou `⌘` + clique) continua somando células avulsas, para o caso espalhado
+que o retângulo não cobre. No toque o arrasto rola a grade — que é o gesto esperado no
+celular e o único jeito de alcançar as colunas da direita numa tela de 320 px.
+
+A barra abaixo da grade responde cinco perguntas sobre o que está marcado: quantas células
+estão **preenchidas**, a **soma**, a **média**, o **mínimo** e o **máximo**. Células com
+erro são contadas à parte e ficam fora das contas — tratar erro como zero é exatamente o
+defeito que o motor deixou de ter. Quando não há número na seleção a barra diz isso, em
+vez de exibir `Soma 0`: zero se lê como zero de verdade.
+
+Com uma célula só marcada, a barra mostra o **total da coluna** — o valor da célula já está
+na barra de fórmulas logo acima, e repeti-lo custava justamente a leitura que falta.
+
 ## Seleção de linha e coluna
 
-Clicar no cabeçalho seleciona a linha ou a coluna inteira: as células ficam destacadas, o
-rodapé passa a mostrar o total do que está selecionado e o cursor para na primeira célula
-livre do eixo, que é onde o total costuma entrar. Com a linha selecionada, `SOMA` e as
+Clicar no cabeçalho seleciona a linha ou a coluna inteira: as células ficam destacadas, a
+barra de resumo passa a falar do eixo escolhido e o cursor para na primeira célula
+livre do eixo, que é onde o total costuma entrar. O total do eixo **não inclui a linha de
+total** marcada pelo modelo, senão o número apareceria dobrado. Com a linha selecionada, `SOMA` e as
 demais funções de intervalo montam uma faixa horizontal (`SOMA(A5:D5)`); com a coluna,
 vertical (`SOMA(A1:A4)`). O intervalo sempre termina antes do cursor, para a fórmula não se
 incluir e virar `#CIRCULAR!`. Sem nada selecionado vale a coluna do cursor.
@@ -87,3 +104,21 @@ descrita em [Saúde financeira](SAUDE-FINANCEIRA.md).
 São 52 colunas e 500 linhas por planilha, e no máximo 20 mil células preenchidas. Isso não
 é um substituto do Excel: é a superfície de cálculo sobre os dados reais da plataforma,
 para encurtar o caminho entre o dado e o total.
+
+
+## Números digitados
+
+O ponto separa **milhar** quando não há vírgula e os grupos têm três dígitos, como no Excel
+em português: `1.500` vale mil e quinhentos, `12.000` vale doze mil. Com vírgula, ela é a
+casa decimal: `1.234,56`. `1234.56` continua valendo mil duzentos e trinta e quatro e
+cinquenta e seis — é a forma que a inserção de dados reais produz.
+
+## Erro em fórmula
+
+Erro contamina quem depende dele. Se `E3` vale `#DIV/0!`, então `F3 = D3*E3` também vale
+`#DIV/0!`, e o total da coluna igual. Antes a célula com erro valia zero para quem a
+referenciava, e o total do orçamento fechava como se estivesse certo, com uma parcela
+faltando.
+
+Para seguir mesmo assim, diga isso explicitamente: `=SEERRO(PROCV(...);0)`. `SEERRO` não
+engole `#CIRCULAR!` — alternativa não desfaz um ciclo, só o esconderia.
