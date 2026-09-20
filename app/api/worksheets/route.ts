@@ -9,6 +9,7 @@ import {
 } from "@/lib/server/backend";
 import { worksheetResponse, worksheetSchema, type WorksheetRow } from "@/lib/worksheets";
 import { buildTemplateContent, templateById } from "@/lib/worksheet-templates";
+import { enforceWorksheetValidation } from "@/lib/server/worksheet-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
       columns = built.columns;
       rows = built.rows;
     }
+    enforceWorksheetValidation(content);
     const id = crypto.randomUUID();
     const now = Date.now();
     await context.db.batch([

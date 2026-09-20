@@ -100,6 +100,46 @@ async function openWorksheet(overrides = {}, extraRoutes = {}) {
   return calls;
 }
 
+test("regras salvas colorem células, mostram opções e bloqueiam salvamento inválido", async () => {
+  const content = { ...worksheet().content, cells: { A1: "Fora", B1: "=2+3" }, advanced: {
+    validations: [{ range: "A1", kind: "list", options: ["Sim", "Não"], allowBlank: false }],
+    conditions: [{ range: "B1", kind: "greater", value: "4", color: "green" }], views: [],
+  } };
+  const calls = await openWorksheet({ content });
+  assert.match(textOf(container), /1 célula\(s\) inválida/);
+  assert.equal(container.querySelector("#cell-B1").parentElement.style.backgroundColor, "rgb(220, 252, 231)");
+  assert.ok(container.querySelector('[aria-label="Opções para A1"]'));
+  await act(async () => { findByText(container, /Salvar/, "button").click(); });
+  assert.equal(calls.some(call => call.method === "PATCH"), false);
+  const options = container.querySelector('[aria-label="Opções para A1"]');
+  await act(async () => { options.value = "Sim"; options.dispatchEvent(new window.Event("change", { bubbles: true })); });
+  assert.equal(container.querySelector("#cell-A1").textContent, "Sim");
+  assert.doesNotMatch(textOf(container), /1 célula\(s\) inválida/);
+  await act(async () => { findByText(container, /Salvar/, "button").click(); });
+  assert.equal(calls.find(call => call.method === "PATCH").body.content.advanced.validations[0].kind, "list");
+});
+
+test("resumo reage aos dados e configurações participam do desfazer", async () => {
+  const content = { ...worksheet().content, cells: { A1: "Setor", B1: "Custo", A2: "Obra", B2: "-20", A3: "Obra", B3: "30" }, advanced: { validations: [], conditions: [], views: [{ name: "Custo por setor", range: "A1:B3", groupColumn: 0, valueColumn: 1, aggregation: "sum", chart: "bar" }] } };
+  await openWorksheet({ content });
+  const chart = container.querySelector('svg[role="img"]'); assert.ok(chart);
+  assert.match(chart.textContent, /Obra: 10/);
+  await act(async () => { container.querySelector('[aria-label="Excluir resumo Custo por setor"]').click(); });
+  assert.equal(container.querySelector('svg[role="img"]'), null);
+  await act(async () => { container.querySelector('[aria-label^="Desfazer"]').click(); });
+  assert.ok(container.querySelector('svg[role="img"]'));
+});
+
+test("acesso de leitura mostra resumos sem expor edição nem importação XLSX", async () => {
+  const current = worksheet({ content: { ...worksheet().content, cells: { A1: "Setor", B1: "Custo", A2: "Obra", B2: "5" }, advanced: { validations: [], conditions: [], views: [{ name: "Custo", range: "A1:B2", groupColumn: 0, valueColumn: 1, aggregation: "sum", chart: "table" }] } } });
+  await openWorksheet(current, { "/api/worksheets/w1": { worksheet: current, access: { canView: true, canEdit: false, canGovern: false, level: "view" } } });
+  assert.match(textOf(container), /Custo/);
+  assert.equal(container.querySelector('[aria-label="Importar arquivo XLSX"]'), null);
+  assert.equal(container.querySelector('[aria-label="Tipo de validação"]'), null);
+  assert.equal(container.querySelector('[aria-label="Excluir resumo Custo"]'), null);
+  assert.ok(findByText(container, /Baixar XLSX salvo/, "button"));
+});
+
 test("uma tecla inicia a edição uma única vez", async () => {
   await openWorksheet();
   const cell = container.querySelector("#cell-A1");

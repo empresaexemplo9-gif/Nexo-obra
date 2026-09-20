@@ -39,6 +39,7 @@ class D1Local {
 
 const list = await vite.ssrLoadModule("/app/api/worksheets/route.ts");
 const item = await vite.ssrLoadModule("/app/api/worksheets/[worksheetId]/route.ts");
+const xlsx = await vite.ssrLoadModule("/app/api/worksheets/[worksheetId]/xlsx/route.ts");
 const data = await vite.ssrLoadModule("/app/api/worksheets/data/route.ts");
 const grants = await vite.ssrLoadModule("/app/api/worksheets/[worksheetId]/grants/route.ts");
 const superadmin = await vite.ssrLoadModule("/lib/server/superadmin.ts");
@@ -89,6 +90,38 @@ async function createSheet(cells = {}) {
   assert.equal(response.status, 201, await response.clone().text());
   return (await response.json()).worksheet;
 }
+
+test("regras avançadas persistem e impedem dados inválidos inclusive via API", async () => {
+  const created = await createSheet({ A1: "2" });
+  const advanced = { validations: [{ range: "A1", kind: "number", min: 1, max: 3, allowBlank: false }], conditions: [{ range: "A1", kind: "greater", value: "1", color: "green" }], views: [] };
+  const patch = (cells, revision) => item.PATCH(owner(`/api/worksheets/${created.id}`, { method: "PATCH", body: JSON.stringify({ revision, content: { cells, advanced } }) }), params(created.id));
+  const saved = await patch({ A1: "=1+1" }, 1); assert.equal(saved.status, 200);
+  assert.equal((await saved.json()).worksheet.content.advanced.conditions[0].color, "green");
+  const refused = await patch({ A1: "4" }, 2); assert.equal(refused.status, 422);
+  assert.equal((await refused.json()).code, "worksheet_validation");
+  const reopened = await (await item.GET(owner(`/api/worksheets/${created.id}`), params(created.id))).json();
+  assert.equal(reopened.worksheet.revision, 2); assert.equal(reopened.worksheet.content.cells.A1, "=1+1");
+  const createInvalid = await list.POST(owner("/api/worksheets", { method: "POST", body: JSON.stringify({ name: "Inválida", content: { cells: { A1: "10" }, advanced } }) }));
+  assert.equal(createInvalid.status, 422);
+});
+
+test("XLSX respeita empresa, revisão e liberação restrita; importação não grava antes de aplicar", async () => {
+  const created = await createSheet({ A1: "=2+3" });
+  const path = `/api/worksheets/${created.id}/xlsx`;
+  const exported = await xlsx.GET(owner(path), params(created.id)); assert.equal(exported.status, 200);
+  assert.match(exported.headers.get("content-type"), /spreadsheetml/); assert.match(exported.headers.get("cache-control"), /no-store/);
+  const bytes = await exported.arrayBuffer();
+  const imported = await xlsx.POST(owner(path, { method: "POST", body: bytes }), params(created.id)); assert.equal(imported.status, 200);
+  assert.equal((await imported.json()).sheets[0].cells.A1, "5");
+  assert.equal(db.sqlite.prepare("SELECT revision FROM worksheets WHERE id=?").get(created.id).revision, 1);
+  assert.equal((await xlsx.GET(owner(path + "?revision=2"), params(created.id))).status, 409);
+  assert.equal((await xlsx.GET(as("owner-b", "owner-b@example.test", orgB, path), params(created.id))).status, 404);
+  const restricted = await analysisSheet(); const privatePath = `/api/worksheets/${restricted.id}/xlsx`;
+  assert.equal((await xlsx.GET(owner(privatePath), params(restricted.id))).status, 404);
+  await grants.POST(asAdmin(`/api/worksheets/${restricted.id}/grants`, { method: "POST", body: JSON.stringify({ memberId: "colab", level: "view" }) }), params(restricted.id));
+  assert.equal((await xlsx.GET(as("colab", "colab@example.test", orgA, privatePath), params(restricted.id))).status, 200);
+  assert.equal((await xlsx.POST(as("colab", "colab@example.test", orgA, privatePath, { method: "POST", body: bytes }), params(restricted.id))).status, 403);
+});
 
 test("guarda o que foi digitado e devolve o mesmo conteúdo para recalcular", async () => {
   const created = await createSheet({ A1: "12", B1: "89,90", C1: "=A1*B1" });
