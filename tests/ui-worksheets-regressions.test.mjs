@@ -169,12 +169,15 @@ test("Ctrl mantém células separadas e soma apenas a seleção, sem duplicar pa
   await clickCell("C1", { ctrlKey: true });
   assert.equal(container.querySelector("#cell-A1").getAttribute("aria-pressed"), "true");
   assert.equal(container.querySelector("#cell-C1").getAttribute("aria-pressed"), "true");
-  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*40/);
+  assert.match(textOf(container), /Preenchidas\s*2/);
+  assert.match(textOf(container), /Soma\s*40/);
   await clickCell("A2", { metaKey: true });
-  assert.match(textOf(container), /Soma da seleção \(3 células\):\s*45/);
+  assert.match(textOf(container), /Preenchidas\s*3/);
+  assert.match(textOf(container), /Soma\s*45/);
   await clickCell("C1", { ctrlKey: true });
   assert.equal(container.querySelector("#cell-C1").getAttribute("aria-pressed"), "false");
-  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*15/);
+  assert.match(textOf(container), /Preenchidas\s*2/);
+  assert.match(textOf(container), /Soma\s*15/);
   await clickCell("B1");
   assert.equal(container.querySelector("#cell-A1").getAttribute("aria-pressed"), "false");
   assert.equal(container.querySelector("#cell-B1").getAttribute("aria-pressed"), "true");
@@ -186,7 +189,7 @@ test("SOMA da seleção preserva parcelas e grava fórmula numa célula livre", 
   } });
   await clickCell("A1");
   await clickCell("C1", { ctrlKey: true });
-  assert.match(textOf(container), /Soma da seleção \(2 células\):\s*2\.000/);
+  assert.match(textOf(container), /Soma\s*2\.000/);
   await act(async () => {
     const functions = container.querySelector('[aria-label="Inserir função"]');
     functions.value = "SOMA";
@@ -209,8 +212,13 @@ test("clicar no cabeçalho seleciona a linha e soma a linha, não a coluna", asy
   assert.equal(cabecalho.getAttribute("aria-pressed"), "true", "a linha selecionada se anuncia como tal");
 
   const texto = textOf(container);
-  assert.match(texto, /Total da linha 1/, "o rodapé passa a falar da linha escolhida");
-  assert.match(texto, /Total da linha 1:\s*60/, "10 + 20 + 30 da linha, não os 20 da coluna A");
+  assert.match(texto, /Linha 1/, "a barra passa a falar da linha escolhida");
+  assert.match(texto, /Total\s*60/, "10 + 20 + 30 da linha, não os 20 da coluna A");
+  // A mesma marcação feita arrastando responderia média e extremos; pelo cabeçalho
+  // também responde, senão clicar no cabeçalho seria a forma pior de marcar.
+  assert.match(texto, /Média\s*20/);
+  assert.match(texto, /Mín\s*10/);
+  assert.match(texto, /Máx\s*30/);
 });
 
 test("a função inserida na linha selecionada gera intervalo horizontal", async () => {
@@ -233,9 +241,103 @@ test("a função inserida na linha selecionada gera intervalo horizontal", async
 
 test("sem eixo escolhido o total continua sendo o da coluna do cursor", async () => {
   await openWorksheet(comDados);
-  assert.match(textOf(container), /Total da coluna A:\s*20/,
-    "A1 + A2 + A3 = 20, o comportamento que já existia");
+  // Uma célula marcada: a barra mostra o TOTAL DA COLUNA, e não repete o valor da
+  // célula, que a barra de fórmulas logo acima já exibe.
+  const inicial = textOf(container);
+  assert.match(inicial, /Total da coluna A\s*20/, "A1 + A2 + A3 = 20, o comportamento que já existia");
+  assert.doesNotMatch(inicial, /Soma\s/, "com uma célula só não há soma de seleção a mostrar");
 
   await act(async () => { container.querySelector('[aria-label="Selecionar coluna B"]').click(); });
-  assert.match(textOf(container), /Total da coluna B:\s*20/, "a coluna B tem só o 20 de B1");
+  assert.match(textOf(container), /Total\s*20/, "a coluna B tem só o 20 de B1");
+});
+
+/**
+ * Seleção por arrasto e a barra de resumo.
+ *
+ * O rodapé antigo respondia uma pergunta só — a soma — e, depois de qualquer clique,
+ * respondia mal: "Soma da seleção (1 células)", plural errado, valor que a barra de
+ * fórmulas já mostrava, e que derrubava o total da coluna. E não havia como marcar
+ * "da linha 2 até a 31" sem trinta Ctrl + cliques.
+ */
+
+async function arrastar(de, ate) {
+  const inicio = container.querySelector(`#cell-${de}`);
+  await act(async () => {
+    inicio.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", buttons: 1 }));
+  });
+  for (const chave of ate) {
+    const alvo = container.querySelector(`#cell-${chave}`);
+    await act(async () => {
+      alvo.dispatchEvent(new window.PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", buttons: 1 }));
+    });
+  }
+  await act(async () => { window.dispatchEvent(new window.PointerEvent("pointerup", { bubbles: true })); });
+}
+
+test("arrastar marca o retângulo e a barra responde as cinco perguntas", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await arrastar("A1", ["A2", "A3"]);
+
+  const texto = textOf(container);
+  assert.match(texto, /A1:A3/, "o intervalo aparece, para confirmar o que foi marcado");
+  assert.match(texto, /Preenchidas\s*3/);
+  assert.match(texto, /Soma\s*20/);
+  assert.match(texto, /Média\s*6,67/, "a média é arredondada na exibição, não no valor");
+  assert.match(texto, /Mín\s*5/);
+  assert.match(texto, /Máx\s*10/);
+});
+
+test("arrastar no toque não marca: no celular o arrasto rola a grade", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  const alvo = container.querySelector("#cell-A3");
+  await act(async () => {
+    container.querySelector("#cell-A1").dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", buttons: 1 }));
+    alvo.dispatchEvent(new window.PointerEvent("pointerover", { bubbles: true, pointerType: "touch", buttons: 1 }));
+  });
+  assert.equal(container.querySelector("#cell-A3").getAttribute("aria-pressed"), "false");
+});
+
+test("soltar o botão encerra o arrasto: passar o mouse depois não marca mais", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await arrastar("A1", ["A2"]);
+  await act(async () => {
+    container.querySelector("#cell-A3").dispatchEvent(new window.PointerEvent("pointerover", { bubbles: true, pointerType: "mouse", buttons: 0 }));
+  });
+  assert.equal(container.querySelector("#cell-A3").getAttribute("aria-pressed"), "false");
+});
+
+test("Shift + clique estende a partir da âncora, sem apagá-la", async () => {
+  await openWorksheet(comDados);
+  await clickCell("A1");
+  await clickCell("A3", { shiftKey: true });
+
+  assert.equal(container.querySelector("#cell-A1").getAttribute("aria-pressed"), "true");
+  assert.equal(container.querySelector("#cell-A2").getAttribute("aria-pressed"), "true");
+  assert.equal(container.querySelector("#cell-A3").getAttribute("aria-pressed"), "true");
+  assert.match(textOf(container), /A1:A3/);
+});
+
+test("seleção só de texto não exibe Soma 0", async () => {
+  // Zero é um número que a tela exibe sem ninguém desconfiar. Dizer que não há número
+  // para somar é a resposta honesta.
+  await openWorksheet({ ...comDados, content: { ...comDados.content, cells: { A1: "alvenaria", A2: "pintura" } } });
+  await clickCell("A1");
+  await arrastar("A1", ["A2"]);
+
+  const texto = textOf(container);
+  assert.match(texto, /sem número para somar/);
+  assert.doesNotMatch(texto, /Soma\s*0/);
+});
+
+test("célula com erro é contada à parte e fica fora da soma", async () => {
+  await openWorksheet({ ...comDados, content: { ...comDados.content, cells: { A1: "10", A2: "=1/0" } } });
+  await clickCell("A1");
+  await arrastar("A1", ["A2"]);
+
+  const texto = textOf(container);
+  assert.match(texto, /1 com erro, fora das contas/);
+  assert.match(texto, /Soma\s*10/, "o erro não entra como zero na conta");
 });

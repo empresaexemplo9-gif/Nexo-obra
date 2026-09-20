@@ -15,8 +15,9 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
-  insertColumn, insertRow, moveAnalysis, parseCellKey, sheetToCsv, sortRows,
-  axisLastFilled, axisRange, axisTotal, exact,
+  chavesDoRetangulo, insertColumn, insertRow, moveAnalysis, parseCellKey, resumoDaSelecao,
+  rotuloDoRetangulo, sheetToCsv, sortRows,
+  axisLastFilled, axisRange, axisTotal,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetAxis, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
@@ -37,10 +38,21 @@ type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
 type DataSource = { id: string; label: string; headers: string[] };
 
+/** Erro de API que preserva o código, para o chamador distinguir conflito de queda. */
+class ErroDeApi extends Error {
+  constructor(message: string, public codigo?: string) { super(message); }
+}
+
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...init?.headers } });
-  const body = await response.json().catch(() => ({})) as { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "Não foi possível concluir a operação.");
+  let response: Response;
+  try {
+    response = await fetch(url, { ...init, cache: "no-store", headers: { "Content-Type": "application/json", ...init?.headers } });
+  } catch {
+    // `Failed to fetch` é o texto do navegador, em inglês, e não diz o que fazer.
+    throw new ErroDeApi("Sem conexão com o servidor. Seu trabalho continua aqui na tela.", "offline");
+  }
+  const body = await response.json().catch(() => ({})) as { error?: string; code?: string };
+  if (!response.ok) throw new ErroDeApi(body.error ?? "Não foi possível concluir a operação.", body.code);
   return body as T;
 }
 
@@ -53,35 +65,58 @@ function download(name: string, content: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+/** A média vai a 10 casas no formato padrão e estoura a linha em 320 px. Arredondar na
+ *  EXIBIÇÃO, nunca no valor: a conta continua exata. */
+function arredondarExibicao(valor: number | null) {
+  return valor === null ? null : Number(valor.toFixed(2));
+}
+
 type AxisSelection = { kind: SheetAxis; index: number };
 
 function Grid({
-  cells, columns, rows, computed, active, selected, axis, onActive, onAxis, onChange,
+  cells, columns, rows, computed, active, selected, axis, onActive, onEstender, onAxis, onChange,
 }: {
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
-  active: string; selected: string[]; axis: AxisSelection | null; onActive: (key: string, additive?: boolean) => void;
+  active: string; selected: Set<string>; axis: AxisSelection | null;
+  onActive: (key: string, additive?: boolean) => void;
+  onEstender: (key: string) => void;
   onAxis: (kind: SheetAxis, index: number) => void; onChange: (key: string, value: string) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const pointerFocus = useRef(false);
+  // Arrastar só com mouse/caneta. No toque, o arrasto continua rolando a grade — que é o
+  // gesto que a pessoa espera num celular, e o único jeito de alcançar a coluna G.
+  const arrastando = useRef(false);
+
+  useEffect(() => {
+    const soltar = () => { arrastando.current = false; };
+    window.addEventListener("pointerup", soltar);
+    window.addEventListener("pointercancel", soltar);
+    return () => {
+      window.removeEventListener("pointerup", soltar);
+      window.removeEventListener("pointercancel", soltar);
+    };
+  }, []);
 
   function commit() {
     if (editing) onChange(editing, draft);
     setEditing(null);
   }
-  function move(key: string, deltaColumn: number, deltaRow: number) {
+  function move(key: string, deltaColumn: number, deltaRow: number, estender = false) {
     const address = parseCellKey(key);
     if (!address) return;
     const next = cellKey({
       column: Math.max(0, Math.min(columns - 1, address.column + deltaColumn)),
       row: Math.max(0, Math.min(rows - 1, address.row + deltaRow)),
     });
-    onActive(next);
+    if (estender) onEstender(next); else onActive(next);
     document.getElementById(`cell-${next}`)?.focus();
   }
 
-  return <div className="overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }}>
+  // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
+  // o gesto já existia e produzia um efeito feio e sem função nenhuma.
+  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }}>
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
@@ -115,7 +150,7 @@ function Grid({
               const isActive = active === key;
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
-              const isSelected = selected.includes(key);
+              const isSelected = selected.has(key);
               return <td key={key} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
                 {isEditing ? (
                   <input
@@ -136,18 +171,38 @@ function Grid({
                     aria-pressed={isSelected || inAxis}
                     onMouseDown={() => { pointerFocus.current = true; }}
                     onFocus={() => { if (!pointerFocus.current) onActive(key); }}
+                    onPointerDown={(event) => {
+                      // No toque o arrasto rola a grade, que é o gesto esperado no celular
+                      // e o único jeito de alcançar a coluna G numa tela de 320 px.
+                      if (event.pointerType === "touch") return;
+                      // Com modificador quem decide é o clique, que chega depois e é o
+                      // mesmo caminho do teclado e do toque.
+                      if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+                      arrastando.current = true;
+                    }}
+                    // `pointerover`, não `pointerenter`: o React sintetiza o `enter` a
+                    // partir deste, então é este que chega de verdade ao handler.
+                    onPointerOver={(event) => {
+                      // `buttons & 1` confirma que o botão ainda está pressionado: sem
+                      // isso, passar o mouse depois de soltar continuaria marcando.
+                      if (arrastando.current && (event.buttons & 1) === 1) onEstender(key);
+                    }}
                     onClick={(event) => {
                       pointerFocus.current = false;
+                      if (event.shiftKey) { onEstender(key); return; }
                       onActive(key, event.ctrlKey || event.metaKey);
                     }}
                     onDoubleClick={() => { setDraft(cells[key] ?? ""); setEditing(key); }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
                       if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
-                      if (event.key === "ArrowRight") { event.preventDefault(); move(key, 1, 0); }
-                      if (event.key === "ArrowLeft") { event.preventDefault(); move(key, -1, 0); }
-                      if (event.key === "ArrowDown") { event.preventDefault(); move(key, 0, 1); }
-                      if (event.key === "ArrowUp") { event.preventDefault(); move(key, 0, -1); }
+                      // Com Shift a seta ESTENDE a faixa em vez de mover o cursor. É o que
+                      // todo mundo que veio do Excel tenta antes de tentar arrastar, e no
+                      // celular é a única forma sensata de marcar um intervalo.
+                      if (event.key === "ArrowRight") { event.preventDefault(); move(key, 1, 0, event.shiftKey); }
+                      if (event.key === "ArrowLeft") { event.preventDefault(); move(key, -1, 0, event.shiftKey); }
+                      if (event.key === "ArrowDown") { event.preventDefault(); move(key, 0, 1, event.shiftKey); }
+                      if (event.key === "ArrowUp") { event.preventDefault(); move(key, 0, -1, event.shiftKey); }
                       if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.nativeEvent.isComposing) {
                         // A tecla que abre o editor não pode também cair no input recém-montado.
                         // Sem o preventDefault, "1" podia virar "11" e "a" virar "aa".
@@ -175,14 +230,29 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [canGovern, setCanGovern] = useState(false);
   const [sources, setSources] = useState<DataSource[]>([]);
   const [active, setActive] = useState("A1");
-  const [selected, setSelected] = useState<string[]>([]);
+  // A seleção é um RETÂNGULO (âncora → foco) mais as avulsas do Ctrl + clique. Era uma
+  // lista solta de chaves, que não tinha como representar "da linha 2 até a 31".
+  const [faixa, setFaixa] = useState<{ ancora: string; foco: string } | null>({ ancora: "A1", foco: "A1" });
+  const [avulsas, setAvulsas] = useState<string[]>([]);
   const [axis, setAxis] = useState<AxisSelection | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [dirty, setDirty] = useState(false);
+  // Conflito de edição: a planilha mudou em outro acesso. Guardamos a versão do servidor
+  // para a pessoa DECIDIR, em vez de escolher por ela — o trabalho na tela é dela.
+  const [conflito, setConflito] = useState<Worksheet | null>(null);
   const formulaRef = useRef<HTMLInputElement>(null);
+
+  // Fechar a aba ou dar F5 com alteração pendente é perda de trabalho, não de rascunho.
+  // O aviso do navegador é o único que funciona nesse caminho. Mesmo padrão da Prancheta.
+  useEffect(() => {
+    if (!dirty) return;
+    const aviso = (evento: BeforeUnloadEvent) => { evento.preventDefault(); };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [dirty]);
 
   const loadList = useCallback(async () => {
     const result = await api<{ worksheets: WorksheetSummary[]; canGovern: boolean }>("/api/worksheets");
@@ -191,13 +261,25 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return result.worksheets;
   }, []);
 
+  /**
+   * Trocar de planilha com alteração pendente descartava tudo sem perguntar. Confirmar é
+   * o mínimo: o trabalho é da pessoa e o clique que o apaga é indistinguível do clique
+   * que só queria olhar outra planilha.
+   */
+  const confirmarDescarte = useCallback(() => {
+    if (!dirty) return true;
+    return window.confirm("Esta planilha tem alterações não salvas. Continuar sem salvar descarta o que você digitou.");
+  }, [dirty]);
+
   const open = useCallback(async (id: string) => {
     setError("");
+    setConflito(null);
     const result = await api<{ worksheet: Worksheet; access: Access }>(`/api/worksheets/${id}`);
     setCurrent(result.worksheet);
     setAccess(result.access);
     setActive("A1");
-    setSelected([]);
+    setFaixa({ ancora: "A1", foco: "A1" });
+    setAvulsas([]);
     setAxis(null);
     setDirty(false);
   }, []);
@@ -223,18 +305,54 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   const computed = useMemo(() => evaluateSheet(current?.content.cells ?? {}), [current]);
 
+  /**
+   * Marcar a célula. Sem modificador, recomeça a faixa nela.
+   *
+   * `aditivo` (Ctrl/⌘) continua somando célula avulsa, para o caso espalhado que o
+   * retângulo não cobre.
+   */
   const selectCell = useCallback((key: string, additive = false) => {
     setActive(key);
     setAxis(null);
-    setSelected((previous) => additive
-      ? previous.includes(key) ? previous.filter((cell) => cell !== key) : [...previous, key]
-      : [key]);
+    if (additive) {
+      setAvulsas((previous) => previous.includes(key) ? previous.filter((cell) => cell !== key) : [...previous, key]);
+      return;
+    }
+    setAvulsas([]);
+    setFaixa({ ancora: key, foco: key });
   }, []);
 
-  const selectedSum = useMemo(() => exact(selected.reduce((total, key) => {
-    const result = computed[key];
-    return total + (!result?.error && typeof result?.value === "number" ? result.value : 0);
-  }, 0)), [computed, selected]);
+  /** Estende a faixa até a célula, mantendo a âncora. Shift + clique, arrasto e Shift + setas. */
+  const estenderAte = useCallback((key: string) => {
+    setAxis(null);
+    setActive(key);
+    setFaixa((previous) => (previous ? { ...previous, foco: key } : { ancora: key, foco: key }));
+  }, []);
+
+  // As células marcadas: o retângulo mais as avulsas do Ctrl + clique.
+  const selected = useMemo(() => {
+    const chaves = faixa ? chavesDoRetangulo(faixa.ancora, faixa.foco) : [];
+    const unicas = new Set(chaves);
+    for (const chave of avulsas) unicas.add(chave);
+    return [...unicas];
+  }, [faixa, avulsas]);
+
+  // Teste de pertencimento por Set: `includes` por célula renderizada era
+  // O(células × selecionadas) a cada quadro, e arrastar redesenha a cada movimento.
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  // As chaves sobre as quais a barra de resumo fala. Com um eixo escolhido, é o eixo
+  // inteiro: clicar no cabeçalho da coluna e ver só o total, sem média nem extremos,
+  // seria responder menos do que a mesma marcação feita arrastando.
+  const chavesDoResumo = useMemo(() => {
+    if (!axis || !current) return selected;
+    const limite = axis.kind === "row" ? current.columns : current.rows;
+    return Array.from({ length: limite }, (_, posicao) => (axis.kind === "row"
+      ? cellKey({ column: posicao, row: axis.index })
+      : cellKey({ column: axis.index, row: posicao })));
+  }, [axis, current, selected]);
+
+  const resumo = useMemo(() => resumoDaSelecao(computed, chavesDoResumo), [computed, chavesDoResumo]);
 
   // Clicar no cabeçalho seleciona o eixo inteiro e leva o cursor para a primeira
   // célula livre dele, que é onde o total entra.
@@ -243,7 +361,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const limit = kind === "row" ? current.columns : current.rows;
     const next = Math.min(axisLastFilled(current.content.cells, kind, index) + 1, limit - 1);
     setAxis({ kind, index });
-    setSelected([]);
+    setFaixa(null);
+    setAvulsas([]);
     setActive(kind === "row" ? cellKey({ column: next, row: index }) : cellKey({ column: index, row: next }));
   }
 
@@ -251,8 +370,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   // que era o único comportamento que existia.
   const axisSum = useMemo(() => {
     const target = axis ?? { kind: "column" as SheetAxis, index: parseCellKey(active)?.column ?? 0 };
-    return { ...target, total: axisTotal(computed, target.kind, target.index) };
-  }, [axis, active, computed]);
+    return { ...target, total: axisTotal(computed, target.kind, target.index, current?.content.analysis.ignoreRows ?? []) };
+  }, [axis, active, computed, current?.content.analysis.ignoreRows]);
 
   const selection = useMemo(() => {
     if (!current) return null;
@@ -321,7 +440,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     // total passar a somar outra linha sem aviso nenhum na tela.
     if (operation !== "fill-down") {
       setAxis(null);
-      setSelected([cellKey({ column: Math.min(address.column, nextColumns - 1), row: Math.min(address.row, nextRows - 1) })]);
+      const dentro = cellKey({ column: Math.min(address.column, nextColumns - 1), row: Math.min(address.row, nextRows - 1) });
+      setFaixa({ ancora: dentro, foco: dentro });
+      setAvulsas([]);
     }
     setDirty(true);
   }
@@ -353,6 +474,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }
 
   async function create(kind: WorksheetKind, templateId?: string) {
+    if (!confirmarDescarte()) return;
     try {
       const template = templateId ? worksheetTemplates.find((item) => item.id === templateId) : null;
       const label = template ? template.name
@@ -371,7 +493,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   async function save() {
     if (!current) return;
-    setSaving(true); setError("");
+    setSaving(true); setError(""); setConflito(null);
     try {
       const result = await api<{ worksheet: Worksheet }>(`/api/worksheets/${current.id}`, {
         method: "PATCH",
@@ -382,8 +504,49 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       await loadList();
       toast.success("Salvo");
     } catch (cause) {
+      // Conflito era um beco sem saída: a revisão local nunca era atualizada, então toda
+      // tentativa seguinte levava o mesmo 409 e a única saída era recarregar e perder
+      // tudo. Agora busca-se a versão do servidor e a decisão fica com quem digitou.
+      if (cause instanceof ErroDeApi && cause.codigo === "worksheet_conflict") {
+        try {
+          const atual = await api<{ worksheet: Worksheet }>(`/api/worksheets/${current.id}`);
+          setConflito(atual.worksheet);
+        } catch {
+          setError("Esta planilha mudou em outro acesso e não foi possível ler a versão nova. Baixe o CSV antes de recarregar.");
+        }
+      } else {
+        setError(cause instanceof Error ? cause.message : "Não foi possível salvar.");
+      }
+    } finally { setSaving(false); }
+  }
+
+  /** Reenvia o MESMO conteúdo sobre a revisão nova. Decisão explícita de sobrescrever. */
+  async function salvarSobreVersaoNova() {
+    if (!current || !conflito) return;
+    setCurrent({ ...current, revision: conflito.revision });
+    setConflito(null);
+    setSaving(true); setError("");
+    try {
+      const result = await api<{ worksheet: Worksheet }>(`/api/worksheets/${current.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: current.name, columns: current.columns, rows: current.rows, content: current.content, revision: conflito.revision }),
+      });
+      setCurrent(result.worksheet);
+      setDirty(false);
+      await loadList();
+      toast.success("Salvo sobre a versão nova");
+    } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar.");
     } finally { setSaving(false); }
+  }
+
+  /** Desiste do que está na tela e assume a versão do servidor. */
+  function usarVersaoDoServidor() {
+    if (!conflito) return;
+    setCurrent(conflito);
+    setConflito(null);
+    setDirty(false);
+    toast.success("Versão do servidor carregada");
   }
 
   async function remove() {
@@ -489,12 +652,25 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         <Button size="sm" onClick={() => void create("sheet")}><Plus />Nova planilha</Button>
         <Button size="sm" variant="outline" onClick={() => void create("document")}><FileText />Novo documento</Button>
         {canGovern ? <Button size="sm" variant="outline" onClick={() => void create("analysis")}><ChartNoAxesCombined />Nova planilha de saúde financeira</Button> : null}
-        {list.length ? <NativeSelect aria-label="Abrir" value={current?.id ?? ""} onChange={(event) => void open(event.target.value)} className="h-9 max-w-[16rem]">
+        {list.length ? <NativeSelect aria-label="Abrir" value={current?.id ?? ""} onChange={(event) => { if (confirmarDescarte()) void open(event.target.value); else event.target.value = current?.id ?? ""; }} className="h-9 max-w-[16rem]">
           {filtered.map((item) => <option key={item.id} value={item.id}>{item.kind === "sheet" ? "▦" : "▤"} {item.name}</option>)}
         </NativeSelect> : null}
       </CardContent>
     </Card>
 
+    {conflito ? (
+      <Card className="border-hoikos-200">
+        <CardContent className="space-y-3 p-4 text-sm text-hoikos-800">
+          <p className="flex items-center gap-3 font-medium"><CircleAlert className="size-5 shrink-0" />Esta planilha mudou em outro acesso enquanto você editava</p>
+          <p className="text-xs text-hoikos-500">O que você digitou continua aqui na tela e ainda não foi enviado. Escolha o que fazer — nenhuma das opções acontece sozinha.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={saving} onClick={() => void salvarSobreVersaoNova()}>Salvar o meu por cima</Button>
+            <Button size="sm" variant="outline" disabled={saving} onClick={usarVersaoDoServidor}>Descartar o meu e usar a versão nova</Button>
+            <Button size="sm" variant="outline" onClick={() => current && download(`${current.name}.csv`, sheetToCsv(current.content.cells, current.columns, current.rows), "text/csv;charset=utf-8")}>Baixar o meu em CSV</Button>
+          </div>
+        </CardContent>
+      </Card>
+    ) : null}
     {error ? <Card className="border-hoikos-200"><CardContent className="flex items-center gap-3 p-4 text-sm text-hoikos-800"><CircleAlert className="size-5 shrink-0" />{error}</CardContent></Card> : null}
 
     {!current ? (
@@ -605,15 +781,53 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               )}
               <Grid
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
-                computed={computed} active={active} selected={selected} axis={axis}
-                onActive={selectCell} onAxis={selectAxis} onChange={updateCell}
+                computed={computed} active={active} selected={selectedSet} axis={axis}
+                onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
               />
-              <p className="text-xs leading-5 text-hoikos-500">
-                Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Clique no cabeçalho para selecionar a
-                linha ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células da seleção.{" "}
-                {!axis && selected.length > 0 ? `Soma da seleção (${selected.length} células):` : `Total da ${axisSum.kind === "row" ? `linha ${axisSum.index + 1}` : `coluna ${columnName(axisSum.index)}`}:`}{" "}
-                <strong className="tabular-nums">{displayValue(!axis && selected.length > 0 ? selectedSum : axisSum.total)}</strong>
-              </p>
+              {/*
+                A barra de resumo. Antes era uma frase de ajuda com uma soma grudada no
+                fim, que depois de qualquer clique dizia "Soma da seleção (1 células)":
+                plural errado, número que a barra de fórmulas já mostrava, e que derrubava
+                o "Total da coluna" — a leitura que interessa num orçamento.
+                `aria-live` porque a soma é o propósito da tela e mudava em silêncio.
+              */}
+              <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-xs text-hoikos-700">
+                <span className="font-mono">
+                  {axis
+                    ? (axis.kind === "row" ? `Linha ${axis.index + 1}` : `Coluna ${columnName(axis.index)}`)
+                    : faixa ? rotuloDoRetangulo(faixa.ancora, faixa.foco) : active}
+                </span>
+                {axis ? <span>Total <strong className="tabular-nums">{displayValue(axisSum.total)}</strong></span> : null}
+                {!axis && resumo.celulas <= 1 ? (
+                  // Uma célula só: o valor dela já está na barra de fórmulas logo acima.
+                  // Repeti-lo aqui era o velho "Soma da seleção (1 células)" — e ele
+                  // derrubava o total da coluna, que é a leitura que falta na tela.
+                  <span>Total da coluna {columnName(axisSum.index)} <strong className="tabular-nums">{displayValue(axisSum.total)}</strong></span>
+                ) : null}
+                {resumo.celulas > 1 ? <span>Preenchidas <strong className="tabular-nums">{resumo.preenchidas}</strong></span> : null}
+                {resumo.celulas > 1 && resumo.soma !== null ? (
+                  <>
+                    {axis ? null : <span>Soma <strong className="tabular-nums">{displayValue(resumo.soma)}</strong></span>}
+                    <span>Média <strong className="tabular-nums">{displayValue(arredondarExibicao(resumo.media))}</strong></span>
+                    <span>Mín <strong className="tabular-nums">{displayValue(resumo.minimo)}</strong></span>
+                    <span>Máx <strong className="tabular-nums">{displayValue(resumo.maximo)}</strong></span>
+                    {resumo.numericas !== resumo.preenchidas ? <span className="text-hoikos-500">{resumo.numericas} numéricas</span> : null}
+                  </>
+                ) : null}
+                {resumo.celulas > 1 && resumo.soma === null ? (
+                  // Nunca exibir "Soma 0" aqui: zero se lê como zero de verdade.
+                  <span className="text-hoikos-500">{resumo.preenchidas ? "sem número para somar" : "nenhuma célula preenchida"}</span>
+                ) : null}
+                {resumo.comErro ? <span className="font-medium">{resumo.comErro} com erro, fora das contas</span> : null}
+              </div>
+              <details className="text-xs leading-5 text-hoikos-500">
+                <summary className="cursor-pointer">Atalhos</summary>
+                <p className="mt-1">
+                  Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Arraste com o mouse ou use
+                  Shift + clique e Shift + setas para marcar um intervalo. Clique no cabeçalho para selecionar a linha
+                  ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células avulsas.
+                </p>
+              </details>
             </TabsContent>
 
             <TabsContent value="leitura" className="mt-4">

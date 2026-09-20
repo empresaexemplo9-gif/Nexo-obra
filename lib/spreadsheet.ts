@@ -62,15 +62,33 @@ export function displayValue(value: number | string | boolean | null): string {
   return value;
 }
 
+/**
+ * Ponto usado como separador de MILHAR, do jeito que o Excel em português decide:
+ * grupos de exatamente três dígitos, sem vírgula em lugar nenhum.
+ *
+ * `1.500` → 1500, `12.000` → 12000, `1.234.567` → 1234567.
+ * `1234.56` e `1.50` continuam decimais — dois dígitos não formam grupo de milhar, e
+ * `1234.56` é a forma que `/api/worksheets/data` produz (centavos ÷ 100, no máximo duas
+ * casas), então a regra nunca colide com o dado que o próprio produto insere.
+ */
+const MILHAR = /^[+-]?\d{1,3}(\.\d{3})+$/;
+
 // Um texto digitado vira número quando é inequivocamente numérico, aceitando os dois
 // separadores usados no Brasil: "1.234,56" e "1234.56".
+//
+// O ponto sozinho era sempre lido como decimal, então `1.500` valia 1,5 — erro de mil
+// vezes, em silêncio, num produto de orçamento. Pior: a exibição formata 1500 como
+// "1.500", ensinando um formato que a leitura recusava. Copiar um número da tela para
+// outra célula o dividia por mil.
 export function parseNumber(raw: string): number | null {
   const text = raw.trim();
   if (!text) return null;
   const cleaned = text.replace(/\s|R\$|%/g, "");
   const candidate = /,\d{1,10}$/.test(cleaned)
     ? cleaned.replace(/\./g, "").replace(",", ".")
-    : cleaned.replace(/,/g, "");
+    : MILHAR.test(cleaned)
+      ? cleaned.replace(/\./g, "")
+      : cleaned.replace(/,/g, "");
   if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(candidate)) return null;
   const value = Number(candidate);
   if (!Number.isFinite(value)) return null;
@@ -255,13 +273,14 @@ const ALIASES: Record<string, string> = {
   "MINÚSCULA": "MINUSCULA", AND: "E", OR: "OU", NOT: "NAO", "NÃO": "NAO", MEDIAN: "MEDIANA",
   MINIMO: "MIN", "MÍNIMO": "MIN", MAXIMO: "MAX", "MÁXIMO": "MAX", VLOOKUP: "PROCV",
   ABS: "ABS", INT: "INT", TRUNC: "TRUNCAR", LEN: "NUM.CARACT", "NÚM.CARACT": "NUM.CARACT",
+  IFERROR: "SEERRO",
 };
 
 export const SHEET_FUNCTIONS = [
   "SOMA", "MEDIA", "MIN", "MAX", "CONT.NUM", "CONT.VALORES", "SE", "SOMASE", "CONT.SE",
   "ARRED", "ABS", "INT", "TRUNCAR", "TETO", "PISO", "POTENCIA", "RAIZ", "MEDIANA",
   "HOJE", "AGORA", "CONCAT", "ESQUERDA", "DIREITA", "MAIUSCULA", "MINUSCULA",
-  "NUM.CARACT", "E", "OU", "NAO", "PROCV",
+  "NUM.CARACT", "E", "OU", "NAO", "PROCV", "SEERRO",
 ] as const;
 
 type Scalar = number | string | boolean | null;
@@ -334,9 +353,25 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
   const results: SheetResult = {};
   const visiting = new Set<string>();
 
+  /**
+   * Valor de uma célula para quem a referencia. Célula com erro NÃO vale zero: o erro
+   * sobe.
+   *
+   * Antes, `A1` com `#DIV/0!` valia nulo, e nulo vale 0 numa conta. O efeito era o pior
+   * possível num produto de orçamento: uma parcela quebrada não aparecia em lugar nenhum
+   * e o total fechava como se estivesse certo. A leitura financeira lia o mesmo zero e
+   * mostrava margem melhor do que a real.
+   *
+   * Agora a regra é a do Excel: erro contamina quem depende dele, e quem quiser seguir
+   * mesmo assim diz isso explicitamente com `SEERRO`.
+   */
   function cellValue(key: string): Scalar {
     const normalized = key.toUpperCase();
-    if (results[normalized]) return results[normalized].error ? null : results[normalized].value;
+    if (results[normalized]) {
+      const pronto = results[normalized];
+      if (pronto.error) throw new FormulaError(pronto.error);
+      return pronto.value;
+    }
     if (visiting.has(normalized)) throw new FormulaError("#CIRCULAR!");
     const raw = cells[normalized];
     if (raw === undefined || raw === "") { results[normalized] = { value: null, error: null, display: "" }; return null; }
@@ -344,7 +379,8 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
     try {
       const computed = computeRaw(raw);
       results[normalized] = computed;
-      return computed.error ? null : computed.value;
+      if (computed.error) throw new FormulaError(computed.error);
+      return computed.value;
     } finally {
       visiting.delete(normalized);
     }
@@ -353,6 +389,16 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
   function values(node: Node): Scalar[] {
     if (node.type === "range") return expandRange(node.from, node.to).map((key) => cellValue(key));
     return [evaluate(node)];
+  }
+
+  function arredondarAoMultiplo(args: Node[], ajustar: (valor: number) => number): number {
+    const valor = toNumber(evaluate(args[0]));
+    const multiplo = args[1] === undefined ? 1 : toNumber(evaluate(args[1]));
+    if (multiplo === 0) return 0;
+    // Sinais opostos não têm resposta boa; o Excel recusa, e devolver um número
+    // plausível aqui seria pior do que o erro.
+    if (valor !== 0 && Math.sign(valor) !== Math.sign(multiplo)) throw new FormulaError("#NÚM!");
+    return exact(ajustar(exact(valor / multiplo)) * multiplo);
   }
 
   function callFunction(rawName: string, args: Node[]): Scalar {
@@ -403,8 +449,11 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
       case "ABS": return Math.abs(toNumber(evaluate(args[0])));
       case "INT": return Math.floor(toNumber(evaluate(args[0])));
       case "TRUNCAR": return Math.trunc(toNumber(evaluate(args[0])));
-      case "TETO": return Math.ceil(toNumber(evaluate(args[0])));
-      case "PISO": return Math.floor(toNumber(evaluate(args[0])));
+      // O 2º argumento é o múltiplo, e era ignorado em silêncio: `=TETO(12,3;0,5)` dava
+      // 13 em vez de 12,5. É a conta de comprar material em múltiplo de embalagem — barra
+      // de 12 m, saco de cimento, caixa de piso — dando quantidade errada sem avisar.
+      case "TETO": return arredondarAoMultiplo(args, Math.ceil);
+      case "PISO": return arredondarAoMultiplo(args, Math.floor);
       case "POTENCIA": return toNumber(evaluate(args[0])) ** toNumber(evaluate(args[1]));
       case "RAIZ": { const value = toNumber(evaluate(args[0])); if (value < 0) throw new FormulaError("#NÚM!"); return Math.sqrt(value); }
       case "HOJE": return new Date(now).toLocaleDateString("pt-BR");
@@ -415,6 +464,20 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
       case "MAIUSCULA": return toText(evaluate(args[0])).toLocaleUpperCase("pt-BR");
       case "MINUSCULA": return toText(evaluate(args[0])).toLocaleLowerCase("pt-BR");
       case "NUM.CARACT": return toText(evaluate(args[0])).length;
+      // A saída explícita da propagação acima. `PROCV` que não acha devolve `#N/D`, e
+      // quem monta orçamento quer ver 0 ali — mas dizendo que quer, não por acidente.
+      case "SEERRO": {
+        if (args.length < 1) throw new FormulaError("#FÓRMULA!");
+        try {
+          return evaluate(args[0]);
+        } catch (erro) {
+          // Só erro de fórmula tem alternativa. Falha de programação continua subindo.
+          if (!(erro instanceof FormulaError)) throw erro;
+          // `#CIRCULAR!` não se engole: a alternativa não desfaz o ciclo, só o esconde.
+          if (erro.code === "#CIRCULAR!") throw erro;
+          return args.length > 1 ? evaluate(args[1]) : "";
+        }
+      }
       default: throw new FormulaError("#NOME?");
     }
   }
@@ -472,7 +535,11 @@ export function evaluateSheet(cells: SheetCells, now = Date.now()): SheetResult 
     }
   }
 
-  for (const key of Object.keys(cells)) cellValue(key);
+  for (const key of Object.keys(cells)) {
+    // `cellValue` agora lança quando a célula tem erro. O erro já foi gravado em
+    // `results` antes de subir; aqui só se impede que ele derrube a planilha inteira.
+    try { cellValue(key); } catch { /* o resultado da célula já está registrado */ }
+  }
   return results;
 }
 
@@ -670,11 +737,29 @@ function axisPosition(address: CellAddress, axis: SheetAxis) {
   return axis === "row" ? address.row : address.column;
 }
 
-export function axisTotal(computed: SheetResult, axis: SheetAxis, index: number) {
+/**
+ * Total do eixo, pulando as linhas marcadas para ignorar.
+ *
+ * Sem esse filtro o total somava a PRÓPRIA linha de total: itens de 30 mil com
+ * `=SOMA(...)` no rodapé mostravam 60 mil. Como os dez modelos gravam a linha de total em
+ * `analysis.ignoreRows`, o número aparecia dobrado em qualquer planilha criada por modelo
+ * — e dobrado é um número plausível, que ninguém confere.
+ */
+export function axisTotal(
+  computed: SheetResult,
+  axis: SheetAxis,
+  index: number,
+  ignorarLinhas: readonly number[] = [],
+) {
+  const ignoradas = new Set(ignorarLinhas);
   let total = 0;
   for (const [key, result] of Object.entries(computed)) {
     const address = parseCellKey(key);
     if (!address || axisPosition(address, axis) !== index) continue;
+    // Numa linha selecionada, ignorar a própria linha apagaria o total inteiro; o que se
+    // pula ali é só a coluna de total, que não é marcada. Por isso o filtro vale para a
+    // linha da célula, e só quando o eixo é uma coluna.
+    if (axis === "column" && ignoradas.has(address.row)) continue;
     if (typeof result.value === "number") total += result.value;
   }
   return exact(total);
@@ -700,4 +785,91 @@ export function axisRange(axis: SheetAxis, index: number, until: number) {
   return axis === "row"
     ? `${columnName(0)}${index + 1}:${columnName(until - 1)}${index + 1}`
     : `${columnName(index)}1:${columnName(index)}${until}`;
+}
+
+export type ResumoSelecao = {
+  /** Quantas células a seleção cobre, cheias ou vazias. */
+  celulas: number;
+  preenchidas: number;
+  /** Quantas viraram número — é sobre estas que soma, média, mínimo e máximo falam. */
+  numericas: number;
+  comErro: number;
+  soma: number | null;
+  media: number | null;
+  minimo: number | null;
+  maximo: number | null;
+};
+
+/**
+ * As contas da seleção, para a barra de resumo.
+ *
+ * Responde perguntas que a soma sozinha não responde num orçamento: "quantos itens de
+ * fato têm preço" (a linha esquecida), "qual o preço médio", "qual o maior e o menor
+ * unitário" (o item fora da curva).
+ *
+ * Célula com erro é CONTADA à parte e fica fora das contas. Somar tratando erro como zero
+ * é o defeito que este mesmo arquivo acabou de corrigir em `cellValue`; repeti-lo aqui
+ * devolveria o zero silencioso pela porta da frente.
+ *
+ * `soma`, `media`, `minimo` e `maximo` vêm `null` quando não há número nenhum. Devolver 0
+ * seria pior: zero é um número que a tela exibe sem ninguém desconfiar.
+ */
+export function resumoDaSelecao(computed: SheetResult, chaves: Iterable<string>): ResumoSelecao {
+  let celulas = 0;
+  let preenchidas = 0;
+  let comErro = 0;
+  const numeros: number[] = [];
+
+  for (const chave of chaves) {
+    celulas += 1;
+    const resultado = computed[chave.toUpperCase()];
+    if (!resultado) continue;
+    if (resultado.error) { comErro += 1; preenchidas += 1; continue; }
+    if (resultado.value === null || resultado.value === "") continue;
+    preenchidas += 1;
+    if (typeof resultado.value === "number") numeros.push(resultado.value);
+  }
+
+  if (numeros.length === 0) {
+    return { celulas, preenchidas, numericas: 0, comErro, soma: null, media: null, minimo: null, maximo: null };
+  }
+
+  const soma = exact(numeros.reduce((total, valor) => total + valor, 0));
+  return {
+    celulas,
+    preenchidas,
+    numericas: numeros.length,
+    comErro,
+    soma,
+    media: exact(soma / numeros.length),
+    minimo: Math.min(...numeros),
+    maximo: Math.max(...numeros),
+  };
+}
+
+/** As chaves de um retângulo, da âncora ao foco, em qualquer ordem de arrasto. */
+export function chavesDoRetangulo(ancora: string, foco: string): string[] {
+  const a = parseCellKey(ancora);
+  const b = parseCellKey(foco);
+  if (!a || !b) return [];
+  const chaves: string[] = [];
+  for (let row = Math.min(a.row, b.row); row <= Math.max(a.row, b.row); row += 1) {
+    for (let column = Math.min(a.column, b.column); column <= Math.max(a.column, b.column); column += 1) {
+      chaves.push(cellKey({ column, row }));
+    }
+  }
+  return chaves;
+}
+
+/** `A2:C31 · 30L × 3C` — o rótulo que confirma o que foi marcado antes de somar. */
+export function rotuloDoRetangulo(ancora: string, foco: string): string {
+  const a = parseCellKey(ancora);
+  const b = parseCellKey(foco);
+  if (!a || !b) return "";
+  const inicio = cellKey({ column: Math.min(a.column, b.column), row: Math.min(a.row, b.row) });
+  const fim = cellKey({ column: Math.max(a.column, b.column), row: Math.max(a.row, b.row) });
+  if (inicio === fim) return inicio;
+  const linhas = Math.abs(a.row - b.row) + 1;
+  const colunas = Math.abs(a.column - b.column) + 1;
+  return `${inicio}:${fim} · ${linhas}L × ${colunas}C`;
 }

@@ -147,7 +147,11 @@ export const worksheetTemplates: WorksheetTemplate[] = [
     headers: ["Data", "Descrição", "Categoria", "Entrada", "Saída", "Resultado do dia", "Saldo acumulado"],
     formulas: {
       F: '=SE(E(D{l}="";E{l}="");"";D{l}-E{l})',
-      G: '=SE(F{l}="";"";SE({l}={f};F{l};G{p}+F{l}))',
+      // O saldo vem da soma do período inteiro até esta linha, não do saldo da linha de
+      // cima. Encadear `G{p}` fazia o acumulado REINICIAR depois de qualquer linha em
+      // branco: a de cima valia "", que numa conta vale 0, e o saldo voltava do zero sem
+      // avisar. Somar as colunas desde o começo é imune a lacuna no meio.
+      G: '=SE(F{l}="";"";SOMA(D{f}:D{l})-SOMA(E{f}:E{l}))',
     },
     totals: ["D", "E", "F"],
     totalLabel: "Total do período",
@@ -198,10 +202,15 @@ export const worksheetTemplates: WorksheetTemplate[] = [
     name: "Honorários por etapa de projeto",
     purpose: "Distribuir o honorário entre as etapas do projeto e comparar com as horas realmente gastas em cada uma.",
     category: "comercial",
-    headers: ["Etapa", "% do honorário", "Valor da etapa", "Horas previstas", "Horas gastas", "Custo das horas", "Margem da etapa", "", "Valor do contrato"],
+    // A décima coluna é vazia de propósito: I1 é o RÓTULO e J1 é onde o valor do contrato
+    // é digitado. Sem ela a planilha nascia com 9 colunas (A–I), `J1` ficava fora da
+    // grade, não havia como digitar o valor — e cada etapa fechava em 0, sem erro nenhum.
+    headers: ["Etapa", "% do honorário", "Valor da etapa", "Horas previstas", "Horas gastas", "Custo das horas", "Margem da etapa", "", "Valor do contrato", ""],
     formulas: {
       // J1 guarda o valor do contrato; cada etapa recebe a fatia do percentual.
-      C: '=SE(B{l}="";"";ARRED(J1*B{l}/100;2))',
+      // Enquanto J1 estiver vazio a etapa fica vazia, e não zero: zero é um número que a
+      // tela exibe sem ninguém desconfiar.
+      C: '=SE(OU(B{l}="";J1="");"";ARRED(J1*B{l}/100;2))',
       G: '=SE(C{l}="";"";C{l}-F{l})',
     },
     totals: ["B", "C", "D", "E", "F", "G"],
