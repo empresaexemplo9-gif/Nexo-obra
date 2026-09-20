@@ -4,7 +4,6 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { CircleAlert, DraftingCompass, Files, Image as Icone, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
-import { PranchetaEditor, Prancha } from "@/components/prancheta-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -182,9 +181,7 @@ function Biblioteca({ canEdit }: { canEdit: boolean }) {
 
 export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Projeto[]; query: string; canEdit: boolean }) {
   const [pranchas, definirPranchas] = useState<Resumo[]>([]);
-  const [aberta, definirAberta] = useState<Prancha | null>(null);
   const [carregando, definirCarregando] = useState(true);
-  const [abrindo, definirAbrindo] = useState<string | null>(null);
   const [criando, definirCriando] = useState(false);
   const [dialogoAberto, definirDialogoAberto] = useState(false);
   const [erro, definirErro] = useState("");
@@ -208,22 +205,10 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
     return () => window.clearTimeout(relogio);
   }, [recarregar]);
 
-  async function abrir(id: string) {
-    definirAbrindo(id);
-    try {
-      const resposta = await fetch(`/api/studio/${id}`, { cache: "no-store" });
-      if (!resposta.ok) throw new Error(await mensagemDeErro(resposta));
-      const corpo = await resposta.json() as { prancha: Prancha };
-      definirAberta(corpo.prancha);
-    } catch (causa) {
-      toast.error(causa instanceof Error ? causa.message : "Não foi possível abrir a prancha.");
-    } finally {
-      definirAbrindo(null);
-    }
-  }
-
   async function criar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
+    const novaAba = window.open("", "_blank");
+    if (novaAba) novaAba.opener = null;
     const formulario = new FormData(evento.currentTarget);
     const projectId = String(formulario.get("projectId") ?? "");
     definirCriando(true);
@@ -241,8 +226,11 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
       const corpo = await resposta.json() as { prancha: Resumo };
       definirDialogoAberto(false);
       await recarregar();
-      await abrir(corpo.prancha.id);
+      const destino = `/prancheta/${corpo.prancha.id}`;
+      if (novaAba) novaAba.location.href = destino;
+      else toast.info("Prancha criada. Abra o editor em outra aba pela lista de pranchas.");
     } catch (causa) {
+      novaAba?.close();
       toast.error(causa instanceof Error ? causa.message : "Não foi possível criar a prancha.");
     } finally {
       definirCriando(false);
@@ -259,12 +247,6 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
     } catch (causa) {
       toast.error(causa instanceof Error ? causa.message : "Não foi possível apagar a prancha.");
     }
-  }
-
-  if (aberta) {
-    return <PranchetaEditor prancha={aberta} canEdit={canEdit}
-      onVoltar={() => { definirAberta(null); void recarregar(); }}
-      onSalvo={(atualizada) => definirAberta((anterior) => anterior ? { ...anterior, ...atualizada } : atualizada)} />;
   }
 
   const termo = query.trim().toLowerCase();
@@ -307,9 +289,9 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
               Revisão {prancha.revisao} · {dataCurta(prancha.atualizadoEm)}{prancha.autor ? ` · ${prancha.autor}` : ""}
             </p>
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => void abrir(prancha.id)} disabled={abrindo === prancha.id}>
-                {abrindo === prancha.id ? <LoaderCircle className="animate-spin" /> : <DraftingCompass />}Abrir na prancheta
-              </Button>
+              <Button size="sm" asChild><a href={`/prancheta/${prancha.id}`} target="_blank" rel="noopener noreferrer">
+                <DraftingCompass />Abrir editor em outra aba
+              </a></Button>
               {canEdit && <Button variant="outline" size="sm" onClick={() => void apagar(prancha)} aria-label={`Apagar ${prancha.nome}`}><Trash2 /></Button>}
             </div>
           </CardContent></Card>)}
@@ -343,7 +325,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
             </NativeSelect>
           </div>
           <Button type="submit" disabled={criando} className="w-full">
-            {criando ? <LoaderCircle className="animate-spin" /> : <Plus />}Criar e abrir
+            {criando ? <LoaderCircle className="animate-spin" /> : <Plus />}Criar e abrir em outra aba
           </Button>
         </form>
       </DialogContent>

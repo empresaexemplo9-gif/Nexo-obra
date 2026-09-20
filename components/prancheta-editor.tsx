@@ -68,6 +68,26 @@ const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2
   { id: "estender", rotulo: "Estender — clique na ponta que deve crescer", icone: MoveHorizontal, atalho: "N" },
 ];
 
+const instrucoes: Record<Ferramenta, string> = {
+  selecionar: "Clique em um elemento para selecionar. Segure o botão esquerdo, arraste e solte para mover. Arraste o espaço vazio para deslocar a vista.",
+  parede: "Clique no início e no fim da parede. Continue clicando para encadear paredes; Esc encerra.",
+  comodo: "Clique em cada canto do cômodo e use Fechar cômodo para concluir.",
+  porta: "Clique no ponto onde a porta deve ser colocada e ajuste suas medidas no painel Seleção.",
+  janela: "Clique no ponto da janela e ajuste largura ou rotação no painel Seleção.",
+  passagem: "Clique no ponto da passagem e ajuste suas medidas no painel Seleção.",
+  simbolo: "Escolha o símbolo no painel e clique no desenho para colocá-lo.",
+  mobilia: "Clique no desenho para inserir um móvel e ajuste suas dimensões no painel Seleção.",
+  imagem: "Escolha uma imagem da biblioteca e clique no desenho para colocá-la.",
+  texto: "Clique onde a anotação deve aparecer; edite o texto no painel Seleção.",
+  cota: "Clique nos dois pontos que deseja medir. A distância aparece na prancha.",
+  traco: "Segure o botão esquerdo e arraste para desenhar um traço livre; solte para concluir.",
+  circulo: "Clique no centro e depois no ponto que define o raio.",
+  arco: "Clique no centro, no início e no fim do arco.",
+  espelhar: "Selecione um elemento, marque dois pontos do eixo e crie sua cópia espelhada.",
+  aparar: "Selecione uma parede ou traço e clique no trecho que deve ser removido.",
+  estender: "Selecione uma parede ou traço e clique na ponta que deve alcançar o limite.",
+};
+
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
 // cada traço seria burocracia: quem coloca uma tomada está no elétrico por definição.
 const camadaDaFerramenta: Record<Ferramenta, string> = {
@@ -238,14 +258,17 @@ function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: E
     stroke={selecionado ? "#846100" : "#1C190F"} strokeWidth={Math.max(elemento.espessuraMm, minimumStroke)} strokeLinecap="round" strokeLinejoin="round" />;
 }
 
-export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
+export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false }: {
   prancha: Prancha; canEdit: boolean; onVoltar: () => void;
   onSalvo: (atualizada: Prancha) => void;
+  fullPage?: boolean;
 }) {
   const [documento, definirDocumento] = useState<Documento>(prancha.documento);
   const [revisao, definirRevisao] = useState(prancha.revisao);
   const [nome, definirNome] = useState(prancha.nome);
   const [ferramenta, definirFerramenta] = useState<Ferramenta>("selecionar");
+  const [ajudaVisivel, definirAjudaVisivel] = useState<Ferramenta | null>(null);
+  const temporizadorAjuda = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [familia, definirFamilia] = useState<string>("tomada-media");
   const [itemImagem, definirItemImagem] = useState<ItemBiblioteca | null>(null);
   const [biblioteca, definirBiblioteca] = useState<ItemBiblioteca[]>([]);
@@ -277,6 +300,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const arrastando = useRef<{ id: string; de: { x: number; y: number } } | null>(null);
   const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
   const verticeArrastado = useRef<{ id: string; indice: number } | null>(null);
+
+  function esconderAjuda() {
+    if (temporizadorAjuda.current) clearTimeout(temporizadorAjuda.current);
+    temporizadorAjuda.current = null;
+    definirAjudaVisivel(null);
+  }
+
+  function aguardarAjuda(id: Ferramenta) {
+    esconderAjuda();
+    temporizadorAjuda.current = setTimeout(() => definirAjudaVisivel(id), 4000);
+  }
+
+  useEffect(() => () => {
+    if (temporizadorAjuda.current) clearTimeout(temporizadorAjuda.current);
+  }, []);
 
   const camadaAtiva = camadaDaFerramenta[ferramenta];
   const bloqueada = camadaBloqueada(documento, camadaAtiva);
@@ -470,11 +508,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   }
 
   function aoApontar(evento: React.PointerEvent<SVGSVGElement>) {
+    esconderAjuda();
     if (evento.button === 1 || evento.button === 2 || evento.shiftKey) {
       panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y } };
-      (evento.target as Element).setPointerCapture?.(evento.pointerId);
+      evento.currentTarget.setPointerCapture?.(evento.pointerId);
       return;
     }
+    if (evento.button !== 0) return;
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
     const origem = pendentes.length ? pendentes[pendentes.length - 1] : null;
@@ -492,7 +532,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
         if (alca) {
           marcarHistorico();
           verticeArrastado.current = { id: selecionado.id, indice: alca.indice };
-          (evento.target as Element).setPointerCapture?.(evento.pointerId);
+          evento.currentTarget.setPointerCapture?.(evento.pointerId);
           return;
         }
       }
@@ -501,7 +541,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       if (alvo && canEdit) {
         marcarHistorico();
         arrastando.current = { id: alvo.id, de: ponto };
-        (evento.target as Element).setPointerCapture?.(evento.pointerId);
+        evento.currentTarget.setPointerCapture?.(evento.pointerId);
+      } else if (!alvo) {
+        // Na seleção, arrastar o espaço vazio com o botão esquerdo desloca a vista.
+        panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y } };
+        evento.currentTarget.setPointerCapture?.(evento.pointerId);
       }
       return;
     }
@@ -590,7 +634,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     }
     if (ferramenta === "traco") {
       definirPendentes([ponto]);
-      (evento.target as Element).setPointerCapture?.(evento.pointerId);
+      evento.currentTarget.setPointerCapture?.(evento.pointerId);
       return;
     }
     colocar(ponto);
@@ -646,7 +690,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     }
   }
 
-  function aoSoltar() {
+  function aoSoltar(evento?: React.PointerEvent<SVGSVGElement>) {
+    if (evento?.currentTarget.hasPointerCapture?.(evento.pointerId)) evento.currentTarget.releasePointerCapture(evento.pointerId);
     if (panorama.current) { panorama.current = null; return; }
     if (verticeArrastado.current) { verticeArrastado.current = null; return; }
     if (arrastando.current) { arrastando.current = null; return; }
@@ -888,7 +933,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
   const faltas = conferencia.achados.filter((achado) => achado.severidade === "falta").length;
   const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
 
-  return <div className="prancheta space-y-4">
+  return <div className={`prancheta space-y-4 ${fullPage ? "prancheta-ampla" : ""}`}>
     <header className="prancheta-barra flex flex-wrap items-center gap-2">
       <Button variant="ghost" size="sm" onClick={onVoltar}><ArrowLeft />Pranchas</Button>
       <Input value={nome} onChange={(evento) => { definirNome(evento.target.value); definirSujo(true); }}
@@ -974,12 +1019,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
     <div className="prancheta-area grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">
         <div className="grid grid-cols-4 gap-1 xl:grid-cols-3">
-          {ferramentas.map((item) => <button key={item.id} type="button"
-            onClick={() => { definirFerramenta(item.id); definirPendentes([]); }}
-            aria-pressed={ferramenta === item.id} aria-label={`${item.rotulo} (${item.atalho})`} title={`${item.rotulo} — tecla ${item.atalho}`}
-            className="grid h-11 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
-            <item.icone className="size-4" />
-          </button>)}
+          {ferramentas.map((item) => <div key={item.id} className="relative">
+            <button type="button"
+              onClick={() => { esconderAjuda(); definirFerramenta(item.id); definirPendentes([]); }}
+              onPointerEnter={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
+              onPointerMove={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
+              onPointerLeave={esconderAjuda} onPointerDown={esconderAjuda}
+              aria-pressed={ferramenta === item.id} aria-label={`${item.rotulo} (${item.atalho})`}
+              aria-describedby={ajudaVisivel === item.id ? `ajuda-${item.id}` : undefined}
+              className="grid h-11 w-full place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+              <item.icone className="size-4" />
+            </button>
+            {ajudaVisivel === item.id && <div id={`ajuda-${item.id}`} role="tooltip"
+              className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-hoikos-200 bg-white p-3 text-left shadow-lg">
+              <p className="text-sm font-semibold text-hoikos-900">{item.rotulo} · tecla {item.atalho}</p>
+              <p className="mt-1 text-xs leading-5 text-hoikos-700">{instrucoes[item.id]}</p>
+            </div>}
+          </div>)}
         </div>
         <p className="text-xs leading-5 text-hoikos-500">{ferramentas.find((item) => item.id === ferramenta)?.rotulo}</p>
 
@@ -1081,8 +1137,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo }: {
       <div className="prancheta-mesa overflow-hidden rounded-md border border-hoikos-200 bg-white">
         <svg ref={svgRef} role="application" aria-label={`Prancha ${nome}`}
           viewBox={`${vista.x} ${vista.y} ${vista.largura} ${vista.largura * 0.62}`}
-          className="h-[min(70svh,640px)] w-full touch-none"
-          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerLeave={() => definirCursor(null)}
+          className={fullPage ? "w-full touch-none" : "h-[min(70svh,640px)] w-full touch-none"}
+          style={fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : undefined}
+          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={aoSoltar} onPointerLeave={() => definirCursor(null)}
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
             <pattern id="prancheta-malha-padrao" width={passoMalha} height={passoMalha} patternUnits="userSpaceOnUse">
