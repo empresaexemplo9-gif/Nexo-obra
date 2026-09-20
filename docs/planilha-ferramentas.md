@@ -4,11 +4,11 @@ Esta entrega amplia o editor existente. Não representa equivalência integral c
 
 ## Recursos adicionados
 
-- Desfazer e refazer até 50 alterações nesta sessão, incluindo edição, estrutura, importação e receitas. O histórico não volta a uma revisão antiga do servidor.
+- Desfazer e refazer até 50 alterações nesta sessão, incluindo edição, estrutura, formatos, importação e receitas. Grades grandes reduzem o número de passos para respeitar o orçamento de 400.000 células no histórico. O histórico não volta a uma revisão antiga do servidor. Os botões descrevem a ação; na grade, Ctrl+Z desfaz e Ctrl+Shift+Z ou Ctrl+Y refazem.
 - Moeda brasileira, percentual e número com duas casas por coluna. A formatação não arredonda o valor utilizado nas fórmulas.
 - Negrito nas células selecionadas e aplicação das larguras previstas pelos modelos. Formatos, larguras e negrito acompanham inserções e exclusões de linhas/colunas.
 - Filtro visual por conteúdo. As fórmulas continuam usando todas as linhas. Seleções podem incluir linhas ocultas, conforme aviso na interface.
-- Ctrl+C copia valores como tabela; Ctrl+V cola tabelas a partir da célula ativa, inclusive do Excel ou Google Planilhas. O editor de uma célula mantém os atalhos normais de texto.
+- Ctrl+C copia valores como tabela; Ctrl+V cola tabelas TSV a partir da célula ativa, inclusive do Excel ou Google Planilhas, expandindo a grade quando necessário. Vírgulas decimais e ponto e vírgula de fórmulas são preservados. Blocos que excedem os limites são recusados inteiros. Para CSV, escolha o separador em Ferramentas. O editor de uma célula mantém os atalhos normais de texto.
 - Importação CSV/TSV com separador selecionável, aspas, campos multilinha e validação antes de alterar a grade. O destino é substituído e a operação pode ser desfeita.
 - Localizar e substituir texto na seleção, com prévia; fórmulas são preservadas.
 - Receitas de ações em sequência: remover espaços, maiúsculas, minúsculas, conversão numérica, fórmulas em valores e limpeza. A prévia informa células afetadas. Uma mudança posterior na planilha invalida a prévia.

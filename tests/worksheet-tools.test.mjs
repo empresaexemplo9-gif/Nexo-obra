@@ -70,6 +70,16 @@ test("receitas têm validação no servidor e conteúdo antigo continua válido"
   assert.equal(contentSchema.safeParse({ recipes: [{ name: "Script", actions: ["eval"] }] }).success, false);
 });
 
+test("histórico preserva conteúdo completo e reabrir a mesma planilha elimina passos antigos", () => {
+  const original = { id:"a", revision:1, rows:3, columns:3, content:{cells:{B1:"12"},formats:{B:"moeda"},widths:{B:220},bold:["B1"],recipes:[{name:"Limpar",actions:["trim"]}]} };
+  let history = worksheetHistory({current:null,past:[],future:[]},{type:"reset",value:original});
+  history = worksheetHistory(history,{type:"set",value:{...original,columns:2,content:{...original.content,cells:{},formats:{},widths:{},bold:[]}},label:"Excluir coluna B"});
+  history = worksheetHistory(history,{type:"undo"});
+  assert.deepEqual(history.current,original);
+  history = worksheetHistory(history,{type:"reset",value:{...original,revision:2}});
+  assert.equal(history.past.length,0); assert.equal(history.future.length,0);
+});
+
 test("colar valores conserva texto literal, booleanos e erros ao copiar", () => {
   const cells = { A1: '=CONCAT("=";"1+2")', A2: "=1>2", A3: '=CONCAT("00";"123")', A4: "=1/0" };
   const next = tools.runActions(cells, ["A1", "A2", "A3"], ["values"]);

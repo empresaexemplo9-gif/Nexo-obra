@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownAZ, ArrowDownWideNarrow, ChartNoAxesCombined, CircleAlert, Columns3, Download, FileSpreadsheet,
-  FileText, LoaderCircle, Plus, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2,
+  FileText, LoaderCircle, Plus, Redo2, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,12 +20,13 @@ import {
   axisLastFilled, axisRange, axisTotal,
   SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetAxis, type SheetCells, type SheetResult,
 } from "@/lib/spreadsheet";
+import { analisarColagem, rotuloDaColagem } from "@/lib/sheet-clipboard";
 import { AnalysisPanel, GrantsPanel } from "@/components/analysis-panel";
 import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
-import { formattedCell, parseTable, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
+import { formattedCell, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
 import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
@@ -78,17 +79,20 @@ function arredondarExibicao(valor: number | null) {
 type AxisSelection = { kind: SheetAxis; index: number };
 
 function Grid({
-  cells, columns, rows, computed, active, selected, axis, onActive, onEstender, onAxis, onChange,
-  formats, bold, widths, filter, readOnly, onPasteTable, onCopyCells,
+  cells, columns, rows, computed, active, selected, axis,
+  onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
+  formats, bold, widths, filter, readOnly, onCopyCells,
 }: {
   formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
-  onPasteTable: (table: string[][]) => void;
   onCopyCells: () => string;
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
   active: string; selected: Set<string>; axis: AxisSelection | null;
   onActive: (key: string, additive?: boolean) => void;
   onEstender: (key: string) => void;
   onAxis: (kind: SheetAxis, index: number) => void; onChange: (key: string, value: string) => void;
+  onColar: (texto: string) => void;
+  onDesfazer: () => void;
+  onRefazer: () => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -132,7 +136,7 @@ function Grid({
     const text = event.clipboardData.getData("text/plain");
     if (!text) return;
     event.preventDefault();
-    try { onPasteTable(parseTable(text, "\t")); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível colar."); }
+    try { onColar(text); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível colar."); }
   }}>
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
@@ -218,6 +222,17 @@ function Grid({
                     onDoubleClick={() => { if (!readOnly) { setDraft(cells[key] ?? ""); setEditing(key); } }}
                     onKeyDown={(event) => {
                       if (readOnly && !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(event.key)) return;
+                      // Desfazer/refazer antes de tudo: é atalho com modificador, e o
+                      // resto do handler trata tecla solta. Ficam presos à grade de
+                      // propósito — Ctrl+Z no campo de nome da planilha tem que
+                      // continuar desfazendo o que a pessoa digitou lá.
+                      if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+                        const tecla = event.key.toLowerCase();
+                        if (tecla === "z" && !event.shiftKey) { event.preventDefault(); onDesfazer(); return; }
+                        // Ctrl+Shift+Z e Ctrl+Y: o primeiro é o de quem veio do Google
+                        // Sheets, o segundo o de quem veio do Excel no Windows.
+                        if ((tecla === "z" && event.shiftKey) || tecla === "y") { event.preventDefault(); onRefazer(); return; }
+                      }
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
                       if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
                       // Com Shift a seta ESTENDE a faixa em vez de mover o cursor. É o que
@@ -250,7 +265,7 @@ function Grid({
 export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const [list, setList] = useState<WorksheetSummary[]>([]);
   const history = useWorksheetHistory<Worksheet>();
-  const { current, set: setCurrent } = history;
+  const { current, set: setCurrent, reset: resetCurrent } = history;
   const [rowFilter, setRowFilter] = useState("");
   const [access, setAccess] = useState<Access | null>(null);
   const [canGovern, setCanGovern] = useState(false);
@@ -301,7 +316,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setError("");
     setConflito(null);
     const result = await api<{ worksheet: Worksheet; access: Access }>(`/api/worksheets/${id}`);
-    setCurrent(result.worksheet);
+    resetCurrent(result.worksheet);
     setAccess(result.access);
     setActive("A1");
     setFaixa({ ancora: "A1", foco: "A1" });
@@ -309,7 +324,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setAxis(null);
     setDirty(false);
     setRowFilter("");
-  }, [setCurrent]);
+  }, [resetCurrent]);
 
   const readOnly = access ? !access.canEdit : false;
 
@@ -406,27 +421,39 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return { raw: current.content.cells[active] ?? "", result };
   }, [computed, current, active]);
 
-  function updateContent(change: (content: WorksheetContent) => WorksheetContent) {
-    if (readOnly) return;
-    setCurrent((sheet) => (sheet ? { ...sheet, content: change(sheet.content) } : sheet));
-    setDirty(true);
+  function aplicar(label: string, change: (sheet: Worksheet) => Worksheet) {
+    if (!current || readOnly || saving) return;
+    setCurrent(sheet => sheet ? change(sheet) : sheet, label); setDirty(true);
   }
-
+  function updateContent(label: string, change: (content: WorksheetContent) => WorksheetContent): void;
+  function updateContent(change: (content: WorksheetContent) => WorksheetContent): void;
+  function updateContent(labelOrChange: string | ((content: WorksheetContent) => WorksheetContent), change?: (content: WorksheetContent) => WorksheetContent) {
+    const label = typeof labelOrChange === "string" ? labelOrChange : "Alterar ferramentas da planilha";
+    const update = typeof labelOrChange === "function" ? labelOrChange : change!;
+    aplicar(label, sheet => ({ ...sheet, content: update(sheet.content) }));
+  }
   function insertTable(table: string[][]) {
-    if (!current || readOnly) return;
+    if (!current || readOnly || saving) return;
     try {
       const result = placeTable(current.content.cells, active, table);
-      setCurrent({ ...current, columns: Math.max(current.columns, result.columns), rows: Math.max(current.rows, result.rows), content: { ...current.content, cells: result.cells } });
-      setDirty(true);
-      toast.success(`${table.length} linha(s) inseridas. Use Desfazer para reverter.`);
+      aplicar(`Colar ${rotuloDaColagem(table)}`, sheet => ({ ...sheet, columns: Math.max(sheet.columns, result.columns), rows: Math.max(sheet.rows, result.rows), content: { ...sheet.content, cells: result.cells } }));
+      toast.success(`Colado: ${rotuloDaColagem(table)}`);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível inserir."); }
   }
-
+  function colar(text: string) {
+    if (text.length > 2_000_000) { toast.error("A colagem excede 2 MB."); return; }
+    // Clipboard from Excel/Sheets is TSV. Guessing commas corrupts decimal values,
+    // and guessing semicolons splits formulas. CSV has an explicit delimiter in Tools.
+    const table = analisarColagem(text, "\t");
+    if (table.length) insertTable(table);
+  }
   function travelHistory(direction: "undo" | "redo") {
-    if (readOnly) return;
+    if (readOnly || saving) return;
     history[direction](); setDirty(true); setActive("A1"); setAxis(null);
     setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]);
   }
+  const desfazerAgora = () => travelHistory("undo");
+  const refazerAgora = () => travelHistory("redo");
 
   // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
   function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column" | "fill-down") {
@@ -450,8 +477,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const nextColumns = operation === "insert-column" ? current.columns + 1
       : operation === "delete-column" ? current.columns - 1 : current.columns;
 
-    setCurrent((sheet) => {
-      if (!sheet) return sheet;
+    const rotulo =
+      operation === "insert-row" ? `Inserir linha ${address.row + 1}`
+      : operation === "delete-row" ? `Excluir linha ${address.row + 1}`
+      : operation === "insert-column" ? `Inserir coluna ${columnName(address.column)}`
+      : operation === "delete-column" ? `Excluir coluna ${columnName(address.column)}`
+      : "Preencher para baixo";
+
+    aplicar(rotulo, (sheet) => {
       const cells = sheet.content.cells;
       const next =
         operation === "insert-row" ? insertRow(cells, address.row)
@@ -503,7 +536,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       setFaixa({ ancora: dentro, foco: dentro });
       setAvulsas([]);
     }
-    setDirty(true);
   }
 
   function sort(direction: "asc" | "desc") {
@@ -517,19 +549,19 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       toast.error("Há fórmula nas linhas a ordenar. Ordenar moveria as referências para o lugar errado.");
       return;
     }
-    updateContent((content) => ({ ...content, cells: result.cells }));
+    updateContent(
+      `Ordenar por ${columnName(address.column)} (${direction === "asc" ? "crescente" : "decrescente"})`,
+      (content) => ({ ...content, cells: result.cells }),
+    );
     toast.success("Linhas reordenadas");
   }
 
   function updateCell(key: string, value: string) {
-    if (readOnly) return;
-    setCurrent((sheet) => {
-      if (!sheet) return sheet;
+    aplicar(value.trim() === "" ? `Apagar ${key}` : `Editar ${key}`, (sheet) => {
       const cells = { ...sheet.content.cells };
       if (value.trim() === "") delete cells[key]; else cells[key] = value;
       return { ...sheet, content: { ...sheet.content, cells } };
     });
-    setDirty(true);
   }
 
   async function create(kind: WorksheetKind, templateId?: string) {
@@ -602,7 +634,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   /** Desiste do que está na tela e assume a versão do servidor. */
   function usarVersaoDoServidor() {
     if (!conflito) return;
-    setCurrent(conflito);
+    resetCurrent(conflito);
     setConflito(null);
     setDirty(false);
     toast.success("Versão do servidor carregada");
@@ -640,8 +672,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       if (anchor.column + result.headers.length > SHEET_MAX_COLUMNS || anchor.row + result.rows.length + 1 > SHEET_MAX_ROWS) {
         toast.error("Os dados não cabem a partir desta célula. Escolha uma célula mais acima ou à esquerda."); return;
       }
-      setCurrent((sheet) => {
-        if (!sheet) return sheet;
+      aplicar(`Inserir ${result.rows.length} linha(s) de dados`, (sheet) => {
         const cells = { ...sheet.content.cells };
         result.headers.forEach((header, column) => { cells[cellKey({ column: anchor.column + column, row: anchor.row })] = header; });
         result.rows.forEach((row, line) => row.forEach((value, column) => {
@@ -657,7 +688,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           content: { ...sheet.content, cells },
         };
       });
-      setDirty(true);
       toast.success(`${result.rows.length} linha(s) reais inseridas`);
     } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trazer os dados."); }
   }
@@ -673,8 +703,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       while (row < SHEET_MAX_ROWS && current.content.cells[cellKey({ column: address.column, row })]?.trim()) row += 1;
       if (row >= SHEET_MAX_ROWS) { toast.error("Não há célula livre abaixo da seleção para inserir o resultado."); return; }
       const destination = cellKey({ column: address.column, row });
-      updateCell(destination, `=${name}(${selected.join(";")})`);
-      setCurrent((sheet) => sheet ? { ...sheet, rows: Math.max(sheet.rows, row + 1) } : sheet);
+      // Célula e altura numa alteração só: em duas, desfazer uma vez tiraria a fórmula
+      // e deixaria a linha extra, e seriam necessários dois cliques para voltar.
+      aplicar(`Inserir ${name} em ${destination}`, (sheet) => ({
+        ...sheet,
+        rows: Math.max(sheet.rows, row + 1),
+        content: {
+          ...sheet.content,
+          cells: { ...sheet.content.cells, [destination]: `=${name}(${selected.join(";")})` },
+        },
+      }));
       selectCell(destination);
       return;
     }
@@ -817,7 +855,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           body={current.content.body}
           cells={current.content.cells}
           readOnly={readOnly}
-          onChange={(body) => { updateContent((content) => ({ ...content, body })); }}
+          onChange={(body) => { updateContent("Editar o texto", (content) => ({ ...content, body })); }}
         /> : (
           <Tabs defaultValue="grade">
             <TabsList>
@@ -831,8 +869,6 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 <Input aria-label="Filtrar linhas" placeholder="Filtrar linhas por conteúdo…" value={rowFilter} onChange={event => setRowFilter(event.target.value)} className="max-w-sm" />
                 {rowFilter && <Button size="sm" variant="ghost" onClick={() => setRowFilter("")}>Limpar filtro</Button>}
                 {!readOnly && <>
-                  <Button size="sm" variant="outline" disabled={!history.canUndo} onClick={() => travelHistory("undo")}>Desfazer</Button>
-                  <Button size="sm" variant="outline" disabled={!history.canRedo} onClick={() => travelHistory("redo")}>Refazer</Button>
                   <Button size="sm" variant="outline" onClick={() => {
                     const chosen = chavesDoResumo;
                     updateContent(content => {
@@ -862,6 +898,26 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
                 <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-hoikos-50 p-2">
+                  {/*
+                    Desfazer e refazer abrem a barra porque são a saída de todo o resto
+                    dela: remover coluna e ordenar são as ações que a pessoa mais erra, e
+                    até agora errar significava perder. O título diz O QUE vai voltar —
+                    botão que só diz "desfazer" obriga a clicar para descobrir, e
+                    descobrir errado é outra perda.
+                  */}
+                  <Button
+                    size="sm" variant="ghost" onClick={desfazerAgora}
+                    disabled={!history.canUndo}
+                    title={history.undoLabel}
+                    aria-label={history.undoLabel}
+                  ><Undo2 />Desfazer</Button>
+                  <Button
+                    size="sm" variant="ghost" onClick={refazerAgora}
+                    disabled={!history.canRedo}
+                    title={history.redoLabel}
+                    aria-label={history.redoLabel}
+                  ><Redo2 />Refazer</Button>
+                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-row")}><Rows3 />Inserir linha</Button>
                   <Button size="sm" variant="ghost" onClick={() => structural("delete-row")}>Remover linha</Button>
                   <span className="mx-1 h-5 w-px bg-hoikos-200" />
@@ -875,11 +931,11 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               )}
               <Grid
                 formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
-                onPasteTable={insertTable}
                 onCopyCells={() => selectionToTsv(current.content.cells, chavesDoResumo)}
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
+                onColar={colar} onDesfazer={desfazerAgora} onRefazer={refazerAgora}
               />
               {/*
                 A barra de resumo. Antes era uma frase de ajuda com uma soma grudada no
@@ -933,7 +989,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               <AnalysisPanel
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 settings={current.content.analysis} canEdit={!readOnly}
-                onChange={(analysis) => updateContent((content) => ({ ...content, analysis }))}
+                onChange={(analysis) => updateContent("Alterar a leitura financeira", (content) => ({ ...content, analysis }))}
               />
             </TabsContent>
 
