@@ -68,7 +68,7 @@ export function WorksheetToolsPanel({ cells, keys, recipes, onCells, onTable, on
       </div>}
       <div className="space-y-2 border-t pt-3">
         <p className="font-medium">Importar CSV na célula ativa</p>
-        <p className="text-xs text-hoikos-500">O conteúdo da área de destino será substituído. Use Desfazer para reverter. Para XLSX, copie as células no Excel e cole na grade ou exporte como CSV.</p>
+        <p className="text-xs text-hoikos-500">O conteúdo da área de destino será substituído. Use Desfazer para reverter. Arquivos Excel podem ser abertos em Importar e exportar XLSX.</p>
         <div className="flex flex-wrap items-center gap-2">
           <NativeSelect aria-label="Separador CSV" value={delimiter} onChange={event => setDelimiter(event.target.value)}>
             <option value=";">Ponto e vírgula (;)</option><option value=",">Vírgula (,)</option><option value={"\t"}>Tabulação</option>

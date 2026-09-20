@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { advancedSchema } from "@/lib/worksheet-advanced";
 
 import { SHEET_MAX_COLUMNS, SHEET_MAX_ROWS } from "@/lib/spreadsheet";
 
@@ -22,6 +23,7 @@ export const analysisSettingsSchema = z.object({
 }).strict();
 
 export const contentSchema = z.object({
+  advanced: advancedSchema.optional(),
   cells: cellsSchema.default({}),
   body: z.string().max(400_000).default(""),
   widths: z.record(z.string(), z.number().int().min(60).max(600)).default({}),

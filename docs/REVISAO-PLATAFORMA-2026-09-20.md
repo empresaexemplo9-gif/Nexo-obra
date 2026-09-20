@@ -18,7 +18,7 @@ Base: `de0696b`. Inventário de código, contratos de API, testes e diagnóstico
 | Portal | Convites, publicação seletiva, decisões e ajustes | Executar regressões de isolamento, expiração e decisão idempotente. | Documentos arbitrários e integração de aprovações com orçamento. |
 | Financeiro/Drap | Adaptador, centro de custo, cobrança, webhook e conciliação de eventos | Homologação ao vivo depende de credencial/tenant, não apenas build. Nenhuma transação financeira será criada como teste de produção. | Completar fluxos apenas sobre contratos homologados do fornecedor. |
 | SINAPI | Ingestão retomável e ativação com conferência | Validar fonte real e amostra de preços com superadmin; a declaração do README não comprova homologação atual. | Composições e cobertura adicional conforme fonte/licença disponível. |
-| Planilhas/documentos | Fórmulas, modelos, importação CSV/colagem, formatos e receitas | Regressão da fase publicada e preservação de permissões/revisões. | XLSX completo, tabelas dinâmicas, gráficos gerais, validação, formatação condicional e colaboração simultânea. |
+| Planilhas/documentos | Fórmulas, modelos, CSV/colagem, receitas, validação, cores condicionais, resumo agrupado, gráficos de barras/linhas e XLSX de valores | Regressão de persistência, permissões, revisão, precisão e limites de arquivos. | XLSX com fórmulas executáveis/objetos/estilos completos, pivô multidimensional, novos tipos de gráfico e colaboração simultânea. |
 | Prancheta | CAD 2D, NEXO/DXF/DWG, camadas, exportação e encaixes | Executar suíte geométrica e de interface, sem declarar compatibilidade não existente. | BIM/3D/GIS, colaboração, estilos/layouts avançados e demais itens de `cad-implementation.md`. |
 | Lembretes/metas | Agenda por acesso, metas e ações | Regressões de permissão e cálculo; dependem dos dados reais disponíveis. | Notificações externas mediante canal configurado e consentimento. |
 | Tempo de uso | Heartbeat, histórico por pessoa/empresa | Validar isolamento e medição no servidor. Tempo online não equivale a horas produtivas. | Apontamento de trabalho por atividade como recurso separado. |
@@ -54,7 +54,7 @@ Inventário concluído e apresentado antes das alterações. Implementações de
 
 ## Ordem de implementação restante
 
-1. Planilhas: XLSX, gráficos e tabelas dinâmicas, validação/formatação condicional e testes de compatibilidade; depois colaboração e automações programadas com histórico de execução. As receitas atuais são selecionáveis e executadas manualmente.
+1. Planilhas: ampliar a compatibilidade XLSX além de valores, pivô multidimensional, colaboração e automações programadas com histórico de execução. As receitas atuais são selecionáveis e executadas manualmente.
 2. Operação: entregáveis, checklists, horas por tarefa, capacidade editável, revisões de arquivos e paginação. Medições/compras/fornecedores exigem entidades e regras próprias, não apenas novas telas.
 3. Comercial: etapas configuráveis, histórico de atividades e aceite do cliente associado a uma versão imutável de orçamento.
 4. Planejamento: calendário útil, recálculo com prévia dos impactos, caminho crítico e curva S baseada em medições.
@@ -62,3 +62,14 @@ Inventário concluído e apresentado antes das alterações. Implementações de
 6. CAD/BIM: seguir as lacunas do inventário especializado em `cad-implementation.md`, sem apresentar CAD 2D como BIM completo.
 
 Esta entrega corrige as falhas imediatas e acrescenta os recursos acima. Os itens restantes não foram implantados e não estão contabilizados como concluídos.
+
+## Ampliação de planilhas e segurança
+
+- Validação por intervalo: lista selecionável, limites numéricos inclusivos, data real AAAA-MM-DD e preenchimento obrigatório. O painel lista erros; a grade os marca; API recusa gravação inválida sem mudar a revisão. Até 20 regras.
+- Formatação condicional: maior/menor, igualdade, texto e vazio; quatro cores, última regra prevalece, até 20 regras. Usa resultados calculados.
+- Tabelas dinâmicas de um agrupamento: soma, média, contagem, mínimo e máximo, até 10 resumos persistidos. Gráficos de barras e linhas com zero e valores negativos; tabela completa acessível e cópia dos resultados. Gráficos mostram os primeiros 40 grupos e informam esse limite; a tabela inclui todos. Erros de fórmula impedem um resumo enganoso.
+- Regras e resumos acompanham inserção/exclusão de linhas/colunas e desfazer/refazer. Exclusão de toda a referência remove a regra; excluir a coluna de agrupamento/valor remove o resumo.
+- XLSX de valores com prévia por aba, substituição local reversível e gravação posterior. API exige edição para importar e leitura para exportar, oculta planilhas não autorizadas e recusa exportação de revisão desatualizada. Limites, perdas de compatibilidade e resultados de fórmulas aparecem na interface. Sem macros nem vínculos externos. Valores textuais como 00123 e números em notação científica são preservados.
+- ExcelJS 4.4.0 adicionado somente no servidor: o leitor seletivo SINAPI existente não cobre edição/exportação de arquivos XLSX. ZIP verifica tamanho real, CRC e limite total antes do parser; a exportação não executa fórmulas recebidas.
+- Revisão de dependências: Next.js/eslint-config-next 16.3.5 e dependências transitivas corrigidas. Override de uuid 11.1.1 para a dependência ExcelJS, mantendo CommonJS e API v4 compatíveis. `npm audit --omit=dev` retornou zero vulnerabilidades conhecidas após a atualização.
+- Esta fase não exige migração SQL. Configurações ficam no conteúdo versionado da planilha. Não foram inseridos dados fictícios em produção. A lista dos outros módulos e homologações continua aberta conforme o inventário acima.

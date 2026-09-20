@@ -19,6 +19,10 @@ flowchart TD
 
 ## O que já está no código
 
+As planilhas possuem validação de preenchimento (listas, números, datas e obrigatoriedade), cores condicionais e resumos agrupados com soma, contagem, média, mínimo e máximo, exibidos como tabela ou gráfico de barras/linhas. Configurações são persistidas, ajustadas ao inserir/excluir e incluídas no desfazer/refazer. Valores inválidos impedem salvar também na API.
+
+XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados. Importa valores e resultados salvos de fórmulas; não importa estilos, macros, vínculos externos, mesclagens ou objetos. Exporta valores calculados, formatos de coluna, negrito e cores atuais, com fórmulas originais em aba de referência textual. Limites: 10 MB comprimidos, 32 MB descomprimidos, 20 abas por arquivo, 20.000 células preenchidas no conjunto, 500 linhas e 52 colunas por aba. A exportação exige a revisão salva atual. O processamento usa ExcelJS no servidor; nenhum código dessa dependência entra no cliente.
+
 - Revisão operacional de 20/09/2026: edição de clientes, oportunidades, projetos/obras e tarefas; reabertura e filtros de tarefas; linha do tempo; carga estimada por responsável; cópia de orçamento e proposta imprimível. Carregamento isolado por módulo, validação de datas/dependências e correção de upload. [Inventário, validação e pendências por módulo](docs/REVISAO-PLATAFORMA-2026-09-20.md).
 
 - CAD integrado à Prancheta: linha de comandos, medidas fracionárias e importação NEXO, DXF e DWG (conversão local em WebAssembly, sem configuração externa obrigatória). [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.

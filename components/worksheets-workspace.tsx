@@ -28,6 +28,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
 import { formattedCell, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
 import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
+import { WorksheetAdvancedPanel } from "@/components/worksheet-advanced-panel";
+import { WorksheetXlsxPanel } from "@/components/worksheet-xlsx-panel";
+import { conditionalColors, emptyAdvanced, moveAdvanced, validationIssues, type AdvancedSettings } from "@/lib/worksheet-advanced";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
 type WorksheetSummary = {
@@ -38,6 +41,7 @@ type WorksheetContent = {
   cells: SheetCells; body: string; widths: Record<string, number>;
   formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
   recipes?: WorksheetRecipe[];
+  advanced?: AdvancedSettings;
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
@@ -81,8 +85,9 @@ type AxisSelection = { kind: SheetAxis; index: number };
 function Grid({
   cells, columns, rows, computed, active, selected, axis,
   onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
-  formats, bold, widths, filter, readOnly, onCopyCells,
+  formats, bold, widths, filter, readOnly, onCopyCells, colors, issues,
 }: {
+  colors: Record<string, string>; issues: Map<string, string>;
   formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
   onCopyCells: () => string;
   cells: SheetCells; columns: number; rows: number; computed: SheetResult;
@@ -172,7 +177,7 @@ function Grid({
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
               const isSelected = selected.has(key);
-              return <td key={key} style={{ minWidth: widths[columnName(column)] ?? 120, fontWeight: bold.includes(key) ? 700 : undefined }} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
+              return <td key={key} title={issues.get(key)} style={{ backgroundColor: colors[key], boxShadow: issues.has(key) ? "inset 0 -3px #dc2626" : undefined, minWidth: widths[columnName(column)] ?? 120, fontWeight: bold.includes(key) ? 700 : undefined }} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -346,6 +351,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }, [loadList, open]);
 
   const computed = useMemo(() => evaluateSheet(current?.content.cells ?? {}), [current]);
+  const advanced = current?.content.advanced ?? emptyAdvanced;
+  const colors = useMemo(() => conditionalColors(computed, advanced), [computed, advanced]);
+  const issues = useMemo(() => validationIssues(computed, advanced), [computed, advanced]);
 
   /**
    * Marcar a célula. Sem modificador, recomeça a faixa nela.
@@ -423,7 +431,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   function aplicar(label: string, change: (sheet: Worksheet) => Worksheet) {
     if (!current || readOnly || saving) return;
-    setCurrent(sheet => sheet ? change(sheet) : sheet, label); setDirty(true);
+    try { const next = change(current); setCurrent(next, label); setDirty(true); }
+    catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível alterar a planilha."); }
   }
   function updateContent(label: string, change: (content: WorksheetContent) => WorksheetContent): void;
   function updateContent(change: (content: WorksheetContent) => WorksheetContent): void;
@@ -519,7 +528,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         ...sheet,
         rows: nextRows,
         columns: nextColumns,
-        content: { ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths) },
+        content: { ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths), advanced: operation === "fill-down" ? sheet.content.advanced : moveAdvanced(sheet.content.advanced ?? emptyAdvanced, eixo, alvo, passo) },
       };
     });
     if (operation === "delete-row" || operation === "delete-column") {
@@ -584,6 +593,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
 
   async function save() {
     if (!current) return;
+    if (issues.size) { toast.error(`Corrija ${issues.size} célula(s) inválida(s) antes de salvar. Consulte as regras de validação.`); return; }
     setSaving(true); setError(""); setConflito(null);
     try {
       const result = await api<{ worksheet: Worksheet }>(`/api/worksheets/${current.id}`, {
@@ -894,6 +904,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               {!readOnly && <WorksheetToolsPanel key={current.id} cells={current.content.cells} keys={chavesDoResumo} recipes={current.content.recipes ?? []}
                 onCells={cells => updateContent(content => ({ ...content, cells }))} onTable={insertTable}
                 onRecipes={recipes => updateContent(content => ({ ...content, recipes }))} />}
+              <WorksheetAdvancedPanel key={`advanced-${current.id}`} computed={computed} settings={advanced} columns={current.columns} selectedRange={active} readOnly={readOnly}
+                onChange={advanced => updateContent("Alterar regras e resumos", content => ({ ...content, advanced }))} onTable={insertTable} />
+              <WorksheetXlsxPanel key={`xlsx-${current.id}`} id={current.id} name={current.name} revision={current.revision} dirty={dirty} readOnly={readOnly} onImport={imported => {
+                aplicar(`Importar XLSX: ${imported.name}`, sheet => ({ ...sheet, rows: imported.rows, columns: imported.columns, content: { ...sheet.content, cells: imported.cells, formats: {}, widths: {}, bold: [], advanced: emptyAdvanced, analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }));
+                setActive("A1"); setAxis(null); setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]); setRowFilter("");
+              }} />
+              {!readOnly && advanced.validations.filter(rule => rule.kind === "list").map((rule, index) => {
+                const start = parseCellKey(rule.range.split(":")[0])!, end = parseCellKey(rule.range.split(":")[1] ?? rule.range)!, address = parseCellKey(active)!;
+                return address.row >= start.row && address.row <= end.row && address.column >= start.column && address.column <= end.column ? <NativeSelect key={index} aria-label={`Opções para ${active}`} value="" onChange={event => updateCell(active, event.target.value)}><option value="">Escolher valor para {active}…</option>{rule.options.map(option => <option key={option} value={option}>{option}</option>)}</NativeSelect> : null;
+              })}
               {readOnly ? <p className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
@@ -930,6 +950,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 </div>
               )}
               <Grid
+                colors={colors} issues={issues}
                 formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
                 onCopyCells={() => selectionToTsv(current.content.cells, chavesDoResumo)}
                 cells={current.content.cells} columns={current.columns} rows={current.rows}

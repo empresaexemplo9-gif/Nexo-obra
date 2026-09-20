@@ -84,12 +84,12 @@ export function parseNumber(raw: string): number | null {
   const text = raw.trim();
   if (!text) return null;
   const cleaned = text.replace(/\s|R\$|%/g, "");
-  const candidate = /,\d{1,10}$/.test(cleaned)
+  const candidate = /,\d+(?:e[+-]?\d+)?$/i.test(cleaned)
     ? cleaned.replace(/\./g, "").replace(",", ".")
     : MILHAR.test(cleaned)
       ? cleaned.replace(/\./g, "")
       : cleaned.replace(/,/g, "");
-  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(candidate)) return null;
+  if (!/^[+-]?(\d+(\.\d+)?|\.\d+)(?:e[+-]?\d+)?$/i.test(candidate)) return null;
   const value = Number(candidate);
   if (!Number.isFinite(value)) return null;
   return text.includes("%") ? value / 100 : value;

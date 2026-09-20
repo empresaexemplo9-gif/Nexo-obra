@@ -27,7 +27,7 @@ function acharFimDoDiretorio(dados: Buffer): number {
   throw new Error("arquivo não é um ZIP válido: fim do diretório central não encontrado");
 }
 
-export function abrirZip(dados: Buffer): Zip {
+export function abrirZip(dados: Buffer, maxEntryBytes = 128 * 1024 * 1024): Zip {
   if (dados.length > 80 * 1024 * 1024) throw new Error("ZIP excede 80 MB.");
   const fim = acharFimDoDiretorio(dados);
   const total = dados.readUInt16LE(fim + 10);
@@ -66,12 +66,13 @@ export function abrirZip(dados: Buffer): Zip {
       // O cabeçalho local repete nome e extra com tamanhos próprios: é por ele que se
       // acha o início real dos bytes, não pelos tamanhos do diretório central.
       const base = entrada.deslocamento;
-      if (entrada.tamanho > 128 * 1024 * 1024 || base + 30 > dados.length || dados.readUInt32LE(base) !== 0x04034b50) throw new Error("Entrada ZIP inválida ou muito grande.");
+      if (entrada.tamanho > maxEntryBytes || base + 30 > dados.length || dados.readUInt32LE(base) !== 0x04034b50) throw new Error("Entrada ZIP inválida ou muito grande.");
       const inicio = base + 30 + dados.readUInt16LE(base + 26) + dados.readUInt16LE(base + 28);
       if (inicio + entrada.comprimido > dados.length) throw new Error("Conteúdo ZIP truncado.");
       const bruto = dados.subarray(inicio, inicio + entrada.comprimido);
       if (entrada.metodo !== 0 && entrada.metodo !== 8) throw new Error(`método de compressão ${entrada.metodo} não suportado`);
-      const result = entrada.metodo === 0 ? Buffer.from(bruto) : inflateRawSync(bruto, { maxOutputLength: 128 * 1024 * 1024 });
+      if (entrada.metodo === 0 && bruto.length > maxEntryBytes) throw new Error("Entrada ZIP muito grande.");
+      const result = entrada.metodo === 0 ? Buffer.from(bruto) : inflateRawSync(bruto, { maxOutputLength: maxEntryBytes });
       if (result.length !== entrada.tamanho || crc32(result) !== checksums.get(nome)) throw new Error("Integridade ZIP inválida (tamanho ou CRC).");
       return result;
     },
