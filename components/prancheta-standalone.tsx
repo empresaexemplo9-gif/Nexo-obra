@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { ArrowLeft, CircleAlert, LoaderCircle } from "lucide-react";
 
@@ -54,7 +56,7 @@ export function PranchetaStandalone({ drawingId }: { drawingId: string }) {
   }
 
   if (carregando) return <main className="grid min-h-svh place-items-center" aria-label="Carregando prancha"><LoaderCircle className="size-7 animate-spin" /></main>;
-  if (erro || !prancha) return <main className="grid min-h-svh place-items-center p-6"><div className="max-w-md space-y-4 text-center"><CircleAlert className="mx-auto size-8 text-hoikos-700" /><p role="alert">{erro}</p><Button asChild variant="outline"><a href="/"><ArrowLeft />Voltar à H.OIKOS</a></Button></div></main>;
+  if (erro || !prancha) return <main className="grid min-h-svh place-items-center p-6"><div className="max-w-md space-y-4 text-center"><CircleAlert className="mx-auto size-8 text-hoikos-700" /><p role="alert">{erro}</p><Button asChild variant="outline"><Link href="/"><ArrowLeft />Voltar à H.OIKOS</Link></Button></div></main>;
 
   return <main className="prancheta-autonoma min-h-svh bg-hoikos-50 p-3 sm:p-4">
     <PranchetaEditor prancha={prancha} canEdit={canEdit} onVoltar={voltar}

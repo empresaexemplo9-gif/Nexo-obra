@@ -11,6 +11,7 @@ import {
   validationError,
 } from "@/lib/server/backend";
 import { projectResponse, projectSelect, type ProjectRow } from "@/lib/server/projects-records";
+import { validatePeriod } from "@/lib/server/task-planning";
 
 export const dynamic = "force-dynamic";
 
@@ -65,14 +66,15 @@ export async function PATCH(request: Request, route: RouteContext) {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "projects", "edit");
     const { projectId } = await route.params;
-    ensureFound(
-      await context.db.prepare("SELECT id FROM projects WHERE id = ?1 AND organization_id = ?2")
-        .bind(projectId, context.organization.id).first(),
+    const current = ensureFound(
+      await context.db.prepare("SELECT id, start_date, target_date FROM projects WHERE id = ?1 AND organization_id = ?2")
+        .bind(projectId, context.organization.id).first<{ id: string; start_date: string | null; target_date: string | null }>(),
       "Projeto",
     );
     const parsed = updateProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    validatePeriod(data.startDate === undefined ? current.start_date : data.startDate, data.targetDate === undefined ? current.target_date : data.targetDate);
     if (data.clientId !== undefined) await verifyRelation(context.db, "clients", data.clientId, context.organization.id);
     if (data.ownerMemberId !== undefined) await verifyRelation(context.db, "members", data.ownerMemberId, context.organization.id);
 

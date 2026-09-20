@@ -176,7 +176,7 @@ test("depois de migrar, criar planilha por modelo funciona de ponta a ponta", as
 test("o manifesto embutido é exatamente o que está em drizzle/*.sql", async () => {
   // O SQL viaja embutido porque `import.meta.glob` é do Vite e não existe no `next build`.
   // O risco de embutir é a deriva: alguém gera uma migração e esquece de regerar. Aqui a
-  // pasta e o manifesto são comparados byte a byte.
+  // pasta e manifesto são comparados após normalizar CRLF do checkout no Windows.
   const { migrationSources } = await vite.ssrLoadModule("/drizzle/manifest.ts");
   const arquivos = (await readdir(`${root}/drizzle`)).filter((file) => file.endsWith(".sql")).sort();
   assert.deepEqual(
@@ -185,7 +185,7 @@ test("o manifesto embutido é exatamente o que está em drizzle/*.sql", async ()
     "rode `npm run db:manifest` depois de gerar uma migração",
   );
   for (const [id, sql] of migrationSources) {
-    assert.equal(sql, await readFile(`${root}/drizzle/${id}.sql`, "utf8"), `${id} divergiu do arquivo`);
+    assert.equal(sql.replaceAll("\r\n", "\n"), (await readFile(`${root}/drizzle/${id}.sql`, "utf8")).replaceAll("\r\n", "\n"), `${id} divergiu do arquivo`);
   }
   // E o runner enxerga todas elas, na ordem.
   assert.deepEqual(runner.migrations.map((item) => item.id), arquivos.map((file) => file.replace(/\.sql$/, "")));

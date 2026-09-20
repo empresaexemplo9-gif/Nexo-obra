@@ -57,7 +57,7 @@ export function TeamAccessManager({ members, canManage }: { members: TeamMember[
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load]);
+  useEffect(() => { if (!canManage) return; const timer = window.setTimeout(() => void load(), 0); return () => window.clearTimeout(timer); }, [load, canManage]);
 
   function chooseProfile(value: Profile) {
     setRole(value);

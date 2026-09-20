@@ -16,6 +16,14 @@ const crmItem = await vite.ssrLoadModule("/app/api/crm/[opportunityId]/route.ts"
 const budgets = await vite.ssrLoadModule("/app/api/budgets/route.ts");
 const budgetItems = await vite.ssrLoadModule("/app/api/budgets/[budgetId]/items/route.ts");
 const budgetItem = await vite.ssrLoadModule("/app/api/budgets/[budgetId]/route.ts");
+const budgetCopy = await vite.ssrLoadModule("/app/api/budgets/[budgetId]/copy/route.ts");
+const budgetReport = await vite.ssrLoadModule("/app/api/budgets/[budgetId]/report/route.ts");
+const tasks = await vite.ssrLoadModule("/app/api/tasks/route.ts");
+const taskItem = await vite.ssrLoadModule("/app/api/tasks/[taskId]/route.ts");
+const projectItem = await vite.ssrLoadModule("/app/api/projects/[projectId]/route.ts");
+const projects = await vite.ssrLoadModule("/app/api/projects/route.ts");
+const schedule = await vite.ssrLoadModule("/app/api/schedule/route.ts");
+const permissions = await vite.ssrLoadModule("/lib/permissions.ts");
 
 class D1Local {
   sqlite = new DatabaseSync(":memory:");
@@ -81,6 +89,85 @@ async function json(response) {
   assert.ok(response.ok, `${response.status}: ${JSON.stringify(payload)}`);
   return payload;
 }
+
+function createProject(code = "REV-001") {
+  const id = crypto.randomUUID();
+  db.sqlite.prepare("INSERT INTO projects (id,organization_id,client_id,code,name,type,kind,phase,stage,status,progress,progress_percent,budget_cents,created_at,updated_at) VALUES (?,?,?,?,?,'project','project','briefing','briefing','active',0,0,0,0,0)")
+    .run(id, orgId, clientId, code, "Projeto revisão");
+  return id;
+}
+
+test("tarefas recusam ciclos, dependências externas ao projeto e datas invertidas", async () => {
+  const projectId = createProject(), other = createProject("REV-002");
+  const a = (await json(await tasks.POST(request("/api/tasks", "POST", { projectId, title: "Primeira tarefa", startsAt: "2026-09-20T10:00:00Z", dueAt: "2026-09-21T10:00:00Z" })))).task;
+  const b = (await json(await tasks.POST(request("/api/tasks", "POST", { projectId, title: "Segunda tarefa", parentTaskId: a.id })))).task;
+  const patch = body => taskItem.PATCH(request(`/api/tasks/${a.id}`, "PATCH", body), { params: Promise.resolve({ taskId: a.id }) });
+  const cycle = await patch({ parentTaskId: b.id }); assert.equal(cycle.status, 400); assert.equal((await cycle.json()).code, "dependency_cycle");
+  assert.equal((await patch({ dueAt: "2026-09-19T10:00:00Z" })).status, 400);
+  assert.equal((await patch({ projectId: other })).status, 400);
+  assert.equal((await tasks.POST(request("/api/tasks", "POST", { projectId: other, title: "Vínculo inválido", parentTaskId: a.id }))).status, 400);
+  assert.equal((await patch({ status: "done" })).status, 200);
+  assert.equal((await patch({ status: "todo" })).status, 200);
+  assert.equal(db.sqlite.prepare("SELECT completed_at FROM tasks WHERE id=?").get(a.id).completed_at, null);
+});
+
+test("projeto valida atualização parcial das datas sem apagar os dados existentes", async () => {
+  const projectId = createProject();
+  const patch = body => projectItem.PATCH(request(`/api/projects/${projectId}`, "PATCH", body), { params: Promise.resolve({ projectId }) });
+  assert.equal((await patch({ startDate: "2026-09-20", targetDate: "2026-09-30" })).status, 200);
+  assert.equal((await patch({ targetDate: "2026-09-19" })).status, 400);
+  assert.equal(db.sqlite.prepare("SELECT target_date FROM projects WHERE id=?").get(projectId).target_date, "2026-09-30");
+  assert.equal((await projects.POST(request("/api/projects", "POST", { code: "INVALID", name: "Data inválida", kind: "work", startDate: "2026-10-01", targetDate: "2026-09-30" }))).status, 400);
+});
+
+test("leitura independente do cronograma preserva restrições das tarefas e do orçamento", async () => {
+  const projectId = createProject();
+  await json(await tasks.POST(request("/api/tasks", "POST", { projectId, title: "Entrega planejada", description: "Descrição privada" })));
+  const matrix = Object.fromEntries(permissions.permissionModules.map(key => [key, { view: key === "schedule", edit: false }]));
+  db.sqlite.prepare("UPDATE members SET role='partner', permissions_json=? WHERE id=?").run(JSON.stringify(matrix), memberId);
+  const response = await json(await schedule.GET(request("/api/schedule")));
+  assert.equal(response.tasks.length, 1); assert.equal(response.tasks[0].title, "Entrega planejada");
+  assert.ok(!Object.hasOwn(response.tasks[0], "description")); assert.ok(!Object.hasOwn(response.tasks[0], "assigneeMemberId"));
+  assert.equal((await tasks.GET(request("/api/tasks"))).status, 403);
+  const context = { params: Promise.resolve({ budgetId: crypto.randomUUID() }) };
+  assert.equal((await budgetCopy.POST(request("/api/budgets/copy", "POST"), context)).status, 403);
+  assert.equal((await budgetReport.GET(request("/api/budgets/report"), context)).status, 403);
+});
+
+test("cópia de orçamento preserva original e relatório escapa texto fornecido", async () => {
+  const projectId = createProject();
+  const original = (await json(await budgets.POST(request("/api/budgets", "POST", { projectId, code: "REV-ORC" })))).budget;
+  const ctx = { params: Promise.resolve({ budgetId: original.id }) };
+  await json(await budgetItems.POST(request("/api/budgets/items", "POST", { items: [{ description: '<script>alert(1)</script>', unit: "un", quantity: 2, unitCostCents: 1000, source: "manual" }] }), ctx));
+  await json(await budgetItem.PATCH(request("/api/budgets/item", "PATCH", { status: "sent" }), ctx));
+  const copy = (await json(await budgetCopy.POST(request("/api/budgets/copy", "POST"), ctx))).budget;
+  assert.equal(copy.version, 2); assert.equal(copy.status, "draft"); assert.equal(copy.itemCount, 1); assert.equal(copy.totalCents, 2000);
+  assert.equal(db.sqlite.prepare("SELECT status FROM budget_versions WHERE id=?").get(original.id).status, "sent");
+  const report = await budgetReport.GET(request("/api/budgets/report"), ctx);
+  const html = await report.text(); assert.match(html, /&lt;script&gt;/); assert.doesNotMatch(html, /<script>/); assert.match(html, /20,00/);
+  assert.match(report.headers.get("Content-Security-Policy"), /default-src 'none'/);
+  const absent = { params: Promise.resolve({ budgetId: crypto.randomUUID() }) };
+  assert.equal((await budgetCopy.POST(request("/api/budgets/copy", "POST"), absent)).status, 404);
+  assert.equal((await budgetReport.GET(new Request("https://platform.test/api/budgets/report"), ctx)).status, 401);
+});
+
+test("cópia mantém hierarquia fora da ordem de exibição e isola outra empresa", async () => {
+  const original = (await json(await budgets.POST(request("/api/budgets", "POST", { projectId: createProject(), code: "REV-HIER" })))).budget;
+  const ctx = { params: Promise.resolve({ budgetId: original.id }) };
+  await json(await budgetItems.POST(request("/api/budgets/items", "POST", { items: [{ description: "Pai", quantity: 1, unitCostCents: 100 }, { description: "Filho", quantity: 2, unitCostCents: 50 }] }), ctx));
+  const rows = db.sqlite.prepare("SELECT id,description FROM budget_items WHERE budget_version_id=?").all(original.id);
+  const parent = rows.find(row => row.description === "Pai"), child = rows.find(row => row.description === "Filho");
+  db.sqlite.prepare("UPDATE budget_items SET parent_item_id=?,sort_order=-1 WHERE id=?").run(parent.id, child.id);
+  const copy = (await json(await budgetCopy.POST(request("/api/budgets/copy", "POST"), ctx))).budget;
+  const copied = db.sqlite.prepare("SELECT id,parent_item_id,description FROM budget_items WHERE budget_version_id=?").all(copy.id);
+  assert.equal(copied.find(row => row.description === "Filho").parent_item_id, copied.find(row => row.description === "Pai").id);
+  assert.notEqual(copied.find(row => row.description === "Pai").id, parent.id);
+  const otherOrg = crypto.randomUUID();
+  db.sqlite.prepare("INSERT INTO organizations(id,name,slug,created_at,updated_at) VALUES (?,?,?,0,0)").run(otherOrg, "Outra empresa", otherOrg);
+  db.sqlite.prepare("UPDATE budget_versions SET organization_id=? WHERE id=?").run(otherOrg, original.id);
+  assert.equal((await budgetCopy.POST(request("/api/budgets/copy", "POST"), ctx)).status, 404);
+  assert.equal((await budgetReport.GET(request("/api/budgets/report"), ctx)).status, 404);
+});
 
 test("CRM cria oportunidade e converte para projeto sem recadastrar cliente", async () => {
   const created = await json(await crm.POST(request("/api/crm", "POST", {
