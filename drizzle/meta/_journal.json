@@ -148,6 +148,13 @@
       "when": 1789727074079,
       "tag": "0020_stale_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1789953665259,
+      "tag": "0021_supreme_firelord",
+      "breakpoints": true
     }
   ]
 }

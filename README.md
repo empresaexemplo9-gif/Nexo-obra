@@ -198,6 +198,43 @@ que chega ali não tem conta e nem precisa saber que existe uma, e duas opções
 obrigavam a escolher entre uma coisa que a pessoa quer e outra de que ela nunca ouviu
 falar.
 
+### Nota fiscal de serviço
+
+Emitir sai da obra: o serviço, o valor e o cliente já estão ali, e o cliente da obra é o
+tomador da nota. Sem esse vínculo financeiro a emissão é recusada aqui mesmo — inventar um
+tomador seria falsificar documento fiscal.
+
+A tela nunca diz "nota emitida" no momento do pedido. Quem autoriza é a prefeitura, e a
+resposta dela vem depois: o pedido entra como *processando* e vira *autorizada* quando a
+confirmação chega. A listagem confere a situação real numa consulta só e, quando ela
+falha, mostra o que se sabia junto da data — "confirmado em", nunca uma situação que
+ninguém conferiu.
+
+Dois desfechos de erro ficam separados de propósito:
+
+- **Recusada** — o serviço fiscal respondeu que não emitiu, e o motivo dele aparece na
+  tela (cadastro fiscal faltando, município que exige CNAE, franquia esgotada);
+- **Não confirmada** — a conexão caiu no meio e ninguém sabe se a nota saiu. Aqui a tela
+  oferece **Verificar**, que reenvia a **mesma** chave de idempotência: o serviço fiscal
+  reconhece a tentativa anterior e devolve a nota de antes em vez de emitir a segunda.
+  Tratar este caso como "não emitida" seria o caminho mais curto para duas notas pelo
+  mesmo serviço — e duas notas só se desfazem com cancelamento, que tem prazo e
+  justificativa.
+
+Os dados fiscais da empresa (incluindo o certificado A1, que atravessa sem ficar guardado
+aqui) são cadastrados em **Dados fiscais**, no topo do Financeiro.
+
+### Credencial da empresa
+
+A chave de cada empresa nasce com um conjunto fixo de acessos. Quando a plataforma passa a
+usar um recurso novo — emitir nota, por exemplo — as empresas conectadas antes continuam
+com a chave antiga, que não alcança esse recurso.
+
+Reconectar não resolve: a empresa já existe do outro lado, o pedido repetido devolve a
+mesma empresa e a chave não vem de novo. Por isso a tela de conexão distingue "não está no
+plano" de "a credencial não alcança" e oferece **Atualizar credencial**, que pede outra
+chave sem tocar na empresa nem no histórico dela.
+
 ### Avisos automáticos
 
 Conectar uma empresa também registra, sozinho, o webhook dela na Drap. Sem isso o

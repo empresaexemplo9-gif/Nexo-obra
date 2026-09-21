@@ -49,13 +49,13 @@ test("a consulta devolve só os identificadores dos módulos ativos", async () =
     url_assinatura: "https://empresa.drap.app.br/configuracoes/modulos",
   });
 
-  const ativos = await drap.fetchDrapActiveModules("empresa-1");
+  const { ativos } = await drap.fetchDrapActiveModules("empresa-1");
   assert.deepEqual(ativos, ["sheets-sync", "emissao-nf"]);
 });
 
 test("resposta malformada vira lista vazia, não exceção", async () => {
   drapFalsa({ ativos: "nao-e-lista" });
-  assert.deepEqual(await drap.fetchDrapActiveModules("empresa-1"), []);
+  assert.deepEqual((await drap.fetchDrapActiveModules("empresa-1")).ativos, []);
 });
 
 test("o cliente não carrega preço nem link de assinatura de outro produto", async () => {
@@ -66,14 +66,15 @@ test("o cliente não carrega preço nem link de assinatura de outro produto", as
 
 test("emitir nota é capacidade, não seção de plano com marca de fora", async () => {
   const rota = await source("app/api/integrations/drap/connection/route.ts");
-  assert.match(rota, /notas: ativos\.includes\("emissao-nf"\)/);
+  assert.match(rota, /notas: modulos\.ativos\.includes\("emissao-nf"\)/);
 });
 
 test("a consulta de módulos que falha não derruba o Financeiro", async () => {
   // O motor pode não responder sobre um recurso que talvez nem seja usado hoje. Isso não
   // pode apagar saldo, contas e cobranças da tela.
   const rota = await source("app/api/integrations/drap/connection/route.ts");
-  assert.match(rota, /fetchDrapActiveModules\(connection\.external_company_id\)\.catch\(\(\) => \[\]\)/);
+  assert.match(rota, /fetchDrapActiveModules\(connection\.external_company_id\)\.catch\(/);
+  assert.match(rota, /catch\(\(\) => \(\{ ativos: \[\] as string\[\] \}\)\)/);
 });
 
 test("não existe rota que leve o usuário para fora do produto", async () => {
