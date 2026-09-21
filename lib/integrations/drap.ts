@@ -580,7 +580,7 @@ export class DrapApiError extends Error {
 export async function requestDrapApi<T>(
   externalCompanyId: string,
   path: string,
-  init: { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; idempotencyKey?: string } = {},
+  init: { method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown; idempotencyKey?: string } = {},
 ): Promise<{ data: T | null; status: number; retryAfter: string | null }> {
   if (!isDrapConfigured()) throw new Error("DRAP integration is not configured");
   const method = init.method ?? "GET";
