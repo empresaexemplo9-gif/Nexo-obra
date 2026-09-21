@@ -228,6 +228,12 @@ empresa conecta pela própria H.OIKOS, em Financeiro → Conexão DRAP:
 A chave nunca chega ao navegador nem ao log. `DRAP_TENANTS_JSON` continua funcionando e
 tem precedência sobre o que está no banco — é a saída de emergência.
 
+O vínculo por identificador manual fica restrito ao superadministrador. Uma chave legada
+`DRAP_API_TOKEN` exige `DRAP_LEGACY_COMPANY_ID` correspondente; ela não autoriza outras
+empresas. Em Soluções Drap, o painel de preparação mostra configurações e permite uma
+consulta explícita de leitura da API. O [roteiro de entrega](docs/DRAP-ENTREGA-INTEGRACAO.md)
+registra os contratos implementados, as dependências da Drap e os critérios de homologação.
+
 ### Homologar a credencial
 
 ```bash

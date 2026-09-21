@@ -1,5 +1,6 @@
 import { ApiError, apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { conectarWebhook } from "@/lib/server/drap-webhook-conectar";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
+    rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request, ["owner", "admin"]);
     requireModulePermission(context, "finance", "edit");
 

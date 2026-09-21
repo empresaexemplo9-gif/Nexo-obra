@@ -50,6 +50,10 @@ const catalogRoute = await vite.ssrLoadModule("/app/api/integrations/drap/catalo
 const selectionRoute = await vite.ssrLoadModule("/app/api/integrations/drap/selection/route.ts");
 const termsRoute = await vite.ssrLoadModule("/app/api/terms/accept/route.ts");
 const sessionRoute = await vite.ssrLoadModule("/app/api/session/route.ts");
+const readinessRoute = await vite.ssrLoadModule("/app/api/integrations/drap/readiness/route.ts");
+const connectionRoute = await vite.ssrLoadModule("/app/api/integrations/drap/connection/route.ts");
+const drapAdapter = await vite.ssrLoadModule("/lib/integrations/drap.ts");
+const credentials = await vite.ssrLoadModule("/lib/server/drap-credenciais.ts");
 
 const org = "11111111-1111-4111-8111-111111111111";
 const full = () => Object.fromEntries(permissions.permissionModules.map((m) => [m, { view: true, edit: true }]));
@@ -71,8 +75,25 @@ beforeEach(async () => {
   for (const migration of migrations) db.sqlite.exec(migration);
   db.sqlite.prepare("INSERT INTO organizations(id,name,slug,timezone,created_at,updated_at) VALUES (?,?,?,'America/Sao_Paulo',0,0)").run(org, org, org);
   Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true" });
+  delete runtime.DRAP_API_TOKEN; delete runtime.DRAP_API_URL; delete runtime.DRAP_LEGACY_COMPANY_ID;
+  delete runtime.SECRETS_ENCRYPTION_KEY;
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
+
+test("repetir vínculo preserva segredos, mas outra empresa não herda as credenciais", async () => {
+  runtime.SECRETS_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+  const save = async (externalCompanyId, token = null, webhookSecret = null) => db.batch([
+    await credentials.instrucoesParaGuardarCredenciais({ db, id: "connection", organizationId: org, externalCompanyId, token, webhookSecret, origem: "vinculado" }),
+  ]);
+  await save("empresa-a", "token-a", "webhook-a");
+  await save("empresa-a");
+  assert.equal(await credentials.tokenGuardado("empresa-a"), "token-a");
+  assert.equal(await credentials.segredoDeWebhookGuardado("empresa-a"), "webhook-a");
+  await save("empresa-b");
+  assert.equal(await credentials.tokenGuardado("empresa-b"), null);
+  assert.equal(await credentials.segredoDeWebhookGuardado("empresa-b"), null);
+  assert.equal(await credentials.tokenGuardado("empresa-a"), null);
+});
 
 test("administrador gerencia outro administrador somente na própria empresa com revisão e auditoria", async () => {
   addMember("admin1", "admin"); addMember("admin2", "admin"); addMember("owner", "owner");
@@ -134,6 +155,37 @@ test("aceite repetido preserva a evidência original e não aceita uma minuta ne
   assert.deepEqual(db.sqlite.prepare("SELECT * FROM terms_acceptances WHERE external_user_id='owner'").get(), before);
   assert.equal((await accept("2026-09-20")).status, 400);
   assert.equal((await accept(CURRENT_TERMS_VERSION, { origin: "https://attacker.test" })).status, 403);
+});
+
+test("diagnóstico Drap é privado, não expõe segredos nem faz chamadas por padrão", async () => {
+  addMember("admin", "admin"); addMember("finance", "finance");
+  runtime.DRAP_API_TOKEN = 'test-only-secret'; runtime.DRAP_API_URL = 'https://empresa.drap.app.br';
+  assert.equal((await readinessRoute.GET(as("finance", "/api/integrations/drap/readiness"))).status, 403);
+  const original = globalThis.fetch; globalThis.fetch = async () => { throw new Error("Diagnóstico local não deve usar rede"); };
+  try {
+    const response = await readinessRoute.GET(as("admin", "/api/integrations/drap/readiness"));
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    const text = await response.text(); assert.equal(text.includes('test-only-secret'), false);
+    const body = JSON.parse(text); assert.equal(body.canVerifyApi, false); assert.equal(body.operationallyValidated, false);
+    assert.equal(body.checks.find(check => check.id === 'tenant').ready, false);
+  } finally { globalThis.fetch = original; }
+});
+
+test("identificador Drap não comprova posse e chave legada exige empresa explícita", async () => {
+  addMember("admin", "admin");
+  const response = await connectionRoute.PUT(as("admin", "/api/integrations/drap/connection", { method: 'PUT', body: JSON.stringify({ externalCompanyId: 'foreign-tenant' }) }));
+  assert.equal(response.status, 403); assert.equal((await response.json()).code, 'drap_link_proof_required');
+  runtime.DRAP_API_URL = 'https://empresa.drap.app.br'; runtime.DRAP_API_TOKEN = 'test-only-global-secret';
+  const original = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response('{"items":[],"total":0}'); };
+  try {
+    await assert.rejects(drapAdapter.requestDrapApi('foreign-tenant', '/api/v1/lancamentos'));
+    assert.equal(calls, 0);
+    runtime.DRAP_LEGACY_COMPANY_ID = 'allowed-tenant';
+    await assert.rejects(drapAdapter.requestDrapApi('foreign-tenant', '/api/v1/lancamentos'));
+    assert.equal(calls, 0);
+    await drapAdapter.requestDrapApi('allowed-tenant', '/api/v1/lancamentos'); assert.equal(calls, 1);
+  } finally { globalThis.fetch = original; }
 });
 
 test("cada perfil nasce com a matriz que o produto promete", () => {

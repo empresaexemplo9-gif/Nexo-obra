@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, ExternalLink, LoaderCircle, ShieldCheck, UserPlus } from "lucide-react";
 
 import { DrapConectar } from "@/components/drap-conectar";
+import { DrapReadinessPanel } from "@/components/drap-readiness-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -171,6 +172,7 @@ export function DrapSolutionsWorkspace() {
       )}
 
       {actionError ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 p-3 text-sm text-hoikos-800">{actionError}</p> : null}
+      {data.canManage && <DrapReadinessPanel key={reload} />}
 
       <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
         <p className="font-medium">Escolha os serviços para sua empresa</p>

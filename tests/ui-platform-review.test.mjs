@@ -99,6 +99,7 @@ test("seleção Drap é salva sem inventar cobrança ou checkout e leitores não
   const catalog = { catalog: [{ id: 'cobrancas', name: 'Cobranças', kind: 'module', monthlyCents: 7375, description: 'Cobranças da empresa' }], checkedAt: '2026-09-16', selection: [], canManage: true, provisioningAvailable: false, tenantProvisioned: true, connectionStatus: 'active', subscription: null };
   let saved;
   globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/readiness')) return new Response(JSON.stringify({ checks: [], resources: null, events: [], canVerifyApi: false, notice: 'Homologação pendente' }));
     if (init?.method === 'POST') { assert.equal(url, '/api/integrations/drap/selection'); saved = JSON.parse(init.body); return new Response(JSON.stringify({ saved: true, contracted: false })); }
     return new Response(JSON.stringify(catalog));
   };

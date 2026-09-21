@@ -251,7 +251,7 @@ test("o administrador de manutenção segue confinado e sem os recursos extras d
   assert.equal(own.member.role, "admin");
 
   // ...e continua sem alcançar as empresas contratantes, mesmo escolhendo uma.
-  assert.equal((await backend.requireOrganizationContext(asMaintenance(orgA))).organization.id, MAINTENANCE_ORGANIZATION_ID);
+  await assert.rejects(backend.requireOrganizationContext(asMaintenance(orgA)), { code: "organization_forbidden" });
 
   // Os recursos exclusivos do superadmin seguem fechados para ele.
   const headers = { cookie: maintenanceCookie, "content-type": "application/json" };
