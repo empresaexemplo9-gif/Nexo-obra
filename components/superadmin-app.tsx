@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   Wrench,
   Target,
+  Trash2,
   Users,
   XCircle,
 } from "lucide-react";
@@ -161,7 +162,62 @@ function InvitationsPanel({ organizations }: { organizations: Overview["organiza
     await loadInvitations();
   }
 
-  return <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><MailPlus className="size-5 text-hoikos-600" />Liberar acesso do contratante</CardTitle><p className="text-sm leading-6 text-hoikos-500">Este link cria o proprietário da empresa. Depois, ele mesmo libera colaboradores e prestadores com permissões específicas.</p></CardHeader><CardContent><form onSubmit={createInvitation} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-company">Empresa</label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="invite-company" className="h-11 w-full"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select></div><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do contratante</label><Input id="invite-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-11" placeholder="responsavel@empresa.com" /></div><div className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900"><strong>Perfil:</strong> Contratante · proprietário</div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="submit" disabled={saving || !organizationId} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <MailPlus />}Gerar link principal</Button></form>{latestLink ? <div className="mt-5 rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="flex items-center gap-2 text-sm font-medium text-hoikos-800"><Check className="size-4" />Link criado</p><p className="mt-2 break-all text-xs text-hoikos-700">{latestLink}</p><Button type="button" size="sm" variant="outline" onClick={() => void copyLink()} className="mt-3 border-hoikos-300 bg-white text-hoikos-800">{copied ? <Check /> : <Copy />}{copied ? "Copiado" : "Copiar link"}</Button></div> : null}</CardContent></Card><Card className="overflow-hidden workspace-card"><CardHeader className="border-b"><CardTitle className="text-lg">Convites de contratantes</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Usuário</TableHead><TableHead>Empresa</TableHead><TableHead>Perfil</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{invitations.length ? invitations.map((invitation) => <TableRow key={invitation.id}><TableCell className="pl-5"><p className="font-medium">{invitation.email}</p><p className="text-xs text-hoikos-500">Expira em {new Date(invitation.expiresAt).toLocaleDateString("pt-BR")}</p></TableCell><TableCell>{invitation.organizationName}</TableCell><TableCell>{roleLabels[invitation.role] ?? invitation.role}</TableCell><TableCell><Badge variant="outline">{invitation.status === "pending" ? "Pendente" : invitation.status === "accepted" ? "Aceito" : invitation.status === "expired" ? "Expirado" : "Revogado"}</Badge></TableCell><TableCell className="text-right">{invitation.status === "pending" ? <Button type="button" size="sm" variant="ghost" onClick={() => void revoke(invitation.id)} className="text-hoikos-600 hover:text-hoikos-700"><XCircle />Revogar</Button> : null}</TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-32 text-center text-hoikos-500">Nenhum convite criado.</TableCell></TableRow>}</TableBody></Table></div></Card></div>;
+  // Revogar queima o link e mantém a linha, porque "este acesso foi cancelado" é
+  // informação. Remover é para a lista não virar depósito de tentativa antiga — e só
+  // alcança convite que já não abre.
+  async function remover(invitationId: string) {
+    try { await api(`/api/superadmin/invitations/${invitationId}?modo=remover`, { method: "DELETE" }); await loadInvitations(); }
+    catch (causa) { setError(causa instanceof Error ? causa.message : "Não foi possível remover o convite."); }
+  }
+
+  return <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><MailPlus className="size-5 text-hoikos-600" />Liberar acesso do contratante</CardTitle><p className="text-sm leading-6 text-hoikos-500">Este link cria o proprietário da empresa. Depois, ele mesmo libera colaboradores e prestadores com permissões específicas.</p></CardHeader><CardContent><form onSubmit={createInvitation} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-company">Empresa</label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="invite-company" className="h-11 w-full"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select></div><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do contratante</label><Input id="invite-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-11" placeholder="responsavel@empresa.com" /></div><div className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900"><strong>Perfil:</strong> Contratante · proprietário</div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="submit" disabled={saving || !organizationId} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <MailPlus />}Gerar link principal</Button></form>{latestLink ? <div className="mt-5 rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="flex items-center gap-2 text-sm font-medium text-hoikos-800"><Check className="size-4" />Link criado</p><p className="mt-2 break-all text-xs text-hoikos-700">{latestLink}</p><Button type="button" size="sm" variant="outline" onClick={() => void copyLink()} className="mt-3 border-hoikos-300 bg-white text-hoikos-800">{copied ? <Check /> : <Copy />}{copied ? "Copiado" : "Copiar link"}</Button></div> : null}</CardContent></Card><Card className="overflow-hidden workspace-card"><CardHeader className="border-b"><CardTitle className="text-lg">Convites de contratantes</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Usuário</TableHead><TableHead>Empresa</TableHead><TableHead>Perfil</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{invitations.length ? invitations.map((invitation) => <TableRow key={invitation.id}><TableCell className="pl-5"><p className="font-medium">{invitation.email}</p><p className="text-xs text-hoikos-500">Expira em {new Date(invitation.expiresAt).toLocaleDateString("pt-BR")}</p></TableCell><TableCell>{invitation.organizationName}</TableCell><TableCell>{roleLabels[invitation.role] ?? invitation.role}</TableCell><TableCell><Badge variant="outline">{invitation.status === "pending" ? "Pendente" : invitation.status === "accepted" ? "Aceito" : invitation.status === "expired" ? "Expirado" : "Revogado"}</Badge></TableCell><TableCell className="text-right">{invitation.status === "pending" ? <Button type="button" size="sm" variant="ghost" onClick={() => void revoke(invitation.id)} className="text-hoikos-600 hover:text-hoikos-700"><XCircle />Revogar</Button> : <Button type="button" size="sm" variant="ghost" onClick={() => void remover(invitation.id)} className="text-hoikos-500 hover:text-hoikos-700"><Trash2 />Remover</Button>}</TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-32 text-center text-hoikos-500">Nenhum convite criado.</TableCell></TableRow>}</TableBody></Table></div></Card></div>;
+}
+
+/**
+ * Confirmação de exclusão.
+ *
+ * Pede para digitar o nome do que será apagado. Um "tem certeza?" com botão de OK é
+ * acertado por reflexo — a mão já está indo — e aqui não há desfazer: a empresa leva
+ * junto cliente, obra, orçamento, diário e histórico.
+ *
+ * Digitar o nome obriga a olhar QUAL item está selecionado. É a diferença entre errar a
+ * linha da tabela e não errar.
+ */
+function ConfirmarExclusao({ rotulo, aviso, acao, onPronto, onCancelar }: {
+  rotulo: string;
+  aviso: string;
+  acao: () => Promise<void>;
+  onPronto: () => Promise<void>;
+  onCancelar: () => void;
+}) {
+  const [digitado, setDigitado] = useState("");
+  const [apagando, setApagando] = useState(false);
+  const [erro, setErro] = useState("");
+  const confere = digitado.trim() === rotulo.trim();
+
+  async function apagar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!confere) return;
+    setApagando(true); setErro("");
+    try { await acao(); await onPronto(); }
+    catch (causa) { setErro(causa instanceof Error ? causa.message : "Não foi possível apagar."); setApagando(false); }
+  }
+
+  return <form onSubmit={apagar} className="mt-3 rounded-md border border-hoikos-gold/40 bg-hoikos-gold/10 p-4">
+    <p className="text-sm font-medium text-hoikos-900">{aviso}</p>
+    <label className="mt-3 block text-xs text-hoikos-700" htmlFor="confirmar-exclusao">
+      Para confirmar, digite <strong>{rotulo}</strong>
+    </label>
+    <Input id="confirmar-exclusao" value={digitado} onChange={(evento) => setDigitado(evento.target.value)}
+      autoComplete="off" className="mt-1.5 h-10 bg-white" />
+    {erro ? <p role="alert" className="mt-2 text-sm text-hoikos-700">{erro}</p> : null}
+    <div className="mt-3 flex gap-2">
+      <Button type="submit" size="sm" variant="destructive" disabled={!confere || apagando}>
+        {apagando ? <LoaderCircle className="animate-spin" /> : <Trash2 />}Apagar definitivamente
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={onCancelar} disabled={apagando}>Cancelar</Button>
+    </div>
+  </form>;
 }
 
 function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
@@ -290,11 +346,69 @@ function MaintenancePanel({ maintenance }: { maintenance: Overview["maintenance"
   return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Wrench className="size-5 text-hoikos-600" />Ambiente de manutenção</CardTitle><p className="text-sm leading-6 text-hoikos-500">O administrador de manutenção continua com login próprio em <span className="whitespace-nowrap">/manutencao</span>, confinado a este ambiente. Você entra aqui pela sessão da plataforma, sem a senha dele, e mantém os recursos que só o superadmin tem: cadastrar empresas, controlar acessos, assinaturas e trocar de empresa sem sair.</p></CardHeader><CardContent className="space-y-4">{maintenance.ready ? <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt className="text-hoikos-500">Membros</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.members}</dd></div><div><dt className="text-hoikos-500">Trabalhos</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.projects}</dd></div><div><dt className="text-hoikos-500">Tarefas abertas</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.openTasks}</dd></div></dl> : <p className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900">O ambiente ainda não foi criado. Ele nasce vazio no primeiro acesso, seu ou do administrador de manutenção.</p>}<p className="text-sm text-hoikos-500">{maintenance.lastEntryAt ? `Última entrada da plataforma em ${new Date(maintenance.lastEntryAt).toLocaleString("pt-BR")}.` : "Nenhuma entrada da plataforma registrada."}</p>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="button" onClick={() => void open()} disabled={opening} className="h-11 w-full">{opening ? <LoaderCircle className="animate-spin" /> : <Wrench />}Abrir ambiente de manutenção</Button></CardContent></Card>;
 }
 
+type Conta = { id: string; email: string; displayName: string | null; empresas: number; temSenha: boolean };
+
+/**
+ * As contas de acesso da plataforma.
+ *
+ * `Empresas` é a coluna que decide a ação: apagar quem está em três empresas tira a
+ * pessoa das três. Zero é conta que entra e não vê nada — sobra de teste ou de empresa já
+ * apagada, e é justamente a que se quer limpar.
+ *
+ * O trabalho da pessoa não sai junto: tarefa, diário de obra e orçamento pertencem à
+ * empresa. Apagar a conta de quem saiu não pode apagar o histórico da obra que ela tocou.
+ */
+function ContasPanel({ session }: { session: Session }) {
+  const [contas, setContas] = useState<Conta[]>([]);
+  const [erro, setErro] = useState("");
+  const [apagando, setApagando] = useState("");
+
+  const carregar = useCallback(async () => {
+    try { setContas((await api<{ accounts: Conta[] }>("/api/superadmin/accounts")).accounts); setErro(""); }
+    catch (causa) { setErro(causa instanceof Error ? causa.message : "Não foi possível carregar as contas."); }
+  }, []);
+
+  // Adiado um tique, como o resto da plataforma faz: carregar de dentro do efeito
+  // dispara a atualização de estado no mesmo render e encadeia renderizações.
+  useEffect(() => { const t = window.setTimeout(() => void carregar(), 0); return () => window.clearTimeout(t); }, [carregar]);
+
+  return <Card className="mt-6 overflow-hidden workspace-card">
+    <CardHeader className="border-b bg-white">
+      <CardTitle className="text-lg">Contas de acesso</CardTitle>
+      <p className="text-sm text-hoikos-500">Apagar remove a pessoa de todas as empresas e o login dela. O que ela cadastrou fica com a empresa.</p>
+    </CardHeader>
+    {erro ? <p role="alert" className="px-6 py-4 text-sm text-hoikos-600">{erro}</p> : null}
+    <div className="overflow-x-auto"><Table>
+      <TableHeader><TableRow className="bg-hoikos-50">
+        <TableHead className="pl-6">Conta</TableHead><TableHead>Empresas</TableHead>
+        <TableHead>Senha</TableHead><TableHead className="pr-5 text-right">Ação</TableHead>
+      </TableRow></TableHeader>
+      <TableBody>{contas.length ? contas.map((conta) => <TableRow key={conta.id}>
+        <TableCell className="pl-6"><p className="font-medium text-hoikos-900">{conta.email}</p>{conta.displayName ? <p className="text-xs text-hoikos-500">{conta.displayName}</p> : null}</TableCell>
+        <TableCell>{conta.empresas}</TableCell>
+        <TableCell><Badge variant="outline">{conta.temSenha ? "Definida" : "Sem senha"}</Badge></TableCell>
+        <TableCell className="pr-5 text-right">
+          {conta.email.toLowerCase() === session.email.toLowerCase()
+            ? <span className="text-xs text-hoikos-500">Sua conta</span>
+            : <Button type="button" size="sm" variant="ghost" className="text-hoikos-600 hover:text-hoikos-700" onClick={() => setApagando(apagando === conta.id ? "" : conta.id)} aria-label={`Apagar ${conta.email}`}><Trash2 /></Button>}
+          {apagando === conta.id ? <div className="text-left"><ConfirmarExclusao
+            rotulo={conta.email}
+            aviso={conta.empresas > 0 ? `Remove esta pessoa de ${conta.empresas} empresa(s) e apaga o login dela. Não há desfazer.` : "Apaga o login desta conta, que hoje não pertence a nenhuma empresa. Não há desfazer."}
+            acao={async () => { await api(`/api/superadmin/accounts/${conta.id}`, { method: "DELETE" }); }}
+            onPronto={async () => { setApagando(""); await carregar(); }}
+            onCancelar={() => setApagando("")} /></div> : null}
+        </TableCell>
+      </TableRow>) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-hoikos-500">Nenhuma conta criada.</TableCell></TableRow>}</TableBody>
+    </Table></div>
+  </Card>;
+}
+
 function Dashboard({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [database, setDatabase] = useState<MigrationStatus | null>(null);
   const [error, setError] = useState("");
   const [entering, setEntering] = useState("");
+  const [apagandoEmpresa, setApagandoEmpresa] = useState("");
 
   const loadOverview = useCallback(async () => {
     setOverview(await api<Overview>("/api/superadmin/overview"));
@@ -319,6 +433,24 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadDatabase, loadOverview]);
+
+  /**
+   * Apaga a empresa aqui e na Drap.
+   *
+   * A Drap recusa apagar empresa que ela não provisionou, ou que tem gente acessando
+   * direto lá. A recusa para tudo, com o motivo — e a segunda pergunta oferece apagar só
+   * daqui, dizendo o preço: a empresa continua existindo lá, com o financeiro dela.
+   */
+  async function apagarEmpresa(organizationId: string) {
+    try {
+      await api(`/api/superadmin/organizations/${organizationId}`, { method: "DELETE" });
+    } catch (causa) {
+      const motivo = causa instanceof Error ? causa.message : "Não foi possível apagar a empresa.";
+      if (!/Drap/i.test(motivo)) throw causa;
+      if (!window.confirm(`${motivo}\n\nApagar apenas na H.OIKOS? A empresa continuará existindo na Drap, com o financeiro dela.`)) throw causa;
+      await api(`/api/superadmin/organizations/${organizationId}?manterNaDrap=1`, { method: "DELETE" });
+    }
+  }
 
   async function openCompany(organizationId: string) {
     setEntering(organizationId); setError("");
@@ -354,7 +486,8 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           <PlatformControl organizations={overview.organizations} maintenanceId={overview.maintenance.ready ? overview.maintenance.id : undefined} />
           <SinapiControl />
           {overview.organizations.length ? <section className="mt-6 space-y-4"><h2 className="text-xl font-semibold">Tempo online de todos os acessos</h2><UsageWorkspace /></section> : null}
-          <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-hoikos-900">{organization.name}</p><p className="text-xs text-hoikos-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-hoikos-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
+          <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-hoikos-900">{organization.name}</p><p className="text-xs text-hoikos-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button><Button type="button" size="sm" variant="ghost" className="text-hoikos-600 hover:text-hoikos-700" onClick={() => setApagandoEmpresa(apagandoEmpresa === organization.id ? "" : organization.id)} aria-label={`Apagar ${organization.name}`}><Trash2 /></Button></div>{apagandoEmpresa === organization.id ? <div className="text-left"><ConfirmarExclusao rotulo={organization.name} aviso={`Apaga a empresa e tudo que pendura nela: ${organization.clients} cliente(s), ${organization.projects} projeto(s), orçamentos, diários e histórico. Quem só pertencia a ela perde o login. Não há desfazer.`} acao={() => apagarEmpresa(organization.id)} onPronto={async () => { setApagandoEmpresa(""); await reload(); }} onCancelar={() => setApagandoEmpresa("")} /></div> : null}</TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-hoikos-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
+          <ContasPanel session={session} />
         </>}
       </div>
     </main>

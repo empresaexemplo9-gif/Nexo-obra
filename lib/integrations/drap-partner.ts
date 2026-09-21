@@ -162,3 +162,36 @@ export async function emitirChaveNaDrap(tenantId: string, escopos?: string[]): P
   if (!chave) throw new DrapPartnerError(502, "resposta-sem-chave", "A Drap respondeu sem a chave.");
   return chave;
 }
+
+/**
+ * Apaga na Drap uma empresa que a plataforma criou lá.
+ *
+ * A Drap só aceita apagar empresa que este parceiro PROVISIONOU. Uma empresa que já
+ * existia e foi vinculada pelo administrador dela é recusada de lá mesmo: o dono
+ * consentiu que a plataforma operasse o financeiro, e operar não é destruir.
+ *
+ * Devolve o motivo da recusa em vez de engolir: "empresa com gente dentro" e "empresa
+ * vinculada" são coisas que quem está apagando precisa ler, porque mudam a decisão.
+ */
+export async function apagarEmpresaNaDrap(tenantId: string): Promise<void> {
+  const resposta = await fetch(url(`/api/partner/v1/empresas/${encodeURIComponent(tenantId)}`), {
+    method: "DELETE",
+    redirect: "error",
+    headers: headers(),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (resposta.ok) return;
+
+  const bruto = resposta.status === 204 ? "" : await resposta.text();
+  let dados: Record<string, unknown> = {};
+  if (bruto) {
+    try { dados = JSON.parse(bruto) as Record<string, unknown>; }
+    catch { dados = { error: bruto.slice(0, 200) }; }
+  }
+  throw new DrapPartnerError(
+    resposta.status,
+    texto(dados.error, "erro-desconhecido"),
+    texto(dados.detail, "A Drap recusou apagar a empresa."),
+  );
+}
