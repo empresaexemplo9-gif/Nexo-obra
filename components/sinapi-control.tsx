@@ -3,6 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { SinapiImportControl } from "@/components/sinapi-import-control";
+import { SinapiReferenceBrowser } from "@/components/sinapi-reference-browser";
 import { NativeSelect } from "@/components/ui/native-select";
 import { DEFAULT_SINAPI_UF, UFS, columnName, previousMonth, type Mapping, type Profile } from "@/lib/integrations/sinapi-contract";
 
@@ -63,6 +65,8 @@ export function SinapiControl() {
   }
   const job = data?.jobs.find((j) => j.id === data.jobId);
   return <Card className="mt-6 min-w-0 [&_button]:h-auto [&_button]:min-h-9 [&_button]:whitespace-normal"><CardHeader><CardTitle>Referência SINAPI</CardTitle><p className="text-sm">O pacote XLSX oficial da CAIXA é nacional. A plataforma seleciona a UF, o regime e a competência sem depender de API de terceiro; Goiás é o padrão inicial e as 27 UFs ficam disponíveis.</p></CardHeader><CardContent className="min-w-0 space-y-4">
+    <SinapiImportControl />
+    <SinapiReferenceBrowser />
     <div aria-live="polite">{busy ? <p>Processando a etapa. O progresso fica salvo no servidor.</p> : message ? <p>{message}</p> : null}{error || data?.error ? <p role="alert" className="break-words text-red-700">{error || data?.error}</p> : null}</div>
     {!data ? <Button variant="outline" disabled={busy} onClick={() => void load().catch((e: Error) => setError(e.message))}>Carregar referências</Button> : <>
       {!data.storageConfigured ? <p className="text-sm">Configure BLOB_READ_WRITE_TOKEN na hospedagem para permitir o processamento temporário.</p> : null}

@@ -10,6 +10,7 @@ const root = fileURLToPath(new URL("..", import.meta.url));
 const runtime = {}; globalThis.__platformEnvOverride = runtime;
 const vite = await createServer({ configFile: false, appType: "custom", root, resolve: { alias: { "@": root } }, server: { middlewareMode: true, hmr: false } });
 const sync = await vite.ssrLoadModule("/lib/server/sinapi-sync.ts");
+const imports = await vite.ssrLoadModule('/lib/server/sinapi-import.ts');
 const parser = await vite.ssrLoadModule("/lib/integrations/sinapi-mapped.ts");
 const adminRoute = await vite.ssrLoadModule("/app/api/superadmin/sinapi/route.ts");
 const cronRoute = await vite.ssrLoadModule("/app/api/cron/sinapi/route.ts");
@@ -248,4 +249,23 @@ test("falha ao gravar os bytes não deixa competência presa em baixando", async
   const status = await sync.sinapiStatus();
   assert.equal(status.jobId, null, "sem isso, a trava de job único bloquearia toda tentativa seguinte");
   assert.equal(db.sqlite.prepare("SELECT count(*) n FROM sinapi_competencias").get().n, 0);
+});
+
+
+test('CSV nacional preparado, ativação por perfil e repetição idempotente', async () => {
+  const original = {...sync.sinapiIO}; Object.assign(sync.sinapiIO,io);
+  try {
+    const id=crypto.randomUUID(),path=`sinapi-imports/${id}/files/base.csv`;
+    const header='competencia;uf;regime;tipo;codigo;descricao;unidade;preco\n';
+    const rows=['GO','SP'].flatMap(uf=>Array.from({length:110},(_,i)=>`2026-08;${uf};NaoDesonerado;insumo;${i+1};Material ${i+1};UN;${uf==='GO'?'2,50':'7,50'}`));
+    objects.set(path,Buffer.from(header+rows.join('\n')));
+    const manifest=await locked(()=>imports.prepareSinapiImport({id,month:'2026-08',files:[path],profiles:[{uf:'GO',regime:'NaoDesonerado'},{uf:'SP',regime:'NaoDesonerado'}]}));
+    assert.equal(manifest.sampleCount,110);assert.equal(manifest.completed.length,0);
+    let next=await locked(token=>imports.advanceSinapiImport(id,'admin@example.test',token));assert.equal(next.completed.length,1);
+    next=await locked(token=>imports.advanceSinapiImport(id,'admin@example.test',token));assert.equal(next.completed.length,2);
+    next=await locked(token=>imports.advanceSinapiImport(id,'admin@example.test',token));assert.equal(next.completed.length,2);
+    assert.equal(db.sqlite.prepare("SELECT count(*) n FROM sinapi_itens").get().n,220);
+    assert.equal(db.sqlite.prepare("SELECT custo_unitario_centavos FROM sinapi_itens i JOIN sinapi_competencias c ON c.id=i.competencia_id WHERE uf='GO' LIMIT 1").get().custo_unitario_centavos,250);
+    assert.equal((await imports.latestSinapiImport()).id,id);
+  } finally {Object.assign(sync.sinapiIO,original);}
 });

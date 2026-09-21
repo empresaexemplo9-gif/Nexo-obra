@@ -80,9 +80,13 @@ export function abrirPlanilha(dados: Buffer): Planilha {
           const tipo = /t="([^"]+)"/.exec(marca)?.[1];
           const valor = /<v>([\s\S]*?)<\/v>/.exec(conteudo)?.[1];
           // `t="s"` é índice na tabela compartilhada; `t="inlineStr"` traz o texto junto.
-          const texto = tipo === "s" && valor !== undefined ? (textos[Number(valor)] ?? "")
+          // CAIXA usa HYPERLINK(...,104658) com cache <v>0</v> para códigos.
+          // Lemos somente o rótulo literal; nunca executamos fórmulas.
+          const formula = textoDeXml(/<f\b[^>]*>([\s\S]*?)<\/f>/.exec(conteudo)?.[1] ?? "");
+          const hyperlinkCode = /^HYPERLINK\([\s\S]*[,;]\s*"?(\d+)"?\s*\)$/i.exec(formula)?.[1];
+          const texto = hyperlinkCode ?? (tipo === "s" && valor !== undefined ? (textos[Number(valor)] ?? "")
             : tipo === "inlineStr" ? [...conteudo.matchAll(/<t[^>]*>([\s\S]*?)<\/t>/g)].map(([, t]) => textoDeXml(t)).join("")
-            : valor !== undefined ? textoDeXml(valor) : "";
+            : valor !== undefined ? textoDeXml(valor) : "");
           while (linha.length < coluna) linha.push("");
           linha[coluna] = texto;
         }

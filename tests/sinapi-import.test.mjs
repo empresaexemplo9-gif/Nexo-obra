@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import test, {after} from 'node:test';
+import {createServer} from 'vite';
+import {montarZip,xlsx} from './helpers/sinapi-fixtures.mjs';
+const vite=await createServer({configFile:false,appType:'custom',resolve:{alias:{'@':process.cwd()}},server:{middlewareMode:true,hmr:false}});
+const {parseSinapiCsv,officialSinapiUrl,packSinapiFiles}=await vite.ssrLoadModule('/lib/integrations/sinapi-import.ts');
+const {abrirZip}=await vite.ssrLoadModule('/lib/integrations/planilha-zip.ts');
+const {abrirPlanilha}=await vite.ssrLoadModule('/lib/integrations/planilha-xlsx.ts');
+const {parseNationalPackage}=await vite.ssrLoadModule('/lib/integrations/sinapi-mapped.ts');
+after(()=>vite.close());
+const header='competencia;uf;regime;tipo;codigo;descricao;unidade;preco\n';
+const csv=(extra='')=>({name:'precos.csv',bytes:Buffer.from(header+Array.from({length:100},(_,i)=>`2026-08;GO;NaoDesonerado;insumo;${i+1};"Item; ${i+1}";UN;1,23`).join('\n')+extra)});
+test('CSV separa UF, regime e preço indisponível sem gerar zero',()=>{const p=parseSinapiCsv([csv('\n2026-08;GO;NaoDesonerado;composicao;101;Sem custo;M2;\n2026-08;SP;Desonerado;insumo;1;Outro;UN;9,99')],'2026-08','GO','NaoDesonerado');assert.equal(p.itens.length,100);assert.equal(p.itens[0].custoUnitarioCentavos,123);assert.equal(p.itens[0].descricao,'Item; 1');assert.equal(p.semPreco,1);});
+test('CSV rejeita duplicata entre arquivos, mês errado e preço inválido',()=>{assert.throws(()=>parseSinapiCsv([csv(),csv()],'2026-08','GO','NaoDesonerado'),/duplicado/);assert.throws(()=>parseSinapiCsv([csv()],'2026-09','GO','NaoDesonerado'),/competência/);assert.throws(()=>parseSinapiCsv([csv('\n2026-08;GO;NaoDesonerado;insumo;101;Falha;UN;abc')],'2026-08','GO','NaoDesonerado'),/preço inválido/);});
+test('URL aceita somente pacote oficial da competência sem redirects ou credenciais',()=>{const good='https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-2026-08-formato-xlsx.zip';assert.equal(officialSinapiUrl(good,'2026-08'),good);for(const bad of [good.replace('www.caixa.gov.br','127.0.0.1'),good.replace('https:','http:'),good+'?url=https://x.test',good.replace('https://','https://user@'),good.replace('2026-08','2026-07')])assert.throws(()=>officialSinapiUrl(bad,'2026-08'));});
+test('pasta empacotada preserva XLSX e nomes UTF-8',()=>{const file={name:'Referência.xlsx',bytes:xlsx({Dados:[['Código'],['123']]})};const z=abrirZip(packSinapiFiles([file]));assert.equal(z.entradas[0].nome,file.name);assert.deepEqual(z.extrair(file.name),file.bytes);});
+test('código HYPERLINK oficial é lido do rótulo literal em vez do cache zero',()=>{const book=xlsx({CSD:[['Codigo'],['104658']]});const z=abrirZip(book);const entries=Object.fromEntries(z.entradas.map(e=>[e.nome,z.extrair(e.nome)]));entries['xl/worksheets/sheet1.xml']=Buffer.from('<worksheet><sheetData><row r="1"><c r="A1"><f>HYPERLINK("#"&amp;CELL("address",OFFSET(Analítico!$B$1,MATCH(104658,Analítico!$B:$B,0)-1,3)),104658)</f><v>0</v></c></row></sheetData></worksheet>');assert.equal(abrirPlanilha(montarZip(entries)).linhas('CSD')[0][0],'104658');});
+test('cabeçalho real de custo usa UF acima; percentuais mão de obra não viram preços',()=>{
+ const title=['RELATÓRIO DE CUSTOS DE COMPOSIÇÕES - SEM DESONERAÇÃO'];const date=['Mês de Referência:','08/2026'];
+ const costs=xlsx({CSD:[title,date,['','','','','GO','','SP'],['Grupo','Código da Composição','Descrição','Unidade','Custo (R$)','%AS','Custo (R$)'],...Array.from({length:120},(_,i)=>['Grupo',String(1000+i),'Serviço','M2',i?'12.34':'0','0','90.00'])]});
+ const inputs=xlsx({ISD:[['RELATÓRIO DE PREÇOS DE INSUMOS - SEM DESONERAÇÃO'],date,['Código do Insumo','Descrição do Insumo','Unidade','GO','SP'],...Array.from({length:120},(_,i)=>[String(i+1),'Insumo','UN','2.50','3.50'])]});
+ const labor=xlsx({'SEM Desoneração':[['RELATÓRIO DE PORCENTAGEM DE MÃO DE OBRA EM COMPOSIÇÕES - SEM DESONERAÇÃO'],date,['Código da Composição','Descrição','Unidade','GO'],...Array.from({length:120},(_,i)=>[String(1000+i),'Serviço','M2','0.2'])]});
+ const zip=montarZip({'Insumos.xlsx':inputs,'Composicoes.xlsx':costs,'mao_de_obra.xlsx':labor});const p=parseNationalPackage(zip,'2026-08','GO','NaoDesonerado');assert.equal(p.itens.length,239);assert.equal(p.semPreco,1);assert.equal(p.itens.find(i=>i.tipo==='composicao').custoUnitarioCentavos,1234);assert.throws(()=>parseNationalPackage(zip,'2026-07','GO','NaoDesonerado'),/competência/);
+});

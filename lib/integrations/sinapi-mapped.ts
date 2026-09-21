@@ -93,6 +93,8 @@ type NationalTable = {
 function detectNationalTable(arquivo: string, aba: string, rows: string[][], uf: string, regime: SinapiRegime): NationalTable | null {
   const fileAndSheet = compact(`${arquivo} ${aba}`);
   const preview = compact(`${arquivo} ${aba} ${rows.slice(0, 40).flat().join(" ")}`);
+  // Percentuais de mão de obra não são custos monetários.
+  if (/porcentagem de mao|percentual de mao|familias e coeficientes|manutencoes/.test(preview)) return null;
   if (!regimeMatches(preview, regime)) return null;
 
   for (let h = 0; h < Math.min(rows.length, 40); h++) {
@@ -104,7 +106,9 @@ function detectNationalTable(arquivo: string, aba: string, rows: string[][], uf:
 
     const normalizedHeader = row.map((cell) => compact(cell ?? ""));
     const next = rows[h + 1] ?? [];
-    const combined = Array.from({ length: Math.max(row.length, next.length) }, (_, c) => compact(`${row[c] ?? ""} ${next[c] ?? ""}`));
+    const previous = rows[h - 1] ?? [];
+    const nextIsData = /^\d+$/.test(next[codigo]?.trim() ?? "");
+    const combined = Array.from({ length: Math.max(row.length, nextIsData ? 0 : next.length) }, (_, c) => compact(`${row[c] ?? ""} ${nextIsData ? "" : next[c] ?? ""}`));
     const headerText = compact(row.join(" "));
     const tipo: ItemSinapi["tipo"] | null = /insumo/.test(headerText) || /insumo/.test(fileAndSheet)
       ? "insumo"
@@ -119,11 +123,13 @@ function detectNationalTable(arquivo: string, aba: string, rows: string[][], uf:
       preco = normalizedHeader.findIndex((cell) => cell === state || cell.startsWith(`${state} preco`) || cell.startsWith(`${state} valor`));
       if (preco < 0) preco = combined.findIndex((cell) => cell === state || cell.startsWith(`${state} preco`) || cell.startsWith(`${state} valor`));
     } else {
+      preco = row.findIndex((cell, c) => compact(previous[c] ?? "") === state && /^custo/.test(compact(cell)));
+      if (preco < 0)
       preco = combined.findIndex((cell) => cell.startsWith(`${state} custo`) || cell === `${state} r` || cell === state);
       if (preco >= 0 && /%as|percent/.test(compact(next[preco] ?? ""))) preco = -1;
     }
     if (preco < 0 || new Set([codigo, descricao, unidade, preco]).size !== 4) continue;
-    return { arquivo, aba, tipo, cabecalho: h, codigo, descricao, unidade, preco, header: combined };
+    return { arquivo, aba, tipo, cabecalho: h, codigo, descricao, unidade, preco, header: combined.map((cell, c) => /^[A-Z]{2}$/.test(previous[c] ?? "") ? `${previous[c]} ${cell}` : cell) };
   }
   return null;
 }
@@ -157,6 +163,8 @@ export function parseNationalPackage(zipBytes: Buffer, month: string, state: str
       const preview = book.linhas(aba, 45);
       const table = detectNationalTable(entry.nome, aba, preview, uf, regime);
       if (!table) continue;
+      const declared = preview.find((row) => compact(row[0] ?? "") === "mes de referencia")?.[1];
+      if (declared && declared !== `${reference.slice(5)}/${reference.slice(0, 4)}`) throw new Error(`A planilha informa competência ${declared}, diferente de ${reference}.`);
       tables.push({ table, rows: book.linhas(aba) });
     }
   }
@@ -186,11 +194,14 @@ export function parseNationalPackage(zipBytes: Buffer, month: string, state: str
     for (const row of rows.slice(table.cabecalho + 1)) {
       const codigo = row[table.codigo]?.trim() ?? "";
       if (!/^\d+$/.test(codigo)) continue;
+      if (Number(codigo) === 0) throw new Error("Código SINAPI zero: confira as fórmulas da planilha original.");
       const descricao = row[table.descricao]?.trim() ?? "";
       const unidade = row[table.unidade]?.trim() ?? "";
       const rawPrice = row[table.preco]?.trim() ?? "";
       if (!rawPrice || /^(?:-|–|—|N\/A)$/i.test(rawPrice)) { semPreco++; continue; }
       const price = paraCentavos(rawPrice);
+      // Na publicação SINAPI, custo zero de composição significa sem custo calculado.
+      if (table.tipo === "composicao" && price === 0) { semPreco++; continue; }
       if (!descricao || !unidade || price === null || !Number.isSafeInteger(price)) throw new Error(`Item ${codigo} inválido na tabela nacional da SINAPI (${uf}).`);
       const key = `${table.tipo}:${codigo}`;
       if (seen.has(key)) throw new Error(`Código duplicado no pacote nacional: ${key}. A estrutura publicada pela CAIXA precisa ser conferida.`);

@@ -3,7 +3,7 @@ import { del, get, put } from "@vercel/blob";
 import { getDatabase } from "@/db";
 import { ApiError } from "./api-error";
 import { runtimeEnv } from "./runtime";
-import { inspectReference, parseMapped, parseNationalPackage, referenceFile } from "@/lib/integrations/sinapi-mapped";
+import { inspectReference, parseMapped, parseNationalPackage, referenceFile, type NationalPackage } from "@/lib/integrations/sinapi-mapped";
 import { previousMonth, sourceUrl, type Mapping, type Profile } from "@/lib/integrations/sinapi-contract";
 import type { ItemSinapi } from "@/lib/integrations/sinapi-planilha";
 
@@ -84,6 +84,26 @@ async function abrirCompetencia(month: string, profile: Profile, token: string, 
 
 export async function startSinapi(month: string, profile: Profile, token: string) {
   await abrirCompetencia(month, profile, token, sourceUrl(month));
+}
+
+/** A prepared file uses the same checkpoint, count verification and atomic activation. */
+export async function prepareSinapiItems(month: string, profile: Profile, parsed: NationalPackage,
+  source: { url: string; sha256: string; bytes: number; importId: string }, token: string) {
+  const id = await abrirCompetencia(month, profile, token, source.url);
+  try {
+    await sinapiIO.write(keys(id)[1], Buffer.from(JSON.stringify(parsed.itens)));
+    const report = { arquivos: parsed.arquivos, signatures: parsed.signatures, semPreco: parsed.semPreco,
+      cursor: 0, amostra: [...parsed.itens.slice(0, 5), ...parsed.itens.slice(-5)], alertas: [], importId: source.importId };
+    await getDatabase().prepare("UPDATE sinapi_competencias SET estado='importando',arquivo_sha256=?1,arquivo_bytes=?2,total_itens=?3,laudo_json=?4,baixado_em=?5 WHERE id=?6")
+      .bind(source.sha256, source.bytes, parsed.itens.length, JSON.stringify(report), Date.now(), id).run();
+  } catch(error) {
+    await getDatabase().batch([
+      getDatabase().prepare("UPDATE sinapi_sync SET job_id=NULL WHERE id=1 AND lock_token=?1").bind(token),
+      getDatabase().prepare("DELETE FROM sinapi_competencias WHERE id=?1").bind(id),
+    ]);
+    await sinapiIO.remove(keys(id)[1]).catch(() => {});
+    throw error;
+  }
 }
 
 // Envio manual do ZIP da Caixa, para quando o download automático é recusado.

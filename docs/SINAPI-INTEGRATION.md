@@ -112,3 +112,43 @@ atualizações concorrentes.
 Cada pacote oficial recebe SHA-256 no laudo. Nenhum preço fictício é criado. Resposta curta
 demais, pacote não reconhecido, falha de autenticação externa, rate limit, erro de rede ou
 divergência de persistência preservam a referência que já estava ativa.
+
+## Centro de atualização (URL, CSV e pasta)
+
+Em **Superadmin → Referência SINAPI → Atualizar base SINAPI**, selecione a competência,
+as UFs (padrão: todas) e os regimes (padrão: ambos). Fontes aceitas:
+
+- URL HTTPS do ZIP XLSX mensal oficial em `www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/`.
+- Arquivo ZIP nacional completo, arquivos XLSX extraídos ou pasta com esses XLSX.
+- Um ou mais CSV UTF-8 com cabeçalho `competencia;uf;regime;tipo;codigo;descricao;unidade;preco`.
+  Regimes: `NaoDesonerado`/`Desonerado`; tipos: `insumo`/`composicao`. Preço vazio significa
+  indisponível. A competência é obrigatória em todas as linhas; não misture meses.
+
+Arquivos grandes são enviados diretamente ao Blob privado, sem passar pelo limite de corpo
+HTTP das funções. O limite total é 80 MB/20 arquivos. URLs arbitrárias e redirecionamentos
+não são aceitos. O envio CSV/pasta não recebe automaticamente certificação de fonte oficial:
+a origem enviada pelo administrador aparece explicitamente no laudo.
+
+A conferência mostra origem, SHA-256, relatórios e amostra real da primeira UF/regime.
+Após confirmar, a interface processa cada combinação sequencialmente. Mantenha a página
+aberta. Se interromper, reabra o painel no mesmo navegador e clique em **Continuar importação**.
+Cada combinação é ativada transacionalmente após conferir o total persistido. Uma falha
+preserva a base vigente daquela combinação. Durante a carga, o painel mostra a cobertura
+parcial. Uma referência igual ou mais recente de outra origem não é substituída silenciosamente.
+
+O pacote integral permanece privado e pode ser baixado pelos usuários com permissão de
+orçamentos. **Orçamentos → Consultar parâmetros e relatórios completos do SINAPI** permite
+pesquisar analítico de composições, famílias/coeficientes, percentual de mão de obra,
+manutenções, encargos sociais e preços sem encargos. A consulta exibe até 100 linhas por
+busca; o download contém o conteúdo integral, inclusive fórmulas e relatórios auxiliares.
+Os preços operacionais são carregados na base SINAPI já usada pelos orçamentos.
+
+### Verificação com publicação real
+
+Arquivo obtido diretamente da CAIXA em 20/09/2026:
+`https://www.caixa.gov.br/Downloads/sinapi-relatorios-mensais/SINAPI-2026-08-formato-xlsx.zip`.
+A planilha declara competência 08/2026 e emissão 11/09/2026. A leitura das 27 UFs nos dois
+regimes produziu 651.524 preços utilizáveis. Códigos em `HYPERLINK` são extraídos do rótulo
+literal; não se executa fórmula nem se usa o cache zero como código. Custos de composição
+zerados e preços em branco não são oferecidos como preços utilizáveis. Percentuais de mão
+de obra são relatórios próprios e nunca entram como custos monetários.
