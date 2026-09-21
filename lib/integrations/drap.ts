@@ -608,3 +608,61 @@ export async function requestDrapApi<T>(
   if (!response.ok) throw new DrapApiError(response.status, parsed, retryAfter);
   return { data: parsed as T | null, status: response.status, retryAfter };
 }
+
+export type DrapModule = {
+  id: string;
+  nome: string;
+  descricaoCurta: string;
+  ativo: boolean;
+  precoMensal: number | null;
+  status: string;
+};
+
+export type DrapModulesState = {
+  ativos: string[];
+  modulos: DrapModule[];
+  /** Para onde mandar a pessoa quando ela quiser ativar. É a conta dela. */
+  urlAssinatura: string | null;
+};
+
+/**
+ * O que esta empresa tem contratado na Drap, e quanto custa o que ela não tem.
+ *
+ * Existe para a tela conseguir dizer "Emissão de nota: inativa" ANTES de qualquer
+ * clique. Sem isto, a única forma de descobrir seria tentar a ação e levar 403 — ou
+ * seja, descobrir a permissão errando, na frente do usuário.
+ *
+ * A H.OIKOS não contrata nada por ninguém: assinatura recorrente é no cartão de quem
+ * paga, e quem decide é a pessoa, na conta dela. O papel daqui é mostrar o estado e o
+ * preço, e levar até `urlAssinatura`.
+ *
+ * Os nomes remotos (`preco_mensal`, `url_assinatura`) param aqui: o resto do domínio
+ * não precisa saber como a Drap escreve.
+ */
+export async function fetchDrapModules(externalCompanyId: string): Promise<DrapModulesState> {
+  const { data } = await requestDrapApi<{
+    ativos?: unknown;
+    modulos?: unknown;
+    url_assinatura?: unknown;
+  }>(externalCompanyId, "/api/v1/modulos");
+
+  const brutos = Array.isArray(data?.modulos) ? data.modulos as Record<string, unknown>[] : [];
+  return {
+    ativos: Array.isArray(data?.ativos) ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string") : [],
+    modulos: brutos.flatMap((item) => {
+      const id = typeof item.id === "string" ? item.id : "";
+      if (!id) return [];
+      return [{
+        id,
+        nome: typeof item.nome === "string" ? item.nome : id,
+        descricaoCurta: typeof item.descricao_curta === "string" ? item.descricao_curta : "",
+        ativo: item.ativo === true,
+        // `null` quando a Drap não mandou número. A tela mostra "consultar" em vez de
+        // inventar um preço — dizer R$ 0 seria pior do que não dizer nada.
+        precoMensal: typeof item.preco_mensal === "number" && Number.isFinite(item.preco_mensal) ? item.preco_mensal : null,
+        status: typeof item.status === "string" ? item.status : "stable",
+      }];
+    }),
+    urlAssinatura: typeof data?.url_assinatura === "string" && data.url_assinatura ? data.url_assinatura : null,
+  };
+}

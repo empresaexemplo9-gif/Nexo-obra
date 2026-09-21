@@ -162,3 +162,47 @@ export async function emitirChaveNaDrap(tenantId: string, escopos?: string[]): P
   if (!chave) throw new DrapPartnerError(502, "resposta-sem-chave", "A Drap respondeu sem a chave.");
   return chave;
 }
+
+export type ConviteDaConta = {
+  /** Link de aceite. Vem sempre, porque e-mail falha e sem ele não há segunda via. */
+  link: string;
+  expiraEm: string;
+  /** `true` só significa "a Drap tem SMTP configurado e vai tentar" — não que chegou. */
+  emailEnviado: boolean;
+};
+
+/**
+ * Pede à Drap o convite que entrega a empresa ao dono dela.
+ *
+ * A empresa provisionada por aqui nasce SEM usuário nenhum: ela existe, opera por API e
+ * não há conta para ninguém entrar. Isso é o certo enquanto a pessoa quiser ficar só na
+ * H.OIKOS, e deixa de ser no dia em que ela quer a conta dela — para assinar um módulo,
+ * conferir o histórico, falar com o suporte da Drap.
+ *
+ * O convite é o de sempre da Drap (`/signup?invite=…`), com papel de administrador: quem
+ * recebe a empresa recebe ela inteira. A Drap recusa se a empresa já tiver algum usuário
+ * — a partir daí convidar é decisão de quem está lá dentro, não da plataforma.
+ */
+export async function convidarDonoDaEmpresa(entrada: {
+  tenantId: string;
+  email: string;
+  nome: string;
+}): Promise<ConviteDaConta> {
+  const dados = await chamar("/api/partner/v1/convites", {
+    tenant_id: entrada.tenantId,
+    email: entrada.email,
+    nome: entrada.nome,
+  });
+
+  const link = texto(dados.link, "");
+  if (!link) {
+    // Sem link não há como a pessoa aceitar o convite, e o e-mail pode nunca chegar.
+    // Tratar isso como sucesso deixaria a tela dizendo "convite enviado" sem nada atrás.
+    throw new DrapPartnerError(502, "resposta-sem-link", "A Drap criou o convite mas não devolveu o link de aceite.");
+  }
+  return {
+    link,
+    expiraEm: texto(dados.expires_at, ""),
+    emailEnviado: dados.email_enviado === true,
+  };
+}

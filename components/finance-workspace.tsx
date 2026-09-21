@@ -11,6 +11,7 @@ import {
   CircleDollarSign,
   Clipboard,
   Download,
+  ExternalLink,
   Landmark,
   Link2,
   LoaderCircle,
@@ -41,6 +42,12 @@ type Project = {
 };
 type Connection = { id: string; externalCompanyId: string; status: string; lastSyncedAt: string | null; lastError: string | null; webhookRegistrado: boolean };
 type Capabilities = { summary: boolean; transactions: boolean; charges: boolean };
+/** O que a empresa tem contratado na Drap. A H.OIKOS mostra e leva até lá; quem assina
+ *  é quem paga, na conta dele. */
+type ModuloDrap = { id: string; nome: string; descricaoCurta: string; ativo: boolean; precoMensal: number | null; status: string };
+type PlanoDrap = { ativos: string[]; modulos: ModuloDrap[]; urlAssinatura: string | null };
+/** O convite que entrega a empresa ao dono dela. O link vem junto porque e-mail falha. */
+type ContaDrap = { link: string; expiraEm: string; emailEnviado: boolean; email: string };
 /** Por que o recorte de uma obra voltou sem nada. `null` = não se aplica. */
 type EmptyReason = "company_without_transactions" | "cost_center_without_match" | null;
 type FinancialSummary = { currentBalance: number; receivables: number; payables: number; projected30d: number; overdueReceivables: number; updatedAt: string; source: "drap"; origem?: "resumo" | "lancamentos"; truncado?: boolean };
@@ -119,6 +126,9 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
   const [chargeOpen, setChargeOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [remindOnDueDate, setRemindOnDueDate] = useState(true);
+  const [plano, setPlano] = useState<PlanoDrap | null>(null);
+  const [conta, setConta] = useState<ContaDrap | null>(null);
+  const [pedindoConta, setPedindoConta] = useState(false);
 
   /**
    * Carrega o Financeiro. Cada consulta responde por si.
@@ -138,15 +148,20 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
       catch (causa) { return { valor: null, erro: causa instanceof Error ? causa.message : "Não foi possível carregar." }; }
     };
     try {
-      const [conexao, resumo, cobrancas] = await Promise.all([
+      const [conexao, resumo, cobrancas, modulos] = await Promise.all([
         seguro(requestJson<{ connection: Connection | null; capabilities: Capabilities }>("/api/integrations/drap/connection")),
         seguro(requestJson<FinancialSummary>("/api/integrations/drap/summary")),
         seguro(requestJson<{ charges: Charge[] }>("/api/integrations/drap/charges")),
+        seguro(requestJson<PlanoDrap>("/api/integrations/drap/modulos")),
       ]);
 
       if (conexao.valor) { setConnection(conexao.valor.connection); setCapabilities(conexao.valor.capabilities); }
       setSummary(resumo.valor);
       setCharges(cobrancas.valor?.charges ?? []);
+      // O plano não entra na mensagem de erro: ele é informação de apoio, e uma Drap
+      // antiga que ainda não publica módulos não pode fazer o Financeiro parecer
+      // quebrado. Sem plano, a seção simplesmente não aparece.
+      setPlano(modulos.valor);
       // A conexão é a que mais importa: sem ela a tela inteira fica sem ação. Por isso a
       // mensagem dela vem primeiro.
       setMessage(conexao.erro || resumo.erro || cobrancas.erro);
@@ -202,6 +217,30 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
       // para este endereço. Um texto genérico esconderia o que fazer.
       toast.error(cause instanceof Error ? cause.message : "Não foi possível registrar o webhook.");
     } finally { setSaving(false); }
+  }
+
+  /**
+   * Pede a conta desta empresa na Drap, para quem quiser entrar lá.
+   *
+   * A empresa provisionada por aqui não tem usuário nenhum: ela opera por API e ninguém
+   * consegue entrar. Isso é o certo enquanto a pessoa quiser ficar só na H.OIKOS — e a
+   * maioria vai querer. Este botão existe para o dia em que ela não quiser.
+   *
+   * O convite vai para o e-mail de quem pediu, resolvido no servidor pela sessão: o
+   * papel é de administrador da empresa, e aceitar um endereço digitado deixaria entregar
+   * o financeiro dela para qualquer caixa de entrada.
+   */
+  async function pedirConta() {
+    setPedindoConta(true);
+    try {
+      const resposta = await requestJson<ContaDrap>("/api/integrations/drap/conta", { method: "POST" });
+      setConta(resposta);
+      if (resposta.emailEnviado) toast.success(`Convite enviado para ${resposta.email}`);
+      // Sem SMTP na Drap não adianta mandar esperar e-mail: o link é o caminho.
+      else toast.info("Convite criado. Use o link abaixo para entrar.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Não foi possível pedir a conta na Drap.");
+    } finally { setPedindoConta(false); }
   }
 
   // Desfaz o vínculo desta empresa com a Drap. A empresa e o que ela tem lá continuam
@@ -289,7 +328,7 @@ export function FinanceWorkspace({ projects, query, canEdit, canManageConnection
         <TabsContent value="reports" className="mt-5"><Card><CardHeader><CardTitle className="text-base">Relatório personalizado</CardTitle><p className="text-sm text-hoikos-500">O arquivo respeita o projeto, tipo, situação e busca aplicados na aba Contas.</p></CardHeader><CardContent><div className="grid gap-4 md:grid-cols-[1fr_auto]"><div className="rounded-md border bg-hoikos-50 p-5"><p className="text-sm font-medium">{filtered.length} lançamento(s) no recorte atual</p><p className="mt-2 text-sm text-hoikos-500">Escopo: {selectedProject ? `${selectedProject.code} · ${selectedProject.name}` : "empresa inteira"}. O CSV usa os dados oficiais já carregados da Drap.</p></div><Button onClick={exportCsv} disabled={!filtered.length} className="h-full min-h-14"><Download />Exportar CSV</Button></div></CardContent></Card></TabsContent>
       </Tabs>
 
-      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}><DialogContent><DialogHeader><DialogTitle>Conexão da empresa com a Drap</DialogTitle><DialogDescription>Conecte automaticamente e a chave desta empresa fica guardada cifrada aqui — ninguém precisa abrir a Drap. Token e segredo permanecem no servidor da plataforma.</DialogDescription></DialogHeader><DrapConectar onConectado={() => { setSettingsOpen(false); void loadBase(); }} />{connection && !connection.webhookRegistrado ? <div className="mt-4 rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="text-sm font-medium">Esta empresa ainda não avisa quando muda</p><p className="mt-1 text-xs text-hoikos-500">Sem isso, o Financeiro só descobre lançamento novo quando alguém abre a tela. Ligar não altera nada na Drap além de criar o aviso.</p><Button type="button" variant="outline" size="sm" className="mt-3" disabled={saving} onClick={() => void registrarWebhook()}>{saving ? <LoaderCircle className="animate-spin" /> : <BellRing />}Ligar avisos automáticos</Button></div> : null}<div className="my-4 border-t pt-4"><p className="text-xs text-hoikos-500">Ou informe o identificador de uma empresa já configurada por variável de ambiente.</p></div><form onSubmit={saveConnection} className="space-y-4"><Field name="externalCompanyId" label="ID da empresa na Drap" defaultValue={connection?.externalCompanyId ?? ""} required /><div className="grid grid-cols-3 gap-2 text-center text-xs"><Capability label="Resumo" enabled={capabilities.summary} /><Capability label="Contas" enabled={capabilities.transactions} /><Capability label="Cobranças" enabled={capabilities.charges} /></div><Button type="submit" disabled={saving} className="w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Check />}Salvar conexão</Button></form>{connection ? <div className="mt-4 border-t pt-4"><p className="text-xs text-hoikos-500">A empresa e os dados dela continuam na Drap. Desfazer remove daqui a credencial e o aviso automático.</p><Button type="button" variant="outline" size="sm" className="mt-3 w-full" disabled={saving} onClick={() => void desconectar()}><Unlink />Desfazer conexão</Button></div> : null}</DialogContent></Dialog>
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}><DialogContent><DialogHeader><DialogTitle>Conexão da empresa com a Drap</DialogTitle><DialogDescription>Conecte automaticamente e a chave desta empresa fica guardada cifrada aqui — ninguém precisa abrir a Drap. Token e segredo permanecem no servidor da plataforma.</DialogDescription></DialogHeader><DrapConectar onConectado={() => { setSettingsOpen(false); void loadBase(); }} />{connection && !connection.webhookRegistrado ? <div className="mt-4 rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="text-sm font-medium">Esta empresa ainda não avisa quando muda</p><p className="mt-1 text-xs text-hoikos-500">Sem isso, o Financeiro só descobre lançamento novo quando alguém abre a tela. Ligar não altera nada na Drap além de criar o aviso.</p><Button type="button" variant="outline" size="sm" className="mt-3" disabled={saving} onClick={() => void registrarWebhook()}>{saving ? <LoaderCircle className="animate-spin" /> : <BellRing />}Ligar avisos automáticos</Button></div> : null}<div className="my-4 border-t pt-4"><p className="text-xs text-hoikos-500">Ou informe o identificador de uma empresa já configurada por variável de ambiente.</p></div><form onSubmit={saveConnection} className="space-y-4"><Field name="externalCompanyId" label="ID da empresa na Drap" defaultValue={connection?.externalCompanyId ?? ""} required /><div className="grid grid-cols-3 gap-2 text-center text-xs"><Capability label="Resumo" enabled={capabilities.summary} /><Capability label="Contas" enabled={capabilities.transactions} /><Capability label="Cobranças" enabled={capabilities.charges} /></div><Button type="submit" disabled={saving} className="w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Check />}Salvar conexão</Button></form>{connection ? <PlanoNaDrap plano={plano} conta={conta} pedindo={pedindoConta} onPedirConta={() => void pedirConta()} /> : null}{connection ? <div className="mt-4 border-t pt-4"><p className="text-xs text-hoikos-500">A empresa e os dados dela continuam na Drap. Desfazer remove daqui a credencial e o aviso automático.</p><Button type="button" variant="outline" size="sm" className="mt-3 w-full" disabled={saving} onClick={() => void desconectar()}><Unlink />Desfazer conexão</Button></div> : null}</DialogContent></Dialog>
       <Dialog open={linkOpen} onOpenChange={setLinkOpen}><DialogContent><DialogHeader><DialogTitle>Vincular obra ao financeiro</DialogTitle><DialogDescription>O centro de custo separa contas e resultado desta obra. O cliente Drap é necessário para cobranças.</DialogDescription></DialogHeader><form onSubmit={saveProjectLink} className="space-y-4"><div><label className="mb-1.5 block text-sm font-medium">Projeto ou obra</label><Select name="projectId" defaultValue={selectedProject?.id} required><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.code} · {project.name}</SelectItem>)}</SelectContent></Select></div><Field name="externalCostCenterId" label="ID do centro de custo na Drap" required /><Field name="externalCustomerId" label="ID do cliente na Drap" /><Button type="submit" disabled={saving} className="w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Link2 />}Salvar vínculos</Button></form></DialogContent></Dialog>
       <Dialog open={chargeOpen} onOpenChange={setChargeOpen}><DialogContent><DialogHeader><DialogTitle>Nova cobrança</DialogTitle><DialogDescription>A cobrança só será exibida como criada depois da confirmação oficial da Drap.</DialogDescription></DialogHeader><form onSubmit={createCharge} className="space-y-4"><div><label className="mb-1.5 block text-sm font-medium">Projeto ou obra</label><Select name="projectId" defaultValue={selectedProject?.id !== "all" ? selectedProject?.id : undefined} required><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.code} · {project.name}</SelectItem>)}</SelectContent></Select></div><Field name="description" label="Descrição da cobrança" required /><div className="grid grid-cols-2 gap-4"><Field name="amount" label="Valor (R$)" placeholder="0,00" required /><Field name="dueDate" label="Vencimento" type="date" required /></div><div className="rounded-md border bg-hoikos-50 p-4"><p className="flex items-center gap-2 text-sm font-medium"><BellRing className="size-4 text-hoikos-600" />Lembretes automáticos</p><div className="mt-4 grid grid-cols-2 gap-4"><Field name="daysBefore" label="Dias antes" type="number" defaultValue="3" /><Field name="overdueIntervalDays" label="Repetir após vencer" type="number" defaultValue="3" /></div><label className="mt-4 flex items-center gap-3 text-sm"><Checkbox checked={remindOnDueDate} onCheckedChange={(value) => setRemindOnDueDate(value === true)} />Enviar também no vencimento</label></div><Button type="submit" disabled={saving || !capabilities.charges} className="w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Send />}Criar e obter link</Button></form></DialogContent></Dialog>
     </div>
@@ -306,4 +345,85 @@ function Capability({ label, enabled }: { label: string; enabled: boolean }) {
 
 function Field({ name, label, type = "text", placeholder, required, defaultValue }: { name: string; label: string; type?: string; placeholder?: string; required?: boolean; defaultValue?: string }) {
   return <div><label htmlFor={`finance-${name}`} className="mb-1.5 block text-sm font-medium">{label}</label><Input id={`finance-${name}`} name={name} type={type} placeholder={placeholder} required={required} defaultValue={defaultValue} min={type === "number" ? "0" : undefined} /></div>;
+}
+
+/**
+ * O plano da empresa na Drap, e a porta para a conta dela.
+ *
+ * ─── POR QUE ISTO EXISTE ───
+ *
+ * Sem esta seção, descobrir que "Emissão de Nota Fiscal" não está contratada só
+ * acontecia tentando emitir e levando 403 — descobrir a permissão errando, na frente do
+ * cliente. Aqui o estado aparece antes de qualquer clique, com o preço do que falta.
+ *
+ * ─── POR QUE NÃO TEM BOTÃO DE CONTRATAR ───
+ *
+ * Contratar módulo é assinatura recorrente no cartão de quem paga. A H.OIKOS não assina
+ * nada em nome de ninguém: mostra o preço e leva até a conta, onde a pessoa decide com o
+ * valor na frente. É a mesma razão de o link abrir em aba nova — quem estava no meio de
+ * um trabalho aqui não perde o que estava fazendo.
+ */
+function PlanoNaDrap({ plano, conta, pedindo, onPedirConta }: {
+  plano: PlanoDrap | null;
+  conta: ContaDrap | null;
+  pedindo: boolean;
+  onPedirConta: () => void;
+}) {
+  // Sem plano a seção inteira some. Uma Drap que ainda não publica o estado dos módulos
+  // não pode virar uma caixa vazia dizendo que algo deu errado.
+  const inativos = plano?.modulos.filter((modulo) => !modulo.ativo) ?? [];
+  const ativos = plano?.modulos.filter((modulo) => modulo.ativo) ?? [];
+
+  return <div className="mt-4 border-t pt-4">
+    <p className="text-sm font-medium">Seu plano na Drap</p>
+
+    {plano ? <>
+      <p className="mt-1 text-xs text-hoikos-500">
+        {ativos.length > 0
+          ? `Ativo: ${ativos.map((modulo) => modulo.nome).join(", ")}.`
+          : "Nenhum módulo contratado ainda."}
+      </p>
+      {inativos.length > 0 ? <ul className="mt-3 space-y-1.5">
+        {inativos.map((modulo) => <li key={modulo.id} className="flex items-baseline justify-between gap-3 text-xs">
+          <span className="text-hoikos-700">{modulo.nome}</span>
+          <span className="shrink-0 tabular-nums text-hoikos-500">
+            {/* Preço ausente vira "consultar", nunca R$ 0: um zero inventado aqui é uma
+                promessa de gratuidade que a Drap não fez. */}
+            {modulo.precoMensal === null
+              ? "consultar"
+              : `${modulo.precoMensal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/mês`}
+          </span>
+        </li>)}
+      </ul> : null}
+      {plano.urlAssinatura ? <Button asChild type="button" variant="outline" size="sm" className="mt-3 w-full">
+        <a href={plano.urlAssinatura} target="_blank" rel="noreferrer noopener">
+          <ExternalLink />{inativos.length > 0 ? "Ver planos na Drap" : "Gerenciar plano na Drap"}
+        </a>
+      </Button> : null}
+    </> : <p className="mt-1 text-xs text-hoikos-500">
+      Esta instalação da Drap ainda não informa o plano da empresa.
+    </p>}
+
+    <div className="mt-4 border-t pt-4">
+      <p className="text-xs text-hoikos-500">
+        A empresa funciona inteira por aqui. Se você quiser entrar na Drap — para ver o
+        histórico completo ou falar com o suporte deles — dá para criar seu acesso.
+      </p>
+      {conta ? <div className="mt-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-3">
+        <p className="text-xs text-hoikos-700">
+          {conta.emailEnviado
+            ? `Convite enviado para ${conta.email}. Se não chegar, use o link:`
+            : "Convite criado. Use o link para definir sua senha:"}
+        </p>
+        {/* O link aparece sempre, e não só quando o e-mail falha: a pessoa está olhando
+            para a tela agora, e mandá-la esperar uma mensagem que pode cair no spam é
+            trocar um caminho que funciona por um que talvez funcione. */}
+        <a href={conta.link} target="_blank" rel="noreferrer noopener" className="mt-2 block break-all text-xs font-medium text-hoikos-800 underline">
+          {conta.link}
+        </a>
+      </div> : <Button type="button" variant="ghost" size="sm" className="mt-2 w-full" disabled={pedindo} onClick={onPedirConta}>
+        {pedindo ? <LoaderCircle className="animate-spin" /> : <ExternalLink />}Criar meu acesso na Drap
+      </Button>}
+    </div>
+  </div>;
 }

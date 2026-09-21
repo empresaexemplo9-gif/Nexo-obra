@@ -179,6 +179,28 @@ empresa no banco e é **separada** da `MEDIA_ENCRYPTION_KEY` das fotos de propó
 propósitos diferentes, prazos de rotação diferentes. Trocar esta chave torna ilegíveis as
 credenciais já guardadas — as empresas precisam reconectar.
 
+### Plano e conta na Drap
+
+O Financeiro mostra, dentro de Conexão DRAP, o que a empresa tem contratado lá e quanto
+custa o que falta. Existe para uma pergunta concreta: sem isso, descobrir que "Emissão de
+Nota Fiscal" não está contratada só acontecia tentando emitir e levando `403` — descobrir
+a permissão errando, na frente do cliente.
+
+Não há botão de contratar. Assinatura recorrente é no cartão de quem paga, e a H.OIKOS não
+assina em nome de ninguém: ela mostra o preço e leva até a conta, onde a pessoa decide com
+o valor na frente.
+
+A empresa provisionada por aqui nasce **sem usuário na Drap**: ela existe, opera por API e
+ninguém consegue entrar. Isso é o certo enquanto a pessoa quiser ficar só na H.OIKOS. Para
+quem não quiser, o botão "Criar meu acesso na Drap" pede o convite de administrador da
+empresa. O convite vai para o e-mail de **quem pediu**, resolvido pela sessão no servidor:
+aceitar um endereço digitado deixaria um administrador daqui entregar o financeiro da
+empresa para qualquer caixa de entrada. O link de aceite aparece na tela junto com o aviso
+de envio, porque e-mail cai no spam.
+
+Depende da Drap publicar `GET /api/v1/modulos` e `POST /api/partner/v1/convites`. Numa
+instalação que ainda não publica, a seção diz isso em vez de fingir uma lista vazia.
+
 ### Avisos automáticos
 
 Conectar uma empresa também registra, sozinho, o webhook dela na Drap. Sem isso o
