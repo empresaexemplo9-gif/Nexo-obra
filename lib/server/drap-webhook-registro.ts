@@ -46,6 +46,15 @@ export const EVENTOS_ASSINADOS = [
  * cria precisa conseguir remover. Sem ele, desconectar deixaria a Drap postando o
  * financeiro de uma empresa para um endereço que ninguém mais opera.
  *
+ * `nfse:*` é sensível pelo mesmo motivo e por um mais pesado: nota fiscal é documento
+ * com efeito legal, e desfazer uma exige prazo, justificativa e às vezes substituição.
+ * `nfse:delete` não existe na Drap justamente por isso — cancelar é decisão de quem
+ * responde pela empresa, na tela dela.
+ *
+ * `modulos:read` responde uma pergunta só: esta empresa pode emitir nota? Sem ele a
+ * consulta volta 403 e a plataforma não consegue distinguir "não está no plano" de
+ * "a credencial não alcança" — e esconderia o botão de emitir sem saber por quê.
+ *
  * `lancamentos:delete` e `parceiros:delete` ficam de fora: a plataforma não apaga nenhum
  * dos dois, e escopo que ninguém usa só aumenta o estrago de uma chave vazada.
  */
@@ -58,6 +67,9 @@ export const ESCOPOS_DA_PLATAFORMA = [
   "webhooks:read",
   "webhooks:write",
   "webhooks:delete",
+  "modulos:read",
+  "nfse:read",
+  "nfse:write",
 ] as const;
 
 const NOME_DA_ASSINATURA = "H.OIKOS";

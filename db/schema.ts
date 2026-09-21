@@ -425,6 +425,58 @@ export const financialChargeRequests = sqliteTable("financial_charge_requests", 
   index("idx_financial_charge_org_status_due").on(table.organizationId, table.status, table.dueDate),
 ]);
 
+/**
+ * Pedidos de emissão de nota fiscal feitos daqui.
+ *
+ * ─── O QUE ESTA TABELA É, E O QUE ELA NÃO É ───
+ *
+ * Ela NÃO é a nota. A nota é do serviço fiscal e da prefeitura; quem diz se foi
+ * autorizada é a prefeitura, e é lá que ela vale. Guardar uma cópia do status como se
+ * fosse verdade própria criaria uma segunda fonte, e o dia em que as duas divergissem
+ * seria justamente o dia de uma nota rejeitada exibida como emitida.
+ *
+ * O que ela guarda é o PEDIDO: que obra, que cliente, que valor, com qual chave de
+ * idempotência, e qual identificador o serviço fiscal devolveu. Sem isso, um tempo
+ * esgotado no meio da emissão deixaria a plataforma sem saber se a nota saiu — e a
+ * segunda tentativa emitiria a segunda nota, que só se desfaz com cancelamento, que tem
+ * prazo e justificativa.
+ *
+ * `fiscal_status` e `fiscal_synced_at` são espelho declarado, não verdade: o valor vem da
+ * última resposta real do serviço fiscal, e a data diz quando foi. A tela mostra os dois
+ * juntos para poder dizer "confirmado às 14h32" em vez de afirmar um estado que ninguém
+ * conferiu agora.
+ */
+export const fiscalNoteRequests = sqliteTable("fiscal_note_requests", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").notNull().references(() => projects.id),
+  clientId: text("client_id").references(() => clients.id),
+  idempotencyKey: text("idempotency_key").notNull(),
+  description: text("description").notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  /** Do pedido, não da nota: `pending` (enviado, sem confirmação), `sent` (o serviço
+   *  fiscal aceitou e devolveu identificador) ou `failed` (recusado ou sem resposta). */
+  status: text("status").notNull().default("pending"),
+  /** Identificador da nota no serviço fiscal. É por ele que o status real é consultado. */
+  externalNoteId: text("external_note_id"),
+  /** 'homologacao' ou 'producao' — quem decide é o cadastro fiscal da empresa, lá. */
+  ambiente: text("ambiente"),
+  /** Espelho do último status real: processando, autorizada, cancelada ou erro. */
+  fiscalStatus: text("fiscal_status"),
+  fiscalSyncedAt: text("fiscal_synced_at"),
+  /** Número, verificação e links saem da prefeitura. Ficam aqui só para a listagem não
+   *  precisar de uma consulta por linha; a tela sempre diz de quando são. */
+  numero: text("numero"),
+  urlPdf: text("url_pdf"),
+  /** Motivo da recusa, como veio de lá. Trocar por texto genérico obrigaria a abrir
+   *  chamado para descobrir o que a própria pessoa corrigiria. */
+  lastError: text("last_error"),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_fiscal_note_org_idempotency").on(table.organizationId, table.idempotencyKey),
+  index("idx_fiscal_note_org_project_created").on(table.organizationId, table.projectId, table.createdAt),
+]);
+
 export const superadminLoginAttempts = sqliteTable("superadmin_login_attempts", {
   fingerprint: text("fingerprint").primaryKey(),
   failedCount: integer("failed_count").notNull().default(0),

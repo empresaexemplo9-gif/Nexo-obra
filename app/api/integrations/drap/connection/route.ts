@@ -48,10 +48,15 @@ export async function GET(request: Request) {
      *
      * Falha na consulta vira `false`, nunca exceção: o Financeiro inteiro não pode cair
      * porque o motor não respondeu sobre um recurso que talvez nem seja usado hoje.
+     *
+     * `credencialDesatualizada` sai separado do plano de propósito. Os dois chegam na
+     * tela como "não dá para emitir", e a causa é oposta: um é o plano da empresa, o
+     * outro é a chave guardada aqui, emitida antes de a plataforma passar a pedir esse
+     * acesso. Confundir os dois manda a pessoa pedir ao suporte um módulo que ela já tem.
      */
-    const ativos = connection?.status === "active"
-      ? await fetchDrapActiveModules(connection.external_company_id).catch(() => [])
-      : [];
+    const modulos = connection?.status === "active"
+      ? await fetchDrapActiveModules(connection.external_company_id).catch(() => ({ ativos: [] as string[] }))
+      : { ativos: [] as string[] };
     return Response.json({
       connection: connection ? {
         id: connection.id,
@@ -62,12 +67,15 @@ export async function GET(request: Request) {
         // Só o fato, nunca o segredo: a tela precisa saber se a empresa avisa quando
         // muda, para oferecer a nova tentativa quando não avisa.
         webhookRegistrado: Boolean(connection.webhook_secret_encrypted),
+        // Não é o plano: é a credencial desta instalação, que não alcança a consulta.
+        // Quem administra a empresa pode renovar sem desfazer a conexão.
+        credencialDesatualizada: "credencialDesatualizada" in modulos && modulos.credencialDesatualizada === true,
       } : null,
       capabilities: {
         summary: isDrapConfigured(),
         transactions: isDrapTransactionsConfigured(),
         charges: chargesProbe?.status === "available",
-        notas: ativos.includes("emissao-nf"),
+        notas: modulos.ativos.includes("emissao-nf"),
       },
     });
   });

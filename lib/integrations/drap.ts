@@ -609,6 +609,12 @@ export async function requestDrapApi<T>(
   return { data: parsed as T | null, status: response.status, retryAfter };
 }
 
+export type ModulosDaEmpresa =
+  | { ativos: string[]; credencialDesatualizada?: false }
+  /** A credencial guardada aqui não alcança a consulta. Não é o plano da empresa: é a
+   *  chave, emitida antes de a plataforma passar a pedir este acesso. */
+  | { ativos: []; credencialDesatualizada: true };
+
 /**
  * Quais módulos esta empresa tem ativos na Drap.
  *
@@ -620,10 +626,154 @@ export async function requestDrapApi<T>(
  * O que a plataforma precisa saber é binário: esta empresa pode emitir nota, ou não
  * pode. Sem isso a pessoa só descobriria tentando e levando erro — descobrir a permissão
  * errando, na frente do cliente dela.
+ *
+ * ─── POR QUE 403 NÃO É LISTA VAZIA ───
+ *
+ * Os dois chegam aqui como "não pode emitir", e a causa é oposta: lista vazia é o plano
+ * da empresa, 403 é a credencial desta instalação. Tratar o segundo como o primeiro
+ * esconderia uma chave velha atrás de uma frase sobre plano, e quem fosse resolver
+ * ligaria para o suporte pedindo um módulo que a empresa já tem.
  */
-export async function fetchDrapActiveModules(externalCompanyId: string): Promise<string[]> {
-  const { data } = await requestDrapApi<{ ativos?: unknown }>(externalCompanyId, "/api/v1/modulos");
-  return Array.isArray(data?.ativos)
-    ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string")
-    : [];
+export async function fetchDrapActiveModules(externalCompanyId: string): Promise<ModulosDaEmpresa> {
+  try {
+    const { data } = await requestDrapApi<{ ativos?: unknown }>(externalCompanyId, "/api/v1/modulos");
+    return {
+      ativos: Array.isArray(data?.ativos)
+        ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string")
+        : [],
+    };
+  } catch (causa) {
+    if (causa instanceof DrapApiError && causa.status === 403) return { ativos: [], credencialDesatualizada: true };
+    throw causa;
+  }
+}
+
+// ─────────────── Emissão de nota fiscal de serviço ───────────────
+//
+// O formato do serviço fiscal para aqui. Fora deste arquivo a plataforma fala de valor em
+// centavos, `tomador`, `situacao` — e nunca de `parceiro_id`, `discriminacao` ou `focus_ref`.
+
+/** Situação real de uma nota, como o serviço fiscal a reporta. */
+export type SituacaoDaNota = "processando" | "autorizada" | "cancelada" | "erro";
+
+export type NotaFiscalRemota = {
+  id: string;
+  situacao: SituacaoDaNota;
+  ambiente: "homologacao" | "producao" | null;
+  numero: string | null;
+  urlPdf: string | null;
+  /** Motivo da recusa, como veio da prefeitura. */
+  motivoDoErro: string | null;
+};
+
+const SITUACOES = new Set<string>(["processando", "autorizada", "cancelada", "erro"]);
+
+function situacaoDaNota(valor: unknown): SituacaoDaNota {
+  // Situação desconhecida NÃO vira "autorizada" nem some: cai em `processando`, que é a
+  // única leitura que não afirma nada sobre a prefeitura.
+  return typeof valor === "string" && SITUACOES.has(valor) ? valor as SituacaoDaNota : "processando";
+}
+
+function notaRemota(valor: unknown): NotaFiscalRemota | null {
+  const nota = asRecord(valor);
+  const id = readString(nota, ["id"]);
+  if (!id) return null;
+  const ambiente = readString(nota, ["ambiente"]);
+  const urlPdf = readString(nota, ["url_pdf", "urlPdf"]);
+  return {
+    id,
+    situacao: situacaoDaNota(nota.status),
+    ambiente: ambiente === "homologacao" || ambiente === "producao" ? ambiente : null,
+    numero: readString(nota, ["numero"]),
+    // Só https: um link de outra origem colado numa tela de nota fiscal é phishing pronto.
+    urlPdf: urlPdf && /^https:\/\//i.test(urlPdf) ? urlPdf : null,
+    motivoDoErro: readString(nota, ["erro_mensagem", "erroMensagem"]),
+  };
+}
+
+export type EmissaoAceita = {
+  id: string;
+  situacao: SituacaoDaNota;
+  ambiente: "homologacao" | "producao" | null;
+  /** O serviço fiscal reconheceu este pedido de uma tentativa anterior e devolveu a nota
+   *  de antes em vez de emitir outra. */
+  repetida: boolean;
+};
+
+/**
+ * Pede a emissão de uma nota.
+ *
+ * ─── ACEITA NÃO É AUTORIZADA ───
+ *
+ * A resposta de sucesso é 202: o pedido entrou na fila da prefeitura. Quem trata isso
+ * como "nota emitida" anuncia para o cliente um documento que ainda pode ser rejeitado —
+ * e nota rejeitada depois de anunciada como emitida é ligação do contador.
+ *
+ * `situacao` sai daqui como `processando` justamente por isso. Quem decide é a prefeitura,
+ * e a resposta dela vem depois, na consulta.
+ *
+ * A chave de idempotência não é opcional na prática: um tempo esgotado depois de a
+ * prefeitura aceitar deixaria a plataforma sem resposta e com o documento fiscal emitido.
+ * Repetir com a MESMA chave devolve a nota de antes; sem chave, emite a segunda — e duas
+ * notas pelo mesmo serviço só se desfazem com cancelamento, que tem prazo e justificativa.
+ */
+export async function emitirNotaNaDrap(
+  externalCompanyId: string,
+  entrada: { parceiroId: string; valor: number; discriminacao: string; idempotencyKey: string },
+): Promise<EmissaoAceita> {
+  const { data, status } = await requestDrapApi<Record<string, unknown>>(externalCompanyId, "/api/v1/nfse", {
+    method: "POST",
+    idempotencyKey: entrada.idempotencyKey,
+    body: {
+      parceiro_id: entrada.parceiroId,
+      valor: entrada.valor,
+      discriminacao: entrada.discriminacao,
+    },
+  });
+  const corpo = asRecord(data);
+  const id = readString(corpo, ["id"]);
+  // Sem identificador não há como consultar a situação depois. Chamar isso de sucesso
+  // deixaria uma nota possivelmente emitida fora do alcance de qualquer consulta.
+  if (!id) throw new Error("DRAP nfse response has no id");
+  const ambiente = readString(corpo, ["ambiente"]);
+  return {
+    id,
+    situacao: situacaoDaNota(corpo.status),
+    ambiente: ambiente === "homologacao" || ambiente === "producao" ? ambiente : null,
+    // 200 em vez de 202: o pedido já era conhecido.
+    repetida: corpo.repetida === true || status === 200,
+  };
+}
+
+/**
+ * Situação de uma nota, conferida no serviço fiscal.
+ *
+ * `sincronizado: false` significa "este é o estado que estava guardado; ninguém conferiu
+ * agora". A tela precisa poder dizer isso em vez de afirmar uma situação que não foi
+ * confirmada.
+ */
+export async function consultarNotaNaDrap(
+  externalCompanyId: string,
+  id: string,
+): Promise<{ nota: NotaFiscalRemota; sincronizado: boolean } | null> {
+  const { data } = await requestDrapApi<{ nota?: unknown; sincronizado?: unknown }>(
+    externalCompanyId,
+    `/api/v1/nfse/${encodeURIComponent(id)}`,
+  );
+  const corpo = asRecord(data);
+  const nota = notaRemota(corpo.nota);
+  if (!nota) return null;
+  return { nota, sincronizado: corpo.sincronizado === true };
+}
+
+/** As notas mais recentes desta empresa, para atualizar uma listagem inteira sem uma
+ *  consulta por linha. */
+export async function listarNotasNaDrap(externalCompanyId: string, limite = 200): Promise<NotaFiscalRemota[]> {
+  const { data } = await requestDrapApi<{ items?: unknown }>(
+    externalCompanyId,
+    `/api/v1/nfse?limit=${Math.min(Math.max(limite, 1), 500)}&offset=0`,
+  );
+  const items = asRecord(data).items;
+  if (!Array.isArray(items)) return [];
+  return items.map(notaRemota).filter((nota): nota is NotaFiscalRemota => nota !== null);
 }
