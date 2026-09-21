@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ApiError, apiRoute, auditStatement, isPlatformSuperAdmin, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 import { activationFor } from "@/lib/server/activation";
-import { isDrapConfigured, isDrapTransactionsConfigured, requestDrapApi } from "@/lib/integrations/drap";
+import { fetchDrapActiveModules, isDrapConfigured, isDrapTransactionsConfigured, requestDrapApi } from "@/lib/integrations/drap";
 import { probeDrapResource } from "@/lib/server/drap-resources";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +37,21 @@ export async function GET(request: Request) {
     const chargesProbe = connection?.status === "active"
       ? await probeDrapResource(connection.external_company_id, "cobrancas")
       : null;
+
+    /**
+     * Emissão de nota entra como CAPACIDADE, junto das outras, e não como uma seção de
+     * plano com marca e preço de outro produto.
+     *
+     * Para quem usa a H.OIKOS o motor financeiro é invisível: o plano e o valor são
+     * daqui. O que a tela precisa saber é binário — dá para emitir, ou não dá — e sem
+     * isso a pessoa só descobriria tentando e levando erro, na frente do cliente dela.
+     *
+     * Falha na consulta vira `false`, nunca exceção: o Financeiro inteiro não pode cair
+     * porque o motor não respondeu sobre um recurso que talvez nem seja usado hoje.
+     */
+    const ativos = connection?.status === "active"
+      ? await fetchDrapActiveModules(connection.external_company_id).catch(() => [])
+      : [];
     return Response.json({
       connection: connection ? {
         id: connection.id,
@@ -52,6 +67,7 @@ export async function GET(request: Request) {
         summary: isDrapConfigured(),
         transactions: isDrapTransactionsConfigured(),
         charges: chargesProbe?.status === "available",
+        notas: ativos.includes("emissao-nf"),
       },
     });
   });

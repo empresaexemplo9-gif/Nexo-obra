@@ -608,3 +608,22 @@ export async function requestDrapApi<T>(
   if (!response.ok) throw new DrapApiError(response.status, parsed, retryAfter);
   return { data: parsed as T | null, status: response.status, retryAfter };
 }
+
+/**
+ * Quais módulos esta empresa tem ativos na Drap.
+ *
+ * Devolve SÓ os identificadores, de propósito. A Drap é o motor do financeiro e para
+ * quem usa a H.OIKOS ela é invisível: o plano e o valor são da H.OIKOS. Trazer o
+ * catálogo de preços da Drap para cá criaria uma segunda tabela de preços dentro do
+ * produto, pronta para divergir da real e para vazar na tela.
+ *
+ * O que a plataforma precisa saber é binário: esta empresa pode emitir nota, ou não
+ * pode. Sem isso a pessoa só descobriria tentando e levando erro — descobrir a permissão
+ * errando, na frente do cliente dela.
+ */
+export async function fetchDrapActiveModules(externalCompanyId: string): Promise<string[]> {
+  const { data } = await requestDrapApi<{ ativos?: unknown }>(externalCompanyId, "/api/v1/modulos");
+  return Array.isArray(data?.ativos)
+    ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string")
+    : [];
+}

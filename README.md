@@ -179,6 +179,25 @@ empresa no banco e é **separada** da `MEDIA_ENCRYPTION_KEY` das fotos de propó
 propósitos diferentes, prazos de rotação diferentes. Trocar esta chave torna ilegíveis as
 credenciais já guardadas — as empresas precisam reconectar.
 
+### O motor financeiro é invisível
+
+O plano e o valor são da H.OIKOS. Para quem usa a plataforma, a Drap não aparece: não há
+preço dela na tela, não há link para o produto dela, e não há como sair daqui para lá.
+Mandar alguém para outro produto no meio do trabalho seria anunciar um fornecedor que não
+é problema do cliente.
+
+O que a plataforma consulta é binário: esta empresa pode emitir nota, ou não pode. Isso
+entra em `capabilities.notas`, junto de resumo, contas e cobranças — e sem isso a pessoa
+só descobriria a indisponibilidade tentando emitir e levando erro, na frente do cliente
+dela. A consulta que falha vira `false`, nunca exceção: o Financeiro inteiro não pode cair
+porque o motor não respondeu sobre um recurso que talvez nem seja usado hoje.
+
+Vincular uma empresa que já existe na Drap continua possível, por um link de texto abaixo
+do formulário. Ele não tem o mesmo peso de "criar empresa" de propósito: quase todo mundo
+que chega ali não tem conta e nem precisa saber que existe uma, e duas opções lado a lado
+obrigavam a escolher entre uma coisa que a pessoa quer e outra de que ela nunca ouviu
+falar.
+
 ### Avisos automáticos
 
 Conectar uma empresa também registra, sozinho, o webhook dela na Drap. Sem isso o

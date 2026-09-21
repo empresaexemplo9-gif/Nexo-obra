@@ -81,14 +81,25 @@ export function DrapConectar({ onConectado }: { onConectado: () => void }) {
 
   return (
     <form onSubmit={conectar} className="space-y-3">
-      <div className="grid grid-cols-2 gap-2">
-        <Button type="button" variant={modo === "provisionar" ? "default" : "outline"} size="sm" onClick={() => { setModo("provisionar"); setErro(""); }}>
-          <Building2 />Criar empresa
-        </Button>
-        <Button type="button" variant={modo === "vincular" ? "default" : "outline"} size="sm" onClick={() => { setModo("vincular"); setErro(""); }}>
-          <Link2 />Já uso a Drap
-        </Button>
-      </div>
+      {/*
+        Os dois caminhos não têm o mesmo peso, e a tela não pode fingir que têm.
+
+        Quase todo mundo que chega aqui não tem conta na Drap e nem precisa saber que ela
+        existe: cria a empresa e segue. Oferecer as duas opções lado a lado, do mesmo
+        tamanho, obrigava a pessoa a decidir entre uma coisa que ela quer e outra que ela
+        nunca ouviu falar — e a dúvida sozinha já custa mais do que a opção vale.
+
+        Então o caminho comum é o formulário, direto, sem escolha nenhuma. O outro fica um
+        link de texto, achável por quem foi procurar.
+      */}
+      {modo === "vincular" ? (
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-medium">Vincular empresa que já existe</p>
+          <Button type="button" variant="ghost" size="sm" onClick={() => { setModo("provisionar"); setErro(""); }}>
+            Voltar
+          </Button>
+        </div>
+      ) : null}
 
       {modo === "provisionar" ? (
         <label className="block text-sm">
@@ -110,8 +121,18 @@ export function DrapConectar({ onConectado }: { onConectado: () => void }) {
 
       <Button type="submit" disabled={enviando} className="w-full">
         {enviando ? <LoaderCircle className="animate-spin" /> : null}
-        {modo === "provisionar" ? "Criar e conectar" : "Vincular empresa"}
+        {modo === "provisionar" ? <><Building2 />Criar e conectar</> : <><Link2 />Vincular empresa</>}
       </Button>
+
+      {modo === "provisionar" ? (
+        <button
+          type="button"
+          onClick={() => { setModo("vincular"); setErro(""); }}
+          className="block w-full text-center text-xs text-hoikos-500 underline underline-offset-2 hover:text-hoikos-700"
+        >
+          Já tenho uma conta para vincular
+        </button>
+      ) : null}
     </form>
   );
 }
