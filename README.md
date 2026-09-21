@@ -324,6 +324,43 @@ que os sobrescreva qualquer visitante pode enviá-los e se passar por outra pess
 Configure `SESSION_SECRET` com pelo menos 32 caracteres. Consulte
 [Acesso e senha](docs/ACESSO-E-SENHA.md).
 
+## Apagar empresa, conta e convite
+
+Na tela do superadministrador. Exclusão é irreversível, então a confirmação pede para
+**digitar o nome** do que vai sair: um "tem certeza?" com botão de OK é acertado por
+reflexo, e a diferença entre errar a linha da tabela e não errar é justamente olhar qual
+item está selecionado.
+
+**Empresa.** Sai com tudo que pendurava nela. A lista de tabelas não é escrita no código:
+vem do próprio banco, porque uma lista à mão fica desatualizada exatamente na tabela nova
+que ninguém lembrou — e o que sobra é linha órfã apontando para uma empresa que não
+existe mais. Duas tabelas deste projeto provam o ponto: `audit_events` e
+`organization_members` guardam dado de empresa, estão vivas e **não existem em
+`db/schema.ts`**. A ordem das exclusões também sai do banco, das chaves estrangeiras:
+filha antes da mãe, senão o SQLite recusa. Tudo num `batch`, que é transacional — meia
+empresa apagada é pior do que nenhuma, porque ninguém sabe o que sobrou.
+
+**A Drap vem primeiro.** A empresa existe dos dois lados e só a conexão guardada aqui sabe
+qual é qual. Apagando daqui primeiro, essa ligação some: a empresa fica viva lá sem
+ninguém que saiba o que ela era, e o documento dela continua ocupado. A Drap recusa apagar
+empresa que ela não provisionou ou que tem gente acessando direto — a recusa para tudo,
+com o motivo, e a segunda pergunta oferece apagar só daqui dizendo o preço.
+
+**Conta.** Apagar remove a pessoa de todas as empresas e o login dela. O que ela cadastrou
+**fica**: tarefa, diário de obra e orçamento pertencem à empresa, não a quem digitou.
+Quem só pertencia à empresa apagada perde o login junto — conta sem empresa nenhuma entra
+e vê uma tela vazia, sem saber se perdeu acesso ou se o produto quebrou.
+
+**Convite.** *Revogar* queima o link e mantém a linha, porque "este acesso foi oferecido e
+cancelado" é informação. *Remover* apaga a linha, e só alcança convite que já não abre:
+apagar um convite ainda válido deixaria o link vivo e invisível.
+
+**O rastro sobrevive.** `platform_audit_events` exige `organization_id` apontando para uma
+empresa viva, então o registro de "esta empresa foi apagada" sairia junto no cascade — a
+ação mais destrutiva do produto seria a única sem rastro. Por isso existe
+`platform_deletions`, sem chave estrangeira nenhuma, guardando o nome legível de quem
+saiu e quem mandou apagar.
+
 ## Modelo multiempresa
 
 Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.

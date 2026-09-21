@@ -65,6 +65,33 @@ export const platformAuditEvents = sqliteTable("platform_audit_events", {
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("idx_platform_audit_org_created").on(t.organizationId, t.createdAt)]);
 
+/**
+ * O que foi apagado da plataforma, e por quem.
+ *
+ * ─── POR QUE NÃO CABE EM `platform_audit_events` ───
+ *
+ * Aquela tabela exige `organization_id` com chave estrangeira para `organizations`. Um
+ * registro de "esta empresa foi apagada" não tem onde apontar: a empresa deixou de
+ * existir no mesmo instante, e a linha de auditoria dela sai junto na exclusão.
+ *
+ * O resultado seria a ação mais destrutiva do produto sendo também a única sem rastro.
+ * Por isso esta tabela não tem chave estrangeira nenhuma, de propósito: o que ela guarda
+ * é justamente aquilo que não existe mais. `rotulo` preserva o nome legível, porque um
+ * UUID solto não responde "qual empresa era essa?" seis meses depois.
+ */
+export const platformDeletions = sqliteTable("platform_deletions", {
+  id: text("id").primaryKey(),
+  /** 'organization', 'account' ou 'invitation'. */
+  tipo: text("tipo").notNull(),
+  subjectId: text("subject_id").notNull(),
+  /** Nome da empresa, e-mail da conta — o que identifica para um humano. */
+  rotulo: text("rotulo").notNull(),
+  /** Quem mandou apagar. */
+  actor: text("actor").notNull(),
+  detailsJson: text("details_json").notNull().default("{}"),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [index("idx_platform_deletions_created").on(t.createdAt)]);
+
 export const members = sqliteTable("members", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),
