@@ -609,60 +609,21 @@ export async function requestDrapApi<T>(
   return { data: parsed as T | null, status: response.status, retryAfter };
 }
 
-export type DrapModule = {
-  id: string;
-  nome: string;
-  descricaoCurta: string;
-  ativo: boolean;
-  precoMensal: number | null;
-  status: string;
-};
-
-export type DrapModulesState = {
-  ativos: string[];
-  modulos: DrapModule[];
-  /** Para onde mandar a pessoa quando ela quiser ativar. É a conta dela. */
-  urlAssinatura: string | null;
-};
-
 /**
- * O que esta empresa tem contratado na Drap, e quanto custa o que ela não tem.
+ * Quais módulos esta empresa tem ativos na Drap.
  *
- * Existe para a tela conseguir dizer "Emissão de nota: inativa" ANTES de qualquer
- * clique. Sem isto, a única forma de descobrir seria tentar a ação e levar 403 — ou
- * seja, descobrir a permissão errando, na frente do usuário.
+ * Devolve SÓ os identificadores, de propósito. A Drap é o motor do financeiro e para
+ * quem usa a H.OIKOS ela é invisível: o plano e o valor são da H.OIKOS. Trazer o
+ * catálogo de preços da Drap para cá criaria uma segunda tabela de preços dentro do
+ * produto, pronta para divergir da real e para vazar na tela.
  *
- * A H.OIKOS não contrata nada por ninguém: assinatura recorrente é no cartão de quem
- * paga, e quem decide é a pessoa, na conta dela. O papel daqui é mostrar o estado e o
- * preço, e levar até `urlAssinatura`.
- *
- * Os nomes remotos (`preco_mensal`, `url_assinatura`) param aqui: o resto do domínio
- * não precisa saber como a Drap escreve.
+ * O que a plataforma precisa saber é binário: esta empresa pode emitir nota, ou não
+ * pode. Sem isso a pessoa só descobriria tentando e levando erro — descobrir a permissão
+ * errando, na frente do cliente dela.
  */
-export async function fetchDrapModules(externalCompanyId: string): Promise<DrapModulesState> {
-  const { data } = await requestDrapApi<{
-    ativos?: unknown;
-    modulos?: unknown;
-    url_assinatura?: unknown;
-  }>(externalCompanyId, "/api/v1/modulos");
-
-  const brutos = Array.isArray(data?.modulos) ? data.modulos as Record<string, unknown>[] : [];
-  return {
-    ativos: Array.isArray(data?.ativos) ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string") : [],
-    modulos: brutos.flatMap((item) => {
-      const id = typeof item.id === "string" ? item.id : "";
-      if (!id) return [];
-      return [{
-        id,
-        nome: typeof item.nome === "string" ? item.nome : id,
-        descricaoCurta: typeof item.descricao_curta === "string" ? item.descricao_curta : "",
-        ativo: item.ativo === true,
-        // `null` quando a Drap não mandou número. A tela mostra "consultar" em vez de
-        // inventar um preço — dizer R$ 0 seria pior do que não dizer nada.
-        precoMensal: typeof item.preco_mensal === "number" && Number.isFinite(item.preco_mensal) ? item.preco_mensal : null,
-        status: typeof item.status === "string" ? item.status : "stable",
-      }];
-    }),
-    urlAssinatura: typeof data?.url_assinatura === "string" && data.url_assinatura ? data.url_assinatura : null,
-  };
+export async function fetchDrapActiveModules(externalCompanyId: string): Promise<string[]> {
+  const { data } = await requestDrapApi<{ ativos?: unknown }>(externalCompanyId, "/api/v1/modulos");
+  return Array.isArray(data?.ativos)
+    ? (data.ativos as unknown[]).filter((id): id is string => typeof id === "string")
+    : [];
 }

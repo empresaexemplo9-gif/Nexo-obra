@@ -179,27 +179,24 @@ empresa no banco e é **separada** da `MEDIA_ENCRYPTION_KEY` das fotos de propó
 propósitos diferentes, prazos de rotação diferentes. Trocar esta chave torna ilegíveis as
 credenciais já guardadas — as empresas precisam reconectar.
 
-### Plano e conta na Drap
+### O motor financeiro é invisível
 
-O Financeiro mostra, dentro de Conexão DRAP, o que a empresa tem contratado lá e quanto
-custa o que falta. Existe para uma pergunta concreta: sem isso, descobrir que "Emissão de
-Nota Fiscal" não está contratada só acontecia tentando emitir e levando `403` — descobrir
-a permissão errando, na frente do cliente.
+O plano e o valor são da H.OIKOS. Para quem usa a plataforma, a Drap não aparece: não há
+preço dela na tela, não há link para o produto dela, e não há como sair daqui para lá.
+Mandar alguém para outro produto no meio do trabalho seria anunciar um fornecedor que não
+é problema do cliente.
 
-Não há botão de contratar. Assinatura recorrente é no cartão de quem paga, e a H.OIKOS não
-assina em nome de ninguém: ela mostra o preço e leva até a conta, onde a pessoa decide com
-o valor na frente.
+O que a plataforma consulta é binário: esta empresa pode emitir nota, ou não pode. Isso
+entra em `capabilities.notas`, junto de resumo, contas e cobranças — e sem isso a pessoa
+só descobriria a indisponibilidade tentando emitir e levando erro, na frente do cliente
+dela. A consulta que falha vira `false`, nunca exceção: o Financeiro inteiro não pode cair
+porque o motor não respondeu sobre um recurso que talvez nem seja usado hoje.
 
-A empresa provisionada por aqui nasce **sem usuário na Drap**: ela existe, opera por API e
-ninguém consegue entrar. Isso é o certo enquanto a pessoa quiser ficar só na H.OIKOS. Para
-quem não quiser, o botão "Criar meu acesso na Drap" pede o convite de administrador da
-empresa. O convite vai para o e-mail de **quem pediu**, resolvido pela sessão no servidor:
-aceitar um endereço digitado deixaria um administrador daqui entregar o financeiro da
-empresa para qualquer caixa de entrada. O link de aceite aparece na tela junto com o aviso
-de envio, porque e-mail cai no spam.
-
-Depende da Drap publicar `GET /api/v1/modulos` e `POST /api/partner/v1/convites`. Numa
-instalação que ainda não publica, a seção diz isso em vez de fingir uma lista vazia.
+Vincular uma empresa que já existe na Drap continua possível, por um link de texto abaixo
+do formulário. Ele não tem o mesmo peso de "criar empresa" de propósito: quase todo mundo
+que chega ali não tem conta e nem precisa saber que existe uma, e duas opções lado a lado
+obrigavam a escolher entre uma coisa que a pessoa quer e outra de que ela nunca ouviu
+falar.
 
 ### Avisos automáticos
 
