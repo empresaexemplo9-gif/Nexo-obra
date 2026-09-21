@@ -1,6 +1,7 @@
 import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { tokenGuardado } from "@/lib/server/drap-credenciais";
 import { removerWebhookNaDrap } from "@/lib/server/drap-webhook-registro";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
+    rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request, ["owner", "admin"]);
     requireModulePermission(context, "finance", "edit");
 

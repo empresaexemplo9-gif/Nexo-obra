@@ -45,6 +45,15 @@ const inviteRoute = await vite.ssrLoadModule("/app/api/organization-invitations/
 const accept = await vite.ssrLoadModule("/app/api/invitations/[token]/accept/route.ts");
 const clients = await vite.ssrLoadModule("/app/api/clients/route.ts");
 const finance = await vite.ssrLoadModule("/app/api/integrations/drap/summary/route.ts");
+const memberRoute = await vite.ssrLoadModule("/app/api/members/route.ts");
+const catalogRoute = await vite.ssrLoadModule("/app/api/integrations/drap/catalog/route.ts");
+const selectionRoute = await vite.ssrLoadModule("/app/api/integrations/drap/selection/route.ts");
+const termsRoute = await vite.ssrLoadModule("/app/api/terms/accept/route.ts");
+const sessionRoute = await vite.ssrLoadModule("/app/api/session/route.ts");
+const readinessRoute = await vite.ssrLoadModule("/app/api/integrations/drap/readiness/route.ts");
+const connectionRoute = await vite.ssrLoadModule("/app/api/integrations/drap/connection/route.ts");
+const drapAdapter = await vite.ssrLoadModule("/lib/integrations/drap.ts");
+const credentials = await vite.ssrLoadModule("/lib/server/drap-credenciais.ts");
 
 const org = "11111111-1111-4111-8111-111111111111";
 const full = () => Object.fromEntries(permissions.permissionModules.map((m) => [m, { view: true, edit: true }]));
@@ -66,8 +75,118 @@ beforeEach(async () => {
   for (const migration of migrations) db.sqlite.exec(migration);
   db.sqlite.prepare("INSERT INTO organizations(id,name,slug,timezone,created_at,updated_at) VALUES (?,?,?,'America/Sao_Paulo',0,0)").run(org, org, org);
   Object.assign(runtime, { DB: db, TRUST_IDENTITY_HEADERS: "true" });
+  delete runtime.DRAP_API_TOKEN; delete runtime.DRAP_API_URL; delete runtime.DRAP_LEGACY_COMPANY_ID;
+  delete runtime.SECRETS_ENCRYPTION_KEY;
 });
 after(async () => { db?.sqlite.close(); await vite.close(); delete globalThis.__platformEnvOverride; });
+
+test("repetir vínculo preserva segredos, mas outra empresa não herda as credenciais", async () => {
+  runtime.SECRETS_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
+  const save = async (externalCompanyId, token = null, webhookSecret = null) => db.batch([
+    await credentials.instrucoesParaGuardarCredenciais({ db, id: "connection", organizationId: org, externalCompanyId, token, webhookSecret, origem: "vinculado" }),
+  ]);
+  await save("empresa-a", "token-a", "webhook-a");
+  await save("empresa-a");
+  assert.equal(await credentials.tokenGuardado("empresa-a"), "token-a");
+  assert.equal(await credentials.segredoDeWebhookGuardado("empresa-a"), "webhook-a");
+  await save("empresa-b");
+  assert.equal(await credentials.tokenGuardado("empresa-b"), null);
+  assert.equal(await credentials.segredoDeWebhookGuardado("empresa-b"), null);
+  assert.equal(await credentials.tokenGuardado("empresa-a"), null);
+});
+
+test("administrador gerencia outro administrador somente na própria empresa com revisão e auditoria", async () => {
+  addMember("admin1", "admin"); addMember("admin2", "admin"); addMember("owner", "owner");
+  const snapshot = await (await memberRoute.GET(as("admin1", "/api/members"))).json();
+  const member = snapshot.members.find(member => member.id === "admin2");
+  const body = { id: member.id, updatedAt: member.updatedAt, role: "manager", permissions: permissions.permissionsForRole("manager"), active: false, weeklyCapacityMinutes: 1200 };
+  const patch = (actor, changes = {}) => memberRoute.PATCH(as(actor, "/api/members", { method: "PATCH", body: JSON.stringify({ ...body, ...changes }) }));
+  assert.equal((await patch("admin1", { id: "foreign-member" })).status, 404);
+  assert.equal((await patch("admin1", { id: "owner" })).status, 403);
+  assert.equal((await patch("admin1", { id: "admin1" })).status, 403);
+  assert.equal((await patch("admin1", { role: "superadmin" })).status, 400);
+  const result = await patch("admin1"); assert.equal(result.status, 200, await result.clone().text());
+  assert.equal((await patch("admin1")).status, 409);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM audit_events WHERE action='member.access_updated'").get().n, 1);
+  assert.equal((await memberRoute.GET(as("admin2", "/api/members"))).status, 403);
+  const all = await (await memberRoute.GET(as("admin1", "/api/members?includeInactive=true"))).json();
+  const disabled = all.members.find(member => member.id === "admin2"); assert.equal(disabled.active, false);
+  assert.equal((await patch("admin1", { updatedAt: disabled.updatedAt, active: true })).status, 200);
+});
+
+test("administrador restrito não altera acesso mais poderoso e RH não lista convites", async () => {
+  addMember("restricted", "admin", { ...permissions.permissionsForRole("member"), team: { view: true, edit: true } });
+  addMember("full-admin", "admin"); addMember("hr", "hr");
+  const target = db.sqlite.prepare("SELECT updated_at FROM members WHERE id='full-admin'").get();
+  assert.equal((await memberRoute.PATCH(as("restricted", "/api/members", { method: "PATCH", body: JSON.stringify({ id: "full-admin", role: "member", permissions: permissions.permissionsForRole("member"), active: true, weeklyCapacityMinutes: 2400, updatedAt: target.updated_at }) }))).status, 403);
+  assert.equal((await inviteRoute.GET(as("hr", "/api/organization-invitations"))).status, 403);
+});
+
+test("cookie de outra empresa não cai silenciosamente em uma empresa autorizada", async () => {
+  addMember("admin", "admin");
+  const response = await memberRoute.GET(as("admin", "/api/members", { headers: { cookie: "__Host-nexo-organization=22222222-2222-4222-8222-222222222222" } }));
+  assert.equal(response.status, 403); assert.equal((await response.json()).code, "organization_forbidden");
+  const recovery = await sessionRoute.GET(as("admin", "/api/session", { headers: { cookie: "__Host-nexo-organization=22222222-2222-4222-8222-222222222222" } }));
+  assert.equal(recovery.status, 200); const body = await recovery.json();
+  assert.equal(body.organizationSelectionRequired, true); assert.deepEqual(body.organizations.map(item => item.id), [org]); assert.equal(body.organization, undefined);
+});
+
+test("seleção Drap usa preços do servidor, não contrata e não aceita preços ou empresa do cliente", async () => {
+  addMember("admin", "admin"); addMember("finance", "finance");
+  const save = (actor, body) => selectionRoute.POST(as(actor, "/api/integrations/drap/selection", { method: "POST", body: JSON.stringify(body) }));
+  assert.equal((await save("finance", { itemIds: ["cobrancas"] })).status, 403);
+  assert.equal((await save("admin", { itemIds: ["cobrancas"], monthlyCents: 1 })).status, 400);
+  assert.equal((await save("admin", { itemIds: ["invalid"] })).status, 400);
+  const response = await save("admin", { itemIds: ["cobrancas", "cobrancas", "dashboards-pro"] });
+  assert.equal(response.status, 200); assert.equal((await response.json()).contracted, false);
+  const catalog = await (await catalogRoute.GET(as("admin", "/api/integrations/drap/catalog"))).json();
+  assert.deepEqual(catalog.selection, ["cobrancas", "dashboards-pro"]);
+  for (const item of catalog.catalog) for (const key of ["baseCents", "commissionCents", "multiplierBps", "revision"]) assert.equal(key in item, false);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM drap_activations").get().n, 0);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM financial_charge_requests").get().n, 0);
+});
+
+test("aceite repetido preserva a evidência original e não aceita uma minuta nem origem externa", async () => {
+  addMember("owner", "owner");
+  const before = db.sqlite.prepare("SELECT * FROM terms_acceptances WHERE external_user_id='owner'").get();
+  const accept = (version, headers = {}) => termsRoute.POST(as("owner", "/api/terms/accept", { method: "POST", body: JSON.stringify({ accepted: true, version }), headers }));
+  const response = await accept(CURRENT_TERMS_VERSION); assert.equal(response.status, 200);
+  assert.equal((await response.json()).acceptedAt, before.accepted_at);
+  assert.deepEqual(db.sqlite.prepare("SELECT * FROM terms_acceptances WHERE external_user_id='owner'").get(), before);
+  assert.equal((await accept("2026-09-20")).status, 400);
+  assert.equal((await accept(CURRENT_TERMS_VERSION, { origin: "https://attacker.test" })).status, 403);
+});
+
+test("diagnóstico Drap é privado, não expõe segredos nem faz chamadas por padrão", async () => {
+  addMember("admin", "admin"); addMember("finance", "finance");
+  runtime.DRAP_API_TOKEN = 'test-only-secret'; runtime.DRAP_API_URL = 'https://empresa.drap.app.br';
+  assert.equal((await readinessRoute.GET(as("finance", "/api/integrations/drap/readiness"))).status, 403);
+  const original = globalThis.fetch; globalThis.fetch = async () => { throw new Error("Diagnóstico local não deve usar rede"); };
+  try {
+    const response = await readinessRoute.GET(as("admin", "/api/integrations/drap/readiness"));
+    assert.equal(response.status, 200); assert.equal(response.headers.get('cache-control'), 'private, no-store');
+    const text = await response.text(); assert.equal(text.includes('test-only-secret'), false);
+    const body = JSON.parse(text); assert.equal(body.canVerifyApi, false); assert.equal(body.operationallyValidated, false);
+    assert.equal(body.checks.find(check => check.id === 'tenant').ready, false);
+  } finally { globalThis.fetch = original; }
+});
+
+test("identificador Drap não comprova posse e chave legada exige empresa explícita", async () => {
+  addMember("admin", "admin");
+  const response = await connectionRoute.PUT(as("admin", "/api/integrations/drap/connection", { method: 'PUT', body: JSON.stringify({ externalCompanyId: 'foreign-tenant' }) }));
+  assert.equal(response.status, 403); assert.equal((await response.json()).code, 'drap_link_proof_required');
+  runtime.DRAP_API_URL = 'https://empresa.drap.app.br'; runtime.DRAP_API_TOKEN = 'test-only-global-secret';
+  const original = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async () => { calls++; return new Response('{"items":[],"total":0}'); };
+  try {
+    await assert.rejects(drapAdapter.requestDrapApi('foreign-tenant', '/api/v1/lancamentos'));
+    assert.equal(calls, 0);
+    runtime.DRAP_LEGACY_COMPANY_ID = 'allowed-tenant';
+    await assert.rejects(drapAdapter.requestDrapApi('foreign-tenant', '/api/v1/lancamentos'));
+    assert.equal(calls, 0);
+    await drapAdapter.requestDrapApi('allowed-tenant', '/api/v1/lancamentos'); assert.equal(calls, 1);
+  } finally { globalThis.fetch = original; }
+});
 
 test("cada perfil nasce com a matriz que o produto promete", () => {
   const matrix = (role) => Object.fromEntries(Object.entries(permissions.permissionsForRole(role))

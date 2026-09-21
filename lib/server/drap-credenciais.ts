@@ -77,8 +77,8 @@ export async function instrucoesParaGuardarCredenciais(entrada: {
        -- COALESCE: repetir o provisionamento devolve a empresa sem a chave (a Drap não
        -- mostra a mesma duas vezes). Sobrescrever com NULL apagaria a credencial que
        -- está funcionando.
-       api_token_encrypted = COALESCE(excluded.api_token_encrypted, integration_connections.api_token_encrypted),
-       webhook_secret_encrypted = COALESCE(excluded.webhook_secret_encrypted, integration_connections.webhook_secret_encrypted),
+       api_token_encrypted = CASE WHEN integration_connections.external_company_id = excluded.external_company_id THEN COALESCE(excluded.api_token_encrypted, integration_connections.api_token_encrypted) ELSE excluded.api_token_encrypted END,
+       webhook_secret_encrypted = CASE WHEN integration_connections.external_company_id = excluded.external_company_id THEN COALESCE(excluded.webhook_secret_encrypted, integration_connections.webhook_secret_encrypted) ELSE excluded.webhook_secret_encrypted END,
        origem = excluded.origem,
        updated_at = CURRENT_TIMESTAMP`,
   ).bind(

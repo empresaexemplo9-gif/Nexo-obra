@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { drapCatalogItem } from "@/lib/integrations/drap-catalog";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,8 @@ const signupSchema = z.object({
 
 export async function POST(request: Request) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request);
+    rejectCrossSiteMutation(request);
+    const context = await requireOrganizationContext(request, ["owner", "admin"]);
     requireModulePermission(context, "finance", "edit");
 
     const parsed = signupSchema.safeParse(await jsonBody(request));

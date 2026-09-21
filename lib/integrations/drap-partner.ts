@@ -56,6 +56,7 @@ function texto(valor: unknown, padrao: string) {
 async function chamar(caminho: string, corpo: unknown, idempotencyKey?: string) {
   const resposta = await fetch(url(caminho), {
     method: "POST",
+    redirect: "error",
     headers: headers(idempotencyKey),
     body: JSON.stringify(corpo),
     signal: AbortSignal.timeout(15000),

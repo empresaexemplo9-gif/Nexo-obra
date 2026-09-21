@@ -6,13 +6,13 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const source = (path) => readFile(`${root}/${path}`, "utf8");
 
-test("novas ativações embutidas usam exatamente o preço oficial da DRAP", async () => {
+test("novas ativações usam política opcional congelada e preservam preço padrão", async () => {
   const activation = await source("lib/server/activation.ts");
   const ui = await source("components/platform-control.tsx");
   assert.match(activation, /product: "drap_embedded"/);
-  assert.match(activation, /pricingMultiplierBps: 10000/);
+  assert.match(activation, /pricingMultiplierBps: pricing.multiplierBps/);
   assert.match(activation, /embeddedDrapMonthlyCents\(base: number\)[\s\S]*return checkedMonthlyCents\(base\)/);
-  assert.match(ui, /preço oficial do Drap Empresa, sem acréscimo da H\.OIKOS/);
+  assert.match(ui, /Somente o superadministrador define um acréscimo opcional/);
   assert.doesNotMatch(ui, /\+\s*50%|acrescid[oa] de 50%/i);
 });
 
@@ -53,7 +53,7 @@ test("catálogo é servido dentro da H.OIKOS e só manda criar conta quem ainda 
   const route = await source("app/api/integrations/drap/catalog/route.ts");
   assert.match(route, /requireOrganizationContext/);
   assert.match(route, /requireModulePermission\(context, "finance", "view"\)/);
-  assert.match(route, /pricing: "same_as_drap"/);
+  assert.match(route, /pricing: "company_offer"/);
   // Enquanto a Drap não expõe rota de provisionamento, quem ainda não tem tenant é
   // levado ao cadastro oficial. Quem já tem opera dentro da H.OIKOS, sem sair.
   // O sinal precisa vir do estado do tenant: fixá-lo em `false` anunciava operação

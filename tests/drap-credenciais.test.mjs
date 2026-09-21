@@ -111,7 +111,8 @@ test("a rota de conexão confere a guarda antes de criar empresa na Drap", async
 
 test("vincular empresa existente exige código, não documento", async () => {
   const rota = await source("app/api/integrations/drap/provisionar/route.ts");
-  const ramo = rota.slice(rota.indexOf('z.literal("vincular")'), rota.indexOf("]);"));
+  const inicio = rota.indexOf('z.literal("vincular")');
+  const ramo = rota.slice(inicio, rota.indexOf("}).strict()", inicio));
 
   assert.match(ramo, /codigo:/);
   assert.doesNotMatch(ramo, /documento/);

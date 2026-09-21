@@ -58,6 +58,9 @@ export async function requireOrganizationContext(
     throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa na H.OIKOS.");
   }
   const requestedOrganizationId = selectedOrganizationId(request);
+  if (requestedOrganizationId && !memberships.some((item) => item.organization_id === requestedOrganizationId)) {
+    throw new ApiError(403, "organization_forbidden", "Você não participa da empresa selecionada. Selecione uma empresa autorizada.");
+  }
   const membership = memberships.find((item) => item.organization_id === requestedOrganizationId) ?? memberships[0];
   await assertPlatformAccess(membership.organization_id, identity.email, identity.id);
   if (allowedRoles && !allowedRoles.includes(membership.role)) {

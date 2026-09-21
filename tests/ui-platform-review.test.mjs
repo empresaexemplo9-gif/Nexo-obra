@@ -13,6 +13,8 @@ const { FilesWorkspace } = await vite.ssrLoadModule("/components/files-workspace
 const { BudgetsWorkspace } = await vite.ssrLoadModule("/components/budgets-workspace.tsx");
 const { ClientsDirectory } = await vite.ssrLoadModule("/components/clients-directory.tsx");
 const { TeamAccessManager } = await vite.ssrLoadModule("/components/team-access-manager.tsx");
+const { DrapSolutionsWorkspace } = await vite.ssrLoadModule("/components/drap-solutions-workspace.tsx");
+const { ProposedTermsPage } = await vite.ssrLoadModule("/components/proposed-terms-page.tsx");
 let container, reactRoot;
 const originalFormData = globalThis.FormData, originalFile = globalThis.File;
 test.beforeEach(async () => {
@@ -79,6 +81,38 @@ test("cliente pode ter contato corrigido sem recriar cadastro", async () => {
 test("leitor da equipe não consulta convites restritos", async () => {
   let calls=0; globalThis.fetch=async()=>{ calls++; throw new Error("Não deveria consultar"); };
   await mount(TeamAccessManager,{members:[],canManage:false}); assert.equal(calls,0); assert.doesNotMatch(textOf(container), /Carregando convites/);
+  assert.equal(container.querySelector('.animate-spin'), null);
+});
+
+test("minuta distingue desenvolvedora de operadora e não oferece aceite", async () => {
+  await mount(ProposedTermsPage, {});
+  assert.match(textOf(container), /sem vigência contratual/);
+  assert.match(textOf(container), /A Drap desenvolve a H.OIKOS para venda à adquirente/);
+  assert.doesNotMatch(textOf(container), /64\.759\.314/);
+  assert.ok(container.querySelector('a[href*="l13709compilado"]'));
+  assert.ok(container.querySelector('a[href*="l12378"]'));
+  assert.equal(container.querySelector('button, input[type="checkbox"]'), null);
+  assert.equal(container.querySelectorAll('nav a[href^="#clausula-"]').length, 14);
+});
+
+test("seleção Drap é salva sem inventar cobrança ou checkout e leitores não alteram", async () => {
+  const catalog = { catalog: [{ id: 'cobrancas', name: 'Cobranças', kind: 'module', monthlyCents: 7375, description: 'Cobranças da empresa' }], checkedAt: '2026-09-16', selection: [], canManage: true, provisioningAvailable: false, tenantProvisioned: true, connectionStatus: 'active', subscription: null };
+  let saved;
+  globalThis.fetch = async (url, init) => {
+    if (String(url).includes('/readiness')) return new Response(JSON.stringify({ checks: [], resources: null, events: [], canVerifyApi: false, notice: 'Homologação pendente' }));
+    if (init?.method === 'POST') { assert.equal(url, '/api/integrations/drap/selection'); saved = JSON.parse(init.body); return new Response(JSON.stringify({ saved: true, contracted: false })); }
+    return new Response(JSON.stringify(catalog));
+  };
+  await mount(DrapSolutionsWorkspace, {});
+  assert.match(textOf(container), /73,75/);
+  await act(async () => findByText(container, 'Selecionar', 'button').click());
+  await act(async () => findByText(container, 'Salvar seleção', 'button').click());
+  assert.deepEqual(saved, { itemIds: ['cobrancas'] });
+  assert.match(textOf(container), /Nenhuma contratação ou cobrança foi realizada/);
+  await act(async () => reactRoot.unmount()); reactRoot = createRoot(container);
+  catalog.canManage = false; await mount(DrapSolutionsWorkspace, {});
+  assert.equal(findByText(container, 'Selecionar', 'button').disabled, true);
+  assert.equal(findByText(container, 'Salvar seleção', 'button').disabled, true);
 });
 
 test("falha ao trocar versão de orçamento não mostra itens da versão anterior", async () => {

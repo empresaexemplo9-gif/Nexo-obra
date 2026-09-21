@@ -115,6 +115,7 @@ type SessionData = {
   authenticated: boolean;
   authMethod?: "password" | "maintenance" | "superadmin";
   needsOrganization: boolean;
+  organizationSelectionRequired?: boolean;
   portalOnly?: boolean;
   platformEmpty?: boolean;
   maintenanceEnvironment?: boolean;
@@ -461,7 +462,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "files") return <FilesWorkspace projects={projects} query={query} canEdit={canEdit("files")} />;
     if (activeModule === "studio") return <div className="space-y-5"><PageIntro module="studio" /><PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("studio")} /></div>;
     if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
-    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
+    if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager currentMemberId={session.member?.id} members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "budgets") return <BudgetsWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("budgets")} />;
     if (activeModule === "diary") return <DiaryWorkspace key={session.organization?.id} canEdit={canEdit("diary")} query={query} />;
@@ -481,6 +482,18 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   </SidebarProvider>;
 }
 
+function OrganizationChoice({ organizations, onSelected }: { organizations: Organization[]; onSelected: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function choose(organizationId: string) {
+    setBusy(true); setError("");
+    try { await requestJson("/api/session", { method: "POST", body: JSON.stringify({ organizationId }) }); await onSelected(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível selecionar."); }
+    finally { setBusy(false); }
+  }
+  return <main className="grid min-h-svh place-items-center bg-hoikos-100 p-5"><Card className="w-full max-w-md"><CardHeader><CardTitle>Selecione sua empresa</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm">O acesso à empresa selecionada anteriormente não está disponível. Escolha um dos seus vínculos autorizados.</p>{error && <p role="alert">{error}</p>}{organizations.map(organization => <Button key={organization.id} className="h-auto min-h-10 w-full whitespace-normal" disabled={busy} onClick={() => void choose(organization.id)}>{organization.name}</Button>)}</CardContent></Card></main>;
+}
+
 export function NexoApp() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -490,6 +503,7 @@ export function NexoApp() {
   useUsageHeartbeat(Boolean(session?.authenticated && session.organization && !session.portalOnly));
   if (loading || !session) return <LoadingScreen />;
   if (!session.authenticated) return <AccessScreen />;
+  if (session.organizationSelectionRequired) return <OrganizationChoice organizations={session.organizations} onSelected={loadSession} />;
   if (session.portalOnly) return <ClientPortalApp />;
   if (session.platformEmpty) return <PlatformEmptyScreen />;
   if (session.needsOrganization) return <OrganizationForm onCreated={loadSession} />;

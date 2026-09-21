@@ -14,6 +14,7 @@ const source = (path) => readFile(`${root}/${path}`, "utf8");
 globalThis.__platformEnvOverride = {
   DRAP_API_URL: "https://empresa.drap.app.br",
   DRAP_API_TOKEN: "drap_live_credencial_de_teste",
+  DRAP_LEGACY_COMPANY_ID: "empresa-1",
 };
 
 const fetchOriginal = globalThis.fetch;

@@ -265,7 +265,7 @@ O processador trata `lancamento.*` como sinal de atualização da fonte oficial 
 - [x] eventos `lancamento.*` e `cobranca.*` reconhecidos;
 - [x] descoberta de recursos por tenant com allowlist implementada;
 - [x] cobranças usam rota real descoberta e idempotência de ponta a ponta;
-- [x] novas ativações embutidas usam preço oficial DRAP 1:1, sem acréscimo H.OIKOS;
+- [x] novas ativações usam preço oficial mínimo e acréscimo opcional exclusivo do superadministrador, congelado por solicitação; contratação real aguarda conclusão pela Drap;
 - [ ] credenciais e secrets de produção precisam existir no provedor de hospedagem para cada tenant que será usado;
 - [ ] subscription real de webhook precisa estar criada para cada ambiente publicado que depender de eventos;
 - [ ] cada operação externa de alto impacto, como emissão de NFS-e, deve ser validada ao vivo com um tenant autorizado antes de ser apresentada como concluída ao usuário final.

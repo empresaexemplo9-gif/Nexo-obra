@@ -43,6 +43,7 @@ type DrapTenantConfig = {
 type DrapRuntimeEnv = {
   DRAP_API_URL?: string;
   DRAP_API_TOKEN?: string;
+  DRAP_LEGACY_COMPANY_ID?: string;
   DRAP_API_KEY_HEADER?: string;
   DRAP_PARTNER_TOKEN?: string;
   DRAP_SUMMARY_PATH?: string;
@@ -94,7 +95,7 @@ async function apiTokenFor(externalCompanyId: string) {
 
   const doAmbiente = tenantIds.length > 0
     ? tenants[externalCompanyId]?.apiToken
-    : config.DRAP_API_TOKEN;
+    : config.DRAP_LEGACY_COMPANY_ID === externalCompanyId ? config.DRAP_API_TOKEN : undefined;
   if (doAmbiente) return doAmbiente;
 
   const { tokenGuardado } = await import("@/lib/server/drap-credenciais");
@@ -147,6 +148,11 @@ export function isDrapConfigured() {
   // provisiona apareceria como "integração não configurada" com tudo funcionando.
   const temParceiro = Boolean((config as { DRAP_PARTNER_TOKEN?: string }).DRAP_PARTNER_TOKEN);
   return Boolean(config.DRAP_API_URL && (config.DRAP_API_TOKEN || hasTenantToken || temParceiro));
+}
+
+/** Diagnóstico sem expor credencial e sem realizar requisição externa. */
+export async function hasDrapTenantCredential(externalCompanyId: string) {
+  try { return Boolean(await apiTokenFor(externalCompanyId)); } catch { return false; }
 }
 
 export function isDrapTransactionsConfigured() {
@@ -585,6 +591,7 @@ export async function requestDrapApi<T>(
   if (init.idempotencyKey) headers.set("Idempotency-Key", init.idempotencyKey);
   const response = await fetch(drapUrl(path), {
     method,
+    redirect: "error",
     headers,
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
     signal: AbortSignal.timeout(method === "GET" ? 8000 : 10000),

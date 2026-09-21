@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, ExternalLink, LoaderCircle, ShieldCheck, UserPlus } from "lucide-react";
 
+import { DrapConectar } from "@/components/drap-conectar";
+import { DrapReadinessPanel } from "@/components/drap-readiness-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +25,10 @@ type CatalogResponse = {
   catalog: CatalogItem[];
   source: string;
   checkedAt: string;
-  pricing: "same_as_drap";
+  pricing: "company_offer";
+  canManage: boolean;
+  provisioningAvailable: boolean;
+  selection: string[];
   embeddedExperience: boolean;
   requiresRedirect: boolean;
   checkoutAvailable: boolean;
@@ -48,6 +53,10 @@ function price(item: CatalogItem) {
 }
 
 export function DrapSolutionsWorkspace() {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [saved, setSaved] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [reload, setReload] = useState(0);
   const [data, setData] = useState<CatalogResponse | null>(null);
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -60,12 +69,12 @@ export function DrapSolutionsWorkspace() {
       .then(async (response) => {
         const body = await response.json().catch(() => ({})) as CatalogResponse & { error?: string };
         if (!response.ok) throw new Error(body.error ?? "Não foi possível carregar as soluções DRAP.");
-        if (active) setData(body);
+        if (active) { setData(body); setSelected(body.selection ?? []); }
       })
       .catch((cause: Error) => { if (active) setError(cause.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [reload]);
 
   const groups = useMemo(() => {
     if (!data) return [] as Array<{ title: string; items: CatalogItem[] }>;
@@ -95,6 +104,16 @@ export function DrapSolutionsWorkspace() {
     }
   }
 
+  async function saveSelection() {
+    setSaving(true); setActionError(""); setSaved("");
+    try {
+      const response = await fetch("/api/integrations/drap/selection", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemIds: selected }) });
+      const body = await response.json(); if (!response.ok) throw new Error(body.error ?? "Não foi possível salvar a seleção.");
+      setSaved("Seleção salva para esta empresa. Nenhuma contratação ou cobrança foi realizada; a conclusão depende do checkout homologado da Drap.");
+    } catch (error) { setActionError(error instanceof Error ? error.message : "Não foi possível salvar."); }
+    finally { setSaving(false); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><LoaderCircle className="size-7 animate-spin" /></div>;
   }
@@ -113,20 +132,20 @@ export function DrapSolutionsWorkspace() {
         <div>
           <p className="eyebrow text-hoikos-600">H.OIKOS · Financeiro</p>
           <h1 className="display-heading mt-2 text-4xl text-hoikos-950">Soluções DRAP</h1>
-          <p className="mt-2 max-w-3xl text-sm text-hoikos-500">Use os serviços DRAP dentro da H.OIKOS, com o mesmo preço publicado pela DRAP. Enquanto o provisionamento automático não estiver disponível, somente a criação inicial da conta acontece na DRAP.</p>
+          <p className="mt-2 max-w-3xl text-sm text-hoikos-500">Conecte a conta da sua empresa, escolha os módulos e acompanhe a assinatura dentro da H.OIKOS. Os pagamentos são feitos diretamente à Drap. A ativação depende da confirmação da contratação pela Drap.</p>
         </div>
         <Button variant="outline" onClick={() => { window.location.href = "/"; }}><ArrowLeft />Voltar à H.OIKOS</Button>
       </div>
 
       <Card>
         <CardContent className="grid gap-4 p-5 md:grid-cols-3">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Preço</p><p className="mt-2 font-medium">Mesmo valor da DRAP</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Preço</p><p className="mt-2 font-medium">Oferta para sua empresa</p></div>
           <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Uso</p><p className="mt-2 font-medium">Dentro da H.OIKOS</p></div>
           <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Conta DRAP</p><p className="mt-2 font-medium">{data.tenantProvisioned ? (data.connectionStatus === "active" ? "Conectada" : "Vínculo pendente") : "Ainda não criada/vinculada"}</p></div>
         </CardContent>
       </Card>
 
-      {!data.tenantProvisioned ? (
+      {!data.tenantProvisioned && data.canManage && data.provisioningAvailable ? <DrapConectar onConectado={() => setReload(value => value + 1)} /> : !data.tenantProvisioned ? (
         <Card className="border-hoikos-200 bg-hoikos-50">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
             <span className="grid size-11 shrink-0 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700"><UserPlus className="size-5" /></span>
@@ -134,7 +153,7 @@ export function DrapSolutionsWorkspace() {
               <p className="font-semibold text-hoikos-950">Crie sua conta DRAP para liberar as soluções financeiras na H.OIKOS</p>
               <p className="mt-1 text-sm leading-6 text-hoikos-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte à H.OIKOS e conclua a Conexão DRAP no Financeiro. A liberação acontece quando a conexão técnica for validada pela API.</p>
             </div>
-            <Button onClick={() => void startSignup()} disabled={redirecting !== null}>
+            <Button onClick={() => void startSignup()} disabled={!data.canManage || redirecting !== null}>
               {redirecting === "account" ? <LoaderCircle className="animate-spin" /> : <ExternalLink />}
               Criar conta DRAP
             </Button>
@@ -153,10 +172,11 @@ export function DrapSolutionsWorkspace() {
       )}
 
       {actionError ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 p-3 text-sm text-hoikos-800">{actionError}</p> : null}
+      {data.canManage && <DrapReadinessPanel key={reload} />}
 
       <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
-        <p className="font-medium">Contratação dentro da H.OIKOS continua sendo o destino final.</p>
-        <p className="mt-1 text-hoikos-600">Até a DRAP publicar o checkout service-to-service, a H.OIKOS usa o cadastro oficial da DRAP como etapa provisória. A operação financeira continua dentro da H.OIKOS após a conexão.</p>
+        <p className="font-medium">Escolha os serviços para sua empresa</p>
+        <p className="mt-1 text-hoikos-600">Selecione módulos ou um pacote e salve suas preferências. A contratação e a cobrança só acontecem após confirmação na Drap. O checkout integrado ainda depende de homologação; salvar a seleção não ativa serviços pagos.</p>
       </div>
 
       {data.subscription ? (
@@ -175,13 +195,10 @@ export function DrapSolutionsWorkspace() {
                   <p className="flex-1 text-sm text-hoikos-600">{item.description}</p>
                   {item.kind === "free" ? (
                     <Button disabled><Check />Incluído</Button>
-                  ) : !data.tenantProvisioned ? (
-                    <Button onClick={() => void startSignup(item.id)} disabled={redirecting !== null}>
-                      {redirecting === item.id ? <LoaderCircle className="animate-spin" /> : <UserPlus />}
-                      Criar conta DRAP
-                    </Button>
                   ) : (
-                    <Button disabled>{data.checkoutAvailable ? "Checkout DRAP aguardando homologação final" : "Contratação embutida em integração"}</Button>
+                    <Button variant={selected.includes(item.id) ? "default" : "outline"} disabled={!data.canManage} onClick={() => { setSaved(""); setSelected(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id]); }}>
+                      {selected.includes(item.id) ? <Check /> : null}{selected.includes(item.id) ? "Selecionado" : "Selecionar"}
+                    </Button>
                   )}
                 </CardContent>
               </Card>
@@ -189,6 +206,8 @@ export function DrapSolutionsWorkspace() {
           </div>
         </section>
       ) : null)}
+
+      <Card><CardContent className="space-y-3 p-5"><p className="font-medium">Sua seleção: {selected.length} serviço(s)</p><p className="text-sm">{data.catalog.filter(item => selected.includes(item.id)).map(item => `${item.name}: ${price(item)}`).join(" · ") || "Nenhum serviço selecionado."}</p><p className="text-sm text-hoikos-600">Pacotes podem incluir módulos avulsos. Revise a composição para evitar sobreposição; os valores finais e a disponibilidade são confirmados pela Drap.</p><Button disabled={!data.canManage || saving} onClick={() => void saveSelection()}>{saving ? "Salvando…" : "Salvar seleção"}</Button>{saved && <p role="status" className="text-sm">{saved}</p>}{!data.canManage && <p className="text-sm">Somente administradores autorizados da empresa podem conectar contas e escolher serviços.</p>}</CardContent></Card>
 
       <p className="pb-4 text-xs text-hoikos-500">Catálogo público DRAP conferido em {new Date(`${data.checkedAt}T12:00:00`).toLocaleDateString("pt-BR")}. O valor final de qualquer cobrança deve ser confirmado no servidor da DRAP; a H.OIKOS não aceita preço informado pelo navegador.</p>
     </main>

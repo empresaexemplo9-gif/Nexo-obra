@@ -46,9 +46,12 @@ class D1Local {
 const platform = await vite.ssrLoadModule('/app/api/superadmin/platform/route.ts');
 const callback = await vite.ssrLoadModule('/app/api/integrations/drap/activation/route.ts');
 const backend = await vite.ssrLoadModule('/lib/server/backend.ts');
+const drap = await vite.ssrLoadModule('/lib/server/drap.ts');
 const activation = await vite.ssrLoadModule('/lib/server/activation.ts');
 const superadmin = await vite.ssrLoadModule('/lib/server/superadmin.ts');
 const accept = await vite.ssrLoadModule('/app/api/invitations/[token]/accept/route.ts');
+const pricing = await vite.ssrLoadModule('/lib/server/drap-pricing.ts');
+const pricingRoute = await vite.ssrLoadModule('/app/api/superadmin/drap-pricing/route.ts');
 const orgA = '11111111-1111-4111-8111-111111111111';
 const orgB = '22222222-2222-4222-8222-222222222222';
 const secret = 'test-only-shared-secret-at-least-32-characters';
@@ -77,6 +80,38 @@ async function signed(body, { timestamp = Math.floor(Date.now() / 1000).toString
   const signature = Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(timestamp + '.' + raw))).toString('hex');
   return new Request('https://platform.test/api/integrations/drap/activation', { method: 'POST', headers: { 'content-type': 'application/json', 'x-drap-timestamp': timestamp, 'x-drap-signature': signature }, body: raw });
 }
+
+test('Drap pricing floor, optional markup, tenant scope, stale writes and exclusive superadmin authority', async () => {
+  assert.deepEqual(pricing.drapPrice(5900), { baseCents: 5900, monthlyCents: 5900, commissionCents: 0 });
+  assert.deepEqual(pricing.drapPrice(101, 15000), { baseCents: 101, monthlyCents: 152, commissionCents: 51 });
+  for (const multiplier of [9999, -1, NaN, 100001, 10000.5]) assert.throws(() => pricing.drapPrice(5900, multiplier));
+  const body = { planId: 'cobrancas', multiplierBps: 12500, revision: 0 };
+  assert.equal((await pricingRoute.POST(req(body, { cookie: '' }))).status, 401);
+  assert.equal((await pricingRoute.POST(req(body, { origin: 'https://attacker.test' }))).status, 403);
+  assert.equal((await pricingRoute.POST(req({ ...body, multiplierBps: 9999 }))).status, 400);
+  assert.equal((await pricingRoute.POST(req({ ...body, planId: 'gratis' }))).status, 400);
+  const response = await pricingRoute.POST(req(body)); assert.equal(response.status, 200, await response.clone().text());
+  assert.equal((await pricingRoute.POST(req(body))).status, 409);
+  assert.deepEqual(await pricing.pricingRule(orgA, 'cobrancas'), { multiplierBps: 12500, revision: 1 });
+  assert.deepEqual(await pricing.pricingRule(orgB, 'cobrancas'), { multiplierBps: 10000, revision: 0 });
+  const catalog = await pricing.pricingCatalog(orgA); assert.equal(catalog.find(item => item.id === 'cobrancas').monthlyCents, 7375);
+});
+
+test('confirmed markup is frozen per request, verified against signed totals and recorded once for reconciliation', async () => {
+  await action({ action: 'enroll', companyId: 'empresa-1', planId: 'cobrancas', confirmed: true });
+  const row = await activation.activationFor(orgA);
+  await pricing.changePricingRule(orgA, 'cobrancas', 12500, 0, 'platform-admin');
+  assert.equal((await pricing.lockPricing(orgA, 'cobrancas', row.request_key)).multiplierBps, 12500);
+  await pricing.changePricingRule(orgA, 'cobrancas', 15000, 1, 'platform-admin');
+  assert.equal((await pricing.lockPricing(orgA, 'cobrancas', row.request_key)).multiplierBps, 12500);
+  const confirmed = event(row, { product: 'drap_embedded', baseMonthlyCents: 5900, monthlyCents: 7375 });
+  assert.equal((await callback.POST(await signed({ ...confirmed, monthlyCents: 8850 }))).status, 409);
+  assert.equal((await callback.POST(await signed({ ...confirmed, product: 'drap_architector' }))).status, 409);
+  for (let i = 0; i < 2; i++) assert.equal((await callback.POST(await signed(confirmed))).status, 200);
+  const events = db.sqlite.prepare("SELECT metadata_json FROM platform_audit_events WHERE action='drap.activation_confirmed'").all();
+  assert.equal(events.length, 1); const audit = JSON.parse(events[0].metadata_json);
+  assert.equal(audit.commissionMonthlyCents, 1475); assert.equal(audit.settlementStatus, 'pending_reconciliation');
+});
 test('only superadmin can change access or activate; foreign origins are rejected', async () => {
   for (const headers of [{ cookie: '' }, { cookie: 'invalid' }]) assert.equal((await platform.POST(req({ action: 'partner', email: 'p@example.test' }, headers))).status, 401);
   assert.equal((await platform.POST(req({ action: 'partner', email: 'p@example.test' }, { origin: 'https://attacker.test' }))).status, 403);
@@ -119,7 +154,7 @@ test('150% pricing uses integer centavos and rejects invalid bases', () => {
   for (const value of [-1, 1.2, Number.MAX_SAFE_INTEGER, NaN]) assert.throws(() => activation.architectorMonthlyCents(value));
 });
 test('enrollment stays pending until Empresa confirms; callback connects financial company without creating charges locally', async () => {
-  const row = await enroll(); await assert.rejects(backend.requireOrganizationContext(user()), { code: 'subscription_inactive' });
+  const row = await enroll(); await assert.rejects(drap.requireActiveDrapConnection(await backend.requireOrganizationContext(user())), { code: 'subscription_inactive' });
   await backend.requireOrganizationContext(user(orgB));
   const response = await callback.POST(await signed(event(row))); assert.equal(response.status, 200, await response.clone().text());
   await backend.requireOrganizationContext(user());
@@ -143,7 +178,7 @@ test('duplicate events are idempotent; conflicting IDs and stale revisions canno
   assert.equal((await callback.POST(await signed({ ...body, status: 'suspended' }))).status, 409);
   assert.equal((await callback.POST(await signed(event(row, { revision: 2, status: 'suspended' })))).status, 200);
   assert.equal((await callback.POST(await signed(event(row)))).status, 409);
-  await assert.rejects(backend.requireOrganizationContext(user()), { code: 'subscription_inactive' });
+  await assert.rejects(drap.requireActiveDrapConnection(await backend.requireOrganizationContext(user())), { code: 'subscription_inactive' });
 });
 test('billing activation never clears a manual block and confirmed plan upgrades preserve the 50% rule', async () => {
   const row = await enroll(); await action({ action: 'access', subject: '*', state: 'blocked', until: null, reason: 'Bloqueio manual', revision: 0 });

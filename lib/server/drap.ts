@@ -9,6 +9,9 @@ export type DrapConnectionRow = {
 };
 
 export async function requireActiveDrapConnection(context: OrganizationContext) {
+  const subscription = await context.db.prepare("SELECT status FROM drap_activations WHERE organization_id = ?1")
+    .bind(context.organization.id).first<{ status: string }>();
+  if (subscription && subscription.status !== "active") throw new ApiError(403, "subscription_inactive", "A assinatura Drap aguarda confirmação. Os demais módulos da H.OIKOS continuam disponíveis.");
   const connection = await context.db.prepare(
     `SELECT id, external_company_id, status, last_synced_at, last_error
      FROM integration_connections

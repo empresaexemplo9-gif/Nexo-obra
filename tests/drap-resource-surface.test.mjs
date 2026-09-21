@@ -12,7 +12,7 @@ test.after(() => vite.close());
 
 globalThis.__platformEnvOverride = {
   DRAP_API_URL: "https://empresa.drap.app.br",
-  DRAP_API_TOKEN: "drap_live_credencial_de_teste",
+  DRAP_TENANTS_JSON: JSON.stringify(Object.fromEntries(["tenant-nfse-alias", "tenant-nfse-sem-escopo", "tenant-nfse-ausente"].map(id => [id, { apiToken: `drap_live_test_${id}` }]))),
 };
 
 const fetchOriginal = globalThis.fetch;

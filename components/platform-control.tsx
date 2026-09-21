@@ -1,5 +1,6 @@
 "use client";
 
+import { DrapPricingControl } from "@/components/drap-pricing-control";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,13 +60,13 @@ function CompanyControls({ organizationId, name, maintenance = false }: { organi
     {maintenance && <p className="rounded-lg border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">Ambiente interno da plataforma. Não tem contratante, parceiro nem assinatura: aqui você controla o acesso do administrador de manutenção e lê o histórico administrativo.</p>}
     <div className={`grid gap-6 lg:grid-cols-2 ${maintenance ? "hidden" : ""}`}>
       <Card><CardHeader><CardTitle>Ativação e mensalidade</CardTitle></CardHeader><CardContent className="space-y-4">
-        <p>Mensalidade pelo preço oficial do Drap Empresa, sem acréscimo da H.OIKOS. A cobrança fica no Empresa, inclusive para quem usa somente o Architector.</p>
+        <p>O preço mínimo é o oficial da Drap. Somente o superadministrador define um acréscimo opcional, registrado para conciliação. A cobrança permanece diretamente na Drap.</p>
         {!data.configured && <p className="rounded-lg bg-hoikos-50 p-3 text-sm text-hoikos-900">A conexão de ativação com o Empresa ainda não está configurada. Nenhuma cobrança foi iniciada por esta ferramenta.</p>}
         {data.activation ? <>
           <dl className="grid grid-cols-2 gap-3 text-sm"><dt>Situação</dt><dd>{labels[data.activation.status] ?? data.activation.status}</dd><dt>Plano no Empresa</dt><dd className="break-all">{data.activation.plan_id}</dd><dt>Mensalidade base</dt><dd>{money(data.activation.base_cents)}</dd><dt>Total mensal confirmado</dt><dd className="font-semibold">{money(data.activation.monthly_cents)}</dd></dl>
           {data.activation.last_error && <p className="text-sm text-hoikos-900">{data.activation.last_error}</p>}
           <div className="flex flex-wrap gap-2"><Button disabled={busy || !data.configured} onClick={() => void save({ action: "send" }, "Solicitação enviada. A ativação depende da confirmação do Empresa.")}>Enviar ativação ao Empresa</Button><Button variant="outline" disabled={busy} onClick={() => void load().catch((e: Error) => setError(e.message))}>Atualizar situação</Button></div>
-        </> : <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); setConfirmation({ body: { action: "enroll", companyId, planId, confirmed: true }, text: `Vincular ${name} ao plano ${planId} do Empresa. O acesso ficará aguardando confirmação da assinatura. A mensalidade seguirá exatamente o valor oficial confirmado pelo Drap Empresa, sem acréscimo da H.OIKOS.` }); }}>
+        </> : <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); setConfirmation({ body: { action: "enroll", companyId, planId, confirmed: true }, text: `Vincular ${name} ao plano ${planId} do Empresa. Os serviços Drap aguardarão confirmação da assinatura. A mensalidade seguirá o preço oficial e a política de acréscimo vigente no envio. Os demais módulos H.OIKOS continuam acessíveis.` }); }}>
           <label className="block text-sm">Identificador da empresa no Drap Empresa<Input required value={companyId} onChange={(e) => setCompanyId(e.target.value)} maxLength={120} /></label>
           <label className="block text-sm">Identificador do plano mensal no Empresa<Input required value={planId} onChange={(e) => setPlanId(e.target.value)} maxLength={120} /></label>
           <Button disabled={busy || !data.configured}>Vincular assinatura</Button>
@@ -79,6 +80,7 @@ function CompanyControls({ organizationId, name, maintenance = false }: { organi
         {link && <div className="space-y-2"><label className="block text-sm">Link válido por sete dias<Input readOnly value={link} onFocus={(e) => e.target.select()} /></label><Button variant="outline" onClick={() => void navigator.clipboard.writeText(link).then(() => setMessage("Link copiado.")).catch(() => setError("Selecione e copie o link manualmente."))}>Copiar link</Button></div>}
       </CardContent></Card>
     </div>
+    {!maintenance && <DrapPricingControl organizationId={organizationId} />}
     <Card><CardHeader><CardTitle>Controle de acessos</CardTitle></CardHeader><CardContent className="space-y-5">
       <p className="text-sm text-hoikos-600">Bloquear ou excluir um acesso não cancela a assinatura. Gerencie o cancelamento da cobrança no Drap Empresa.</p>
       <form onSubmit={access} className="grid items-end gap-4 md:grid-cols-2 xl:grid-cols-3">

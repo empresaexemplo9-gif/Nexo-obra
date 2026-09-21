@@ -138,7 +138,9 @@ test("create is durable and idempotent, with server-authored identity and initia
 
 test("tenant isolation applies to reads, writes, report, project choices and forged organization selection", async () => {
   const a = await create(); const b = await create({ projectId: projectB, summary: "Informação privada da empresa B" }, "other");
-  const results = await (await list.GET(request("/api/diary", { headers: { cookie: `__Host-nexo-organization=${orgB}`, "x-organization-id": orgB } }))).json();
+  const forged = await list.GET(request("/api/diary", { headers: { cookie: `__Host-nexo-organization=${orgB}`, "x-organization-id": orgB } }));
+  assert.equal(forged.status, 403); assert.equal((await forged.json()).code, "organization_forbidden");
+  const results = await (await list.GET(request("/api/diary"))).json();
   assert.deepEqual(results.entries.map((entry) => entry.id), [a.id]);
   assert.equal((await record.GET(request(), parameters(b.id))).status, 404);
   assert.equal((await list.GET(request(`/api/diary?projectId=${projectB}`))).status, 404);

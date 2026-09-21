@@ -2,6 +2,7 @@ import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 import { z } from "zod";
 import { getDatabase } from "@/db";
 import { ApiError, validationError } from "@/lib/server/backend";
+import { drapPrice, lockPricing, lockedPricing } from "@/lib/server/drap-pricing";
 
 type Config = { DRAP_ACTIVATION_URL?: string; DRAP_ACTIVATION_TOKEN?: string; DRAP_ACTIVATION_WEBHOOK_SECRET?: string };
 const config = () => platformEnv() as unknown as Config;
@@ -15,7 +16,7 @@ function checkedMonthlyCents(base: number) {
   return base;
 }
 
-// Contrato atual da H.OIKOS: o usuário paga exatamente o preço oficial da DRAP.
+// Preço padrão sem acréscimo. A política opcional do superadministrador é congelada por solicitação.
 export function embeddedDrapMonthlyCents(base: number) {
   return checkedMonthlyCents(base);
 }
@@ -60,6 +61,7 @@ export async function sendActivation(row: Activation) {
   const claimed = await db.prepare(`UPDATE drap_activations SET last_requested_at = ?1 WHERE organization_id = ?2 AND last_requested_at <= ?3 RETURNING organization_id`)
     .bind(Date.now(), row.organization_id, Date.now() - 30_000).all();
   if (!claimed.results.length) throw new ApiError(429, "activation_wait", "Aguarde 30 segundos antes de reenviar.");
+  const pricing = await lockPricing(row.organization_id, row.plan_id, row.request_key);
 
   try {
     const response = await fetch(url, {
@@ -79,7 +81,7 @@ export async function sendActivation(row: Activation) {
         requestKey: row.request_key,
         currency: "BRL",
         interval: "month",
-        pricingMultiplierBps: 10000,
+        pricingMultiplierBps: pricing.multiplierBps,
         billingOwner: "drap_empresa",
       }),
     });
@@ -166,11 +168,13 @@ export async function receiveActivation(request: Request) {
   if (!parsed.success) throw validationError(parsed.error.flatten());
   const data = parsed.data;
 
+  const pricing = await lockedPricing(data.organizationId, data.requestKey);
+  if (pricing && (data.product !== "drap_embedded" || data.planId !== pricing.planId)) throw new ApiError(409, "pricing_mismatch", "O produto ou plano não corresponde à solicitação de contratação.");
   const expectedMonthly = data.product === "drap_embedded"
-    ? embeddedDrapMonthlyCents(data.baseMonthlyCents)
+    ? drapPrice(data.baseMonthlyCents, pricing?.multiplierBps ?? 10000).monthlyCents
     : architectorMonthlyCents(data.baseMonthlyCents);
   if (data.monthlyCents !== expectedMonthly) {
-    throw new ApiError(409, "pricing_mismatch", "O total deve corresponder ao preço oficial confirmado pela DRAP.");
+    throw new ApiError(409, "pricing_mismatch", "O total deve respeitar o valor oficial Drap e a política de preço autorizada pelo superadministrador.");
   }
 
   const db = getDatabase();
@@ -202,7 +206,7 @@ export async function receiveActivation(request: Request) {
         .bind(data.status, data.subscriptionId, data.baseMonthlyCents, data.monthlyCents, data.revision, Date.now(), data.organizationId, data.planId),
       db.prepare(`INSERT INTO platform_audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
         SELECT ?1, ?2, 'drap_empresa', 'drap.activation_confirmed', 'subscription', ?3, ?4, ?5 WHERE changes() > 0`)
-        .bind(crypto.randomUUID(), data.organizationId, data.subscriptionId, JSON.stringify({ revision: data.revision, status: data.status, monthlyCents: data.monthlyCents, product: data.product }), Date.now()),
+        .bind(crypto.randomUUID(), data.organizationId, data.subscriptionId, JSON.stringify({ revision: data.revision, status: data.status, baseMonthlyCents: data.baseMonthlyCents, monthlyCents: data.monthlyCents, commissionMonthlyCents: data.monthlyCents - data.baseMonthlyCents, settlementStatus: "pending_reconciliation", product: data.product }), Date.now()),
       db.prepare(`INSERT INTO integration_connections (id, organization_id, provider, external_company_id, status, last_synced_at)
         SELECT ?1, organization_id, 'drap', company_id, status, CURRENT_TIMESTAMP FROM drap_activations WHERE organization_id = ?2
         ON CONFLICT(organization_id, provider) DO UPDATE SET status = excluded.status, last_synced_at = excluded.last_synced_at, last_error = NULL

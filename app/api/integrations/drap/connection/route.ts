@@ -1,13 +1,14 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, isPlatformSuperAdmin, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 import { activationFor } from "@/lib/server/activation";
 import { isDrapConfigured, isDrapTransactionsConfigured, requestDrapApi } from "@/lib/integrations/drap";
 import { probeDrapResource } from "@/lib/server/drap-resources";
 
 export const dynamic = "force-dynamic";
 
-const connectionSchema = z.object({ externalCompanyId: z.string().trim().min(1).max(160) });
+const connectionSchema = z.object({ externalCompanyId: z.string().trim().min(1).max(160) }).strict();
 
 type ConnectionRow = {
   id: string; external_company_id: string; status: string;
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   return apiRoute(async () => {
+    rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request, ["owner", "admin"]);
     requireModulePermission(context, "finance", "edit");
     const parsed = connectionSchema.safeParse(await jsonBody(request));
@@ -73,6 +75,14 @@ export async function PUT(request: Request) {
       "SELECT id, external_company_id, status, last_synced_at, last_error, webhook_secret_encrypted FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1",
     ).bind(context.organization.id).first<ConnectionRow>();
     const id = existing?.id ?? crypto.randomUUID();
+    // Conhecer um ID Drap não prova posse da empresa nem autoriza usar uma chave do ambiente.
+    // O contratante deve provisionar ou apresentar o código de vínculo emitido pela Drap.
+    if (!isPlatformSuperAdmin(context) && existing?.external_company_id !== externalCompanyId) {
+      throw new ApiError(403, "drap_link_proof_required", "Crie a conta ou utilize o código de vinculação Drap. Um identificador não comprova autorização.");
+    }
+    if (existing && existing.external_company_id !== externalCompanyId) {
+      throw new ApiError(409, "drap_reconnect_required", "Desconecte a empresa anterior antes de estabelecer outro vínculo.");
+    }
     const sameActiveConnection = existing?.external_company_id === externalCompanyId && existing.status === "active";
     const verification = sameActiveConnection
       ? { status: "active" as const, lastError: null }
