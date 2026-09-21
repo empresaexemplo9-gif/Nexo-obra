@@ -7,7 +7,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { DEFAULT_SINAPI_UF, previousMonth, sourceUrl, UFS, type SinapiRegime } from "@/lib/integrations/sinapi-contract";
 import type { SinapiImport } from "@/lib/server/sinapi-import";
 const endpoint = "/api/superadmin/sinapi/import";
-export function SinapiImportControl() {
+export function SinapiImportControl({ onUpdated }: { onUpdated?: () => Promise<unknown> } = {}) {
   const [month, setMonth] = useState(previousMonth()); const [mode, setMode] = useState("url");
   const [url, setUrl] = useState(sourceUrl(previousMonth())); const [uf, setUf] = useState("all"); const [regime, setRegime] = useState("all");
   const [files, setFiles] = useState<File[]>([]); const [current, setCurrent] = useState<SinapiImport | null>(null);
@@ -41,21 +41,22 @@ export function SinapiImportControl() {
         setMessage(`Importando e ativando ${result.completed.length + 1}/${result.profiles.length}. Mantenha esta página aberta; se interromper, use Continuar.`);
         result = await post({action:"advance",id:result.id,confirmed:true}); setCurrent(result);
       }
-      setMessage("Importação concluída. As referências selecionadas estão disponíveis nos orçamentos."); try { window.localStorage.removeItem("sinapi-import-id"); } catch {}
+      setMessage("Importação concluída. Os preços e relatórios completos estão disponíveis na plataforma."); try { window.localStorage.removeItem("sinapi-import-id"); } catch {}
+      await onUpdated?.();
     } catch(e) { setError(e instanceof Error ? e.message : "Falha na importação; o progresso foi salvo."); } finally {setBusy(false);}
   }
   const done = current && current.completed.length === current.profiles.length;
   return <section className="space-y-4 rounded-xl border border-hoikos-200 bg-hoikos-50/40 p-4" aria-label="Atualizar base SINAPI">
-    <div><h3 className="font-semibold">Atualizar base SINAPI — URL, CSV ou pasta</h3><p className="mt-1 text-sm">Importe a competência atual para as 27 UFs e os dois regimes. A ativação substitui a referência anterior de cada UF/regime e preserva os valores dos orçamentos já salvos.</p></div>
+    <div><h3 className="font-semibold">Atualizar relatórios completos do SINAPI</h3><p className="mt-1 text-sm">Busque diretamente na CAIXA o pacote oficial da competência selecionada, com preços, composições analíticas, coeficientes e encargos. Confira a amostra e ative as 27 UFs nos dois regimes. Os valores dos orçamentos já salvos são preservados.</p></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="text-sm">Origem<NativeSelect value={mode} onChange={(e)=>{setMode(e.target.value);setFiles([]);}} disabled={busy}><option value="url">URL oficial da CAIXA</option><option value="file">Arquivo ZIP, XLSX ou CSV</option><option value="folder">Pasta com XLSX ou CSV</option></NativeSelect></label>
       <label className="text-sm">Mês da referência<Input type="month" value={month} min="2025-01" onChange={(e)=>{setMonth(e.target.value);if(/^\d{4}-\d{2}$/.test(e.target.value))setUrl(sourceUrl(e.target.value));}} disabled={busy}/></label>
       <label className="text-sm">Estados<NativeSelect value={uf} onChange={(e)=>setUf(e.target.value)} disabled={busy}><option value="all">Todas as 27 UFs</option>{UFS.map((s)=><option key={s}>{s}</option>)}</NativeSelect></label>
       <label className="text-sm">Encargos<NativeSelect value={regime} onChange={(e)=>setRegime(e.target.value)} disabled={busy}><option value="all">Ambos os regimes</option><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
     </div>
-    {mode === "url" ? <label className="block text-sm">URL do pacote nacional XLSX<Input value={url} onChange={(e)=>setUrl(e.target.value)} disabled={busy}/></label> : <label className="block text-sm">{mode === "folder" ? "Selecionar pasta" : "Selecionar arquivos"}<input key={mode} type="file" multiple accept=".zip,.xlsx,.csv" {...(mode === "folder" ? {webkitdirectory:"",directory:""} : {})} onChange={(e)=>setFiles(Array.from(e.target.files ?? []).filter((f)=>/\.(xlsx|csv|zip)$/i.test(f.name)))} disabled={busy} className="mt-2 block w-full"/></label>}
+    {mode === "url" ? <p className="break-all text-sm">Fonte oficial: <a className="underline" href={url} target="_blank" rel="noreferrer">Pacote nacional XLSX da CAIXA · {month}</a></p> : <label className="block text-sm">{mode === "folder" ? "Selecionar pasta" : "Selecionar arquivos"}<input key={mode} type="file" multiple accept=".zip,.xlsx,.csv" {...(mode === "folder" ? {webkitdirectory:"",directory:""} : {})} onChange={(e)=>setFiles(Array.from(e.target.files ?? []).filter((f)=>/\.(xlsx|csv|zip)$/i.test(f.name)))} disabled={busy} className="mt-2 block w-full"/></label>}
     <p className="text-xs">O envio vai diretamente ao armazenamento para aceitar pacotes grandes. CSV em UTF-8: competencia;uf;regime;tipo;codigo;descricao;unidade;preco. Regimes: NaoDesonerado ou Desonerado; tipos: insumo ou composicao. Deixe preço vazio quando não publicado. <a className="underline" href="/sinapi-modelo.csv" download>Baixar modelo de cabeçalho CSV</a></p>
-    <Button disabled={busy} onClick={()=>void prepare()}>Buscar e conferir dados reais</Button>
+    <Button disabled={busy} onClick={()=>void prepare()}>{mode === "url" ? "Atualizar relatórios completos pela CAIXA" : "Conferir arquivos enviados"}</Button>
     <div aria-live="polite" className="text-sm">{message}</div>{error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
     {current ? <div className="space-y-3 rounded-lg border bg-background p-4">
       <h4 className="font-medium">Referência {current.month} · {current.completed.length}/{current.profiles.length} combinações ativas</h4>

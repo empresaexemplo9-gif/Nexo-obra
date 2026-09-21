@@ -65,7 +65,7 @@ export function SinapiControl() {
   }
   const job = data?.jobs.find((j) => j.id === data.jobId);
   return <Card className="mt-6 min-w-0 [&_button]:h-auto [&_button]:min-h-9 [&_button]:whitespace-normal"><CardHeader><CardTitle>Referência SINAPI</CardTitle><p className="text-sm">O pacote XLSX oficial da CAIXA é nacional. A plataforma seleciona a UF, o regime e a competência sem depender de API de terceiro; Goiás é o padrão inicial e as 27 UFs ficam disponíveis.</p></CardHeader><CardContent className="min-w-0 space-y-4">
-    <SinapiImportControl />
+    <SinapiImportControl onUpdated={async () => { await load(); setError(""); }} />
     <SinapiReferenceBrowser />
     <div aria-live="polite">{busy ? <p>Processando a etapa. O progresso fica salvo no servidor.</p> : message ? <p>{message}</p> : null}{error || data?.error ? <p role="alert" className="break-words text-red-700">{error || data?.error}</p> : null}</div>
     {!data ? <Button variant="outline" disabled={busy} onClick={() => void load().catch((e: Error) => setError(e.message))}>Carregar referências</Button> : <>
