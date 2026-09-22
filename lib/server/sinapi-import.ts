@@ -12,8 +12,9 @@ export type SinapiImport = { id: string; month: string; source: string; sha256: 
 const manifestPath = (id: string) => `sinapi-imports/${id}/manifest.json`;
 export async function readSinapiImport(id: string): Promise<SinapiImport> { return JSON.parse((await sinapiIO.read(manifestPath(id))).toString()); }
 async function writeManifest(manifest: SinapiImport) { await sinapiIO.write(manifestPath(manifest.id), Buffer.from(JSON.stringify(manifest))); }
-export async function latestSinapiImport() {
-  const row = await getDatabase().prepare("SELECT laudo_json FROM sinapi_competencias WHERE estado='aprovada' ORDER BY aprovado_em DESC LIMIT 1").first<{laudo_json: string}>();
+export async function latestSinapiImport(profile?: { uf: string; regime: string }) {
+  const row = await getDatabase().prepare("SELECT laudo_json FROM sinapi_competencias WHERE estado='aprovada' AND (?1='' OR uf=?1) AND (?2='' OR regime=?2) ORDER BY competencia DESC,aprovado_em DESC LIMIT 1")
+    .bind(profile?.uf ?? "", profile?.regime ?? "").first<{laudo_json: string}>();
   const id = row ? JSON.parse(row.laudo_json)?.importId : null;
   return id ? readSinapiImport(id) : null;
 }

@@ -15,7 +15,7 @@ const settle = async () => { await act(async () => { await new Promise((resolve)
 afterEach(async () => { if (reactRoot) await act(async () => reactRoot.unmount()); container?.remove(); });
 after(async () => { await vite.close(); dom.cleanup(); });
 async function render(snapshot) {
-  const calls = stubFetch({ "/api/superadmin/sinapi": snapshot });
+  const calls = stubFetch({ "/api/superadmin/sinapi": snapshot, "/api/integrations/sinapi/reference": { month: "2026-08", files: [] } });
   container = document.createElement("div"); document.body.append(container); reactRoot = createRoot(container);
   await act(async () => reactRoot.render(React.createElement(SinapiControl))); await settle(); return calls;
 }
@@ -53,7 +53,7 @@ for (const scenario of [
     return { ...snapshot, error: failed || scenario.stale ? syncError : null };
   });
   await act(async () => findByText(container, "Processar próxima etapa").click()); await settle();
-  assert.deepEqual(calls.map(({ method }) => method), ["GET", "POST", "GET"]);
+  assert.deepEqual(calls.filter(({ path }) => path === "/api/superadmin/sinapi").map(({ method }) => method), ["GET", "POST", "GET"]);
   assert.equal(container.querySelector('[role="alert"]').textContent, scenario.expected);
   assert.equal(findByText(container, "Processar próxima etapa").disabled, false);
 });

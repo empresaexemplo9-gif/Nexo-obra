@@ -139,8 +139,8 @@ parcial. Uma referência igual ou mais recente de outra origem não é substitu�
 O pacote integral permanece privado e pode ser baixado pelos usuários com permissão de
 orçamentos. **Orçamentos → Consultar parâmetros e relatórios completos do SINAPI** permite
 pesquisar analítico de composições, famílias/coeficientes, percentual de mão de obra,
-manutenções, encargos sociais e preços sem encargos. A consulta exibe até 100 linhas por
-busca; o download contém o conteúdo integral, inclusive fórmulas e relatórios auxiliares.
+manutenções, encargos sociais e preços sem encargos. A consulta pagina os resultados em grupos de 100 linhas, sem limitar o total acessível;
+o download contém o conteúdo integral, inclusive fórmulas e relatórios auxiliares.
 Os preços operacionais são carregados na base SINAPI já usada pelos orçamentos.
 
 ### Verificação com publicação real
@@ -152,3 +152,21 @@ regimes produziu 651.524 preços utilizáveis. Códigos em `HYPERLINK` são extr
 literal; não se executa fórmula nem se usa o cache zero como código. Custos de composição
 zerados e preços em branco não são oferecidos como preços utilizáveis. Percentuais de mão
 de obra são relatórios próprios e nunca entram como custos monetários.
+
+## Relatórios diretamente em Orçamentos
+
+A aba **Orçamentos → Relatórios SINAPI** oferece filtro pelas 27 UFs (ou todas), regime,
+pesquisa nas células e paginação de todos os resultados. Inclui preços de insumos,
+custos de composições, analítico, famílias/coeficientes, percentuais de mão de obra,
+manutenções, encargos e preços/custos sem encargos.
+
+**Todas as abas originais** lista dinamicamente todos os arquivos XLSX e suas abas,
+inclusive Menu, Busca e Analítico com Custo. Nenhuma aba é excluída por não pertencer
+aos relatórios predefinidos. A grade original preserva linhas vazias, títulos, notas e
+números de linha. Campos comuns permanecem ao filtrar UF; grupos de custo e %AS ficam
+juntos. Relatórios sem colunas estaduais são identificados como nacionais.
+
+A consulta usa o pacote vinculado à referência ativa da UF/regime selecionados.
+Valores vazios não são convertidos em zero. A grade apresenta valores armazenados no
+XLSX, sem executar as fórmulas interativas do Excel; fórmulas, hyperlinks e formatação
+originais permanecem no pacote completo para download.

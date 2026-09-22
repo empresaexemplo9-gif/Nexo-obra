@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import test, { after } from 'node:test';
+import { createServer } from 'vite';
+import { montarZip, xlsx } from './helpers/sinapi-fixtures.mjs';
+const vite = await createServer({configFile:false,appType:'custom',resolve:{alias:{'@':process.cwd()}},server:{middlewareMode:true,hmr:false}});
+const {readSinapiTable,sinapiWorkbookCatalog}=await vite.ssrLoadModule('/lib/integrations/sinapi-reference.ts');
+after(()=>vite.close());
+const rows=[['Publicação original'],['','','','','GO','','SP'],['Grupo','Código','Descrição','Unidade','Custo (R$)','%AS','Custo (R$)','%AS'],...Array.from({length:205},(_,i)=>['Grupo',String(i+1),'Item','UN',i===0?'':'12.34','0.25','99.00','0.75'])];
+const bytes=montarZip({'SINAPI_Referência_2026_08.xlsx':xlsx({CSD:rows,CCD:rows,Analítico:[['Código','Descrição','Coeficiente'],['1','Nacional','0.02']],Extra:[['Nota adicional'],[],['Conteúdo fora dos relatórios conhecidos']]})});
+test('UF mantém custo e %AS juntos sem misturar preços de outra UF',()=>{const r=readSinapiTable(bytes,'compositions','NaoDesonerado','',{uf:'GO'});assert.deepEqual(r.headers,['Grupo','Código','Descrição','Unidade','GO · Custo (R$)','GO · %AS']);assert.equal(r.rows[0][4],'');assert.equal(r.rows[1][4],'12.34');assert.equal(r.rows[1][5],'0.25');assert.equal(r.total,205);assert.equal(r.pages,3);assert.equal(r.metadata[0][0],'Publicação original');});
+test('paginação alcança todas as linhas sem truncar a lista em 100',()=>{const all=[1,2,3].flatMap(page=>readSinapiTable(bytes,'compositions','NaoDesonerado','',{uf:'SP',page}).rows);assert.equal(all.length,205);assert.equal(new Set(all.map(r=>r[1])).size,205);assert.equal(all[204][4],'99.00');});
+test('catálogo inclui abas adicionais e leitura original preserva notas e vazios',()=>{const catalog=sinapiWorkbookCatalog(bytes);assert.ok(catalog[0].sheets.includes('Extra'));const r=readSinapiTable(bytes,'original','NaoDesonerado','',{uf:'GO',file:catalog[0].file,sheet:'Extra'});assert.deepEqual(r.rowNumbers,[1,2,3]);assert.equal(r.rows[2][0],'Conteúdo fora dos relatórios conhecidos');assert.equal(r.scope,'national');});
+test('relatório nacional não finge separar dados por UF; busca ignora acentos',()=>{const r=readSinapiTable(bytes,'analytic','NaoDesonerado','nácional',{uf:'GO'});assert.equal(r.total,1);assert.equal(r.scope,'national');assert.equal(r.rows[0][2],'0.02');});
+test('entrada inválida é recusada e arquivos fora do pacote não são lidos',()=>{for(const options of [{uf:'XX'},{page:-1},{page:1.5}])assert.throws(()=>readSinapiTable(bytes,'compositions','NaoDesonerado','',options));assert.throws(()=>readSinapiTable(bytes,'original','NaoDesonerado','',{file:'../outside.xlsx',sheet:'Extra'}));});
