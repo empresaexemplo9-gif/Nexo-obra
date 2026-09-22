@@ -140,12 +140,9 @@ test("o cômodo fecha o polígono nos segmentos, o traço não", () => {
   assert.equal(aberto.length, 2);
 });
 
-test("pontos notáveis não inventam coordenada fracionária", () => {
+test("o ponto médio preserva a fração de milímetro", () => {
   const notaveis = pontosNotaveis(doc([parede("p1", { x: 0, y: 0 }, { x: 1001, y: 999 })]));
-  for (const notavel of notaveis) {
-    assert.ok(Number.isInteger(notavel.ponto.x) && Number.isInteger(notavel.ponto.y),
-      `${notavel.tipo} saiu fracionado`);
-  }
+  assert.deepEqual(notaveis.find(p => p.tipo === "meio").ponto, { x: 500.5, y: 499.5 });
 });
 
 test("a trava ortogonal prende no eixo mais próximo", () => {
@@ -190,13 +187,13 @@ test("comprimento com ângulo usa a convenção do desenho técnico", () => {
 test("deslocamento relativo respeita o eixo do desenho", () => {
   const resultado = resolverEntrada({ x: 1000, y: 1000 }, "@3000,1500");
   assert.deepEqual(resultado.ponto, { x: 4000, y: -500 }, "y positivo no comando sobe na planta");
-  assert.equal(resultado.comprimentoMm, Math.round(Math.hypot(3000, 1500)));
+  assert.equal(resultado.comprimentoMm, Math.hypot(3000, 1500));
 });
 
-test("a entrada devolve inteiro e nunca zero negativo", () => {
+test("a entrada preserva precisão e nunca devolve zero negativo", () => {
   const resultado = resolverEntrada({ x: 0, y: 0 }, "1000<0");
   assert.ok(Object.is(resultado.ponto.y, 0), "zero negativo vira falso conflito na comparação de versões");
-  assert.ok(Number.isInteger(resolverEntrada({ x: 0, y: 0 }, "1234<37").ponto.x));
+  assert.ok(Math.abs(resolverEntrada({ x: 0, y: 0 }, "1234<37").ponto.x - 1234 * Math.cos(37 * Math.PI / 180)) < 1e-9);
 });
 
 test("entrada sem sentido não move nada", () => {
@@ -219,7 +216,7 @@ test("mover um vértice não mexe nos outros e mantém o elemento válido", () =
   assert.deepEqual(original.pontos[2], { x: 4000, y: 3000 }, "o original não é alterado no lugar");
   assert.deepEqual(moverVertice(original, 9, { x: 0, y: 0 }), original, "índice fora da lista não faz nada");
   assert.deepEqual(verticesDe(original).map((v) => v.indice), [0, 1, 2, 3]);
-  assert.deepEqual(verticesDe(parede("p", { x: 0, y: 0 }, { x: 1, y: 0 })), [], "parede não tem vértice de arrastar");
+  assert.deepEqual(verticesDe(parede("p", { x: 0, y: 0 }, { x: 1, y: 0 })).map(v => v.indice), [0, 1], "as pontas da parede são editáveis");
 });
 
 // ## Ida e volta em DXF
@@ -365,7 +362,7 @@ test("os pontos do arco ficam no raio e cobrem só a varredura", () => {
   }
   assert.deepEqual(pontos[0], { x: 3000, y: 2000 }, "0° é à direita");
   assert.deepEqual(pontos[pontos.length - 1], { x: 2000, y: 1000 }, "90° sobe na planta");
-  assert.ok(pontos.every((ponto) => Number.isInteger(ponto.x) && Number.isInteger(ponto.y)));
+  assert.ok(pontos.every(ponto => Math.abs(Math.hypot(ponto.x - 2000, ponto.y - 2000) - 1000) < 1e-9));
 });
 
 test("o círculo fecha em si mesmo", () => {

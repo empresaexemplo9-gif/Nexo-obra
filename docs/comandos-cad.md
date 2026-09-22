@@ -33,3 +33,12 @@ Exemplo polar: `PL 0,0 3000<90 @2000,0`. Os comandos M/CO/RO/SC/MI/O usam o elem
 | TR | `TR 2500,-1000 2500,1000 3800,0` | Aparar pelo limite |
 | EX | `EX 6000,-1000 6000,1000 3900,0` | Estender até limite |
 | Z | `Z` | Enquadrar desenho |
+
+## Edição na tela
+
+- **F**: linha; **W**: polilinha (Enter conclui); **Q**: retângulo; **B**: seleção por janela de contenção.
+- **Shift+clique**: adicionar/remover da seleção; **Ctrl/Cmd+A**: todos os visíveis destravados.
+- **Ctrl/Cmd+Z**: desfazer; **Ctrl/Cmd+Shift+Z** ou **Ctrl/Cmd+Y**: refazer; **Delete**: apagar seleção.
+- O painel Seleção permite deslocamento X/Y, pivô, ângulo e fator de escala para um ou vários elementos. Os comandos M, CO, RO, SC, MI, O, AR, AP e E usam a seleção inteira. TR/EX exigem um único elemento.
+- Paralela tem campo próprio de distância. Na malha, **Livre (sem malha)** mantém coordenadas fracionárias.
+- As coordenadas seguem X à direita e Y para cima; ponto decimal nos pares X,Y.

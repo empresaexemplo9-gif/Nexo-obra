@@ -35,7 +35,8 @@ export const encaixeLabels: Record<TipoEncaixe, string> = {
 export type Encaixe = { tipo: TipoEncaixe; ponto: Ponto; elementoId?: string };
 
 const distancia = (um: Ponto, outro: Ponto) => Math.hypot(outro.x - um.x, outro.y - um.y);
-const inteiro = (ponto: Ponto): Ponto => ({ x: Math.round(ponto.x) || 0, y: Math.round(ponto.y) || 0 });
+// Remove apenas resíduos numéricos próximos de zero, sem quantizar a geometria.
+const preciso = (ponto: Ponto): Ponto => ({ x: Math.abs(ponto.x) < 1e-10 ? 0 : ponto.x, y: Math.abs(ponto.y) < 1e-10 ? 0 : ponto.y });
 
 /** Segmentos de tudo que está desenhado e pode ser encaixado. Camada escondida ou travada
  *  fica de fora: encaixar no que não se vê é perseguir fantasma. */
@@ -79,7 +80,7 @@ export function pontosNotaveis(documento: Documento): Encaixe[] {
     saida.push({ tipo: "extremo", ponto: segmento.b, elementoId: segmento.elementoId });
     saida.push({
       tipo: "meio",
-      ponto: inteiro({ x: (segmento.a.x + segmento.b.x) / 2, y: (segmento.a.y + segmento.b.y) / 2 }),
+      ponto: preciso({ x: (segmento.a.x + segmento.b.x) / 2, y: (segmento.a.y + segmento.b.y) / 2 }),
       elementoId: segmento.elementoId,
     });
   }
@@ -106,7 +107,7 @@ export function interseccao(um: Segmento, outro: Segmento): Ponto | null {
   const t = (diferenca.x * s.y - diferenca.y * s.x) / denominador;
   const u = (diferenca.x * r.y - diferenca.y * r.x) / denominador;
   if (t < 0 || t > 1 || u < 0 || u > 1) return null;
-  return inteiro({ x: um.a.x + t * r.x, y: um.a.y + t * r.y });
+  return preciso({ x: um.a.x + t * r.x, y: um.a.y + t * r.y });
 }
 
 /** Pé da perpendicular baixada de um ponto sobre o segmento. É o que faz uma parede nova
@@ -117,7 +118,7 @@ export function pePerpendicular(origem: Ponto, segmento: Segmento): Ponto | null
   if (comprimentoQuadrado === 0) return null;
   const t = ((origem.x - segmento.a.x) * r.x + (origem.y - segmento.a.y) * r.y) / comprimentoQuadrado;
   if (t < 0 || t > 1) return null;
-  return inteiro({ x: segmento.a.x + t * r.x, y: segmento.a.y + t * r.y });
+  return preciso({ x: segmento.a.x + t * r.x, y: segmento.a.y + t * r.y });
 }
 
 export type OpcoesEncaixe = {
@@ -181,7 +182,9 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
   }
 
   if (ativos.includes("proximo")) {
+    const arcos = new Set(documento.elementos.filter(e => e.tipo === "arco").map(e => e.id));
     for (const segment of segmentosDo(documento)) {
+      if (arcos.has(segment.elementoId)) continue;
       const point = nearestOnSegment(alvo, segment.a, segment.b);
       if (perto(point)) candidatos.push({ tipo: "proximo", ponto: point, elementoId: segment.elementoId });
     }
@@ -257,14 +260,14 @@ export function resolverEntrada(origem: Ponto, texto: string, direcao?: Ponto | 
   if (!limpo) return null;
 
   const montar = (destino: Ponto): EntradaResolvida => {
-    const ponto = inteiro(destino);
+    const ponto = preciso(destino);
     const dx = ponto.x - origem.x;
     const dy = ponto.y - origem.y;
     return {
       ponto,
-      comprimentoMm: Math.round(Math.hypot(dx, dy)),
+      comprimentoMm: Math.hypot(dx, dy),
       // De volta ao ângulo do desenho técnico, com o eixo Y desinvertido.
-      anguloGraus: ((Math.round(Math.atan2(-dy, dx) * 180 / Math.PI) % 360) + 360) % 360,
+      anguloGraus: ((Math.atan2(-dy, dx) * 180 / Math.PI % 360) + 360) % 360,
     };
   };
 
@@ -282,7 +285,7 @@ export function resolverEntrada(origem: Ponto, texto: string, direcao?: Ponto | 
   const comAngulo = limpo.split("<");
   if (comAngulo.length === 2) {
     const comprimento = lerMedida(comAngulo[0]);
-    const graus = Number.parseFloat(comAngulo[1].replace(",", "."));
+    const graus = Number(comAngulo[1].replace(",", "."));
     if (comprimento === null || !Number.isFinite(graus)) return null;
     const radianos = graus * Math.PI / 180;
     return montar({
@@ -305,16 +308,24 @@ export function resolverEntrada(origem: Ponto, texto: string, direcao?: Ponto | 
 /** Move um vértice de um cômodo ou traço, sem tocar nos outros. Refazer o cômodo inteiro
  *  para corrigir um canto é o que faz ninguém corrigir o canto. */
 export function moverVertice(elemento: Elemento, indice: number, destino: Ponto): Elemento {
+  if (elemento.tipo === "parede" || elemento.tipo === "cota") {
+    return indice === 0 ? { ...elemento, a: preciso(destino) } : indice === 1 ? { ...elemento, b: preciso(destino) } : elemento;
+  }
   if (elemento.tipo !== "comodo" && elemento.tipo !== "traco") return elemento;
   if (indice < 0 || indice >= elemento.pontos.length) return elemento;
-  const pontos = elemento.pontos.map((ponto, i) => i === indice ? inteiro(destino) : ponto);
+  const ultimo = elemento.pontos.length - 1;
+  const fechado = elemento.tipo === "traco" && elemento.pontos[0].x === elemento.pontos[ultimo].x && elemento.pontos[0].y === elemento.pontos[ultimo].y;
+  const pontos = elemento.pontos.map((ponto, i) => i === indice || (fechado && (indice === 0 || indice === ultimo) && (i === 0 || i === ultimo)) ? preciso(destino) : ponto);
   return { ...elemento, pontos };
 }
 
-/** Vértices que a tela deve oferecer para arrastar, com o índice de cada um. */
+/** Alças editáveis; o fechamento repetido de uma polilinha usa uma única alça. */
 export function verticesDe(elemento: Elemento): { indice: number; ponto: Ponto }[] {
+  if (elemento.tipo === "parede" || elemento.tipo === "cota") return [{ indice: 0, ponto: elemento.a }, { indice: 1, ponto: elemento.b }];
   if (elemento.tipo !== "comodo" && elemento.tipo !== "traco") return [];
-  return elemento.pontos.map((ponto, indice) => ({ indice, ponto }));
+  const pontos = elemento.pontos;
+  const fechado = elemento.tipo === "traco" && pontos[0].x === pontos.at(-1)!.x && pontos[0].y === pontos.at(-1)!.y;
+  return (fechado ? pontos.slice(0, -1) : pontos).map((ponto, indice) => ({ indice, ponto }));
 }
 
 // ## Paralela
@@ -382,12 +393,12 @@ export function paralelaDePolilinha(pontos: Ponto[], distanciaMm: number, fechad
     return cruzamento;
   };
 
-  if (!fechada) saida.push(inteiro(deslocados[0].a));
+  if (!fechada) saida.push(preciso(deslocados[0].a));
   for (let i = 0; i < deslocados.length; i += 1) {
     const atual = deslocados[i];
     const seguinte = deslocados[(i + 1) % deslocados.length];
-    if (!fechada && i === deslocados.length - 1) { saida.push(inteiro(atual.b)); break; }
-    saida.push(inteiro(emenda(atual, seguinte, atual.b)));
+    if (!fechada && i === deslocados.length - 1) { saida.push(preciso(atual.b)); break; }
+    saida.push(preciso(emenda(atual, seguinte, atual.b)));
   }
   if (fechada && saida.length) {
     // No fechado o primeiro canto é o cruzamento do último com o primeiro, que acabou de
@@ -408,16 +419,16 @@ export function paralelaDePolilinha(pontos: Ponto[], distanciaMm: number, fechad
  * um resultado: cota e texto não têm paralela.
  */
 export function paralelaDe(elemento: Elemento, distanciaMm: number): Elemento | null {
-  if (!Number.isFinite(distanciaMm) || Math.round(distanciaMm) === 0) return null;
-  const distancia = Math.round(distanciaMm);
+  if (!Number.isFinite(distanciaMm) || distanciaMm === 0) return null;
+  const distancia = distanciaMm;
   switch (elemento.tipo) {
     case "parede": {
       const n = normal(elemento.a, elemento.b);
       if (!n) return null;
       return {
         ...elemento,
-        a: inteiro({ x: elemento.a.x + n.x * distancia, y: elemento.a.y + n.y * distancia }),
-        b: inteiro({ x: elemento.b.x + n.x * distancia, y: elemento.b.y + n.y * distancia }),
+        a: preciso({ x: elemento.a.x + n.x * distancia, y: elemento.a.y + n.y * distancia }),
+        b: preciso({ x: elemento.b.x + n.x * distancia, y: elemento.b.y + n.y * distancia }),
       };
     }
     case "comodo": {
@@ -425,8 +436,10 @@ export function paralelaDe(elemento: Elemento, distanciaMm: number): Elemento | 
       return pontos && pontos.length >= 3 ? { ...elemento, pontos } : null;
     }
     case "traco": {
-      const pontos = paralelaDePolilinha(elemento.pontos, distancia, false);
-      return pontos ? { ...elemento, pontos } : null;
+      const primeiro = elemento.pontos[0], ultimo = elemento.pontos.at(-1)!;
+      const fechada = primeiro.x === ultimo.x && primeiro.y === ultimo.y;
+      const pontos = paralelaDePolilinha(fechada ? elemento.pontos.slice(0, -1) : elemento.pontos, distancia, fechada);
+      return pontos ? { ...elemento, pontos: fechada ? [...pontos, pontos[0]] : pontos } : null;
     }
     case "arco": {
       // Paralela de arco é arco concêntrico. O sinal segue a mesma convenção: positivo
@@ -444,7 +457,7 @@ export function paralelaDe(elemento: Elemento, distanciaMm: number): Elemento | 
  *  transforma um traço de estudo em parede com espessura desenhada. */
 export function facesDaParede(elemento: Elemento): [Elemento, Elemento] | null {
   if (elemento.tipo !== "parede") return null;
-  const meia = Math.round(elemento.espessuraMm / 2);
+  const meia = elemento.espessuraMm / 2;
   const um = paralelaDe(elemento, meia);
   const outro = paralelaDe(elemento, -meia);
   return um && outro ? [um, outro] : null;
@@ -468,13 +481,13 @@ function refletir(ponto: Ponto, a: Ponto, b: Ponto): Ponto | null {
   const vx = ponto.x - a.x;
   const vy = ponto.y - a.y;
   const projecao = vx * ux + vy * uy;
-  return inteiro({
+  return preciso({
     x: a.x + 2 * projecao * ux - vx,
     y: a.y + 2 * projecao * uy - vy,
   });
 }
 
-const normalizarGraus = (graus: number) => ((Math.round(graus) % 360) + 360) % 360;
+const normalizarGraus = (graus: number) => ((graus % 360) + 360) % 360;
 
 /**
  * Espelha um elemento no eixo dado por dois pontos.
@@ -539,11 +552,11 @@ export function matrizRetangular(elemento: Elemento, matriz: Matriz, novoId: () 
   const linhas = Math.round(matriz.linhas);
   if (!Number.isFinite(colunas) || !Number.isFinite(linhas) || colunas < 1 || linhas < 1) return [];
   if (colunas * linhas > 400) return []; // Quatrocentas cópias já é o limite do que alguém revisa.
-  const passoX = Math.round(matriz.passoXMm);
-  const passoY = Math.round(matriz.passoYMm);
+  const passoX = matriz.passoXMm;
+  const passoY = matriz.passoYMm;
   if (!Number.isFinite(passoX) || !Number.isFinite(passoY)) return [];
-  if (colunas > 1 && passoX === 0 && linhas === 1) return []; // Cópias empilhadas no mesmo lugar.
-  if (linhas > 1 && passoY === 0 && colunas === 1) return [];
+  if (colunas > 1 && passoX === 0) return []; // Cópias empilhadas no mesmo lugar.
+  if (linhas > 1 && passoY === 0) return [];
 
   const copias: Elemento[] = [];
   for (let linha = 0; linha < linhas; linha += 1) {
@@ -571,7 +584,7 @@ function cruzamentoComCortante(a: Ponto, b: Ponto, cortante: Segmento): { ponto:
   // O corte precisa cair DENTRO do cortante: aparar contra o prolongamento de uma parede
   // que não chega ali cortaria num lugar onde não há nada desenhado.
   if (u < 0 || u > 1) return null;
-  return { ponto: inteiro({ x: a.x + t * r.x, y: a.y + t * r.y }), t };
+  return { ponto: preciso({ x: a.x + t * r.x, y: a.y + t * r.y }), t };
 }
 
 /** Qual segmento do elemento está mais perto do ponto, e o índice da ponta mais próxima. */

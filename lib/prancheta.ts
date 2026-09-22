@@ -156,11 +156,13 @@ export function pontosDoArco(arco: Extract<Elemento, { tipo: "arco" }>): { x: nu
   for (let i = 0; i <= quantos; i += 1) {
     const graus = arco.inicioGraus + arco.varreduraGraus * i / quantos;
     const radianos = graus * Math.PI / 180;
+    const cos = Math.cos(radianos), sin = Math.sin(radianos);
     pontos.push({
-      x: Math.round(arco.centro.x + arco.raioMm * Math.cos(radianos)) || 0,
-      y: Math.round(arco.centro.y - arco.raioMm * Math.sin(radianos)) || 0,
+      x: arco.centro.x + arco.raioMm * (Math.abs(cos) < 1e-14 ? 0 : cos),
+      y: arco.centro.y - arco.raioMm * (Math.abs(sin) < 1e-14 ? 0 : sin),
     });
   }
+  if (arco.varreduraGraus === 360) pontos[pontos.length - 1] = { ...pontos[0] };
   return pontos;
 }
 
@@ -266,20 +268,32 @@ export function moverElemento(elemento: Elemento, dx: number, dy: number, malhaM
 /** Retângulo que contém o elemento, em milímetros. Serve para acertar o clique e para
  *  enquadrar o desenho na exportação. */
 export function limitesDoElemento(elemento: Elemento): { x1: number; y1: number; x2: number; y2: number } {
-  const pontos = elemento.tipo === "parede" || elemento.tipo === "cota" ? [elemento.a, elemento.b]
+  if ("posicao" in elemento) {
+    const centro = elemento.posicao;
+    const largura = "larguraMm" in elemento ? elemento.larguraMm : elemento.tipo === "texto" ? elemento.texto.length * elemento.alturaMm * 0.65 : 800;
+    const altura = "alturaMm" in elemento ? elemento.alturaMm : elemento.tipo === "abertura" ? (elemento.especie === "porta" ? elemento.larguraMm * 2 : 200) : 800;
+    const x1 = elemento.tipo === "texto" ? 0 : -largura / 2, x2 = x1 + largura;
+    const y1 = elemento.tipo === "texto" ? -altura : -altura / 2, y2 = y1 + altura;
+    const r = elemento.rotacaoGraus * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r);
+    const cantos = [[x1,y1], [x2,y1], [x2,y2], [x1,y2]].map(([x,y]) => ({ x: centro.x + x*cos - y*sin, y: centro.y + x*sin + y*cos }));
+    return { x1: Math.min(...cantos.map(p => p.x)), x2: Math.max(...cantos.map(p => p.x)), y1: Math.min(...cantos.map(p => p.y)), y2: Math.max(...cantos.map(p => p.y)) };
+  }
+  if (elemento.tipo === "cota") {
+    const d = elemento.deslocamentoMm;
+    return { x1: Math.min(elemento.a.x, elemento.b.x) - 100, x2: Math.max(elemento.a.x, elemento.b.x) + 100,
+      y1: Math.min(elemento.a.y, elemento.b.y, elemento.a.y + d - 260, elemento.b.y + d - 260), y2: Math.max(elemento.a.y, elemento.b.y, elemento.a.y + d, elemento.b.y + d) + 100 };
+  }
+  const pontos = elemento.tipo === "parede" ? [elemento.a, elemento.b]
     : elemento.tipo === "comodo" || elemento.tipo === "traco" ? elemento.pontos
     // O arco pela tessellation: a caixa do centro mais o raio abraçaria o círculo inteiro
     // e um arco de 20° ficaria com uma área de clique vinte vezes maior do que o traço.
     : elemento.tipo === "arco" ? pontosDoArco(elemento)
-    : [elemento.posicao];
+    : [];
   const xs = pontos.map((ponto) => ponto.x);
   const ys = pontos.map((ponto) => ponto.y);
-  const folga = elemento.tipo === "mobilia" || elemento.tipo === "imagem"
-    ? { x: elemento.larguraMm / 2, y: elemento.alturaMm / 2 }
-    : elemento.tipo === "abertura" ? { x: elemento.larguraMm / 2, y: 100 }
-    : elemento.tipo === "parede" || elemento.tipo === "traco" || elemento.tipo === "arco"
-      ? { x: elemento.espessuraMm / 2, y: elemento.espessuraMm / 2 }
-    : { x: 250, y: 250 };
+  const folga = "espessuraMm" in elemento
+    ? { x: elemento.espessuraMm / 2, y: elemento.espessuraMm / 2 }
+    : { x: 0, y: 0 };
   return {
     x1: Math.min(...xs) - folga.x, y1: Math.min(...ys) - folga.y,
     x2: Math.max(...xs) + folga.x, y2: Math.max(...ys) + folga.y,

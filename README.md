@@ -25,6 +25,8 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 
 - Revisão operacional de 20/09/2026: edição de clientes, oportunidades, projetos/obras e tarefas; reabertura e filtros de tarefas; linha do tempo; carga estimada por responsável; cópia de orçamento e proposta imprimível. Carregamento isolado por módulo, validação de datas/dependências e correção de upload. [Inventário, validação e pendências por módulo](docs/REVISAO-PLATAFORMA-2026-09-20.md).
 
+- CAD revisado em 22/09/2026: seleção múltipla e por janela, mover/copiar/girar/escalar/apagar em grupo, linha/polilinha/retângulo por cliques, camadas criáveis e precisão fracionária nos gestos. Gravar mantém o histórico e preserva alterações feitas durante o envio. [Ferramentas e limites](docs/cad-implementation.md).
+
 - CAD integrado à Prancheta: linha de comandos, medidas fracionárias e importação NEXO, DXF e DWG (conversão local em WebAssembly, sem configuração externa obrigatória). [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.
 
 - Política Drap por empresa e módulo: preço oficial como mínimo, acréscimo opcional exclusivo do superadministrador, revisão concorrente e preço congelado por solicitação. Confirmação HMAC registra base, total e comissão mensal para conciliação; não comprova pagamento. Contratação real aguarda conclusão/homologação pela Drap, por orientação do responsável. Consulte [Ativação e controle](docs/DRAP-ACTIVATION.md).

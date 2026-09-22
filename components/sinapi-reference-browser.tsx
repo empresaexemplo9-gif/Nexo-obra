@@ -15,13 +15,13 @@ export function SinapiReferenceBrowser() {
   const [catalogRevision, setCatalogRevision] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    setCatalog(null); setCatalogError(""); setFile(""); setSheet("");
     void fetch(`/api/integrations/sinapi/reference?${new URLSearchParams({ catalog: "1", uf, regime })}`, { signal: controller.signal }).then(async response => {
       const value = await response.json(); if (!response.ok) throw new Error(value.error);
       if (!controller.signal.aborted) { setCatalog(value); setFile(value.files[0]?.file ?? ""); setSheet(value.files[0]?.sheets[0] ?? ""); }
     }).catch(e => { if (!controller.signal.aborted) setCatalogError(e instanceof Error ? e.message : "Não foi possível listar as planilhas."); });
     return () => controller.abort();
   }, [uf, regime, catalogRevision]);
+  function clearCatalog() { setCatalog(null); setCatalogError(""); setFile(""); setSheet(""); }
   function clear() { setResult(null); setError(""); }
   async function search(page = 1) {
     setBusy(true); setError("");
@@ -34,8 +34,8 @@ export function SinapiReferenceBrowser() {
   return <section aria-label="Planilhas e relatórios SINAPI" className="min-w-0 space-y-4 rounded-xl border bg-background p-4">
     <div><h2 className="text-lg font-semibold">Planilhas e relatórios SINAPI</h2><p className="mt-1 text-sm">Consulte os dados oficiais dentro do orçamento: preços, composições, coeficientes, percentuais, encargos e todas as abas do pacote.</p></div>
     <form className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-4" onSubmit={e => { e.preventDefault(); void search(); }}>
-      <label className="text-sm">UF do relatório<NativeSelect value={uf} disabled={busy} onChange={e => { setUf(e.target.value); clear(); }}><option value="all">Todas as UFs</option>{UFS.map(state => <option key={state}>{state}</option>)}</NativeSelect></label>
-      <label className="text-sm">Regime do relatório<NativeSelect value={regime} disabled={busy} onChange={e => { setRegime(e.target.value); clear(); }}><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
+      <label className="text-sm">UF do relatório<NativeSelect value={uf} disabled={busy} onChange={e => { setUf(e.target.value); clearCatalog(); clear(); }}><option value="all">Todas as UFs</option>{UFS.map(state => <option key={state}>{state}</option>)}</NativeSelect></label>
+      <label className="text-sm">Regime do relatório<NativeSelect value={regime} disabled={busy} onChange={e => { setRegime(e.target.value); clearCatalog(); clear(); }}><option value="NaoDesonerado">Não desonerado</option><option value="Desonerado">Desonerado</option></NativeSelect></label>
       <label className="text-sm">Relatório<NativeSelect value={table} disabled={busy} onChange={e => { setTable(e.target.value); clear(); }}>{Object.entries(names).map(([v, n]) => <option key={v} value={v}>{n}</option>)}</NativeSelect></label>
       <label className="text-sm">Buscar nas células<Input value={query} disabled={busy} maxLength={160} placeholder="Código, descrição ou termo" onChange={e => { setQuery(e.target.value); clear(); }} /></label>
       {table === "original" ? <>
@@ -44,7 +44,7 @@ export function SinapiReferenceBrowser() {
       </> : null}
       <Button disabled={busy || (table === "original" && !sheet)}>{busy ? "Consultando…" : "Consultar relatório"}</Button>
     </form>
-    {catalog ? <div className="flex flex-wrap items-center gap-3 text-sm"><span>Competência {catalog.month} · {catalog.files.length} arquivos · {catalog.files.reduce((n, f) => n + f.sheets.length, 0)} abas disponíveis</span><a className="underline" href={download}>Baixar pacote original completo</a></div> : catalogError ? <div role="status" className="text-sm"><p>{catalogError}</p><Button variant="outline" onClick={() => setCatalogRevision(n => n + 1)}>Recarregar planilhas</Button></div> : <p role="status" className="text-sm">Carregando lista de planilhas…</p>}
+    {catalog ? <div className="flex flex-wrap items-center gap-3 text-sm"><span>Competência {catalog.month} · {catalog.files.length} arquivos · {catalog.files.reduce((n, f) => n + f.sheets.length, 0)} abas disponíveis</span><a className="underline" href={download}>Baixar pacote original completo</a></div> : catalogError ? <div role="status" className="text-sm"><p>{catalogError}</p><Button variant="outline" onClick={() => { clearCatalog(); setCatalogRevision(n => n + 1); }}>Recarregar planilhas</Button></div> : <p role="status" className="text-sm">Carregando lista de planilhas…</p>}
     <p className="text-xs text-muted-foreground">O filtro mantém as colunas da UF e os campos comuns. Relatórios nacionais não variam por estado. Células vazias continuam vazias; percentuais em fração (0,20 = 20%) e valores são apresentados como publicados, sem BDI.</p>
     {error ? <p role="alert" className="text-sm text-red-700">{error}</p> : null}
     {result ? <div className="space-y-3" aria-live="polite">

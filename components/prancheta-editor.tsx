@@ -12,7 +12,8 @@ import { toast } from "sonner";
 import { exportarDxf } from "@/lib/integrations/dxf";
 import { nearestOnSegment } from "@/packages/cad-core";
 import { zoomNaVista, enquadrarElementos } from "@/lib/prancheta-viewport";
-import { CAD_COMMANDS, executeCadCommand } from "@/lib/cad-commands";
+import { executarNaSelecao, selecionarNaJanela } from "@/lib/cad-selection";
+import { CAD_COMMANDS } from "@/lib/cad-commands";
 import { exportNative, mergeCadImport, type ImportReport } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
 import { Button } from "@/components/ui/button";
@@ -26,7 +27,7 @@ import {
   resolverEntrada, segmentosDo, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
-  Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada,
+  Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada, documentoSchema,
   comprimentoM, disciplinaLabels, elementosVisiveis, encaixar, exportarSvg, glifoDoSimbolo,
   pontosDoArco,
   limitesDoElemento, moverElemento, quantitativo, simboloLabels,
@@ -35,7 +36,8 @@ import {
 type Ferramenta =
   | "selecionar" | "parede" | "comodo" | "porta" | "janela" | "passagem"
   | "simbolo" | "mobilia" | "imagem" | "texto" | "cota" | "traco"
-  | "circulo" | "arco" | "espelhar" | "aparar" | "estender";
+  | "circulo" | "arco" | "espelhar" | "aparar" | "estender"
+  | "linha" | "polilinha" | "retangulo" | "janelaSelecao";
 
 type ItemBiblioteca = {
   id: string; nome: string; categoria: string; larguraMm: number | null;
@@ -50,6 +52,10 @@ export type Prancha = {
 
 const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2; atalho: string }[] = [
   { id: "selecionar", rotulo: "Selecionar e mover", icone: MousePointer2, atalho: "V" },
+  { id: "janelaSelecao", rotulo: "Selecionar por janela", icone: Square, atalho: "B" },
+  { id: "linha", rotulo: "Linha", icone: Minus, atalho: "F" },
+  { id: "polilinha", rotulo: "Polilinha", icone: Spline, atalho: "W" },
+  { id: "retangulo", rotulo: "Retângulo", icone: Square, atalho: "Q" },
   { id: "parede", rotulo: "Parede", icone: Minus, atalho: "P" },
   { id: "comodo", rotulo: "Cômodo", icone: Square, atalho: "C" },
   { id: "porta", rotulo: "Porta", icone: DoorOpen, atalho: "D" },
@@ -69,7 +75,11 @@ const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2
 ];
 
 const instrucoes: Record<Ferramenta, string> = {
-  selecionar: "Clique em um elemento para selecionar. Segure o botão esquerdo, arraste e solte para mover. Arraste o espaço vazio para deslocar a vista.",
+  selecionar: "Clique para selecionar; Shift+clique adiciona ou remove da seleção. Segure o botão esquerdo e arraste a seleção para mover. Arraste o espaço vazio para deslocar a vista.",
+  janelaSelecao: "Arraste uma janela envolvendo os elementos inteiros. Shift mantém a seleção anterior. Botão do meio ou direito desloca a vista.",
+  linha: "Clique no início e no fim da linha, ou digite uma medida após o primeiro ponto. Esc encerra.",
+  polilinha: "Clique nos vértices. Enter conclui aberta; Fechar polilinha une o último ponto ao primeiro. Esc cancela.",
+  retangulo: "Clique em dois cantos opostos, ou digite @largura,altura após o primeiro ponto.",
   parede: "Clique no início e no fim da parede. Continue clicando para encadear paredes; Esc encerra.",
   comodo: "Clique em cada canto do cômodo e use Fechar cômodo para concluir.",
   porta: "Clique no ponto onde a porta deve ser colocada e ajuste suas medidas no painel Seleção.",
@@ -91,6 +101,7 @@ const instrucoes: Record<Ferramenta, string> = {
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
 // cada traço seria burocracia: quem coloca uma tomada está no elétrico por definição.
 const camadaDaFerramenta: Record<Ferramenta, string> = {
+  linha: "layout", polilinha: "layout", retangulo: "layout", janelaSelecao: "layout",
   selecionar: "layout", parede: "layout", comodo: "layout", porta: "layout",
   janela: "layout", passagem: "layout", simbolo: "eletrico", mobilia: "mobiliario",
   imagem: "mobiliario", texto: "anotacao", cota: "anotacao", traco: "anotacao",
@@ -107,7 +118,7 @@ const UNIDADES_ROTULO: Record<string, string> = {
   mm: "Milímetro", cm: "Centímetro", m: "Metro", polegada: "Polegada", pe: "Pé",
 };
 
-const MALHAS = [10, 25, 50, 100, 250, 500];
+const MALHAS = [1, 10, 25, 50, 100, 250, 500];
 const ESCALAS = [20, 25, 50, 75, 100, 200];
 const LIMITE_HISTORICO = 60;
 
@@ -143,7 +154,7 @@ function alteracaoDe(antes: Elemento, depois: Elemento) {
 /** Ângulo do desenho técnico entre dois pontos: 0° à direita, crescendo no anti-horário.
  *  O Y da tela aponta para baixo, por isso ele entra negado. */
 function anguloDe(centro: { x: number; y: number }, ponto: { x: number; y: number }) {
-  const graus = Math.round(Math.atan2(-(ponto.y - centro.y), ponto.x - centro.x) * 180 / Math.PI);
+  const graus = Math.atan2(-(ponto.y - centro.y), ponto.x - centro.x) * 180 / Math.PI;
   return ((graus % 360) + 360) % 360;
 }
 
@@ -162,10 +173,26 @@ function elementoNoPonto(documento: Documento, x: number, y: number, tolerance: 
     const caixa = limitesDoElemento(elemento);
     if (x < caixa.x1 - tolerance || x > caixa.x2 + tolerance || y < caixa.y1 - tolerance || y > caixa.y2 + tolerance) continue;
     if (elemento.tipo === "parede" || elemento.tipo === "cota" || elemento.tipo === "traco" || elemento.tipo === "arco") {
-      const points = elemento.tipo === "parede" || elemento.tipo === "cota" ? [elemento.a, elemento.b] : elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
+      const points = elemento.tipo === "cota" ? [elemento.a, { x: elemento.a.x, y: elemento.a.y + elemento.deslocamentoMm }, { x: elemento.b.x, y: elemento.b.y + elemento.deslocamentoMm }, elemento.b] : elemento.tipo === "parede" ? [elemento.a, elemento.b] : elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
       const margin = tolerance + ("espessuraMm" in elemento ? elemento.espessuraMm / 2 : 0);
       if (points.slice(1).some((b, index) => { const near = nearestOnSegment({ x, y }, points[index], b); return Math.hypot(near.x - x, near.y - y) <= margin; })) return elemento;
       continue;
+    }
+    if (elemento.tipo === "comodo") {
+      let dentro = false;
+      for (let a = 0, b = elemento.pontos.length - 1; a < elemento.pontos.length; b = a++) {
+        const p = elemento.pontos[a], q = elemento.pontos[b];
+        const perto = nearestOnSegment({ x, y }, p, q);
+        if (Math.hypot(perto.x - x, perto.y - y) <= tolerance) return elemento;
+        if ((p.y > y) !== (q.y > y) && x < (q.x - p.x) * (y - p.y) / (q.y - p.y) + p.x) dentro = !dentro;
+      }
+      if (!dentro) continue;
+    }
+    if (elemento.tipo === "mobilia" || elemento.tipo === "imagem") {
+      const r = elemento.rotacaoGraus * Math.PI / 180;
+      const dx = x - elemento.posicao.x, dy = y - elemento.posicao.y;
+      if (Math.abs(dx * Math.cos(r) + dy * Math.sin(r)) > elemento.larguraMm / 2 + tolerance
+        || Math.abs(-dx * Math.sin(r) + dy * Math.cos(r)) > elemento.alturaMm / 2 + tolerance) continue;
     }
     return elemento;
   }
@@ -272,7 +299,18 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const [familia, definirFamilia] = useState<string>("tomada-media");
   const [itemImagem, definirItemImagem] = useState<ItemBiblioteca | null>(null);
   const [biblioteca, definirBiblioteca] = useState<ItemBiblioteca[]>([]);
-  const [selecao, definirSelecao] = useState<string | null>(null);
+  const [selecoes, definirSelecoes] = useState<string[]>([]);
+  const selecao = selecoes.length === 1 ? selecoes[0] : null;
+  const definirSelecao = useCallback((id: string | null) => definirSelecoes(id ? [id] : []), []);
+  const [janelaSelecao, definirJanelaSelecao] = useState<{ a: { x: number; y: number }; b: { x: number; y: number }; manter: boolean } | null>(null);
+  const janelaRef = useRef<typeof janelaSelecao>(null);
+  const [distanciaParalela, definirDistanciaParalela] = useState("100");
+  const [transformacao, definirTransformacao] = useState({ dx: "1000", dy: "0", angulo: "90", fator: "2", x: "0", y: "0" });
+  const [novaCamada, definirNovaCamada] = useState("");
+  const [camadaEscolhida, definirCamadaEscolhida] = useState("");
+  const estadoAtual = useRef({ documento, nome });
+  useEffect(() => { estadoAtual.current = { documento, nome }; }, [documento, nome]);
+  const salvamentoEmCurso = useRef(false);
   const [pendentes, definirPendentes] = useState<{ x: number; y: number }[]>([]);
   const [cursor, definirCursor] = useState<{ x: number; y: number } | null>(null);
   const [vista, definirVista] = useState({ x: -2000, y: -2000, largura: 24000 });
@@ -297,9 +335,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   // não teria o que reler.
   const dxfEscolhido = useRef<File | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const arrastando = useRef<{ id: string; de: { x: number; y: number } } | null>(null);
+  const arrastando = useRef<{ ids: string[]; de: { x: number; y: number }; documento: Documento; mudou: boolean } | null>(null);
   const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
-  const verticeArrastado = useRef<{ id: string; indice: number } | null>(null);
+  const verticeArrastado = useRef<{ id: string; indice: number; documento: Documento; mudou: boolean } | null>(null);
 
   function esconderAjuda() {
     if (temporizadorAjuda.current) clearTimeout(temporizadorAjuda.current);
@@ -316,8 +354,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (temporizadorAjuda.current) clearTimeout(temporizadorAjuda.current);
   }, []);
 
-  const camadaAtiva = camadaDaFerramenta[ferramenta];
-  const bloqueada = camadaBloqueada(documento, camadaAtiva);
+  const camadaAtiva = camadaEscolhida || (ferramenta === "simbolo" ? (FAMILIAS_SIMBOLO.eletrico.includes(familia as never) ? "eletrico" : "luminotecnico") : camadaDaFerramenta[ferramenta]);
+  const bloqueada = camadaBloqueada(documento, camadaAtiva) || !documento.camadas.find(c => c.id === camadaAtiva)?.visivel;
   const podeDesenhar = canEdit && !bloqueada;
   const selecionado = useMemo(() => documento.elementos.find((elemento) => elemento.id === selecao) ?? null, [documento, selecao]);
   const resumo = useMemo(() => quantitativo(documento), [documento]);
@@ -325,23 +363,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const visiveis = useMemo(() => elementosVisiveis(documento), [documento]);
 
   const aplicar = useCallback((proximo: Documento) => {
-    if (!canEdit) return;
+    if (!canEdit) return false;
+    const validacao = documentoSchema.safeParse(proximo);
+    if (!validacao.success) { toast.error("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
     definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
     definirRefeitos([]);
     definirDocumento(proximo);
     definirSujo(true);
+    return true;
   }, [documento, canEdit]);
 
-  /** Um ponto de desfazer antes de um arrasto. O arrasto em si altera sem empilhar a
-   *  cada quadro, senão desfazer voltaria um pixel por vez; sem esta marca no começo,
-   *  porém, mover não teria volta nenhuma. */
-  const marcarHistorico = useCallback(() => {
-    definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
-    definirRefeitos([]);
-  }, [documento]);
-
   const acrescentar = useCallback((elemento: Elemento) => {
-    aplicar({ ...documento, elementos: [...documento.elementos, elemento] });
+    if (camadaBloqueada(documento, elemento.camada) || !documento.camadas.find(c => c.id === elemento.camada)?.visivel) {
+      toast.error("A camada de destino está oculta ou travada."); return false;
+    }
+    return aplicar({ ...documento, elementos: [...documento.elementos, elemento] });
   }, [aplicar, documento]);
 
   const trocar = useCallback((id: string, mudanca: Partial<Elemento>) => {
@@ -358,30 +394,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (!canEdit || !target || camadaBloqueada(documento, target.camada)) return;
     aplicar({ ...documento, elementos: documento.elementos.filter((elemento) => elemento.id !== id) });
     definirSelecao(null);
-  }, [aplicar, documento, canEdit]);
+  }, [aplicar, documento, canEdit, definirSelecao]);
 
   const desfazer = useCallback(() => {
-    definirHistorico((anterior) => {
-      if (!anterior.length) return anterior;
-      const ultimo = anterior[anterior.length - 1];
-      definirRefeitos((refazer) => [...refazer, documento].slice(-LIMITE_HISTORICO));
-      definirDocumento(ultimo);
-      definirSujo(true);
-      definirSelecao(null);
-      return anterior.slice(0, -1);
-    });
-  }, [documento]);
+    if (!canEdit || !historico.length) return;
+    definirRefeitos([...refeitos, documento].slice(-LIMITE_HISTORICO));
+    definirDocumento(historico[historico.length - 1]);
+    definirHistorico(historico.slice(0, -1));
+    definirSujo(true); definirSelecao(null); definirPendentes([]);
+  }, [canEdit, historico, refeitos, documento, definirSelecao]);
 
   const refazer = useCallback(() => {
-    definirRefeitos((anterior) => {
-      if (!anterior.length) return anterior;
-      const proximo = anterior[anterior.length - 1];
-      definirHistorico((historia) => [...historia, documento].slice(-LIMITE_HISTORICO));
-      definirDocumento(proximo);
-      definirSujo(true);
-      return anterior.slice(0, -1);
-    });
-  }, [documento]);
+    if (!canEdit || !refeitos.length) return;
+    definirHistorico([...historico, documento].slice(-LIMITE_HISTORICO));
+    definirDocumento(refeitos[refeitos.length - 1]);
+    definirRefeitos(refeitos.slice(0, -1));
+    definirSujo(true); definirSelecao(null); definirPendentes([]);
+  }, [canEdit, historico, refeitos, documento, definirSelecao]);
 
   useEffect(() => {
     let vivo = true;
@@ -437,14 +466,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   const encaixarEm = useCallback((bruto: { x: number; y: number }, origem?: { x: number; y: number } | null) => {
     const alvo = orto && origem ? ortogonal(origem, bruto) : bruto;
-    const encaixe = encaixePerto(documento, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe });
+    const ignorar = new Set(arrastando.current?.ids ?? (verticeArrastado.current ? [verticeArrastado.current.id] : []));
+    const referencia = ignorar.size ? { ...documento, elementos: documento.elementos.filter(e => !ignorar.has(e.id)) } : documento;
+    const encaixe = encaixePerto(referencia, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe });
     // Com a trava ortogonal ligada, só vale o encaixe que não sai do eixo — senão a
     // trava seria desfeita pelo próprio encaixe, calada.
     if (orto && origem && encaixe.tipo !== "malha"
       && encaixe.ponto.x !== origem.x && encaixe.ponto.y !== origem.y) {
-      return { tipo: "malha" as const, ponto: { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) } };
+      return { tipo: "malha" as const, ponto: ortogonal(origem, { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) }) };
     }
-    return encaixe;
+    return orto && origem && encaixe.tipo === "malha" ? { ...encaixe, ponto: ortogonal(origem, encaixe.ponto) } : encaixe;
   }, [ativosEncaixe, documento, orto, toleranciaMm]);
 
   const fundosPossiveis = useMemo(
@@ -487,7 +518,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       return;
     }
     if (ferramenta === "simbolo") {
-      acrescentar({ ...base, camada: FAMILIAS_SIMBOLO.eletrico.includes(familia as never) ? "eletrico" : "luminotecnico",
+      acrescentar({ ...base,
         tipo: "simbolo", familia, posicao: ponto, rotacaoGraus: 0 });
       return;
     }
@@ -509,7 +540,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function aoApontar(evento: React.PointerEvent<SVGSVGElement>) {
     esconderAjuda();
-    if (evento.button === 1 || evento.button === 2 || evento.shiftKey) {
+    if (evento.button === 1 || evento.button === 2) {
       panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y } };
       evento.currentTarget.setPointerCapture?.(evento.pointerId);
       return;
@@ -517,12 +548,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (evento.button !== 0) return;
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
-    const origem = pendentes.length ? pendentes[pendentes.length - 1] : null;
+    const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0] : pendentes.at(-1) ?? null;
     const encaixe = encaixarEm(bruto, origem);
     const ponto = encaixe.ponto;
     definirEncaixeAtual(encaixe);
 
+    if (ferramenta === "janelaSelecao") {
+      janelaRef.current = { a: bruto, b: bruto, manter: evento.shiftKey };
+      definirJanelaSelecao(janelaRef.current);
+      evento.currentTarget.setPointerCapture?.(evento.pointerId);
+      return;
+    }
     if (ferramenta === "selecionar") {
+      if (evento.shiftKey) {
+        const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
+        if (alvo) definirSelecoes(atual => atual.includes(alvo.id) ? atual.filter(id => id !== alvo.id) : [...atual, alvo.id]);
+        return;
+      }
       // Vértice antes de elemento: quem clica em cima de uma alça quer a alça. Testar o
       // elemento primeiro tornaria a alça inalcançável, já que ela fica dentro dele.
       if (selecionado && canEdit && !camadaBloqueada(documento, selecionado.camada)) {
@@ -530,17 +572,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         const alca = verticesDe(selecionado).find((vertice) =>
           Math.hypot(vertice.ponto.x - bruto.x, vertice.ponto.y - bruto.y) <= raio);
         if (alca) {
-          marcarHistorico();
-          verticeArrastado.current = { id: selecionado.id, indice: alca.indice };
+          verticeArrastado.current = { id: selecionado.id, indice: alca.indice, documento, mudou: false };
           evento.currentTarget.setPointerCapture?.(evento.pointerId);
           return;
         }
       }
       const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
-      definirSelecao(alvo?.id ?? null);
+      const ids = alvo ? (selecoes.includes(alvo.id) ? selecoes : [alvo.id]) : [];
+      definirSelecoes(ids);
       if (alvo && canEdit) {
-        marcarHistorico();
-        arrastando.current = { id: alvo.id, de: ponto };
+        arrastando.current = { ids, de: bruto, documento, mudou: false };
         evento.currentTarget.setPointerCapture?.(evento.pointerId);
       } else if (!alvo) {
         // Na seleção, arrastar o espaço vazio com o botão esquerdo desloca a vista.
@@ -554,21 +595,19 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       // abaixo olha a camada da ferramenta, e recusaria espelhar uma tomada só porque a
       // camada de layout está travada.
       if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
-      if (!selecionado) { toast.error("Selecione o elemento antes de usar esta ferramenta."); return; }
-      if (camadaBloqueada(documento, selecionado.camada)) {
+      if (!selecoes.length || (ferramenta !== "espelhar" && !selecionado)) { toast.error("Selecione um elemento para aparar/estender, ou um grupo para espelhar."); return; }
+      if (documento.elementos.some(e => selecoes.includes(e.id) && camadaBloqueada(documento, e.camada))) {
         toast.error("A camada do elemento selecionado está travada. Destrave-a no painel de camadas.");
         return;
       }
     }
     if (ferramenta === "espelhar") {
-      if (!selecionado) { toast.error("Selecione o que deve ser espelhado antes de marcar o eixo."); return; }
       if (!pendentes.length) { definirPendentes([ponto]); return; }
-      const refletido = espelhar(selecionado, pendentes[0], ponto);
+      const copias = documento.elementos.filter(e => selecoes.includes(e.id)).map(e => espelhar(e, pendentes[0], ponto));
       definirPendentes([]);
-      if (!refletido) { toast.error("O eixo ficou com comprimento zero. Marque dois pontos diferentes."); return; }
-      const id = novoId();
-      aplicar({ ...documento, elementos: [...documento.elementos, { ...refletido, id }] });
-      definirSelecao(id);
+      if (copias.some(e => !e)) { toast.error("Marque dois pontos diferentes para o eixo."); return; }
+      const novas = copias.map(e => ({ ...e!, id: novoId() }));
+      if (aplicar({ ...documento, elementos: [...documento.elementos, ...novas] })) definirSelecoes(novas.map(e => e.id));
       return;
     }
     if (ferramenta === "aparar" || ferramenta === "estender") {
@@ -596,41 +635,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       toast.error(bloqueada ? "A camada desta ferramenta está travada. Destrave-a no painel de camadas." : "Você não tem permissão para editar esta prancha.");
       return;
     }
-    if (ferramenta === "parede" || ferramenta === "cota") {
-      if (!pendentes.length) { definirPendentes([ponto]); return; }
-      const inicio = pendentes[0];
-      if (inicio.x === ponto.x && inicio.y === ponto.y) { definirPendentes([]); return; }
-      if (ferramenta === "parede") {
-        acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "parede", a: inicio, b: ponto, espessuraMm: 150 });
-        // Encadear: a próxima parede começa onde esta terminou, que é como se desenha
-        // um cômodo sem reclicar em cada canto.
-        definirPendentes([ponto]);
-      } else {
-        acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "cota", a: inicio, b: ponto, deslocamentoMm: 400 });
-        definirPendentes([]);
-      }
-      return;
-    }
-    if (ferramenta === "comodo") {
-      definirPendentes((anterior) => [...anterior, ponto]);
-      return;
-    }
-    if (ferramenta === "circulo" || ferramenta === "arco") {
-      // Centro, depois um ponto do raio; no arco, um terceiro clique fecha a varredura.
-      // A ordem é a de todo CAD, e é a única em que o raio já aparece enquanto se move.
-      const marcados = [...pendentes, ponto];
-      const precisa = ferramenta === "arco" ? 3 : 2;
-      if (marcados.length < precisa) { definirPendentes(marcados); return; }
-      const [centro, inicio, fim] = marcados;
-      const raioMm = Math.round(Math.hypot(inicio.x - centro.x, inicio.y - centro.y));
-      if (raioMm < 1) { toast.error("O raio ficou em zero. Marque o centro e depois um ponto afastado dele."); definirPendentes([]); return; }
-      const inicioGraus = anguloDe(centro, inicio);
-      const varreduraGraus = ferramenta === "circulo"
-        ? 360
-        : Math.max(1, ((anguloDe(centro, fim) - inicioGraus) % 360 + 360) % 360 || 360);
-      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "arco", centro, raioMm, inicioGraus, varreduraGraus, espessuraMm: 25 });
-      definirPendentes([]);
-      return;
+    if (["parede", "cota", "linha", "polilinha", "retangulo", "comodo", "circulo", "arco"].includes(ferramenta)) {
+      confirmarPonto(ponto); return;
     }
     if (ferramenta === "traco") {
       definirPendentes([ponto]);
@@ -638,6 +644,40 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       return;
     }
     colocar(ponto);
+  }
+
+  function confirmarPonto(ponto: { x: number; y: number }) {
+    if (!["parede", "cota", "linha", "polilinha", "retangulo", "comodo", "circulo", "arco"].includes(ferramenta)) { toast.error("Escolha uma ferramenta de desenho para aplicar a medida."); return; }
+    if (!podeDesenhar) { toast.error("A camada está oculta ou travada, ou seu acesso é somente leitura."); return; }
+    if (!pendentes.length) { definirPendentes([ponto]); return; }
+    const inicio = pendentes[0];
+    const ultimo = pendentes[pendentes.length - 1];
+    if (Math.hypot(ultimo.x - ponto.x, ultimo.y - ponto.y) < 1e-9) { toast.error("Marque um ponto diferente."); return; }
+    if (ferramenta === "polilinha" || ferramenta === "comodo") {
+      if (pendentes.length >= (ferramenta === "comodo" ? 200 : 1999)) { toast.error("Limite de vértices atingido. Conclua o desenho."); return; }
+      definirPendentes([...pendentes, ponto]); return;
+    }
+    const base = { id: novoId(), camada: camadaAtiva };
+    let elemento: Elemento;
+    if (ferramenta === "circulo" || ferramenta === "arco") {
+      if (ferramenta === "arco" && pendentes.length === 1) { definirPendentes([...pendentes, ponto]); return; }
+      const raioPonto = ferramenta === "circulo" ? ponto : pendentes[1];
+      const raioMm = Math.hypot(raioPonto.x - inicio.x, raioPonto.y - inicio.y);
+      elemento = { ...base, tipo: "arco", centro: inicio, raioMm, inicioGraus: anguloDe(inicio, raioPonto),
+        varreduraGraus: ferramenta === "circulo" ? 360 : (anguloDe(inicio, ponto) - anguloDe(inicio, raioPonto) + 360) % 360 || 360, espessuraMm: 25 };
+    } else if (ferramenta === "retangulo") {
+      if (inicio.x === ponto.x || inicio.y === ponto.y) { toast.error("O retângulo precisa de largura e altura."); return; }
+      elemento = { ...base, tipo: "traco", pontos: [inicio, { x: ponto.x, y: inicio.y }, ponto, { x: inicio.x, y: ponto.y }, inicio], espessuraMm: 25 };
+    } else if (ferramenta === "linha") elemento = { ...base, tipo: "traco", pontos: [inicio, ponto], espessuraMm: 25 };
+    else if (ferramenta === "parede") elemento = { ...base, tipo: "parede", a: inicio, b: ponto, espessuraMm: 150 };
+    else elemento = { ...base, tipo: "cota", a: inicio, b: ponto, deslocamentoMm: 400 };
+    if (acrescentar(elemento)) definirPendentes(ferramenta === "parede" || ferramenta === "linha" ? [ponto] : []);
+  }
+
+  function concluirPolilinha(fechar = false) {
+    if (pendentes.length < (fechar ? 3 : 2)) { toast.error("Marque mais vértices para concluir a polilinha."); return; }
+    const pontos = fechar ? [...pendentes, pendentes[0]] : pendentes;
+    if (acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "traco", pontos, espessuraMm: 25 })) definirPendentes([]);
   }
 
   function aoMover(evento: React.PointerEvent<SVGSVGElement>) {
@@ -653,36 +693,30 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     }
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
-    const origem = pendentes.length ? pendentes[pendentes.length - 1] : arrastando.current?.de ?? null;
+    if (janelaRef.current) {
+      janelaRef.current = { ...janelaRef.current, b: bruto }; definirJanelaSelecao(janelaRef.current); return;
+    }
+    const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0]
+      : pendentes.length ? pendentes[pendentes.length - 1] : arrastando.current?.de ?? null;
     const encaixe = encaixarEm(bruto, origem);
     const ponto = encaixe.ponto;
     definirCursor(ponto);
     definirEncaixeAtual(encaixe);
 
-    if (verticeArrastado.current) {
-      const { id, indice } = verticeArrastado.current;
-      definirDocumento((anterior) => ({
-        ...anterior,
-        elementos: anterior.elementos.map((item) => item.id === id ? moverVertice(item, indice, ponto) : item),
-      }));
-      definirSujo(true);
-      return;
-    }
-
-    if (arrastando.current) {
-      const { id, de } = arrastando.current;
-      if (de.x === ponto.x && de.y === ponto.y) return;
-      const elemento = documento.elementos.find((item) => item.id === id);
-      if (!elemento) return;
-      // O arrasto altera sem empilhar histórico a cada pixel: o ponto de desfazer é o
-      // começo do arrasto, não cada quadro dele.
-      definirDocumento((anterior) => ({
-        ...anterior,
-        elementos: anterior.elementos.map((item) => item.id === id
-          ? moverElemento(item, ponto.x - de.x, ponto.y - de.y, anterior.malhaMm) : item),
-      }));
-      definirSujo(true);
-      arrastando.current = { id, de: ponto };
+    const gesto = verticeArrastado.current ?? arrastando.current;
+    if (gesto) {
+      const proximo = { ...gesto.documento, elementos: gesto.documento.elementos.map(item => {
+        if ("indice" in gesto) return item.id === gesto.id ? moverVertice(item, gesto.indice, ponto) : item;
+        return gesto.ids.includes(item.id) ? moverElemento(item, ponto.x - gesto.de.x, ponto.y - gesto.de.y, 1) : item;
+      }) };
+      if (!documentoSchema.safeParse(proximo).success) return;
+      const mudou = JSON.stringify(proximo.elementos) !== JSON.stringify(gesto.documento.elementos);
+      if (!gesto.mudou && mudou) {
+        definirHistorico(h => [...h, gesto.documento].slice(-LIMITE_HISTORICO)); definirRefeitos([]);
+      }
+      gesto.mudou ||= mudou;
+      definirDocumento(proximo);
+      if (mudou) definirSujo(true);
       return;
     }
     if (ferramenta === "traco" && pendentes.length && evento.buttons === 1) {
@@ -692,6 +726,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function aoSoltar(evento?: React.PointerEvent<SVGSVGElement>) {
     if (evento?.currentTarget.hasPointerCapture?.(evento.pointerId)) evento.currentTarget.releasePointerCapture(evento.pointerId);
+    if (janelaRef.current) {
+      const janela = janelaRef.current;
+      const ids = selecionarNaJanela(documento, janela.a, janela.b);
+      definirSelecoes(janela.manter ? [...new Set([...selecoes, ...ids])] : ids);
+      janelaRef.current = null; definirJanelaSelecao(null); return;
+    }
     if (panorama.current) { panorama.current = null; return; }
     if (verticeArrastado.current) { verticeArrastado.current = null; return; }
     if (arrastando.current) { arrastando.current = null; return; }
@@ -704,26 +744,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   /** Confirma o traço pelo que foi digitado, a partir do último ponto marcado. Ninguém
    *  desenha parede de 3,15 m arrastando o mouse até acertar. */
   function confirmarEntrada() {
-    const origem = pendentes.length ? pendentes[pendentes.length - 1] : null;
+    const origem = (ferramenta === "circulo" || ferramenta === "arco") ? pendentes[0] : pendentes.at(-1);
     if (!origem) { toast.error("Marque o ponto de partida na prancha antes de digitar a medida."); return; }
     const resolvido = resolverEntrada(origem, entrada, cursor);
     if (!resolvido) {
       toast.error("Não entendi a medida. Use 3150, 3150<90, @3000,1500 ou 3,15m.");
       return;
     }
-    const destino = resolvido.ponto;
-    if (ferramenta === "parede") {
-      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "parede", a: origem, b: destino, espessuraMm: 150 });
-      definirPendentes([destino]);
-    } else if (ferramenta === "cota") {
-      acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "cota", a: origem, b: destino, deslocamentoMm: 400 });
-      definirPendentes([]);
-    } else if (ferramenta === "comodo") {
-      definirPendentes((anterior) => [...anterior, destino]);
-    } else {
-      toast.error("A medida digitada vale para parede, cômodo e cota.");
-      return;
-    }
+    confirmarPonto(resolvido.ponto);
     definirEntrada("");
   }
 
@@ -731,14 +759,15 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
    *  mesmo gesto: dizer quanto. */
   function criarParalela(sinal: 1 | -1) {
     if (!selecionado || !canEdit || camadaBloqueada(documento, selecionado.camada)) return;
-    const distancia = lerMedida(entrada) ?? Math.round(documento.malhaMm);
+    const distancia = lerMedida(distanciaParalela);
+    if (distancia === null || distancia === 0) { toast.error("Informe uma distância não nula para a paralela."); return; }
     const nova = paralelaDe(selecionado, Math.abs(distancia) * sinal);
     if (!nova) {
       toast.error("Este elemento não tem paralela. Vale para parede, cômodo, traço e arco.");
       return;
     }
     const id = novoId();
-    aplicar({ ...documento, elementos: [...documento.elementos, { ...nova, id }] });
+    if (!aplicar({ ...documento, elementos: [...documento.elementos, { ...nova, id }] })) return;
     definirSelecao(id);
     toast.success(`Paralela a ${Math.abs(distancia)} mm.`);
   }
@@ -754,7 +783,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       toast.error("O desenho passaria do limite de 20 mil elementos.");
       return;
     }
-    aplicar({ ...documento, elementos: [...documento.elementos, ...copias] });
+    if (!aplicar({ ...documento, elementos: [...documento.elementos, ...copias] })) return;
     toast.success(`${copias.length} cópia(s) criadas.`);
   }
 
@@ -765,14 +794,19 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function fecharComodo() {
     if (pendentes.length < 3) { toast.error("Um cômodo precisa de pelo menos três cantos."); return; }
-    acrescentar({ id: novoId(), camada: "layout", tipo: "comodo", pontos: pendentes, nome: "Cômodo" });
+    acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "comodo", pontos: pendentes, nome: "Cômodo" });
     definirPendentes([]);
   }
 
   useEffect(() => {
     function tecla(evento: KeyboardEvent) {
       const alvo = evento.target as HTMLElement | null;
-      if (alvo && ["INPUT", "TEXTAREA", "SELECT"].includes(alvo.tagName)) return;
+      if (alvo && (["INPUT", "TEXTAREA", "SELECT"].includes(alvo.tagName) || alvo.isContentEditable)) return;
+      if (evento.ctrlKey || evento.metaKey) {
+        if (evento.key.toLowerCase() === "a") { evento.preventDefault(); definirSelecoes(visiveis.filter(e => !camadaBloqueada(documento, e.camada)).map(e => e.id)); return; }
+        if (evento.key.toLowerCase() === "y") { evento.preventDefault(); refazer(); return; }
+        if (evento.key.toLowerCase() !== "z") return;
+      }
       if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "z") {
         evento.preventDefault();
         if (evento.shiftKey) refazer(); else desfazer();
@@ -780,9 +814,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       }
       if (evento.key === "Escape") { definirPendentes([]); definirSelecao(null); definirEntrada(""); return; }
       if (evento.key.toLowerCase() === "o") { evento.preventDefault(); definirOrto((anterior) => !anterior); return; }
+      if (evento.key === "Enter" && ferramenta === "polilinha") { evento.preventDefault(); concluirPolilinha(); return; }
       if (evento.key === "Enter" && ferramenta === "comodo") { evento.preventDefault(); fecharComodo(); return; }
-      if ((evento.key === "Delete" || evento.key === "Backspace") && selecao && canEdit) {
-        evento.preventDefault(); apagar(selecao); return;
+      if ((evento.key === "Delete" || evento.key === "Backspace") && selecoes.length && canEdit) {
+        evento.preventDefault(); operarSelecao("E"); return;
       }
       const escolhida = ferramentas.find((item) => item.atalho.toLowerCase() === evento.key.toLowerCase());
       if (escolhida) { definirFerramenta(escolhida.id); definirPendentes([]); }
@@ -800,11 +835,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function trocarCamada(id: string, mudanca: Partial<Camada>) {
     if (!canEdit) return;
-    definirDocumento((anterior) => ({
-      ...anterior,
-      camadas: anterior.camadas.map((camada) => camada.id === id ? { ...camada, ...mudanca } : camada),
-    }));
-    definirSujo(true);
+    aplicar({ ...documento, camadas: documento.camadas.map(camada => camada.id === id ? { ...camada, ...mudanca } : camada) });
+    if (mudanca.bloqueada || mudanca.visivel === false) definirSelecoes(selecoes.filter(el => documento.elementos.find(e => e.id === el)?.camada !== id));
+  }
+
+  function operarSelecao(input: string) {
+    if (!canEdit) return;
+    try {
+      const result = executarNaSelecao(documento, input, selecoes);
+      if (aplicar(result.document)) { definirSelecoes(result.selectedIds); definirMensagemComando(result.message); }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível editar a seleção."); }
   }
 
   async function importar(arquivo: File, unidade: string) {
@@ -849,9 +889,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       else if (normalized === "U" || normalized === "UNDO") { desfazer(); definirMensagemComando("Desfazer concluído."); }
       else if (normalized === "REDO") { refazer(); definirMensagemComando("Refazer concluído."); }
       else {
-        const result = executeCadCommand(documento, comando, selecao);
+        const result = executarNaSelecao(documento, comando, selecoes);
         aplicar(result.document);
-        definirSelecao(result.selectedId);
+        definirSelecoes(result.selectedIds);
         definirMensagemComando(result.message);
       }
       definirComando("");
@@ -863,7 +903,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   }
 
   async function salvar() {
-    if (!canEdit) return;
+    if (!canEdit || salvamentoEmCurso.current) return;
+    salvamentoEmCurso.current = true;
     definirSalvando(true); definirConflito(false);
     try {
       const resposta = await fetch(`/api/studio/${prancha.id}`, {
@@ -877,13 +918,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         throw new Error(corpo.error ?? "Não foi possível gravar a prancha.");
       }
       definirRevisao(corpo.prancha!.revisao);
-      definirSujo(false);
-      definirHistorico([]); definirRefeitos([]);
+      definirSujo(estadoAtual.current.documento !== documento || estadoAtual.current.nome !== nome);
       onSalvo(corpo.prancha!);
       toast.success(`Prancha gravada — revisão ${corpo.prancha!.revisao}.`);
     } catch (causa) {
       toast.error(causa instanceof Error ? causa.message : "Não foi possível gravar a prancha.");
     } finally {
+      salvamentoEmCurso.current = false;
       definirSalvando(false);
     }
   }
@@ -940,8 +981,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         disabled={!canEdit} aria-label="Nome da prancha" className="h-10 w-full max-w-72" />
       <span className="text-xs text-hoikos-500">Revisão {revisao}{sujo ? " · alterações não gravadas" : ""}</span>
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={desfazer} disabled={!historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
-        <Button variant="outline" size="sm" onClick={refazer} disabled={!refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
+        <Button variant="outline" size="sm" onClick={desfazer} disabled={!canEdit || !historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
+        <Button variant="outline" size="sm" onClick={refazer} disabled={!canEdit || !refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
         {canEdit && <>
           <input ref={arquivoDxf} type="file" accept=".nexo,.dxf,text/plain,application/dxf,image/vnd.dxf,.dwg,application/json" className="sr-only"
             aria-label="Arquivo CAD para importar"
@@ -1039,6 +1080,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </div>
         <p className="text-xs leading-5 text-hoikos-500">{ferramentas.find((item) => item.id === ferramenta)?.rotulo}</p>
 
+        <Label htmlFor="camada-desenho">Camada de desenho</Label>
+        <NativeSelect id="camada-desenho" value={camadaEscolhida} onChange={e => definirCamadaEscolhida(e.target.value)}>
+          <option value="">Automática pela ferramenta</option>
+          {documento.camadas.map(c => <option key={c.id} value={c.id} disabled={c.bloqueada || !c.visivel}>{c.nome}</option>)}
+        </NativeSelect>
+        <p className="text-xs text-hoikos-500">{instrucoes[ferramenta]}</p>
+        {ferramenta === "polilinha" && pendentes.length > 0 && <div className="space-y-1">
+          <Button size="sm" onClick={() => concluirPolilinha()}>Concluir polilinha</Button>
+          <Button size="sm" variant="outline" onClick={() => concluirPolilinha(true)}>Fechar polilinha</Button>
+        </div>}
         {ferramenta === "simbolo" && <div className="space-y-2">
           {Object.entries(FAMILIAS_SIMBOLO).map(([disciplina, familias]) => <div key={disciplina}>
             <p className="eyebrow text-hoikos-600">{disciplinaLabels[disciplina as keyof typeof disciplinaLabels]}</p>
@@ -1070,7 +1121,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             <p className="truncate text-xs text-hoikos-700" title={documento.fundo.nome}>{documento.fundo.nome}</p>
             <Label htmlFor="fundo-largura" className="text-xs">Largura real do fundo (mm)</Label>
             <Input id="fundo-largura" type="number" inputMode="numeric" min={100} value={documento.fundo.larguraMm} disabled={!canEdit}
-              onChange={(evento) => { void redimensionarFundo(Math.round(Number(evento.target.value))); }} />
+              onChange={(evento) => { void redimensionarFundo(Number(evento.target.value)); }} />
             <Label htmlFor="fundo-opacidade" className="text-xs">Opacidade: {documento.fundo.opacidade}%</Label>
             <input id="fundo-opacidade" type="range" min={5} max={100} value={documento.fundo.opacidade} disabled={!canEdit}
               className="w-full accent-hoikos-700"
@@ -1118,12 +1169,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         <div className="space-y-2 border-t border-hoikos-200 pt-3">
           <Label htmlFor="prancheta-malha" className="text-xs">Malha de encaixe</Label>
           <NativeSelect id="prancheta-malha" value={String(documento.malhaMm)} disabled={!canEdit}
-            onChange={(evento) => { definirDocumento((anterior) => ({ ...anterior, malhaMm: Number(evento.target.value) })); definirSujo(true); }}>
-            {MALHAS.map((malha) => <option key={malha} value={malha}>{malha} mm</option>)}
+            onChange={(evento) => aplicar({ ...documento, malhaMm: Number(evento.target.value) })}>
+            {MALHAS.map((malha) => <option key={malha} value={malha}>{malha === 1 ? "Livre (sem malha)" : `${malha} mm`}</option>)}
           </NativeSelect>
           <Label htmlFor="prancheta-escala" className="text-xs">Escala de impressão</Label>
           <NativeSelect id="prancheta-escala" value={String(documento.escala)} disabled={!canEdit}
-            onChange={(evento) => { definirDocumento((anterior) => ({ ...anterior, escala: Number(evento.target.value) })); definirSujo(true); }}>
+            onChange={(evento) => aplicar({ ...documento, escala: Number(evento.target.value) })}>
             {ESCALAS.map((escala) => <option key={escala} value={escala}>1:{escala}</option>)}
           </NativeSelect>
           <div className="flex gap-1">
@@ -1139,7 +1190,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           viewBox={`${vista.x} ${vista.y} ${vista.largura} ${vista.largura * 0.62}`}
           className={fullPage ? "w-full touch-none" : "h-[min(70svh,640px)] w-full touch-none"}
           style={fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : undefined}
-          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={aoSoltar} onPointerLeave={() => definirCursor(null)}
+          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={() => { const gesto = arrastando.current ?? verticeArrastado.current; if (gesto?.mudou) { definirDocumento(gesto.documento); definirHistorico(h => h.slice(0, -1)); } arrastando.current = null; verticeArrastado.current = null; panorama.current = null; janelaRef.current = null; definirJanelaSelecao(null); definirPendentes([]); }} onPointerLeave={() => definirCursor(null)}
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
             <pattern id="prancheta-malha-padrao" width={passoMalha} height={passoMalha} patternUnits="userSpaceOnUse">
@@ -1150,7 +1201,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           {documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
-          {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={elemento.id === selecao} minimumStroke={vista.largura / 800} />)}
+          {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={selecoes.includes(elemento.id)} minimumStroke={vista.largura / 800} />)}
+          {janelaSelecao && <rect x={Math.min(janelaSelecao.a.x, janelaSelecao.b.x)} y={Math.min(janelaSelecao.a.y, janelaSelecao.b.y)} width={Math.abs(janelaSelecao.b.x - janelaSelecao.a.x)} height={Math.abs(janelaSelecao.b.y - janelaSelecao.a.y)} fill="#846100" fillOpacity={0.1} stroke="#846100" strokeWidth={vista.largura / 800} />}
+          {ferramenta === "retangulo" && pendentes[0] && cursor && <rect x={Math.min(pendentes[0].x, cursor.x)} y={Math.min(pendentes[0].y, cursor.y)} width={Math.abs(pendentes[0].x - cursor.x)} height={Math.abs(pendentes[0].y - cursor.y)} fill="none" stroke="#846100" strokeWidth={vista.largura / 800} />}
           {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
               cursor não diria nada sobre o raio que está sendo marcado. */}
           {pendentes.length > 0 && (ferramenta === "circulo" || ferramenta === "arco")
@@ -1158,7 +1211,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               const centro = pendentes[0];
               const referencia = pendentes[1] ?? cursor;
               if (!referencia) return null;
-              const raio = Math.round(Math.hypot(referencia.x - centro.x, referencia.y - centro.y));
+              const raio = Math.hypot(referencia.x - centro.x, referencia.y - centro.y);
               if (raio < 1) return null;
               const varredura = ferramenta === "circulo" || pendentes.length < 2 || !cursor
                 ? 360
@@ -1177,7 +1230,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140" />}
           {/* Alças dos vértices do elemento selecionado: corrigir um canto sem refazer o
               cômodo inteiro é o que faz alguém de fato corrigir o canto. */}
-          {canEdit && selecionado && verticesDe(selecionado).map((vertice) => <rect key={vertice.indice}
+          {canEdit && ferramenta === "selecionar" && selecionado && !camadaBloqueada(documento, selecionado.camada) && verticesDe(selecionado).map((vertice) => <rect key={vertice.indice}
             x={vertice.ponto.x - vista.largura / 220} y={vertice.ponto.y - vista.largura / 220}
             width={vista.largura / 110} height={vista.largura / 110}
             fill="#F4F2E9" stroke="#846100" strokeWidth={vista.largura / 900} />)}
@@ -1198,7 +1251,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         <div className="flex flex-wrap items-center gap-3 border-t border-hoikos-200 px-3 py-2 text-xs text-hoikos-500">
           <span className="flex items-center gap-1.5">
             <Grid2x2 aria-hidden="true" className="size-3.5" />
-            {cursor ? `${(cursor.x / 1000).toFixed(2).replace(".", ",")} m · ${(cursor.y / 1000).toFixed(2).replace(".", ",")} m` : "Mova o cursor sobre a prancha"}
+            {cursor ? `X ${Number(cursor.x.toFixed(3))} mm · Y ${Number((-cursor.y).toFixed(3))} mm` : "Mova o cursor sobre a prancha"}
           </span>
           {encaixeAtual && encaixeAtual.tipo !== "malha" && <span className="font-medium text-hoikos-gold">{encaixeLabels[encaixeAtual.tipo]}</span>}
           {orto && <span className="font-medium text-hoikos-gold">Ortogonal</span>}
@@ -1232,7 +1285,31 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           </TabsList>
 
           <TabsContent value="propriedades" className="space-y-3 pt-3">
-            {!selecionado ? <p className="text-sm text-hoikos-500">Nada selecionado. Use a ferramenta de seleção e clique sobre um elemento do desenho.</p> : <>
+            {selecoes.length > 0 && <section aria-label="Editar seleção" className="space-y-2 border-b pb-3">
+              <p className="text-sm">{selecoes.length} elemento(s) selecionado(s)</p>
+              {canEdit && <>
+                <div className="grid grid-cols-2 gap-2">
+                  {([ ["dx", "Deslocamento X (mm)"], ["dy", "Deslocamento Y (mm)"], ["x", "Pivô X (mm)"], ["y", "Pivô Y (mm)"], ["angulo", "Ângulo (graus)"], ["fator", "Fator de escala"] ] as const).map(([key, label]) => <label key={key} className="text-xs">{label}<Input aria-label={label} value={transformacao[key]} onChange={e => definirTransformacao(v => ({ ...v, [key]: e.target.value }))} /></label>)}
+                </div>
+                <p className="text-xs text-hoikos-500">Y positivo sobe. Giro positivo é anti-horário. Pivô em coordenadas do desenho.</p>
+                <div className="flex flex-wrap gap-1">
+                  <Button size="sm" variant="outline" onClick={() => operarSelecao(`M @${transformacao.dx},${transformacao.dy}`)}>Mover seleção</Button>
+                  <Button size="sm" variant="outline" onClick={() => operarSelecao(`CO @${transformacao.dx},${transformacao.dy}`)}>Copiar seleção</Button>
+                  <Button size="sm" variant="outline" onClick={() => operarSelecao(`RO ${transformacao.angulo} ${transformacao.x},${transformacao.y}`)}>Girar seleção</Button>
+                  <Button size="sm" variant="outline" onClick={() => operarSelecao(`SC ${transformacao.fator} ${transformacao.x},${transformacao.y}`)}>Escalar seleção</Button>
+                  <Button size="sm" variant="outline" onClick={() => operarSelecao("E")}><Trash2 />Apagar seleção</Button>
+                </div>
+                <Label htmlFor="selecao-camada">Mover seleção para camada</Label>
+                <NativeSelect id="selecao-camada" value="" onChange={e => {
+                  const camada = e.target.value;
+                  if (!camada || documento.elementos.some(el => selecoes.includes(el.id) && camadaBloqueada(documento, el.camada))) return;
+                  aplicar({ ...documento, elementos: documento.elementos.map(el => selecoes.includes(el.id) ? { ...el, camada } : el) });
+                }}><option value="">Escolha a camada…</option>{documento.camadas.filter(c => !c.bloqueada && c.visivel).map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</NativeSelect>
+              </>}
+              <Button size="sm" variant="outline" onClick={() => definirSelecoes([])}>Limpar seleção</Button>
+            </section>}
+
+            {!selecionado ? <p className="text-sm text-hoikos-500">{selecoes.length > 1 ? "Seleção múltipla ativa. Para editar propriedades individuais, selecione um único elemento." : "Nada selecionado."} Use a ferramenta de seleção e clique sobre um elemento do desenho.</p> : <>
               <p className="eyebrow text-hoikos-600">{selecionado.tipo}</p>
               {"rotulo" in selecionado && <div className="space-y-1">
                 <Label htmlFor="prop-rotulo" className="text-xs">Rótulo</Label>
@@ -1254,7 +1331,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-largura" className="text-xs">Largura (mm)</Label>
                 <Input id="prop-largura" type="number" inputMode="numeric" value={selecionado.larguraMm} disabled={!canEdit}
                   onChange={(evento) => {
-                    const valor = Math.round(Number(evento.target.value));
+                    const valor = Number(evento.target.value);
                     if (Number.isFinite(valor) && valor >= 10) trocar(selecionado.id, { larguraMm: valor } as Partial<Elemento>);
                   }} />
               </div>}
@@ -1262,7 +1339,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-altura" className="text-xs">{selecionado.tipo === "texto" ? "Corpo do texto (mm)" : "Profundidade (mm)"}</Label>
                 <Input id="prop-altura" type="number" inputMode="numeric" value={selecionado.alturaMm} disabled={!canEdit}
                   onChange={(evento) => {
-                    const valor = Math.round(Number(evento.target.value));
+                    const valor = Number(evento.target.value);
                     if (Number.isFinite(valor) && valor >= 10) trocar(selecionado.id, { alturaMm: valor } as Partial<Elemento>);
                   }} />
               </div>}
@@ -1270,7 +1347,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-espessura" className="text-xs">Espessura (mm)</Label>
                 <Input id="prop-espessura" type="number" inputMode="numeric" value={selecionado.espessuraMm} disabled={!canEdit}
                   onChange={(evento) => {
-                    const valor = Math.round(Number(evento.target.value));
+                    const valor = Number(evento.target.value);
                     if (Number.isFinite(valor) && valor >= 1) trocar(selecionado.id, { espessuraMm: valor } as Partial<Elemento>);
                   }} />
               </div>}
@@ -1278,7 +1355,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-giro" className="text-xs">Giro (graus)</Label>
                 <Input id="prop-giro" type="number" inputMode="numeric" min={0} max={359} value={selecionado.rotacaoGraus} disabled={!canEdit}
                   onChange={(evento) => {
-                    const valor = Math.round(Number(evento.target.value));
+                    const valor = Number(evento.target.value);
                     if (Number.isFinite(valor)) trocar(selecionado.id, { rotacaoGraus: ((valor % 360) + 360) % 360 } as Partial<Elemento>);
                   }} />
               </div>}
@@ -1287,7 +1364,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   <Label htmlFor="prop-raio" className="text-xs">Raio (mm)</Label>
                   <Input id="prop-raio" type="number" inputMode="numeric" value={selecionado.raioMm} disabled={!canEdit}
                     onChange={(evento) => {
-                      const valor = Math.round(Number(evento.target.value));
+                      const valor = Number(evento.target.value);
                       if (Number.isFinite(valor) && valor >= 1) trocar(selecionado.id, { raioMm: valor } as Partial<Elemento>);
                     }} />
                 </div>
@@ -1295,7 +1372,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   <Label htmlFor="prop-varredura" className="text-xs">Varredura (graus)</Label>
                   <Input id="prop-varredura" type="number" inputMode="numeric" min={1} max={360} value={selecionado.varreduraGraus} disabled={!canEdit}
                     onChange={(evento) => {
-                      const valor = Math.round(Number(evento.target.value));
+                      const valor = Number(evento.target.value);
                       if (Number.isFinite(valor) && valor >= 1 && valor <= 360) trocar(selecionado.id, { varreduraGraus: valor } as Partial<Elemento>);
                     }} />
                 </div>
@@ -1303,6 +1380,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   {selecionado.varreduraGraus >= 360 ? "Círculo completo." : `Arco de ${selecionado.varreduraGraus}° a partir de ${selecionado.inicioGraus}°.`}
                 </p>
               </>}
+              {selecionado.tipo === "cota" && <label className="text-xs">Afastamento da cota (mm)<Input type="number" step="any" value={selecionado.deslocamentoMm} disabled={!canEdit} onChange={e => { const v = Number(e.target.value); if (Number.isFinite(v)) trocar(selecionado.id, { deslocamentoMm: v }); }} /></label>}
               {selecionado.tipo === "parede" && <p className="text-xs text-hoikos-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
               {canEdit && <div className="space-y-2 border-t border-hoikos-200 pt-3">
                 <p className="eyebrow text-hoikos-600">Repetir em matriz</p>
@@ -1310,22 +1388,22 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   <div className="space-y-1">
                     <Label htmlFor="matriz-colunas" className="text-xs">Colunas</Label>
                     <Input id="matriz-colunas" type="number" inputMode="numeric" min={1} value={matriz.colunas}
-                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, colunas: Math.round(Number(evento.target.value)) || 1 }))} />
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, colunas: Number(evento.target.value) || 1 }))} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="matriz-linhas" className="text-xs">Linhas</Label>
                     <Input id="matriz-linhas" type="number" inputMode="numeric" min={1} value={matriz.linhas}
-                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, linhas: Math.round(Number(evento.target.value)) || 1 }))} />
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, linhas: Number(evento.target.value) || 1 }))} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="matriz-passo-x" className="text-xs">Passo →  (mm)</Label>
                     <Input id="matriz-passo-x" type="number" inputMode="numeric" value={matriz.passoXMm}
-                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoXMm: Math.round(Number(evento.target.value)) || 0 }))} />
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoXMm: Number(evento.target.value) || 0 }))} />
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="matriz-passo-y" className="text-xs">Passo ↓ (mm)</Label>
                     <Input id="matriz-passo-y" type="number" inputMode="numeric" value={matriz.passoYMm}
-                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoYMm: Math.round(Number(evento.target.value)) || 0 }))} />
+                      onChange={(evento) => definirMatriz((anterior) => ({ ...anterior, passoYMm: Number(evento.target.value) || 0 }))} />
                   </div>
                 </div>
                 <Button variant="outline" size="sm" className="w-full" onClick={repetirEmMatriz}>
@@ -1333,9 +1411,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 </Button>
               </div>}
               {canEdit && paralelaDe(selecionado, 1) && <div className="space-y-1 border-t border-hoikos-200 pt-3">
-                <p className="text-xs text-hoikos-600">
-                  Paralela à distância digitada no campo Medida (hoje {lerMedida(entrada) ?? documento.malhaMm} mm).
-                </p>
+                <Label htmlFor="distancia-paralela">Distância da paralela (mm)</Label>
+                <Input id="distancia-paralela" value={distanciaParalela} onChange={e => definirDistanciaParalela(e.target.value)} placeholder="100 ou 0,15m" />
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => criarParalela(1)}><Copy />Um lado</Button>
                   <Button variant="outline" size="sm" className="flex-1" onClick={() => criarParalela(-1)}><Copy />Outro lado</Button>
@@ -1346,6 +1423,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           </TabsContent>
 
           <TabsContent value="camadas" className="space-y-2 pt-3">
+            {canEdit && <form className="flex gap-2" onSubmit={e => {
+              e.preventDefault(); const nome = novaCamada.trim(); if (!nome) return;
+              const id = novoId();
+              if (aplicar({ ...documento, camadas: [...documento.camadas, { id, nome, disciplina: "layout", visivel: true, bloqueada: false }] })) { definirNovaCamada(""); definirCamadaEscolhida(id); }
+            }}><Input aria-label="Nome da nova camada" maxLength={60} value={novaCamada} onChange={e => definirNovaCamada(e.target.value)} placeholder="Nova camada" /><Button type="submit" disabled={!novaCamada.trim() || documento.camadas.length >= 60}>Criar</Button></form>}
+
             {documento.camadas.map((camada) => {
               const quantos = documento.elementos.filter((elemento) => elemento.camada === camada.id).length;
               return <div key={camada.id} className="flex items-center gap-2 rounded-md border border-hoikos-200 bg-white px-3 py-2">
