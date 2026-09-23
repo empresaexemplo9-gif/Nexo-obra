@@ -13,7 +13,6 @@ import {
   BookOpenText,
   Building2,
   Calculator,
-  DraftingCompass,
   CalendarRange,
   Check,
   CircleAlert,
@@ -49,7 +48,6 @@ import { ClientPortalApp } from "@/components/client-portal-app";
 import { CrmWorkspace } from "@/components/crm-workspace";
 import { ScheduleWorkspace } from "@/components/schedule-workspace";
 import { FilesWorkspace } from "@/components/files-workspace";
-import { PranchetaWorkspace } from "@/components/prancheta-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -107,7 +105,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "studio" | "usage" | "sheets" | "reminders";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -166,7 +164,6 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   team: { title: "Equipe", description: "Pessoas com acesso a esta empresa." },
   tasks: { title: "Tarefas", description: "Execução organizada por prioridade e projeto." },
   files: { title: "Arquivos", description: "Documentos vinculados aos trabalhos." },
-  studio: { title: "Prancheta", description: "Desenho de planta, elétrico, luminotécnico e interiores dentro da plataforma." },
   usage: { title: "Tempo de uso", description: "Tempo online por dia, medido no servidor." },
   sheets: { title: "Planilha e documento", description: "Cálculo sobre os dados reais da empresa." },
   reminders: { title: "Lembretes do dia", description: "Cobranças, boletos, follow-ups, prazos e metas." },
@@ -174,7 +171,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
-  schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files", studio: "studio",
+  schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
   usage: "overview", sheets: "overview", reminders: "overview",
 };
 const alwaysVisibleModules: ModuleId[] = ["usage", "sheets", "reminders"];
@@ -395,7 +392,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
       setLoadErrors(errors); setLoading(false);
   }, [canView, startRequest]);
   useEffect(() => { const timer = window.setTimeout(() => { void loadData(); }, 0); return () => window.clearTimeout(timer); }, [loadData, session.organization?.id]);
-  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
+  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
 
   async function switchOrganization(organizationId: string) { try { await requestJson("/api/session", { method: "POST", body: JSON.stringify({ organizationId }) }); await reloadSession(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trocar de empresa."); } }
   function openCreate(kind: CreateKind) { setQuickKind(kind); setQuickOpen(true); }
@@ -407,7 +404,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const activeProjects = projects.filter((project) => project.status === "active");
   const canCreateAny = canEdit("projects") || canEdit("crm") || canEdit("tasks");
   const navSections = ([
-    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }, { id: "studio", label: "Prancheta", icon: DraftingCompass }] },
+    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
     { label: "Negócio", items: [{ id: "crm", label: "CRM e clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "sheets", label: "Planilha e documento", icon: Sigma }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[]).map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) })).filter((section) => section.items.length);
@@ -415,7 +412,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const dependencies: Partial<Record<ModuleId, (keyof typeof loadErrors)[]>> = {
     overview: ["clients", "projects", "tasks", "members"], projects: ["projects"], works: ["projects"],
     crm: ["clients"], tasks: ["tasks"], schedule: ["tasks"], team: ["members", "tasks"],
-    files: ["projects"], studio: ["projects"], finance: ["projects"], budgets: ["projects"],
+    files: ["projects"], finance: ["projects"], budgets: ["projects"],
   };
   const error = (dependencies[activeModule] ?? []).map(key => loadErrors[key]).filter(Boolean).join(" ");
   const content = loading ? <Card><Empty className="min-h-72 border-0"><LoaderCircle className="size-7 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando dados da empresa…</p></Empty></Card> : error ? <HonestEmpty icon={CircleAlert} title="Não foi possível carregar" description={error} action={loadData} actionLabel="Tentar novamente" /> : (() => {
@@ -460,7 +457,6 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "crm") return <CrmWorkspace clients={clients} members={members.map((member) => ({ id: member.id, name: member.name }))} query={query} canEdit={canEdit("crm")} canConvert={canEdit("projects")} onProjectsChanged={loadData} />;
     if (activeModule === "schedule") return <ScheduleWorkspace projects={projects} tasks={tasks} query={query} canEdit={canEdit("schedule") && canEdit("tasks")} onChanged={loadData} />;
     if (activeModule === "files") return <FilesWorkspace projects={projects} query={query} canEdit={canEdit("files")} />;
-    if (activeModule === "studio") return <div className="space-y-5"><PageIntro module="studio" /><PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("studio")} /></div>;
     if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager currentMemberId={session.member?.id} members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;
