@@ -161,7 +161,7 @@ export async function readSuperAdminIdentity(request: Request) {
 export function rejectCrossSiteMutation(request: Request) {
   const origin = request.headers.get("origin");
   if (request.headers.get("sec-fetch-site") === "cross-site" || (origin !== null && origin !== new URL(request.url).origin)) {
-    throw new ApiError(403, "cross_site_request", "A solicitação administrativa foi bloqueada.");
+    throw new ApiError(403, "cross_site_request", "Solicitação vinda de outro site bloqueada.");
   }
 }
 

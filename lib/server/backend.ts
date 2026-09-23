@@ -11,7 +11,7 @@ import {
 } from "@/lib/permissions";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMaintenanceIdentity } from "@/lib/server/maintenance";
-import { readSuperAdminIdentity, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
+import { readSuperAdminIdentity, rejectCrossSiteMutation, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
 import { readSessionUser } from "@/lib/server/auth";
 import { runtimeEnv } from "@/lib/server/runtime";
 
@@ -48,6 +48,9 @@ export async function requireOrganizationContext(
   allowedRoles?: readonly string[],
   options: { allowUnacceptedTerms?: boolean } = {},
 ): Promise<OrganizationContext> {
+  // Toda escrita de dado de negócio passa por aqui. A trava contra outro site ficava só nas
+  // rotas administrativas; orçamento, CRM, obra e financeiro dependiam apenas do SameSite.
+  if (!["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) rejectCrossSiteMutation(request);
   const identity = await authenticatedIdentity(request);
   const db = getDatabase();
   // O superadministrador opera qualquer empresa com poder total: sem papel exigido,

@@ -61,6 +61,12 @@ test("o ponto só é separador de milhar quando existe vírgula", () => {
   assert.equal(lerValorBrasileiro("1234"), 1234);
   assert.equal(lerValorBrasileiro("R$ 89,90"), 89.9);
   assert.equal(lerValorBrasileiro("1.234.567,89"), 1234567.89);
+  // Sem vírgula, grupos de três dígitos são milhar: "1.500" digitado como mil e quinhentos
+  // virava R$ 1,50 na cobrança.
+  assert.equal(lerValorBrasileiro("1.500"), 1500);
+  assert.equal(lerValorBrasileiro("12.000"), 12000);
+  assert.equal(lerValorBrasileiro("1.234.567"), 1234567);
+  assert.equal(lerValorBrasileiro("1.5"), 1.5);
 });
 
 test("valor ilegível devolve nulo, nunca zero", () => {

@@ -32,6 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { DEFAULT_SINAPI_UF, UFS } from "@/lib/integrations/sinapi-contract";
 import { SinapiReferenceBrowser } from "@/components/sinapi-reference-browser";
+import { lerValorBrasileiro } from "@/lib/drap-envelope";
 
 type Project = { id: string; code: string; name: string; kind: "project" | "work" };
 type Budget = {
@@ -81,16 +82,14 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function moneyToCents(value: FormDataEntryValue | string | null) {
-  const raw = String(value ?? "").trim().replace(/R\$\s?/i, "").replace(/\s/g, "");
-  if (!raw) return 0;
-  const normalized = raw.includes(",") ? raw.replace(/\./g, "").replace(",", ".") : raw;
-  const number = Number(normalized);
-  return Number.isFinite(number) ? Math.max(0, Math.round(number * 100)) : 0;
+  // Mesmo leitor do financeiro: "1.500" é mil e quinhentos, não R$ 1,50.
+  const amount = lerValorBrasileiro(String(value ?? ""));
+  return amount === null ? 0 : Math.max(0, Math.round(amount * 100));
 }
 
 function numberValue(value: FormDataEntryValue | string | null, fallback = 0) {
-  const parsed = Number(String(value ?? "").replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : fallback;
+  // "1.234,5" virava NaN e caía no valor padrão sem aviso.
+  return lerValorBrasileiro(String(value ?? "")) ?? fallback;
 }
 
 function parseBulk(text: string): DraftItem[] {

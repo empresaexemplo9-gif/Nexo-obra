@@ -47,12 +47,15 @@ export function camposDoCorpo(corpo: unknown): string[] {
 }
 
 /** Número como a Drap escreve: "1.234,56" (brasileiro) e "1234.56" (ponto decimal)
- *  convivem. O ponto só é separador de milhar quando existe vírgula — tirá-lo sempre
+ *  convivem. O ponto é milhar com vírgula presente ou em grupos de três dígitos — tirá-lo sempre
  *  transforma 1500.50 em 150050, que num sistema financeiro é dinheiro errado gravado. */
 export function lerValorBrasileiro(bruto: string): number | null {
   const limpo = bruto.trim().replace(/\s|R\$/g, "");
   if (!limpo) return null;
-  const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".") : limpo;
+  // Sem vírgula, ponto seguido de grupos de exatamente três dígitos é milhar, como no
+  // Excel em português e na planilha da plataforma: "1.500" é mil e quinhentos, não 1,5.
+  const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".")
+    : /^[+-]?\d{1,3}(\.\d{3})+$/.test(limpo) ? limpo.replace(/\./g, "") : limpo;
   const numero = Number(normalizado);
   return Number.isFinite(numero) ? numero : null;
 }

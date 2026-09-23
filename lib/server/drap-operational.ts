@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { DrapApiError, requestDrapApi } from "@/lib/integrations/drap";
-import { apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { requireActiveDrapConnection } from "@/lib/server/drap";
 
 const objectBodySchema = z.record(z.unknown()).refine((value) => Object.keys(value).length > 0, "Body vazio");
@@ -67,4 +67,13 @@ export function chaveIdempotenciaDe(request: Request): string | undefined {
   const bruto = request.headers.get("Idempotency-Key")?.trim();
   if (!bruto || !/^[A-Za-z0-9_-]{8,128}$/.test(bruto)) return undefined;
   return bruto;
+}
+
+/** Mesma chave, agora obrigatória. Toda escrita financeira na Drap (POST, PATCH, DELETE)
+ *  precisa de uma chave de idempotência para o retry seguro exigido pela regra 5 do
+ *  CLAUDE.md — sem ela, um timeout seguido de nova tentativa pode duplicar o efeito. */
+export function requireChaveIdempotencia(request: Request): string {
+  const chave = chaveIdempotenciaDe(request);
+  if (!chave) throw new ApiError(400, "idempotency_key_required", "Envie uma Idempotency-Key válida para qualquer escrita financeira.");
+  return chave;
 }

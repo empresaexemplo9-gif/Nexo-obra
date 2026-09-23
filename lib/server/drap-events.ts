@@ -68,7 +68,8 @@ export async function processDrapEvent(db: D1Database, eventId: string, organiza
         return { status: "failed" as const, error: "missing_external_charge_id" };
       }
       const status = chargeStatus(event.event_type, cobranca);
-      const shareUrl = text(cobranca.share_url, cobranca.shareUrl, cobranca.url);
+      const rawShareUrl = text(cobranca.invoice_url, cobranca.invoiceUrl, cobranca.share_url, cobranca.shareUrl, cobranca.url);
+      const shareUrl = rawShareUrl && /^https:\/\//i.test(rawShareUrl) ? rawShareUrl : null;
       const result = await db.prepare(
         `UPDATE financial_charge_requests SET status = ?1,
          share_url = COALESCE(?2, share_url), last_error = CASE WHEN ?1 = 'failed' THEN 'drap_event_failed' ELSE NULL END,

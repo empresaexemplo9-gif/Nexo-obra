@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { requestDrapApi } from "@/lib/integrations/drap";
+import { corpoDaCobranca, DrapApiError, lerCobrancaDaDrap, motivoDaRecusaDrap, requestDrapApi } from "@/lib/integrations/drap";
 import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
 import { requireActiveDrapConnection } from "@/lib/server/drap";
 import { requireDrapResourcePath } from "@/lib/server/drap-resources";
@@ -30,27 +30,6 @@ function response(row: ChargeRow) {
   return { id: row.id, projectId: row.project_id, projectName: row.project_name, clientId: row.client_id, clientName: row.client_name, description: row.description, amountCents: row.amount_cents, dueDate: row.due_date, reminders: JSON.parse(row.reminder_policy_json) as unknown, status: row.status, externalChargeId: row.external_charge_id, shareUrl: row.share_url, lastError: row.last_error, createdAt: row.created_at };
 }
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function text(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-function remoteCharge(value: unknown) {
-  const root = record(value);
-  const data = record(root.data ?? root.charge ?? root.cobranca ?? root);
-  const id = text(data.id) ?? text(data.chargeId) ?? text(data.charge_id) ?? text(data.cobranca_id);
-  if (!id) throw new Error("DRAP charge response has no id");
-  const rawShareUrl = text(data.shareUrl) ?? text(data.share_url) ?? text(data.paymentUrl) ?? text(data.payment_url) ?? text(data.link_pagamento);
-  return {
-    id,
-    status: text(data.status) ?? text(data.situacao) ?? "created",
-    shareUrl: rawShareUrl && /^https:\/\//i.test(rawShareUrl) ? rawShareUrl : null,
-  };
-}
-
 const select = `SELECT r.id, r.project_id, p.name AS project_name, r.client_id, c.name AS client_name,
   r.description, r.amount_cents, r.due_date, r.reminder_policy_json, r.status,
   r.external_charge_id, r.share_url, r.last_error, r.created_at
@@ -78,48 +57,58 @@ export async function POST(request: Request) {
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
     const existing = await context.db.prepare(`${select} WHERE r.organization_id = ?1 AND r.idempotency_key = ?2`).bind(context.organization.id, data.idempotencyKey).first<ChargeRow>();
-    if (existing) return Response.json({ charge: response(existing), replayed: true });
+    // Mesma chave depois de falha é a MESMA intenção tentando de novo: reenvia à Drap com a
+    // mesma Idempotency-Key, que devolve a cobrança já criada em vez de emitir outra.
+    // Devolver a linha com falha como 200 fazia a tela anunciar "cobrança confirmada".
+    if (existing && existing.status !== "failed") return Response.json({ charge: response(existing), replayed: true });
     const project = await context.db.prepare(`SELECT p.id, p.client_id, p.external_financial_cost_center_id, c.external_financial_id
       FROM projects p LEFT JOIN clients c ON c.id = p.client_id AND c.organization_id = p.organization_id
-      WHERE p.id = ?1 AND p.organization_id = ?2`).bind(data.projectId, context.organization.id).first<{ id: string; client_id: string | null; external_financial_cost_center_id: string | null; external_financial_id: string | null }>();
+      WHERE p.id = ?1 AND p.organization_id = ?2`).bind(existing?.project_id ?? data.projectId, context.organization.id).first<{ id: string; client_id: string | null; external_financial_cost_center_id: string | null; external_financial_id: string | null }>();
     if (!project) throw new ApiError(404, "not_found", "Projeto ou obra não encontrado.");
     if (!project.external_financial_cost_center_id) throw new ApiError(409, "project_cost_center_required", "Vincule esta obra a um centro de custo da Drap.");
     if (!project.client_id || !project.external_financial_id) throw new ApiError(409, "client_financial_link_required", "Vincule o cliente desta obra ao cadastro financeiro da Drap.");
     const connection = await requireActiveDrapConnection(context);
     const chargePath = await requireDrapResourcePath(connection.external_company_id, "cobrancas");
-    const id = crypto.randomUUID();
-    const reminders = JSON.stringify(data.reminders);
-    try {
-      await context.db.prepare(`INSERT INTO financial_charge_requests (id, organization_id, project_id, client_id, idempotency_key, description, amount_cents, due_date, reminder_policy_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(id, context.organization.id, data.projectId, project.client_id, data.idempotencyKey, data.description, data.amountCents, data.dueDate, reminders).run();
-    } catch (error) {
-      if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "charge_request_in_progress", "Esta cobrança já está sendo processada.");
-      throw error;
+    const id = existing?.id ?? crypto.randomUUID();
+    if (existing) {
+      // Reivindica a nova tentativa atomicamente: dois cliques simultâneos não disparam duas chamadas.
+      const claimed = await context.db.prepare("UPDATE financial_charge_requests SET status = 'pending', last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND organization_id = ?2 AND status = 'failed'").bind(id, context.organization.id).run();
+      if (!claimed.meta?.changes) throw new ApiError(409, "charge_request_in_progress", "Esta cobrança já está sendo processada.");
+    } else {
+      const reminders = JSON.stringify(data.reminders);
+      try {
+        await context.db.prepare(`INSERT INTO financial_charge_requests (id, organization_id, project_id, client_id, idempotency_key, description, amount_cents, due_date, reminder_policy_json, status, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`).bind(id, context.organization.id, data.projectId, project.client_id, data.idempotencyKey, data.description, data.amountCents, data.dueDate, reminders).run();
+      } catch (error) {
+        if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "charge_request_in_progress", "Esta cobrança já está sendo processada.");
+        throw error;
+      }
     }
+    // Uma nova tentativa reenvia exatamente o que foi gravado na primeira, não o formulário.
+    const sent = existing ?? { description: data.description, amount_cents: data.amountCents, due_date: data.dueDate };
     try {
       const result = await requestDrapApi<unknown>(connection.external_company_id, chargePath, {
         method: "POST",
         idempotencyKey: data.idempotencyKey,
-        body: {
-          customer_id: project.external_financial_id,
-          cost_center_id: project.external_financial_cost_center_id,
-          description: data.description,
-          amount_cents: data.amountCents,
-          due_date: data.dueDate,
-          reminder_policy: {
-            days_before: data.reminders.daysBefore,
-            on_due_date: data.reminders.onDueDate,
-            overdue_interval_days: data.reminders.overdueIntervalDays,
-          },
-        },
+        body: corpoDaCobranca({ externalCustomerId: project.external_financial_id, description: sent.description, amountCents: sent.amount_cents, dueDate: sent.due_date }),
       });
-      const charge = remoteCharge(result.data);
+      const charge = lerCobrancaDaDrap(result.data);
       await context.db.batch([
         context.db.prepare("UPDATE financial_charge_requests SET status = ?1, external_charge_id = ?2, share_url = ?3, last_error = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?4 AND organization_id = ?5").bind(charge.status, charge.id, charge.shareUrl, id, context.organization.id),
-        auditStatement(context, "financial_charge.created", "financial_charge", id, { projectId: data.projectId }),
+        auditStatement(context, "financial_charge.created", "financial_charge", id, { projectId: project.id }),
       ]);
-    } catch {
-      await context.db.prepare("UPDATE financial_charge_requests SET status = 'failed', last_error = 'drap_unavailable', updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND organization_id = ?2").bind(id, context.organization.id).run();
-      return Response.json({ error: "A Drap não confirmou a cobrança. Nenhum pagamento foi registrado na H.OIKOS.", code: "drap_charge_failed" }, { status: 502 });
+    } catch (cause) {
+      const remote = cause instanceof DrapApiError ? cause : null;
+      const lastError = remote ? `drap_http_${remote.status}` : "drap_unavailable";
+      await context.db.prepare("UPDATE financial_charge_requests SET status = 'failed', last_error = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND organization_id = ?3").bind(lastError, id, context.organization.id).run();
+      if (remote?.status === 429) {
+        const headers = remote.retryAfter ? { "Retry-After": remote.retryAfter } : undefined;
+        return Response.json({ error: "Limite de requisições da Drap atingido. Tente de novo em instantes; a cobrança não será duplicada.", code: "drap_rate_limited" }, { status: 429, headers });
+      }
+      if (remote && remote.status >= 400 && remote.status < 500) {
+        const reason = motivoDaRecusaDrap(remote.detail);
+        return Response.json({ error: `A Drap recusou a cobrança.${reason ? ` ${reason}` : ""}`, code: "drap_charge_rejected" }, { status: 422 });
+      }
+      return Response.json({ error: "A Drap não confirmou a cobrança. Tente de novo pelo mesmo formulário: a mesma chave impede cobrança em dobro.", code: "drap_charge_failed" }, { status: 502 });
     }
     const created = await context.db.prepare(`${select} WHERE r.id = ?1 AND r.organization_id = ?2`).bind(id, context.organization.id).first<ChargeRow>();
     return Response.json({ charge: response(created!) }, { status: 201 });

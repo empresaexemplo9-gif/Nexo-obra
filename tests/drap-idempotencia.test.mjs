@@ -33,10 +33,26 @@ test("nada além de identificador atravessa até a Drap", () => {
   }
 });
 
-test("a rota de lançamentos repassa a chave para a Drap", async () => {
-  const fonte = await (await import("node:fs/promises")).readFile(new URL("../app/api/integrations/drap/lancamentos/route.ts", import.meta.url), "utf8");
-  assert.match(fonte, /idempotencyKey: chaveIdempotenciaDe\(request\)/,
-    "sem isso o cabeçalho enviado pela tela morre na rota e não protege nada");
+test("toda escrita operacional exige a chave e a repassa para a Drap", async () => {
+  // PATCH e DELETE de lançamento, e parceiros e categorias, escreviam na Drap sem chave
+  // nenhuma: um tempo esgotado seguido de nova tentativa não tinha como ser deduplicado.
+  const { readFile } = await import("node:fs/promises");
+  const rotas = {
+    "lancamentos/route.ts": 1, "lancamentos/[id]/route.ts": 2,
+    "parceiros/route.ts": 1, "parceiros/[id]/route.ts": 2, "categorias/route.ts": 1,
+  };
+  for (const [rota, escritas] of Object.entries(rotas)) {
+    const fonte = await readFile(new URL(`../app/api/integrations/drap/${rota}`, import.meta.url), "utf8");
+    assert.equal(fonte.match(/requireChaveIdempotencia\(request\)/g)?.length, escritas, `${rota}: chave obrigatória em cada escrita`);
+    assert.equal(fonte.match(/idempotencyKey \}/g)?.length, escritas, `${rota}: chave repassada em cada escrita`);
+  }
+});
+
+test("sem chave válida a escrita é recusada antes de chegar à Drap", async () => {
+  const { requireChaveIdempotencia } = await vite.ssrLoadModule("/lib/server/drap-operational.ts");
+  assert.throws(() => requireChaveIdempotencia(comCabecalho(null)), (erro) => erro.status === 400 && erro.code === "idempotency_key_required");
+  const chave = "3f2b8c1e-5d4a-4b9e-8f7c-1a2b3c4d5e6f";
+  assert.equal(requireChaveIdempotencia(comCabecalho(chave)), chave);
 });
 
 test("o adaptador põe a chave no cabeçalho da chamada à Drap", async () => {
