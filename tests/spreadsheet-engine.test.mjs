@@ -165,9 +165,44 @@ test("ordenar reorganiza as linhas e recusa quando há fórmula na faixa", () =>
   const decrescente = sheet.sortRows(cells, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "desc" });
   assert.deepEqual([decrescente.cells.B2, decrescente.cells.B3, decrescente.cells.B4], ["300", "200", "100"]);
 
-  const comFormula = sheet.sortRows({ ...cells, B4: "=100+100" }, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "asc" });
-  assert.equal(comFormula.blocked, true, "recusa em vez de embaralhar o cálculo");
-  assert.equal(comFormula.cells.B4, "=100+100", "e não altera nada");
+  const ligaLinhas = sheet.sortRows({ ...cells, B4: "=B3+100" }, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "asc" });
+  assert.equal(ligaLinhas.blocked, true, "fórmula que liga uma linha a outra recusa em vez de embaralhar o cálculo");
+  assert.equal(ligaLinhas.cells.B4, "=B3+100", "e não altera nada");
+
+  const deFora = sheet.sortRows({ ...cells, D1: "=B3" }, { columns: 2, rows: 6, headerRow: 0, column: 1, direction: "asc" });
+  assert.equal(deFora.blocked, true, "célula fora do bloco apontando para uma linha dele também recusa");
+});
+
+test("ordenar planilha de modelo move as fórmulas da própria linha e mantém o total fixo", () => {
+  // Todo modelo tem fórmula em todas as linhas de dados. Antes, ordenar recusava sempre.
+  const cells = {
+    A1: "Item", B1: "Qtd", C1: "Unit", D1: "Total",
+    A2: "Areia", B2: "3", C2: "100", D2: '=SE(B2="";"";B2*C2)',
+    A3: "Cimento", B3: "10", C3: "40", D3: '=SE(B3="";"";B3*C3)',
+    D4: '=SE(B4="";"";B4*C4)',
+    A5: "Brita", B5: "1", C5: "90", D5: '=SE(B5="";"";B5*C5)',
+    A6: "Total", D6: "=SOMA(D2:D5)",
+  };
+  const antes = sheet.evaluateSheet(cells).D6.value;
+  const ordenado = sheet.sortRows(cells, { columns: 4, rows: 8, headerRow: 0, column: 3, direction: "desc", fixedRows: [5] });
+  assert.equal(ordenado.blocked, false);
+  assert.deepEqual([ordenado.cells.A2, ordenado.cells.A3, ordenado.cells.A4], ["Cimento", "Areia", "Brita"]);
+  assert.equal(ordenado.cells.D2, '=SE(B2="";"";B2*C2)', "a fórmula aponta para a linha nova");
+  assert.equal(ordenado.cells.D5, '=SE(B5="";"";B5*C5)', "linha só com fórmula do modelo vai para o fim");
+  assert.equal(ordenado.cells.A5, undefined);
+  assert.equal(ordenado.cells.D6, "=SOMA(D2:D5)", "a linha de total fica onde está");
+  assert.equal(sheet.evaluateSheet(ordenado.cells).D6.value, antes, "e o total não muda");
+
+  const crescente = sheet.sortRows(cells, { columns: 4, rows: 8, headerRow: 0, column: 0, direction: "asc", fixedRows: [5] });
+  assert.deepEqual([crescente.cells.A2, crescente.cells.A3, crescente.cells.A4], ["Areia", "Brita", "Cimento"]);
+});
+
+test("ordenar põe números antes de texto e vazios no fim nas duas direções", () => {
+  const cells = { A1: "V", A2: "b", A3: "10", A4: "a", A5: "2", B6: "x" };
+  const asc = sheet.sortRows(cells, { columns: 2, rows: 7, headerRow: 0, column: 0, direction: "asc" });
+  assert.deepEqual([2, 3, 4, 5, 6].map((row) => asc.cells[`A${row}`] ?? asc.cells[`B${row}`]), ["2", "10", "a", "b", "x"]);
+  const desc = sheet.sortRows(cells, { columns: 2, rows: 7, headerRow: 0, column: 0, direction: "desc" });
+  assert.deepEqual([2, 3, 4, 5, 6].map((row) => desc.cells[`A${row}`] ?? desc.cells[`B${row}`]), ["10", "2", "b", "a", "x"]);
 });
 
 test("texto entre aspas não é confundido com endereço ao reajustar", () => {

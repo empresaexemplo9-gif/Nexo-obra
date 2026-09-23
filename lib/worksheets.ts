@@ -1,14 +1,20 @@
 import { z } from "zod";
 import { advancedSchema } from "@/lib/worksheet-advanced";
+import { cellStyleSchema, mergesSchema } from "@/lib/worksheet-format";
 
-import { SHEET_MAX_COLUMNS, SHEET_MAX_ROWS } from "@/lib/spreadsheet";
+import { parseCellKey, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS } from "@/lib/spreadsheet";
 
 export const worksheetKinds = ["sheet", "document", "analysis"] as const;
 
-export const cellsSchema = z.record(
-  z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,3}$/),
-  z.string().max(2000),
-).refine((cells) => Object.keys(cells).length <= 20_000, { message: "A planilha excedeu o limite de células." });
+// A chave precisa cair dentro da grade (AZ500). O formato sozinho aceitava ZZ9999: a célula
+// ficava invisível na tela, entrava nas contas e travava a exportação XLSX.
+const cellKeySchema = z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,3}$/).refine((key) => {
+  const address = parseCellKey(key);
+  return !!address && address.column < SHEET_MAX_COLUMNS && address.row < SHEET_MAX_ROWS;
+}, "Célula fora do limite da planilha (AZ500).");
+
+export const cellsSchema = z.record(cellKeySchema, z.string().max(2000))
+  .refine((cells) => Object.keys(cells).length <= 20_000, { message: "A planilha excedeu o limite de células." });
 
 const columnLetter = z.string().regex(/^[A-Z]{1,2}$/);
 
@@ -27,8 +33,14 @@ export const contentSchema = z.object({
   cells: cellsSchema.default({}),
   body: z.string().max(400_000).default(""),
   widths: z.record(z.string(), z.number().int().min(60).max(600)).default({}),
-  formats: z.record(columnLetter, z.enum(["texto", "numero", "moeda", "percentual"])).default({}),
-  bold: z.array(z.string().regex(/^[A-Z]{1,2}[1-9]\d{0,3}$/)).max(5000).default([]),
+  formats: z.record(columnLetter, z.enum(["texto", "numero", "moeda", "contabil", "percentual"])).default({}),
+  // Colunas da esquerda que ficam paradas ao rolar para o lado. Duas no máximo: em 320 px
+  // três colunas fixas ocupariam a tela inteira.
+  frozenColumns: z.number().int().min(0).max(2).default(0),
+  bold: z.array(cellKeySchema).max(5000).default([]),
+  // Itálico, sublinhado, alinhamento, quebra e cores por célula; mesclagens como "A1:C1".
+  styles: z.record(cellKeySchema, cellStyleSchema).refine((styles) => Object.keys(styles).length <= 20_000, "Formatação em células demais.").default({}),
+  merges: mergesSchema.default([]),
   recipes: z.array(z.object({
     name: z.string().trim().min(1).max(80),
     actions: z.array(z.enum(["trim", "upper", "lower", "number", "values", "clear"])).min(1).max(12),

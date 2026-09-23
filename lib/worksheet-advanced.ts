@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { cellKey, parseCellKey, type SheetResult } from "@/lib/spreadsheet";
+import { cellKey, parseCellKey, parseNumber, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type SheetResult } from "@/lib/spreadsheet";
 
 export function rangeCells(range: string) {
   if (!/^[A-Z]{1,2}[1-9]\d{0,2}(:[A-Z]{1,2}[1-9]\d{0,2})?$/.test(range)) throw new Error("Use um intervalo como A2:B50.");
@@ -20,7 +20,7 @@ export const validationRuleSchema = z.object({
 export const conditionalRuleSchema = z.object({
   range: rangeSchema, kind: z.enum(["greater", "less", "equal", "contains", "blank"]),
   value: z.string().max(200).default(""), color: z.enum(["green", "red", "yellow", "blue"]),
-}).strict().refine(rule => !["greater", "less"].includes(rule.kind) || (rule.value.trim() !== "" && Number.isFinite(Number(rule.value.replace(",", ".")))), "Informe um número válido.");
+}).strict().refine(rule => !["greater", "less"].includes(rule.kind) || parseNumber(rule.value) !== null, "Informe um número válido.");
 export const summaryViewSchema = z.object({
   name: z.string().trim().min(1).max(80), range: rangeSchema,
   groupColumn: z.number().int().min(0).max(51), valueColumn: z.number().int().min(0).max(51),
@@ -36,6 +36,15 @@ export type SummaryView = z.infer<typeof summaryViewSchema>;
 export const emptyAdvanced: AdvancedSettings = { validations: [], conditions: [], views: [] };
 export const ruleColors = { green: "#dcfce7", red: "#fee2e2", yellow: "#fef9c3", blue: "#dbeafe" };
 
+/** DD/MM/AAAA, como se digita no Brasil e como HOJE() escreve, ou AAAA-MM-DD. */
+export function dataValida(text: string) {
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text.trim());
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text.trim());
+  const [year, month, day] = br ? [Number(br[3]), Number(br[2]), Number(br[1])] : iso ? [Number(iso[1]), Number(iso[2]), Number(iso[3])] : [NaN, NaN, NaN];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return Number.isFinite(date.getTime()) && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 export function validationIssues(computed: SheetResult, settings: AdvancedSettings) {
   const issues = new Map<string, string>();
   for (const rule of settings.validations) for (const key of rangeCells(rule.range).keys) {
@@ -44,12 +53,8 @@ export function validationIssues(computed: SheetResult, settings: AdvancedSettin
     let valid = !cell?.error && !blank;
     if (valid && rule.kind === "list") valid = rule.options.includes(String(value));
     if (valid && rule.kind === "number") valid = typeof value === "number" && (rule.min === undefined || value >= rule.min) && (rule.max === undefined || value <= rule.max);
-    if (valid && rule.kind === "date") {
-      const text = String(value);
-      const date = /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(text + "T00:00:00Z") : null;
-      valid = !!date && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === text;
-    }
-    if (!valid) issues.set(key, rule.kind === "list" ? "Escolha um valor da lista." : rule.kind === "date" ? "Use uma data válida AAAA-MM-DD." : rule.kind === "number" ? "Número fora da regra de validação." : "Preenchimento obrigatório.");
+    if (valid && rule.kind === "date") valid = dataValida(String(value));
+    if (!valid) issues.set(key, rule.kind === "list" ? "Escolha um valor da lista." : rule.kind === "date" ? "Use uma data válida, como 23/09/2026." : rule.kind === "number" ? "Número fora da regra de validação." : "Preenchimento obrigatório.");
   }
   return issues;
 }
@@ -59,9 +64,13 @@ export function conditionalColors(computed: SheetResult, settings: AdvancedSetti
   for (const rule of settings.conditions) for (const key of rangeCells(rule.range).keys) {
     const cell = computed[key];
     if (cell?.error) continue;
-    const value = cell?.value ?? "", target = Number(rule.value.replace(",", "."));
-    const match = rule.kind === "blank" ? value === "" : rule.kind === "contains" ? String(value).toLocaleLowerCase("pt-BR").includes(rule.value.toLocaleLowerCase("pt-BR"))
-      : rule.kind === "equal" ? String(value) === rule.value : typeof value === "number" && (rule.kind === "greater" ? value > target : value < target);
+    // O valor da regra é lido como a célula: "1.500,5" é o número 1500,5. Comparar o texto
+    // cru fazia "igual a 1500,5" nunca casar com a célula que vale 1500,5.
+    const value = cell?.value ?? "", target = parseNumber(rule.value);
+    const texto = (item: unknown) => String(item).trim().toLocaleLowerCase("pt-BR");
+    const match = rule.kind === "blank" ? value === "" : rule.kind === "contains" ? texto(value).includes(texto(rule.value))
+      : rule.kind === "equal" ? (typeof value === "number" && target !== null ? value === target : texto(value) === texto(rule.value))
+      : typeof value === "number" && target !== null && (rule.kind === "greater" ? value > target : value < target);
     if (match) colors[key] = ruleColors[rule.color];
   }
   return colors;
@@ -96,7 +105,11 @@ export function moveAdvanced(settings: AdvancedSettings, axis: "row" | "column",
     if (delta < 0 && a[axis] === index && b[axis] === index) return null;
     a[axis] = a[axis] < index ? a[axis] : Math.max(index, a[axis] + delta);
     b[axis] = b[axis] < index ? b[axis] : b[axis] + delta;
-    if (b.row >= 500 || b.column >= 52) throw new Error("A inserção deslocaria uma regra além do limite da planilha.");
+    // Uma regra como A2:A500 cobre a coluna inteira. Lançar erro aqui cancelava a inserção
+    // da linha inteira; o certo é a regra parar no limite da planilha.
+    const limite = axis === "row" ? SHEET_MAX_ROWS : SHEET_MAX_COLUMNS;
+    if (a[axis] >= limite) return null;
+    b[axis] = Math.min(b[axis], limite - 1);
     return `${cellKey(a)}:${cellKey(b)}`;
   }
   return {

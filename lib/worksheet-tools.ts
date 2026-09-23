@@ -1,4 +1,5 @@
-import { cellKey, displayValue, evaluateSheet, parseCellKey, parseNumber, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type CellResult, type SheetCells } from "./spreadsheet";
+import { fillColors, mergeLayout, styleCss, type CellStyles } from "./worksheet-format";
+import { cellKey, columnName, displayValue, evaluateSheet, parseCellKey, parseNumber, SHEET_FUNCTIONS, SHEET_MAX_COLUMNS, SHEET_MAX_ROWS, type CellResult, type SheetCells, type SheetResult } from "./spreadsheet";
 
 export const bulkActions = {
   trim: "Remover espaços extras", upper: "Converter para maiúsculas", lower: "Converter para minúsculas",
@@ -88,6 +89,11 @@ export function placeTable(cells: SheetCells, start: string, table: string[][]) 
 export function formattedCell(result: CellResult | undefined, format: string | undefined) {
   if (!result || result.error || typeof result.value !== "number") return result?.display ?? "";
   if (format === "moeda") return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(result.value);
+  // Contábil: negativo entre parênteses (e em vermelho na grade), como no Excel.
+  if (format === "contabil") {
+    const texto = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(result.value));
+    return result.value < 0 ? `(${texto})` : texto;
+  }
   if (format === "percentual") return new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 2 }).format(result.value);
   if (format === "numero") return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(result.value);
   return result.display;
@@ -105,4 +111,78 @@ export function selectionToTsv(cells: SheetCells, keys: string[]) {
     const text = typeof value === "number" ? String(value).replace(".", ",") : displayValue(value ?? null);
     return /[\t\n\r"]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
   }).join("\t")).join("\n");
+}
+
+/** O formato contábil pinta o negativo de vermelho. Os outros formatos não: nem todo
+ *  negativo é prejuízo (desvio abaixo do previsto é economia). */
+export function negativoEmDestaque(result: CellResult | undefined, format: string | undefined) {
+  return format === "contabil" && !!result && !result.error && typeof result.value === "number" && result.value < 0;
+}
+
+const semAcento = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+/**
+ * Funções que completam o nome que está sendo digitado no fim da fórmula. "=SO" sugere
+ * SOMA e SOMASE; "=A1+ME" sugere MEDIA e MEDIANA. Fora de fórmula, ou dentro de texto
+ * entre aspas, não sugere nada.
+ */
+export function sugestoesDeFuncao(raw: string, limite = 6): { parcial: string; funcoes: string[] } {
+  if (!raw.startsWith("=")) return { parcial: "", funcoes: [] };
+  if ((raw.match(/"/g)?.length ?? 0) % 2 === 1) return { parcial: "", funcoes: [] };
+  const match = /(?:^=|[=(;+\-*/^&<>\s])([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ.]*)$/.exec(raw);
+  if (!match) return { parcial: "", funcoes: [] };
+  const parcial = match[1];
+  // "=A" pode ser o começo de A1: a sugestão aparece, mas some ao digitar o número.
+  const alvo = semAcento(parcial);
+  const funcoes = SHEET_FUNCTIONS.filter((name) => name.startsWith(alvo) && name !== alvo).slice(0, limite);
+  return { parcial, funcoes: [...funcoes] };
+}
+
+/** Completa a fórmula com a função escolhida, já abrindo o parêntese. */
+export function aplicarSugestao(raw: string, parcial: string, funcao: string) {
+  return `${raw.slice(0, raw.length - parcial.length)}${funcao}(`;
+}
+
+/**
+ * Tabela pronta para imprimir: os valores já calculados e formatados, recortada até a
+ * última linha e a última coluna preenchidas. Imprimir 500 linhas vazias desperdiça papel.
+ */
+export function tabelaParaImpressao(
+  computed: SheetResult, formats: Record<string, string>, bold: string[], columns: number, rows: number,
+  styles: CellStyles = {}, merges: string[] = [],
+) {
+  let ultimaLinha = -1, ultimaColuna = -1;
+  const layout = mergeLayout(merges);
+  const alcancar = (row: number, column: number) => {
+    if (row >= rows || column >= columns) return;
+    ultimaLinha = Math.max(ultimaLinha, row);
+    ultimaColuna = Math.max(ultimaColuna, column);
+  };
+  for (const [key, result] of Object.entries(computed)) {
+    const address = parseCellKey(key);
+    if (!address || result.display === "") continue;
+    alcancar(address.row, address.column);
+    // Um título mesclado sobre A1:F1 precisa levar as seis colunas para o papel.
+    const bloco = layout.anchors.get(key)?.bounds;
+    if (bloco) alcancar(bloco.bottom, bloco.right);
+  }
+  const negrito = new Set(bold);
+  const letras = Array.from({ length: ultimaColuna + 1 }, (_, column) => columnName(column));
+  const linhas = Array.from({ length: ultimaLinha + 1 }, (_, row) => letras.map((letra, column) => {
+    const key = cellKey({ column, row });
+    const result = computed[key];
+    const bloco = layout.anchors.get(key);
+    const estilo = styles[key];
+    return {
+      texto: formattedCell(result, formats[letra]),
+      numero: typeof result?.value === "number" && !result.error,
+      negrito: negrito.has(key),
+      negativo: negativoEmDestaque(result, formats[letra]),
+      coberta: layout.covered.has(key),
+      colSpan: bloco ? Math.min(bloco.colSpan, ultimaColuna - column + 1) : 1,
+      rowSpan: bloco ? Math.min(bloco.rowSpan, ultimaLinha - row + 1) : 1,
+      css: { ...styleCss(estilo), ...(estilo?.fill ? { backgroundColor: fillColors[estilo.fill] } : {}) },
+    };
+  }));
+  return { letras, linhas };
 }

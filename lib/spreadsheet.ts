@@ -647,49 +647,114 @@ export function fillDown(cells: SheetCells, fromKey: string, untilRow: number): 
   return next;
 }
 
-// Ordenar move linhas inteiras. Uma fórmula que aponta para outra linha passaria a
-// apontar para o lugar errado, então a ordenação é recusada quando existe fórmula na
-// faixa — recusar é melhor do que embaralhar o cálculo sem avisar.
+const REFERENCIA = /(\$?)([A-Za-z]{1,2})(\$?)(\d{1,4})(?![A-Za-z0-9_.(])/g;
+const INTERVALO = /\$?([A-Za-z]{1,2})\$?(\d{1,4})\s*:\s*\$?([A-Za-z]{1,2})\$?(\d{1,4})(?![A-Za-z0-9_.(])/g;
+
+/** Linhas referenciadas por uma fórmula, com os intervalos à parte. Texto entre aspas não conta. */
+function linhasReferenciadas(formula: string) {
+  const semTexto = formula.replace(/"[^"]*"|'[^']*'/g, "");
+  const intervalos: Array<{ de: number; ate: number }> = [];
+  const resto = semTexto.replace(INTERVALO, (_m, _c1, r1: string, _c2, r2: string) => {
+    const a = Number(r1) - 1, b = Number(r2) - 1;
+    intervalos.push({ de: Math.min(a, b), ate: Math.max(a, b) });
+    return " ";
+  });
+  const avulsas = [...resto.matchAll(REFERENCIA)].map((match) => Number(match[4]) - 1);
+  return { intervalos, avulsas };
+}
+
+function chaveDeOrdem(value: CellResult["value"] | undefined): number | string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return value;
+  if (typeof value === "boolean") return value ? "VERDADEIRO" : "FALSO";
+  return value;
+}
+
+/**
+ * Ordena o bloco de dados abaixo do cabeçalho pela coluna escolhida.
+ *
+ * O bloco termina na primeira linha fixa (a linha de total do modelo), que fica onde está.
+ * Fórmula que só usa a própria linha — `=D5*E5`, o caso de todo modelo — anda junto com a
+ * linha e é reescrita para o novo número. Recusa quando uma fórmula liga uma linha do bloco
+ * a outra (saldo acumulado, `=F4+F5`) ou quando alguém fora do bloco aponta para uma linha
+ * específica dele: nesses casos ordenar mudaria o cálculo sem aviso. Intervalo que cobre o
+ * bloco inteiro, como o total `=SOMA(F2:F61)`, continua certo depois de ordenar.
+ *
+ * Linhas sem nenhum valor digitado (só com as fórmulas do modelo) e valores vazios vão
+ * para o fim nas duas direções; números vêm antes de texto.
+ */
 export function sortRows(
   cells: SheetCells,
-  options: { columns: number; rows: number; headerRow: number; column: number; direction: "asc" | "desc" },
-): { cells: SheetCells; blocked: boolean } {
+  options: { columns: number; rows: number; headerRow: number; column: number; direction: "asc" | "desc"; fixedRows?: number[] },
+): { cells: SheetCells; blocked: boolean; destination: Record<number, number>; range: [number, number] } {
   const { columns, rows, headerRow, column, direction } = options;
-  const body: Array<{ values: Array<string | undefined>; sortKey: string | number }> = [];
+  const inicio = headerRow + 1;
+  const fim = Math.min(rows, ...(options.fixedRows ?? []).filter((row) => row > headerRow));
+  const dentro = (row: number) => row >= inicio && row < fim;
   const computed = evaluateSheet(cells);
+  const recusa = { cells, blocked: true, destination: {}, range: [inicio, fim] as [number, number] };
 
-  for (let row = headerRow + 1; row < rows; row += 1) {
-    const values: Array<string | undefined> = [];
-    let empty = true;
-    for (let index = 0; index < columns; index += 1) {
-      const raw = cells[cellKey({ column: index, row })];
-      if (raw !== undefined && raw !== "") empty = false;
-      if (raw?.startsWith("=")) return { cells, blocked: true };
-      values.push(raw);
+  for (const [key, raw] of Object.entries(cells)) {
+    if (!raw.startsWith("=")) continue;
+    const address = parseCellKey(key);
+    if (!address) continue;
+    const { intervalos, avulsas } = linhasReferenciadas(raw.slice(1));
+    if (dentro(address.row)) {
+      if (avulsas.some((row) => row !== address.row && dentro(row))) return recusa;
+      if (intervalos.some(({ de, ate }) => (de !== address.row || ate !== address.row) && ate >= inicio && de < fim)) return recusa;
+    } else {
+      if (avulsas.some(dentro)) return recusa;
+      if (intervalos.some(({ de, ate }) => ate >= inicio && de < fim && (de > inicio || ate < fim - 1))) return recusa;
     }
-    if (empty) continue;
-    const value = computed[cellKey({ column, row })]?.value;
-    body.push({ values, sortKey: typeof value === "number" ? value : String(value ?? "") });
   }
 
-  body.sort((left, right) => {
-    if (typeof left.sortKey === "number" && typeof right.sortKey === "number") return left.sortKey - right.sortKey;
-    return String(left.sortKey).localeCompare(String(right.sortKey), "pt-BR");
+  const linhas: Array<{ row: number; values: Array<string | undefined>; chave: number | string | null; semDado: boolean }> = [];
+  const vazias: number[] = [];
+  for (let row = inicio; row < fim; row += 1) {
+    const values: Array<string | undefined> = [];
+    let vazia = true, semDado = true;
+    for (let index = 0; index < columns; index += 1) {
+      const raw = cells[cellKey({ column: index, row })];
+      if (raw !== undefined && raw !== "") {
+        vazia = false;
+        if (!raw.startsWith("=")) semDado = false;
+      }
+      values.push(raw);
+    }
+    if (vazia) { vazias.push(row); continue; }
+    linhas.push({ row, values, chave: semDado ? null : chaveDeOrdem(computed[cellKey({ column, row })]?.value), semDado });
+  }
+
+  const sinal = direction === "desc" ? -1 : 1;
+  linhas.sort((left, right) => {
+    if (left.semDado !== right.semDado) return left.semDado ? 1 : -1;
+    if (left.chave === null || right.chave === null) return left.chave === right.chave ? 0 : left.chave === null ? 1 : -1;
+    if (typeof left.chave === "number" && typeof right.chave === "number") return sinal * (left.chave - right.chave);
+    if (typeof left.chave === "number") return -1;
+    if (typeof right.chave === "number") return 1;
+    return sinal * left.chave.localeCompare(right.chave, "pt-BR", { numeric: true, sensitivity: "base" });
   });
-  if (direction === "desc") body.reverse();
 
   const next: SheetCells = {};
   for (const [key, raw] of Object.entries(cells)) {
     const address = parseCellKey(key);
-    if (address && address.row > headerRow) continue;
+    if (address && dentro(address.row)) continue;
     next[key] = raw;
   }
-  body.forEach((entry, index) => {
+  // Para onde foi cada linha do bloco. As vazias vão depois das preenchidas, na ordem em
+  // que estavam, para a formatação delas (negrito, cor) não cair em cima de um dado.
+  const destination: Record<number, number> = {};
+  [...linhas.map((entry) => entry.row), ...vazias].forEach((row, index) => { destination[row] = inicio + index; });
+  linhas.forEach((entry, index) => {
+    const destino = inicio + index;
     entry.values.forEach((raw, columnIndex) => {
-      if (raw !== undefined && raw !== "") next[cellKey({ column: columnIndex, row: headerRow + 1 + index })] = raw;
+      if (raw === undefined || raw === "") return;
+      next[cellKey({ column: columnIndex, row: destino })] = raw.startsWith("=")
+        ? `=${rewriteReferences(raw.slice(1), (address) => cellKey(address.row === entry.row ? { ...address, row: destino } : address))}`
+        : raw;
     });
   });
-  return { cells: next, blocked: false };
+  return { cells: next, blocked: false, destination, range: [inicio, fim] };
 }
 
 // Reposiciona os parâmetros da análise financeira quando a grade muda de forma.

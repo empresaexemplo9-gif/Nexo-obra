@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowDownAZ, ArrowDownWideNarrow, ChartNoAxesCombined, CircleAlert, Columns3, Download, FileSpreadsheet,
-  FileText, LoaderCircle, Plus, Redo2, Rows3, Save, ShieldCheck, Sigma, Table2, Trash2, Undo2,
+  AlignCenter, AlignLeft, AlignRight, Bold, FileText, Italic, LoaderCircle, Plus, Printer, Redo2, RemoveFormatting, Rows3, Save,
+  ShieldCheck, Sigma, Strikethrough, Table2, TableCellsMerge, TableCellsSplit, Trash2, Underline, Undo2, WrapText,
 } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,11 +29,15 @@ import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
-import { formattedCell, placeTable, selectionToTsv } from "@/lib/worksheet-tools";
+import { aplicarSugestao, formattedCell, negativoEmDestaque, placeTable, selectionToTsv, sugestoesDeFuncao, tabelaParaImpressao } from "@/lib/worksheet-tools";
 import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
 import { WorksheetAdvancedPanel } from "@/components/worksheet-advanced-panel";
 import { WorksheetXlsxPanel } from "@/components/worksheet-xlsx-panel";
 import { conditionalColors, emptyAdvanced, moveAdvanced, validationIssues, type AdvancedSettings } from "@/lib/worksheet-advanced";
+import {
+  boundsOf, cellsHiddenByMerge, clearStyles, colorLabels, fillColors, mergeAt, mergeLayout, mergeRange, mergeSpansRows, rangeOf,
+  remapRows, setStyle, shiftKeyed, shiftMerges, styleCss, textColors, toggleFlag, unmergeAt, type CellStyle, type CellStyles, type StyleFlag,
+} from "@/lib/worksheet-format";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
 type WorksheetSummary = {
@@ -42,6 +49,9 @@ type WorksheetContent = {
   formats: Record<string, string>; bold: string[]; analysis: AnalysisSettings;
   recipes?: WorksheetRecipe[];
   advanced?: AdvancedSettings;
+  frozenColumns?: number;
+  styles?: CellStyles;
+  merges?: string[];
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
@@ -82,11 +92,15 @@ function arredondarExibicao(valor: number | null) {
 
 type AxisSelection = { kind: SheetAxis; index: number };
 
+const LARGURA_PADRAO = 120, LARGURA_MIN = 60, LARGURA_MAX = 600, LARGURA_GUIA = 48;
+
 function Grid({
   cells, columns, rows, computed, active, selected, axis,
   onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
-  formats, bold, widths, filter, readOnly, onCopyCells, colors, issues,
+  formats, bold, widths, filter, readOnly, onCopyCells, colors, issues, frozen: fixasPedidas, onWidth, styles, merges, onFormatar,
 }: {
+  frozen: number; onWidth: (column: number, width: number) => void;
+  styles: CellStyles; merges: string[]; onFormatar: (atalho: "bold" | "italic" | "underline") => void;
   colors: Record<string, string>; issues: Map<string, string>;
   formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
   onCopyCells: () => string;
@@ -105,6 +119,39 @@ function Grid({
   // Arrastar só com mouse/caneta. No toque, o arrasto continua rolando a grade — que é o
   // gesto que a pessoa espera num celular, e o único jeito de alcançar a coluna G.
   const arrastando = useRef(false);
+  // Largura durante o arrasto da borda. Só vai para o histórico ao soltar: gravar a cada
+  // pixel encheria o desfazer de passos inúteis.
+  const [larguraAoVivo, setLarguraAoVivo] = useState<{ column: number; width: number } | null>(null);
+  const largura = (column: number) => larguraAoVivo?.column === column ? larguraAoVivo.width : widths[columnName(column)] ?? LARGURA_PADRAO;
+  // Deslocamento de cada coluna fixa: a guia de números mais a largura das fixas à esquerda.
+  const esquerdaFixa = (column: number) => LARGURA_GUIA + Array.from({ length: column }, (_, index) => largura(index)).reduce((total, value) => total + value, 0);
+  const layout = useMemo(() => mergeLayout(merges), [merges]);
+  // A guia de números tem largura exata: a coluna fixa é colada nela por `left`, e uma guia
+  // mais estreita que o previsto fazia a coluna A cobrir o começo da B.
+  // A sombra de 1 px cobre a borda: com `border-collapse`, a borda não acompanha a célula
+  // fixa e o texto que rola por baixo aparecia pela fresta.
+  const guia: CSSProperties = { width: LARGURA_GUIA, minWidth: LARGURA_GUIA, maxWidth: LARGURA_GUIA, boxShadow: "-1px 0 0 0 var(--color-hoikos-200), 2px 0 0 0 var(--color-hoikos-200)" };
+  // Coluna fixa larga numa tela estreita tomaria a grade inteira e travaria a rolagem. Se
+  // não sobra ao menos uma coluna visível ao lado, a fixação fica desligada nessa tela.
+  const gradeRef = useRef<HTMLDivElement>(null);
+  const [larguraVisivel, setLarguraVisivel] = useState(Number.POSITIVE_INFINITY);
+  useEffect(() => {
+    const grade = gradeRef.current;
+    if (!grade || typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(([entrada]) => { if (entrada) setLarguraVisivel(entrada.contentRect.width); });
+    observador.observe(grade);
+    return () => observador.disconnect();
+  }, []);
+  const negrito = useMemo(() => new Set(bold), [bold]);
+  const frozen = esquerdaFixa(fixasPedidas) + LARGURA_PADRAO <= larguraVisivel ? fixasPedidas : 0;
+  const estiloColuna = (column: number, fundo?: string, ate = column): CSSProperties => {
+    // Bloco mesclado ocupa a soma das colunas que cobre.
+    const w = Array.from({ length: ate - column + 1 }, (_, index) => largura(column + index)).reduce((total, value) => total + value, 0);
+    return {
+      width: w, minWidth: w, maxWidth: w,
+      ...(column < frozen ? { position: "sticky", left: esquerdaFixa(column), zIndex: 5, backgroundColor: fundo ?? "var(--background)" } : fundo ? { backgroundColor: fundo } : {}),
+    };
+  };
 
   useEffect(() => {
     const soltar = () => { arrastando.current = false; };
@@ -123,17 +170,21 @@ function Grid({
   function move(key: string, deltaColumn: number, deltaRow: number, estender = false) {
     const address = parseCellKey(key);
     if (!address) return;
-    const next = cellKey({
-      column: Math.max(0, Math.min(columns - 1, address.column + deltaColumn)),
-      row: Math.max(0, Math.min(rows - 1, address.row + deltaRow)),
+    // Saindo de um bloco mesclado, a seta parte da borda dele; entrando, para na âncora.
+    const bloco = layout.anchors.get(key)?.bounds;
+    const origem = bloco ? { column: deltaColumn > 0 ? bloco.right : address.column, row: deltaRow > 0 ? bloco.bottom : address.row } : address;
+    const vizinha = cellKey({
+      column: Math.max(0, Math.min(columns - 1, origem.column + deltaColumn)),
+      row: Math.max(0, Math.min(rows - 1, origem.row + deltaRow)),
     });
+    const next = layout.covered.get(vizinha) ?? vizinha;
     if (estender) onEstender(next); else onActive(next);
     document.getElementById(`cell-${next}`)?.focus();
   }
 
   // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
   // o gesto já existia e produzia um efeito feio e sem função nenhuma.
-  return <div className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
+  return <div ref={gradeRef} className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
     if (editing) return;
     event.preventDefault(); event.clipboardData.setData("text/plain", onCopyCells());
   }} onPaste={event => {
@@ -146,15 +197,46 @@ function Grid({
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
-          <th className="sticky left-0 z-20 w-12 border border-hoikos-200 bg-hoikos-100 p-1 text-xs font-medium text-hoikos-600">#</th>
+          <th style={guia} className="sticky left-0 z-20 border border-hoikos-200 bg-hoikos-100 p-1 text-xs font-medium text-hoikos-600">#</th>
           {Array.from({ length: columns }, (_, column) => (
-            <th key={column} className="min-w-[7.5rem] border border-hoikos-200 p-0 text-xs font-medium">
+            <th key={column} style={{ ...estiloColuna(column, "var(--color-hoikos-100, #f1f5f9)"), ...(column < frozen ? { zIndex: 25, boxShadow: "1px 0 0 0 var(--color-hoikos-200)" } : {}) }} className="relative border border-hoikos-200 p-0 text-xs font-medium">
               <button
                 type="button" onClick={() => onAxis("column", column)}
                 aria-label={`Selecionar coluna ${columnName(column)}`}
                 aria-pressed={axis?.kind === "column" && axis.index === column}
                 className={`h-7 w-full px-1 ${axis?.kind === "column" && axis.index === column ? "bg-hoikos-700 text-white" : "bg-hoikos-100 text-hoikos-700"}`}
               >{columnName(column)}</button>
+              {readOnly ? null : <div
+                role="separator" aria-orientation="vertical" tabIndex={0}
+                aria-label={`Largura da coluna ${columnName(column)}`}
+                aria-valuemin={LARGURA_MIN} aria-valuemax={LARGURA_MAX} aria-valuenow={largura(column)}
+                title="Arraste para ajustar a largura. Com o teclado, use as setas."
+                className="absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize touch-none outline-none hover:bg-hoikos-400 focus-visible:bg-hoikos-600"
+                onPointerDown={(event) => {
+                  event.preventDefault();
+                  const inicio = event.clientX, base = largura(column);
+                  const alvo = event.currentTarget;
+                  alvo.setPointerCapture(event.pointerId);
+                  const mover = (evento: PointerEvent) => setLarguraAoVivo({ column, width: Math.max(LARGURA_MIN, Math.min(LARGURA_MAX, Math.round(base + evento.clientX - inicio))) });
+                  const soltar = (evento: PointerEvent) => {
+                    alvo.removeEventListener("pointermove", mover);
+                    alvo.removeEventListener("pointerup", soltar);
+                    alvo.removeEventListener("pointercancel", soltar);
+                    const final = Math.max(LARGURA_MIN, Math.min(LARGURA_MAX, Math.round(base + evento.clientX - inicio)));
+                    setLarguraAoVivo(null);
+                    if (final !== base) onWidth(column, final);
+                  };
+                  alvo.addEventListener("pointermove", mover);
+                  alvo.addEventListener("pointerup", soltar);
+                  alvo.addEventListener("pointercancel", soltar);
+                }}
+                onKeyDown={(event) => {
+                  const passo = event.shiftKey ? 40 : 10;
+                  const atual = largura(column);
+                  if (event.key === "ArrowRight") { event.preventDefault(); onWidth(column, Math.min(LARGURA_MAX, atual + passo)); }
+                  if (event.key === "ArrowLeft") { event.preventDefault(); onWidth(column, Math.max(LARGURA_MIN, atual - passo)); }
+                }}
+              />}
             </th>
           ))}
         </tr>
@@ -162,7 +244,7 @@ function Grid({
       <tbody>
         {Array.from({ length: rows }, (_, row) => (
           <tr key={row} hidden={!!filter.trim() && !Array.from({ length: columns }, (_, column) => formattedCell(computed[cellKey({ column, row })], formats[columnName(column)])).join(" ").toLocaleLowerCase("pt-BR").includes(filter.trim().toLocaleLowerCase("pt-BR"))}>
-            <th className="sticky left-0 z-10 border border-hoikos-200 p-0 text-xs font-medium">
+            <th style={guia} className="sticky left-0 z-10 border border-hoikos-200 bg-hoikos-100 p-0 text-xs font-medium">
               <button
                 type="button" onClick={() => onAxis("row", row)}
                 aria-label={`Selecionar linha ${row + 1}`}
@@ -172,12 +254,34 @@ function Grid({
             </th>
             {Array.from({ length: columns }, (_, column) => {
               const key = cellKey({ column, row });
+              if (layout.covered.has(key)) return null;
+              const bloco = layout.anchors.get(key);
+              const estilo = styles[key];
               const result = computed[key];
               const isActive = active === key;
               const isEditing = editing === key;
               const inAxis = axis ? (axis.kind === "row" ? axis.index === row : axis.index === column) : false;
               const isSelected = selected.has(key);
-              return <td key={key} title={issues.get(key)} style={{ backgroundColor: colors[key], boxShadow: issues.has(key) ? "inset 0 -3px #dc2626" : undefined, minWidth: widths[columnName(column)] ?? 120, fontWeight: bold.includes(key) ? 700 : undefined }} className={`border p-0 ${inAxis || isSelected ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}>
+              const fixa = column < frozen;
+              const marcada = inAxis || isSelected;
+              // A cor condicional é regra de dado e vence o preenchimento escolhido à mão.
+              const fundo = colors[key] ?? (estilo?.fill ? fillColors[estilo.fill] : undefined);
+              return <td
+                key={key} title={issues.get(key)}
+                colSpan={bloco?.colSpan} rowSpan={bloco?.rowSpan}
+                style={{
+                  ...estiloColuna(column, fundo ?? (fixa && marcada ? "var(--color-hoikos-50)" : undefined), bloco ? bloco.bounds.right : column),
+                  // Com fundo próprio, a seleção vira um véu por cima, senão sumiria.
+                  ...(fundo && marcada ? { backgroundImage: "linear-gradient(rgba(15,23,42,.1),rgba(15,23,42,.1))" } : {}),
+                  ...(bloco && bloco.rowSpan > 1 ? { height: 1 } : {}),
+                  boxShadow: issues.has(key) ? "inset 0 -3px #dc2626" : undefined,
+                  // Célula fixa desenha a própria borda: com `border-collapse` a borda não
+                  // acompanha o `sticky` e o texto que rola por baixo aparecia pela fresta.
+                  ...(fixa ? { outline: `${isActive ? 2 : 1}px solid ${isActive ? "var(--color-hoikos-700)" : "var(--color-hoikos-200)"}`, outlineOffset: -1 } : {}),
+                  fontWeight: negrito.has(key) ? 700 : undefined,
+                }}
+                className={`border p-0 ${marcada ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}
+              >
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -188,7 +292,7 @@ function Grid({
                       if (event.key === "Escape") { event.preventDefault(); setEditing(null); }
                       if (event.key === "Tab") { event.preventDefault(); commit(); move(key, event.shiftKey ? -1 : 1, 0); }
                     }}
-                    className="h-8 w-full min-w-[7.5rem] bg-white px-2 font-mono text-[13px] outline-none"
+                    className="h-8 w-full bg-white px-2 font-mono text-[13px] outline-none"
                   />
                 ) : (
                   <button
@@ -237,6 +341,9 @@ function Grid({
                         // Ctrl+Shift+Z e Ctrl+Y: o primeiro é o de quem veio do Google
                         // Sheets, o segundo o de quem veio do Excel no Windows.
                         if ((tecla === "z" && event.shiftKey) || tecla === "y") { event.preventDefault(); onRefazer(); return; }
+                        if (!event.shiftKey && (tecla === "b" || tecla === "i" || tecla === "u")) {
+                          event.preventDefault(); onFormatar(tecla === "b" ? "bold" : tecla === "i" ? "italic" : "underline"); return;
+                        }
                       }
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
                       if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
@@ -255,7 +362,8 @@ function Grid({
                         setEditing(key);
                       }
                     }}
-                    className={`h-8 w-full min-w-[7.5rem] truncate px-2 text-left ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""}`}
+                    style={styleCss(estilo)}
+                    className={`w-full px-2 text-left ${estilo?.wrap ? `min-h-8 py-1 ${bloco && bloco.rowSpan > 1 ? "h-full" : ""}` : bloco && bloco.rowSpan > 1 ? "h-full min-h-8 truncate" : "h-8 truncate"} ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""} ${negativoEmDestaque(result, formats[columnName(column)]) ? "text-red-700" : ""}`}
                   >{formattedCell(result, formats[columnName(column)])}</button>
                 )}
               </td>;
@@ -413,7 +521,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     setAxis({ kind, index });
     setFaixa(null);
     setAvulsas([]);
-    setActive(kind === "row" ? cellKey({ column: next, row: index }) : cellKey({ column: index, row: next }));
+    const destino = kind === "row" ? cellKey({ column: next, row: index }) : cellKey({ column: index, row: next });
+    setActive(mergeAt(current.content.merges ?? [], destino)?.anchor ?? destino);
   }
 
   // Total do que está selecionado. Sem eixo escolhido vale a coluna do cursor,
@@ -493,6 +602,20 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
       : operation === "delete-column" ? `Excluir coluna ${columnName(address.column)}`
       : "Preencher para baixo";
 
+    // Com um retângulo marcado, cada coluna dele é preenchida a partir da primeira linha —
+    // antes só a coluna do cursor recebia, e as vizinhas ficavam como estavam, sem aviso.
+    // Sem retângulo, a coluna do cursor vai até o fim da planilha.
+    const preencherFaixa = (cells: SheetCells, totalRows: number) => {
+      if (!(selected.length > 1 && faixa)) return fillDown(cells, active, totalRows - 1);
+      const a = parseCellKey(faixa.ancora)!, b = parseCellKey(faixa.foco)!;
+      const topo = Math.min(a.row, b.row), base = Math.max(a.row, b.row);
+      let next = cells;
+      for (let column = Math.min(a.column, b.column); column <= Math.max(a.column, b.column); column += 1) {
+        next = fillDown(next, cellKey({ column, row: topo }), base);
+      }
+      return next;
+    };
+
     aplicar(rotulo, (sheet) => {
       const cells = sheet.content.cells;
       const next =
@@ -500,8 +623,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         : operation === "delete-row" ? deleteRow(cells, address.row)
         : operation === "insert-column" ? insertColumn(cells, address.column)
         : operation === "delete-column" ? deleteColumn(cells, address.column)
-        : fillDown(cells, selected.length > 1 && faixa ? cellKey({ column: address.column, row: Math.min(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) }) : active,
-          selected.length > 1 && faixa ? Math.max(parseCellKey(faixa.ancora)!.row, parseCellKey(faixa.foco)!.row) : sheet.rows - 1);
+        : preencherFaixa(cells, sheet.rows);
       // Os parâmetros guardam posições (letra de coluna, índice de linha). Sem deslocá-los
       // junto, a coluna marcada como "Custo" passa a apontar para a vizinha e a leitura
       // financeira lê a coluna errada, sem erro nenhum na tela.
@@ -528,7 +650,13 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         ...sheet,
         rows: nextRows,
         columns: nextColumns,
-        content: { ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths), advanced: operation === "fill-down" ? sheet.content.advanced : moveAdvanced(sheet.content.advanced ?? emptyAdvanced, eixo, alvo, passo) },
+        content: {
+          ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths),
+          advanced: operation === "fill-down" ? sheet.content.advanced : moveAdvanced(sheet.content.advanced ?? emptyAdvanced, eixo, alvo, passo),
+          // Itálico, cores e mesclagens andam junto com as células, como o negrito.
+          styles: operation === "fill-down" ? sheet.content.styles : shiftKeyed(sheet.content.styles ?? {}, eixo, alvo, passo),
+          merges: operation === "fill-down" ? sheet.content.merges : shiftMerges(sheet.content.merges ?? [], eixo, alvo, passo),
+        },
       };
     });
     if (operation === "delete-row" || operation === "delete-column") {
@@ -553,16 +681,118 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const result = sortRows(current.content.cells, {
       columns: current.columns, rows: current.rows,
       headerRow: current.content.analysis.headerRow, column: address.column, direction,
+      fixedRows: current.content.analysis.ignoreRows,
     });
     if (result.blocked) {
-      toast.error("Há fórmula nas linhas a ordenar. Ordenar moveria as referências para o lugar errado.");
+      toast.error("Uma fórmula liga uma linha a outra (como saldo acumulado). Ordenar mudaria o cálculo, então nada foi alterado.");
       return;
     }
+    if (mergeSpansRows(current.content.merges ?? [], ...result.range)) {
+      toast.error("Há células mescladas entre linhas na faixa. Desfaça a mesclagem para ordenar.");
+      return;
+    }
+    // Negrito, estilos e mesclagens de uma linha só acompanham a linha para onde ela foi.
+    // Antes o negrito ficava parado e passava a destacar o item que caiu no lugar.
+    const moverMesclagem = (range: string) => {
+      const bounds = boundsOf(range);
+      if (!bounds || bounds.top !== bounds.bottom || result.destination[bounds.top] === undefined) return range;
+      const row = result.destination[bounds.top];
+      return rangeOf({ ...bounds, top: row, bottom: row });
+    };
     updateContent(
       `Ordenar por ${columnName(address.column)} (${direction === "asc" ? "crescente" : "decrescente"})`,
-      (content) => ({ ...content, cells: result.cells }),
+      (content) => ({
+        ...content, cells: result.cells,
+        bold: Object.keys(remapRows(Object.fromEntries(content.bold.map((key) => [key, true])), result.destination)),
+        styles: remapRows(content.styles ?? {}, result.destination),
+        merges: (content.merges ?? []).map(moverMesclagem),
+      }),
     );
     toast.success("Linhas reordenadas");
+  }
+
+  // ─── Formatação de texto ───
+  // Vale para o que está marcado: o retângulo, as avulsas ou a linha/coluna inteira.
+  const mesclagens = current?.content.merges ?? [];
+  const estilos = current?.content.styles ?? {};
+  const mesclagemAtiva = mergeAt(mesclagens, active);
+  const todasCom = (teste: (key: string) => boolean) => chavesDoResumo.length > 0 && chavesDoResumo.every(teste);
+  const negritoLigado = current ? todasCom((key) => current.content.bold.includes(key)) : false;
+  const marcaLigada = (flag: StyleFlag) => todasCom((key) => !!estilos[key]?.[flag]);
+  const alinhamentoAtual = (() => {
+    const primeiro = estilos[chavesDoResumo[0] ?? active]?.align;
+    return primeiro && todasCom((key) => estilos[key]?.align === primeiro) ? primeiro : "";
+  })();
+  const valorComum = (campo: "color" | "fill") => {
+    const primeiro = estilos[chavesDoResumo[0] ?? active]?.[campo];
+    return primeiro && todasCom((key) => estilos[key]?.[campo] === primeiro) ? primeiro : "";
+  };
+  const nomeDaMarca: Record<StyleFlag | "bold", string> = { bold: "negrito", italic: "itálico", underline: "sublinhado", strike: "tachado", wrap: "quebra de texto" };
+
+  function alternarNegrito() {
+    const chosen = chavesDoResumo;
+    updateContent(`Alternar ${nomeDaMarca.bold}`, content => {
+      const bold = new Set(content.bold); const remove = chosen.every(key => bold.has(key));
+      chosen.forEach(key => { if (remove) bold.delete(key); else bold.add(key); });
+      if (bold.size > 5000) throw new Error("Selecione até 5.000 células para negrito.");
+      return { ...content, bold: [...bold] };
+    });
+  }
+  function alternarMarca(flag: StyleFlag) {
+    updateContent(`Alternar ${nomeDaMarca[flag]}`, content => ({ ...content, styles: toggleFlag(content.styles ?? {}, chavesDoResumo, flag) }));
+  }
+  function formatarAtalho(atalho: "bold" | "italic" | "underline") {
+    if (atalho === "bold") alternarNegrito(); else alternarMarca(atalho);
+  }
+  function definirEstilo<K extends "align" | "color" | "fill">(campo: K, valor: CellStyle[K] | undefined, rotulo: string) {
+    updateContent(rotulo, content => ({ ...content, styles: setStyle(content.styles ?? {}, chavesDoResumo, campo, valor) }));
+  }
+  function limparFormatacao() {
+    const alvo = new Set(chavesDoResumo);
+    updateContent("Limpar formatação", content => ({ ...content, styles: clearStyles(content.styles ?? {}, chavesDoResumo), bold: content.bold.filter((key) => !alvo.has(key)) }));
+  }
+
+  /** O intervalo a mesclar: o retângulo marcado, ou a linha/coluna inteira do cabeçalho. */
+  function intervaloMarcado() {
+    if (!current) return null;
+    if (axis) {
+      return axis.kind === "row"
+        ? rangeOf({ top: axis.index, bottom: axis.index, left: 0, right: current.columns - 1 })
+        : rangeOf({ top: 0, bottom: current.rows - 1, left: axis.index, right: axis.index });
+    }
+    if (avulsas.length || !faixa) return null;
+    const a = parseCellKey(faixa.ancora), b = parseCellKey(faixa.foco);
+    if (!a || !b) return null;
+    return rangeOf({ top: Math.min(a.row, b.row), bottom: Math.max(a.row, b.row), left: Math.min(a.column, b.column), right: Math.max(a.column, b.column) });
+  }
+
+  function mesclar() {
+    if (!current || readOnly) return;
+    const range = intervaloMarcado();
+    const bounds = range ? boundsOf(range) : null;
+    if (!range || !bounds || (bounds.top === bounds.bottom && bounds.left === bounds.right)) {
+      toast.error("Marque um retângulo com duas ou mais células para mesclar."); return;
+    }
+    const ancora = cellKey({ column: bounds.left, row: bounds.top });
+    // Como no Excel: só o conteúdo do canto superior esquerdo fica. Avisar antes, porque o
+    // resto some da tela (e o desfazer é o único caminho de volta).
+    const perdidas = cellsHiddenByMerge(current.content.cells, range);
+    if (perdidas.length && !window.confirm(`Mesclar mantém só o conteúdo de ${ancora} e apaga ${perdidas.length} célula(s): ${perdidas.slice(0, 6).join(", ")}${perdidas.length > 6 ? "…" : ""}. Continuar?`)) return;
+    aplicar(`Mesclar ${range}`, sheet => {
+      const cells = { ...sheet.content.cells };
+      for (const key of perdidas) delete cells[key];
+      const merges = mergeRange(sheet.content.merges ?? [], range);
+      const styles = sheet.content.styles ?? {};
+      // Mesclar e centralizar é o uso comum; quem já escolheu alinhamento mantém o seu.
+      const centralizado = styles[ancora]?.align ? styles : setStyle(styles, [ancora], "align", "center");
+      return { ...sheet, content: { ...sheet.content, cells, merges, styles: centralizado } };
+    });
+    setAxis(null); setAvulsas([]); setActive(ancora); setFaixa({ ancora, foco: ancora });
+  }
+
+  function desmesclar() {
+    if (!mesclagemAtiva) return;
+    updateContent(`Desfazer mesclagem ${mesclagemAtiva.range}`, content => ({ ...content, merges: unmergeAt(content.merges ?? [], active) }));
   }
 
   function updateCell(key: string, value: string) {
@@ -742,6 +972,64 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     });
   }
 
+  const sugestoes = useMemo(() => sugestoesDeFuncao(selection?.raw ?? ""), [selection?.raw]);
+
+  function completarFuncao(nome: string) {
+    if (!selection || readOnly) return;
+    const next = aplicarSugestao(selection.raw, sugestoes.parcial, nome);
+    updateCell(active, next);
+    window.requestAnimationFrame(() => {
+      formulaRef.current?.focus();
+      formulaRef.current?.setSelectionRange(next.length, next.length);
+    });
+  }
+
+  /**
+   * Imprime os valores calculados (e o navegador salva em PDF pela mesma janela). Monta um
+   * iframe com a tabela via DOM, sem HTML em texto: o conteúdo das células é do usuário e
+   * nunca vira marcação.
+   */
+  function imprimir() {
+    if (!current) return;
+    const { letras, linhas } = tabelaParaImpressao(computed, current.content.formats, current.content.bold, current.columns, current.rows, current.content.styles ?? {}, current.content.merges ?? []);
+    if (!linhas.length) { toast.info("A planilha está vazia. Não há o que imprimir."); return; }
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.append(frame);
+    const doc = frame.contentDocument;
+    const win = frame.contentWindow;
+    if (!doc || !win) { frame.remove(); toast.error("O navegador não permitiu preparar a impressão."); return; }
+    doc.title = current.name;
+    const estilo = doc.createElement("style");
+    estilo.textContent = "body{font:12px system-ui,sans-serif;margin:16px;color:#111}h1{font-size:16px;margin:0 0 4px}p{margin:0 0 12px;color:#555}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}th{background:#f3f4f6;font-weight:600}td.n{text-align:right;font-variant-numeric:tabular-nums}td.b{font-weight:700}td.r{color:#b91c1c}@page{size:landscape;margin:12mm}";
+    doc.head.append(estilo);
+    const titulo = doc.createElement("h1"); titulo.textContent = current.name;
+    const data = doc.createElement("p"); data.textContent = `Revisão ${current.revision} · impresso em ${new Date().toLocaleString("pt-BR")}`;
+    const tabela = doc.createElement("table");
+    const cabeca = tabela.createTHead().insertRow();
+    for (const texto of ["", ...letras]) { const th = doc.createElement("th"); th.textContent = texto; cabeca.append(th); }
+    const corpo = tabela.createTBody();
+    linhas.forEach((linha, indice) => {
+      const tr = corpo.insertRow();
+      const numero = doc.createElement("th"); numero.textContent = String(indice + 1); tr.append(numero);
+      for (const celula of linha) {
+        if (celula.coberta) continue;
+        const td = tr.insertCell();
+        td.textContent = celula.texto;
+        td.className = [celula.numero ? "n" : "", celula.negrito ? "b" : "", celula.negativo ? "r" : ""].filter(Boolean).join(" ");
+        if (celula.colSpan > 1) td.colSpan = celula.colSpan;
+        if (celula.rowSpan > 1) td.rowSpan = celula.rowSpan;
+        Object.assign(td.style, celula.css);
+      }
+    });
+    doc.body.append(titulo, data, tabela);
+    win.addEventListener("afterprint", () => frame.remove(), { once: true });
+    window.setTimeout(() => frame.remove(), 60_000);
+    win.focus();
+    win.print();
+  }
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
     return normalized ? list.filter((item) => item.name.toLocaleLowerCase("pt-BR").includes(normalized)) : list;
@@ -848,6 +1136,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           <Input
             ref={formulaRef} aria-label="Conteúdo da célula" value={selection?.raw ?? ""}
             readOnly={readOnly} onChange={(event) => updateCell(active, event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Tab" && !event.shiftKey && sugestoes.funcoes.length) { event.preventDefault(); completarFuncao(sugestoes.funcoes[0]); }
+            }}
             placeholder="Digite um valor ou uma fórmula começando por ="
             className="h-9 flex-1 font-mono text-[13px]"
           />
@@ -858,6 +1149,12 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           <span className={`min-w-[6rem] text-right text-sm tabular-nums ${selection?.result?.error ? "text-hoikos-700" : "font-semibold text-hoikos-900"}`}>
             {selection?.result?.display ?? ""}
           </span>
+          {!readOnly && sugestoes.funcoes.length ? <div role="group" aria-label="Funções que completam o que você digitou" className="flex w-full flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-hoikos-500">Completar com</span>
+            {sugestoes.funcoes.map((nome, indice) => <Button key={nome} size="sm" variant="outline" className="h-7 px-2 font-mono text-xs" onClick={() => completarFuncao(nome)}>
+              {nome}{indice === 0 ? <span className="ml-1 text-hoikos-500">Tab</span> : null}
+            </Button>)}
+          </div> : null}
         </div> : null}
       </CardHeader>
       <CardContent className="p-3 sm:p-4">
@@ -878,27 +1175,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <Input aria-label="Filtrar linhas" placeholder="Filtrar linhas por conteúdo…" value={rowFilter} onChange={event => setRowFilter(event.target.value)} className="max-w-sm" />
                 {rowFilter && <Button size="sm" variant="ghost" onClick={() => setRowFilter("")}>Limpar filtro</Button>}
-                {!readOnly && <>
-                  <Button size="sm" variant="outline" onClick={() => {
-                    const chosen = chavesDoResumo;
-                    updateContent(content => {
-                      const bold = new Set(content.bold); const remove = chosen.every(key => bold.has(key));
-                      chosen.forEach(key => { if (remove) bold.delete(key); else bold.add(key); });
-                      if (bold.size > 5000) { toast.error("Selecione até 5.000 células para negrito."); return content; }
-                      return { ...content, bold: [...bold] };
-                    });
-                  }}>Negrito</Button>
-                  <NativeSelect aria-label="Formato das colunas selecionadas" value="" onChange={event => {
-                    const format = event.target.value;
-                    updateContent(content => {
-                      const formats = { ...content.formats };
-                      chavesDoResumo.forEach(key => { const address = parseCellKey(key); if (address) formats[columnName(address.column)] = format; });
-                      return { ...content, formats };
-                    });
-                  }}>
-                    <option value="">Formato da coluna…</option><option value="texto">Geral</option><option value="numero">Número (2 casas)</option><option value="moeda">Moeda (R$)</option><option value="percentual">Percentual (%)</option>
-                  </NativeSelect>
-                </>}
+                <Button size="sm" variant="outline" onClick={imprimir}><Printer />Imprimir ou PDF</Button>
               </div>
               {rowFilter && <p className="text-xs text-hoikos-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
               {!readOnly && <WorksheetToolsPanel key={current.id} cells={current.content.cells} keys={chavesDoResumo} recipes={current.content.recipes ?? []}
@@ -907,7 +1184,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
               <WorksheetAdvancedPanel key={`advanced-${current.id}`} computed={computed} settings={advanced} columns={current.columns} selectedRange={active} readOnly={readOnly}
                 onChange={advanced => updateContent("Alterar regras e resumos", content => ({ ...content, advanced }))} onTable={insertTable} />
               <WorksheetXlsxPanel key={`xlsx-${current.id}`} id={current.id} name={current.name} revision={current.revision} dirty={dirty} readOnly={readOnly} onImport={imported => {
-                aplicar(`Importar XLSX: ${imported.name}`, sheet => ({ ...sheet, rows: imported.rows, columns: imported.columns, content: { ...sheet.content, cells: imported.cells, formats: {}, widths: {}, bold: [], advanced: emptyAdvanced, analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }));
+                aplicar(`Importar XLSX: ${imported.name}`, sheet => ({ ...sheet, rows: imported.rows, columns: imported.columns, content: { ...sheet.content, cells: imported.cells, formats: {}, widths: {}, bold: imported.bold ?? [], styles: imported.styles ?? {}, merges: imported.merges ?? [], frozenColumns: 0, advanced: emptyAdvanced, analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }));
                 setActive("A1"); setAxis(null); setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]); setRowFilter("");
               }} />
               {!readOnly && advanced.validations.filter(rule => rule.kind === "list").map((rule, index) => {
@@ -949,6 +1226,50 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   <Button size="sm" variant="ghost" onClick={() => sort("desc")}><ArrowDownWideNarrow />Ordenar ↓</Button>
                 </div>
               )}
+              {readOnly ? null : <div role="toolbar" aria-label="Formatação do texto" className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-white p-2">
+                <Toggle size="sm" variant="outline" aria-label="Negrito (Ctrl+B)" title="Negrito (Ctrl+B)" pressed={negritoLigado} onPressedChange={alternarNegrito}><Bold /></Toggle>
+                <Toggle size="sm" variant="outline" aria-label="Itálico (Ctrl+I)" title="Itálico (Ctrl+I)" pressed={marcaLigada("italic")} onPressedChange={() => alternarMarca("italic")}><Italic /></Toggle>
+                <Toggle size="sm" variant="outline" aria-label="Sublinhado (Ctrl+U)" title="Sublinhado (Ctrl+U)" pressed={marcaLigada("underline")} onPressedChange={() => alternarMarca("underline")}><Underline /></Toggle>
+                <Toggle size="sm" variant="outline" aria-label="Tachado" title="Tachado" pressed={marcaLigada("strike")} onPressedChange={() => alternarMarca("strike")}><Strikethrough /></Toggle>
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <ToggleGroup type="single" size="sm" variant="outline" aria-label="Alinhamento horizontal" value={alinhamentoAtual}
+                  onValueChange={(valor) => definirEstilo("align", (valor || undefined) as CellStyle["align"], valor ? `Alinhar ${valor === "left" ? "à esquerda" : valor === "center" ? "ao centro" : "à direita"}` : "Alinhamento automático")}>
+                  <ToggleGroupItem value="left" aria-label="Alinhar à esquerda" title="Alinhar à esquerda"><AlignLeft /></ToggleGroupItem>
+                  <ToggleGroupItem value="center" aria-label="Centralizar" title="Centralizar"><AlignCenter /></ToggleGroupItem>
+                  <ToggleGroupItem value="right" aria-label="Alinhar à direita" title="Alinhar à direita"><AlignRight /></ToggleGroupItem>
+                </ToggleGroup>
+                <Toggle size="sm" variant="outline" aria-label="Quebrar texto na célula" title="Quebrar texto na célula" pressed={marcaLigada("wrap")} onPressedChange={() => alternarMarca("wrap")}><WrapText /></Toggle>
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <NativeSelect aria-label="Cor do texto" value={valorComum("color")} onChange={event => definirEstilo("color", (event.target.value || undefined) as CellStyle["color"], event.target.value ? `Cor do texto: ${colorLabels[event.target.value]}` : "Cor do texto padrão")}>
+                  <option value="">Texto: cor padrão</option>
+                  {Object.keys(textColors).map((cor) => <option key={cor} value={cor}>Texto: {colorLabels[cor]}</option>)}
+                </NativeSelect>
+                <NativeSelect aria-label="Cor de preenchimento" value={valorComum("fill")} onChange={event => definirEstilo("fill", (event.target.value || undefined) as CellStyle["fill"], event.target.value ? `Preenchimento: ${colorLabels[event.target.value]}` : "Sem preenchimento")}>
+                  <option value="">Fundo: nenhum</option>
+                  {Object.keys(fillColors).map((cor) => <option key={cor} value={cor}>Fundo: {colorLabels[cor]}</option>)}
+                </NativeSelect>
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <Button size="sm" variant="outline" onClick={mesclar} title="Junta o retângulo marcado numa célula só, centralizada"><TableCellsMerge />Mesclar</Button>
+                {mesclagemAtiva ? <Button size="sm" variant="outline" onClick={desmesclar}><TableCellsSplit />Desfazer mesclagem</Button> : null}
+                <Button size="sm" variant="ghost" onClick={limparFormatacao}><RemoveFormatting />Limpar formatação</Button>
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <NativeSelect aria-label="Formato das colunas selecionadas" value="" onChange={event => {
+                  const format = event.target.value;
+                  updateContent("Formato da coluna", content => {
+                    const formats = { ...content.formats };
+                    chavesDoResumo.forEach(key => { const address = parseCellKey(key); if (address) formats[columnName(address.column)] = format; });
+                    return { ...content, formats };
+                  });
+                }}>
+                  <option value="">Formato da coluna…</option><option value="texto">Geral</option><option value="numero">Número (2 casas)</option><option value="moeda">Moeda (R$)</option><option value="contabil">Contábil (negativo em vermelho)</option><option value="percentual">Percentual (%)</option>
+                </NativeSelect>
+                <NativeSelect aria-label="Colunas fixas ao rolar" value={String(current.content.frozenColumns ?? 0)} onChange={event => {
+                  const frozenColumns = Number(event.target.value);
+                  updateContent(frozenColumns ? `Fixar ${frozenColumns === 1 ? "a coluna A" : "as colunas A e B"}` : "Soltar colunas fixas", content => ({ ...content, frozenColumns }));
+                }}>
+                  <option value="0">Sem colunas fixas</option><option value="1">Fixar coluna A</option><option value="2">Fixar colunas A e B</option>
+                </NativeSelect>
+              </div>}
               <Grid
                 colors={colors} issues={issues}
                 formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
@@ -957,6 +1278,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
                 onColar={colar} onDesfazer={desfazerAgora} onRefazer={refazerAgora}
+                frozen={Math.min(current.content.frozenColumns ?? 0, current.columns)}
+                styles={estilos} merges={mesclagens} onFormatar={formatarAtalho}
+                onWidth={(column, width) => updateContent(`Largura da coluna ${columnName(column)}`, (content) => ({ ...content, widths: { ...content.widths, [columnName(column)]: width } }))}
               />
               {/*
                 A barra de resumo. Antes era uma frase de ajuda com uma soma grudada no
@@ -1001,7 +1325,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   Shift + clique e Shift + setas para marcar um intervalo. Clique no cabeçalho para selecionar a linha
                   ou a coluna inteira. Ctrl + clique (ou ⌘ + clique) adiciona ou remove células avulsas.
                   Ctrl + C copia os valores selecionados; Ctrl + V cola tabelas do Excel ou Google Planilhas a partir da célula ativa.
-                  Referências como $A$1 ficam fixas ao preencher para baixo. Selecione um intervalo para limitar o preenchimento.
+                  Referências como $A$1 ficam fixas ao preencher para baixo. Marque um intervalo para preencher cada coluna dele a partir da primeira linha.
+                  Ctrl + B, Ctrl + I e Ctrl + U aplicam negrito, itálico e sublinhado ao que está marcado. Mesclar mantém só o conteúdo do canto superior esquerdo.
                 </p>
               </details>
             </TabsContent>
