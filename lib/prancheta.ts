@@ -209,15 +209,61 @@ export function perimetroM(pontos: { x: number; y: number }[]): number {
 /** Elementos que a tela deve desenhar: os de camada visível, na ordem das camadas.
  *  Elemento órfão — camada apagada — não é desenhado nem some do documento: sumir calado
  *  destruiria trabalho que a pessoa ainda pode recuperar religando a camada. */
+// Índice das camadas por lista: perguntar "esta camada está visível / travada?" para cada
+// um de 60 mil elementos varrendo mil camadas eram 60 milhões de comparações por
+// pergunta — o editor travava. A lista de camadas só muda quando alguém mexe nela.
+const indicesDeCamadas = new WeakMap<Camada[], { total: number; ordem: Map<string, number>; porId: Map<string, Camada> }>();
+function indiceDeCamadas(camadas: Camada[]) {
+  let indice = indicesDeCamadas.get(camadas);
+  if (!indice || indice.total !== camadas.length) {
+    indice = { total: camadas.length, ordem: new Map(camadas.map((camada, i) => [camada.id, i])), porId: new Map(camadas.map((camada) => [camada.id, camada])) };
+    indicesDeCamadas.set(camadas, indice);
+  }
+  return indice;
+}
+
+// Guardado junto com as listas de onde saiu: se o documento ganhar outra lista de camadas
+// ou de elementos (ou a mesma lista mudar de tamanho), a resposta é refeita.
+const visiveisPorDocumento = new WeakMap<Documento, { camadas: Camada[]; elementos: Elemento[]; total: number; visiveis: Elemento[] }>();
 export function elementosVisiveis(documento: Documento): Elemento[] {
-  const ordem = new Map(documento.camadas.map((camada, indice) => [camada.id, indice]));
-  return documento.elementos
-    .filter((elemento) => documento.camadas.some((camada) => camada.id === elemento.camada && camada.visivel))
+  const pronto = visiveisPorDocumento.get(documento);
+  if (pronto && pronto.camadas === documento.camadas && pronto.elementos === documento.elementos && pronto.total === documento.elementos.length) return pronto.visiveis;
+  const { ordem, porId } = indiceDeCamadas(documento.camadas);
+  const visiveis = documento.elementos
+    .filter((elemento) => porId.get(elemento.camada)?.visivel)
     .sort((um, outro) => (ordem.get(um.camada) ?? 0) - (ordem.get(outro.camada) ?? 0));
+  visiveisPorDocumento.set(documento, { camadas: documento.camadas, elementos: documento.elementos, total: documento.elementos.length, visiveis });
+  return visiveis;
 }
 
 export function camadaBloqueada(documento: Documento, camadaId: string): boolean {
-  return documento.camadas.find((camada) => camada.id === camadaId)?.bloqueada ?? true;
+  return indiceDeCamadas(documento.camadas).porId.get(camadaId)?.bloqueada ?? true;
+}
+
+/**
+ * Valida só o que mudou entre duas versões do documento. Validar o desenho inteiro a
+ * cada gesto — mover uma linha num DWG de 60 mil elementos — levava quase um segundo, e
+ * o editor parecia travado. Elemento que é o mesmo objeto da versão anterior já foi
+ * validado; o resto (novos, alterados, camadas, folha) passa pelo esquema.
+ */
+export function validarAlteracao(anterior: Documento, proximo: Documento): boolean {
+  if (proximo.elementos.length > LIMITE_ELEMENTOS) return false;
+  const { elementos: _novos, ...restoProximo } = proximo;
+  const { elementos: _antigos, ...restoAnterior } = anterior;
+  void _novos; void _antigos;
+  if (restoProximo.camadas !== restoAnterior.camadas || restoProximo.fundo !== restoAnterior.fundo
+    || restoProximo.escala !== restoAnterior.escala || restoProximo.malhaMm !== restoAnterior.malhaMm
+    || restoProximo.folhaLarguraMm !== restoAnterior.folhaLarguraMm || restoProximo.folhaAlturaMm !== restoAnterior.folhaAlturaMm) {
+    if (!documentoSchema.omit({ elementos: true }).safeParse(restoProximo).success) return false;
+  }
+  const conhecidos = new Set(anterior.elementos);
+  const ids = new Set<string>();
+  for (const elemento of proximo.elementos) {
+    if (ids.has(elemento.id)) return false;
+    ids.add(elemento.id);
+    if (!conhecidos.has(elemento) && !elementoSchema.safeParse(elemento).success) return false;
+  }
+  return true;
 }
 
 /** Resumo quantitativo do desenho. É o que liga a prancheta ao orçamento: metragem de
@@ -342,6 +388,15 @@ export function limitesDoElemento(elemento: Elemento): Caixa {
     : { x1: 0, y1: 0, x2: 0, y2: 0 };
   const folga = "espessuraMm" in elemento ? elemento.espessuraMm / 2 : 0;
   return { x1: caixa.x1 - folga, y1: caixa.y1 - folga, x2: caixa.x2 + folga, y2: caixa.y2 + folga };
+}
+
+/** Caixa guardada por elemento: o elemento é imutável no editor, então a caixa não muda.
+ *  Clique, seleção por janela, encaixe e o canvas perguntam isso milhares de vezes. */
+const caixasEmCache = new WeakMap<Elemento, Caixa>();
+export function limitesEmCache(elemento: Elemento): Caixa {
+  let caixa = caixasEmCache.get(elemento);
+  if (!caixa) { caixa = limitesDoElemento(elemento); caixasEmCache.set(elemento, caixa); }
+  return caixa;
 }
 
 export function limitesDoDesenho(elementos: Elemento[]) {

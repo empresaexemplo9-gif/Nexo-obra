@@ -1,4 +1,4 @@
-import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, moverElemento, pontosDoArco } from "@/lib/prancheta";
+import { Documento, Elemento, camadaBloqueada, elementosVisiveis, encaixar, limitesEmCache, moverElemento, pontosDoArco } from "@/lib/prancheta";
 import { nearestOnSegment, tangentPoints } from "@/packages/cad-core";
 
 // O que separa desenhar de chutar.
@@ -132,72 +132,141 @@ export type OpcoesEncaixe = {
 
 type ArcoDoc = Extract<Elemento, { tipo: "arco" }>;
 type Caixa = { x1: number; y1: number; x2: number; y2: number };
+type Contribuicao = { segmentos: Segmento[]; notaveis: Encaixe[]; arco: ArcoDoc | null };
+
+/** O que um elemento oferece ao encaixe — as mesmas regras de `segmentosDo` e
+ *  `pontosNotaveis`, por elemento. Guardado por objeto: elemento que não mudou não é
+ *  recalculado (o arco, por exemplo, precisa ser tessellado). */
+const contribuicoes = new WeakMap<Elemento, Contribuicao>();
+function contribuicaoDe(elemento: Elemento): Contribuicao {
+  let pronta = contribuicoes.get(elemento);
+  if (pronta) return pronta;
+  const segmentos: Segmento[] = [];
+  const notaveis: Encaixe[] = [];
+  if (elemento.tipo === "parede" || elemento.tipo === "cota") segmentos.push({ a: elemento.a, b: elemento.b, elementoId: elemento.id });
+  else if (elemento.tipo === "comodo" || elemento.tipo === "traco" || elemento.tipo === "arco") {
+    const pontos = elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
+    const quantos = elemento.tipo === "comodo" ? pontos.length : pontos.length - 1;
+    for (let i = 0; i < quantos; i += 1) segmentos.push({ a: pontos[i], b: pontos[(i + 1) % pontos.length], elementoId: elemento.id });
+  }
+  if (elemento.tipo === "arco") {
+    if (segmentos.length) {
+      notaveis.push({ tipo: "extremo", ponto: segmentos[0].a, elementoId: elemento.id });
+      notaveis.push({ tipo: "extremo", ponto: segmentos[segmentos.length - 1].b, elementoId: elemento.id });
+      notaveis.push({ tipo: "meio", ponto: segmentos[Math.floor(segmentos.length / 2)].a, elementoId: elemento.id });
+    }
+    notaveis.push({ tipo: "centro", ponto: elemento.centro, elementoId: elemento.id });
+  } else {
+    for (const segmento of segmentos) {
+      notaveis.push({ tipo: "extremo", ponto: segmento.a, elementoId: elemento.id });
+      notaveis.push({ tipo: "extremo", ponto: segmento.b, elementoId: elemento.id });
+      notaveis.push({ tipo: "meio", ponto: preciso({ x: (segmento.a.x + segmento.b.x) / 2, y: (segmento.a.y + segmento.b.y) / 2 }), elementoId: elemento.id });
+    }
+    if ("posicao" in elemento) notaveis.push({ tipo: "centro", ponto: elemento.posicao, elementoId: elemento.id });
+  }
+  pronta = { segmentos, notaveis, arco: elemento.tipo === "arco" ? elemento : null };
+  contribuicoes.set(elemento, pronta);
+  return pronta;
+}
+
+const caixaDoElemento = (elemento: Elemento): Caixa => limitesEmCache(elemento);
 
 /**
- * Índice do desenho para o encaixe: segmentos, pontos notáveis e arcos numa grade.
+ * Índice do desenho para o encaixe: os ELEMENTOS numa grade pela caixa de cada um.
  *
  * O encaixe roda a cada movimento do mouse. Varrer o desenho inteiro servia para uma
- * planta desenhada à mão; um DWG importado tem dezenas de milhares de traços, e a tela
- * travava. O índice é montado uma vez por versão do documento e consultado só em volta
- * do cursor.
+ * planta desenhada à mão; num DWG importado são centenas de milhares de segmentos. O
+ * índice guarda só as caixas (montado em milissegundos a cada versão do documento), e os
+ * segmentos e pontos de cada elemento são calculados quando o cursor passa perto dele.
  */
 class IndiceEncaixe {
-  readonly segmentos: Segmento[];
-  readonly notaveis: Encaixe[];
-  readonly arcos: ArcoDoc[];
-  readonly arcoIds: Set<string>;
+  private readonly elementos: Elemento[];
   private celula = 1;
-  private grade: Map<string, { s: number[]; n: number[]; a: number[] }> | null = null;
-  private grandes: { s: number[]; a: number[] } = { s: [], a: [] };
+  private grade: Map<number, number[]> | null = null;
+  private grandes: number[] = [];
+  private todos: { segmentos: Segmento[]; notaveis: Encaixe[]; arcos: ArcoDoc[] } | null = null;
+  private idsDeArco: Set<string> | null = null;
+  get arcoIds() { return (this.idsDeArco ??= new Set(this.elementos.filter((e) => e.tipo === "arco").map((e) => e.id))); }
 
   constructor(documento: Documento) {
-    this.segmentos = segmentosDo(documento);
-    this.notaveis = pontosNotaveis(documento);
-    this.arcos = elementosVisiveis(documento).filter((e): e is ArcoDoc => e.tipo === "arco" && !camadaBloqueada(documento, e.camada));
-    this.arcoIds = new Set(documento.elementos.filter((e) => e.tipo === "arco").map((e) => e.id));
-    const total = this.segmentos.length + this.notaveis.length + this.arcos.length;
-    if (total < 3000) return; // desenho pequeno: a varredura direta é mais rápida que montar a grade
+    // Hachura não oferece encaixe: o contorno dela repete as linhas que a cercam.
+    this.elementos = elementosVisiveis(documento).filter((elemento) => elemento.tipo !== "hachura" && !camadaBloqueada(documento, elemento.camada));
+    if (this.elementos.length < 1500) return; // desenho pequeno: a varredura direta basta
     let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
-    for (const n of this.notaveis) { x1 = Math.min(x1, n.ponto.x); y1 = Math.min(y1, n.ponto.y); x2 = Math.max(x2, n.ponto.x); y2 = Math.max(y2, n.ponto.y); }
+    const caixas = this.elementos.map((elemento) => {
+      const c = caixaDoElemento(elemento);
+      if (Number.isFinite(c.x1)) { x1 = Math.min(x1, c.x1); y1 = Math.min(y1, c.y1); x2 = Math.max(x2, c.x2); y2 = Math.max(y2, c.y2); }
+      return c;
+    });
     this.celula = Math.max(10, Math.max(x2 - x1, y2 - y1, 1) / 256);
-    const grade = new Map<string, { s: number[]; n: number[]; a: number[] }>();
-    const cela = (i: number, j: number) => { const chave = `${i}:${j}`; let c = grade.get(chave); if (!c) { c = { s: [], n: [], a: [] }; grade.set(chave, c); } return c; };
-    const espalhar = (caixa: Caixa, tipo: "s" | "a", indice: number) => {
-      const i1 = Math.floor(caixa.x1 / this.celula), i2 = Math.floor(caixa.x2 / this.celula);
-      const j1 = Math.floor(caixa.y1 / this.celula), j2 = Math.floor(caixa.y2 / this.celula);
-      if ((i2 - i1 + 1) * (j2 - j1 + 1) > 64) { this.grandes[tipo].push(indice); return; }
-      for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) cela(i, j)[tipo].push(indice);
-    };
-    this.segmentos.forEach((seg, k) => espalhar({ x1: Math.min(seg.a.x, seg.b.x), y1: Math.min(seg.a.y, seg.b.y), x2: Math.max(seg.a.x, seg.b.x), y2: Math.max(seg.a.y, seg.b.y) }, "s", k));
-    this.arcos.forEach((arco, k) => espalhar({ x1: arco.centro.x - arco.raioMm, y1: arco.centro.y - arco.raioMm, x2: arco.centro.x + arco.raioMm, y2: arco.centro.y + arco.raioMm }, "a", k));
-    this.notaveis.forEach((n, k) => cela(Math.floor(n.ponto.x / this.celula), Math.floor(n.ponto.y / this.celula)).n.push(k));
+    const grade = new Map<number, number[]>();
+    caixas.forEach((c, k) => {
+      if (!Number.isFinite(c.x1)) return;
+      const i1 = Math.floor(c.x1 / this.celula), i2 = Math.floor(c.x2 / this.celula);
+      const j1 = Math.floor(c.y1 / this.celula), j2 = Math.floor(c.y2 / this.celula);
+      if ((i2 - i1 + 1) * (j2 - j1 + 1) > 64) { this.grandes.push(k); return; }
+      for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) {
+        const chave = (i + 1_000_000) * 2_097_152 + (j + 1_000_000);
+        const lista = grade.get(chave);
+        if (lista) lista.push(k); else grade.set(chave, [k]);
+      }
+    });
     this.grade = grade;
+  }
+
+  private juntar(elementos: Iterable<Elemento>) {
+    const segmentos: Segmento[] = [], notaveis: Encaixe[] = [], arcos: ArcoDoc[] = [];
+    for (const elemento of elementos) {
+      const c = contribuicaoDe(elemento);
+      for (const s of c.segmentos) segmentos.push(s);
+      for (const n of c.notaveis) notaveis.push(n);
+      if (c.arco) arcos.push(c.arco);
+    }
+    return { segmentos, notaveis, arcos };
   }
 
   /** O que está a até `raio` do alvo (por caixa): candidatos, não resposta final. */
   perto(alvo: Ponto, raio: number) {
-    if (!this.grade) return { segmentos: this.segmentos, notaveis: this.notaveis, arcos: this.arcos };
+    const todos = () => (this.todos ??= this.juntar(this.elementos));
+    if (!this.grade) return todos();
     const i1 = Math.floor((alvo.x - raio) / this.celula), i2 = Math.floor((alvo.x + raio) / this.celula);
     const j1 = Math.floor((alvo.y - raio) / this.celula), j2 = Math.floor((alvo.y + raio) / this.celula);
-    if ((i2 - i1 + 1) * (j2 - j1 + 1) > 4096) return { segmentos: this.segmentos, notaveis: this.notaveis, arcos: this.arcos };
-    const s = new Set(this.grandes.s), n = new Set<number>(), a = new Set(this.grandes.a);
-    for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) {
-      const c = this.grade.get(`${i}:${j}`);
-      if (!c) continue;
-      for (const k of c.s) s.add(k); for (const k of c.n) n.add(k); for (const k of c.a) a.add(k);
+    const escolhidos = new Set<number>(this.grandes);
+    if ((i2 - i1 + 1) * (j2 - j1 + 1) > 4096) {
+      // Raio enorme (desenho muito afastado): vale a caixa de cada elemento.
+      this.elementos.forEach((elemento, k) => {
+        const c = caixaDoElemento(elemento);
+        if (c.x1 - raio <= alvo.x && c.x2 + raio >= alvo.x && c.y1 - raio <= alvo.y && c.y2 + raio >= alvo.y) escolhidos.add(k);
+      });
+    } else {
+      for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) {
+        const lista = this.grade.get((i + 1_000_000) * 2_097_152 + (j + 1_000_000));
+        if (lista) for (const k of lista) escolhidos.add(k);
+      }
     }
-    return {
-      segmentos: [...s].sort((x, y) => x - y).map((k) => this.segmentos[k]),
-      notaveis: [...n].sort((x, y) => x - y).map((k) => this.notaveis[k]),
-      arcos: [...a].sort((x, y) => x - y).map((k) => this.arcos[k]),
-    };
+    let lista = [...escolhidos];
+    // Com o desenho muito afastado, o raio abraça a planta inteira. Os 300 elementos cuja
+    // caixa está mais perto do cursor bastam: o encaixe só aceita pontos dentro do raio.
+    if (lista.length > 300) {
+      const distanciaCaixa = (k: number) => {
+        const c = caixaDoElemento(this.elementos[k]);
+        const dx = Math.max(c.x1 - alvo.x, 0, alvo.x - c.x2), dy = Math.max(c.y1 - alvo.y, 0, alvo.y - c.y2);
+        return dx * dx + dy * dy;
+      };
+      lista = lista.map((k) => [k, distanciaCaixa(k)] as const).sort((a, b) => a[1] - b[1]).slice(0, 300).map(([k]) => k);
+    }
+    return this.juntar(lista.sort((a, b) => a - b).map((k) => this.elementos[k]));
   }
 }
 
-const indices = new WeakMap<Documento, IndiceEncaixe>();
+// Só o índice da versão em uso fica guardado. Guardar um por versão prendia na memória o
+// índice de cada passo do histórico de desfazer — dezenas de megabytes por passo numa
+// planta grande —, e depois de alguns minutos o navegador travava.
+let ultimoIndice: { documento: Documento; camadas: Documento["camadas"]; elementos: Documento["elementos"]; indice: IndiceEncaixe } | null = null;
 function indiceDe(documento: Documento) {
-  let indice = indices.get(documento);
-  if (!indice) { indice = new IndiceEncaixe(documento); indices.set(documento, indice); }
+  if (ultimoIndice && ultimoIndice.documento === documento && ultimoIndice.camadas === documento.camadas && ultimoIndice.elementos === documento.elementos) return ultimoIndice.indice;
+  const indice = new IndiceEncaixe(documento);
+  ultimoIndice = { documento, camadas: documento.camadas, elementos: documento.elementos, indice };
   return indice;
 }
 
@@ -225,16 +294,24 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
   const perto = (ponto: Ponto) => distancia(ponto, alvo) <= tolerancia;
 
   for (const candidato of vizinhanca.notaveis) {
-    if (!ativos.includes(candidato.tipo) || !vale(candidato.elementoId)) continue;
-    if (perto(candidato.ponto)) candidatos.push(candidato);
+    if (!perto(candidato.ponto) || !ativos.includes(candidato.tipo) || !vale(candidato.elementoId)) continue;
+    candidatos.push(candidato);
   }
 
-  // Interseção e perpendicular custam mais, então só se olha o que passa perto do alvo.
-  const proximos = vizinhanca.segmentos.filter((segmento) => vale(segmento.elementoId)
-    && Math.min(segmento.a.x, segmento.b.x) - tolerancia <= alvo.x
-    && Math.max(segmento.a.x, segmento.b.x) + tolerancia >= alvo.x
-    && Math.min(segmento.a.y, segmento.b.y) - tolerancia <= alvo.y
-    && Math.max(segmento.a.y, segmento.b.y) + tolerancia >= alvo.y);
+  // Interseção e perpendicular custam mais, então só se olha o que passa perto do alvo —
+  // e no máximo os 48 segmentos mais próximos. Com o desenho afastado, o raio de captura
+  // abraça milhares de linhas, e cruzar todas com todas a cada movimento travava a tela.
+  const proximos = vizinhanca.segmentos
+    .filter((segmento) => vale(segmento.elementoId)
+      && Math.min(segmento.a.x, segmento.b.x) - tolerancia <= alvo.x
+      && Math.max(segmento.a.x, segmento.b.x) + tolerancia >= alvo.x
+      && Math.min(segmento.a.y, segmento.b.y) - tolerancia <= alvo.y
+      && Math.max(segmento.a.y, segmento.b.y) + tolerancia >= alvo.y)
+    .map((segmento) => ({ segmento, d: distancia(nearestOnSegment(alvo, segmento.a, segmento.b), alvo) }))
+    .filter((item) => item.d <= tolerancia)
+    .sort((x, y) => x.d - y.d)
+    .slice(0, 48)
+    .map((item) => item.segmento);
 
   if (ativos.includes("interseccao")) {
     for (let i = 0; i < proximos.length; i += 1) {
@@ -264,6 +341,9 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
   }
   for (const element of vizinhanca.arcos) {
     if (!vale(element.id)) continue;
+    // Todo ponto que o arco oferece (quadrante, tangente, mais próximo) está no círculo;
+    // se o círculo passa longe do cursor, nenhum deles serve.
+    if (Math.abs(distancia(element.centro, alvo) - element.raioMm) > tolerancia) continue;
     const onArc = (p: Ponto) => {
       const angle = ((Math.atan2(element.centro.y - p.y, p.x - element.centro.x) * 180 / Math.PI - element.inicioGraus) % 360 + 360) % 360;
       return angle <= element.varreduraGraus + 1e-9;

@@ -10,6 +10,7 @@ import {
 import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
+import { desenharPrancha } from "@/components/prancheta-canvas";
 import { corNaTela, TIPOS_LINHA, tipoLinhaLabels, tracejadoPara, type TipoLinha } from "@/lib/cad-cores";
 import { CABECALHO_ACEITA, corpoComprimido, JSON_GZIP, jsonDaResposta } from "@/lib/compressao";
 import { uploadOrgFile } from "@/lib/org-files-client";
@@ -30,10 +31,10 @@ import {
   resolverEntrada, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
-  Camada, DISCIPLINAS, Documento, Elemento, FAMILIAS_SIMBOLO, LIMITE_CAMADAS, LIMITE_ELEMENTOS, areaM2, camadaBloqueada, caminhoDosAneis, documentoSchema,
+  Camada, DISCIPLINAS, Documento, Elemento, FAMILIAS_SIMBOLO, LIMITE_CAMADAS, LIMITE_ELEMENTOS, areaM2, camadaBloqueada, caminhoDosAneis,
   comprimentoM, disciplinaLabels, elementosVisiveis, encaixar, exportarSvg, glifoDoSimbolo,
-  pontosDoArco,
-  limitesDoElemento, moverElemento, quantitativo, simboloLabels,
+  elementoSchema, pontosDoArco, validarAlteracao,
+  limitesEmCache, moverElemento, quantitativo, simboloLabels,
 } from "@/lib/prancheta";
 
 type Ferramenta =
@@ -127,6 +128,8 @@ const UNIDADES_ROTULO: Record<string, string> = {
 };
 
 const MALHAS = [1, 10, 25, 50, 100, 250, 500];
+/** Acima disto o desenho é pintado em canvas; o SVG fica só com seleção, cursor e prévias. */
+const LIMITE_SVG = 2000;
 const ESCALAS = [20, 25, 50, 75, 100, 200];
 const LIMITE_HISTORICO = 60;
 
@@ -167,7 +170,7 @@ function elementoNoPonto(documento: Documento, x: number, y: number, tolerance: 
   for (let i = visiveis.length - 1; i >= 0; i -= 1) {
     const elemento = visiveis[i];
     if (camadaBloqueada(documento, elemento.camada)) continue;
-    const caixa = limitesDoElemento(elemento);
+    const caixa = limitesEmCache(elemento);
     if (x < caixa.x1 - tolerance || x > caixa.x2 + tolerance || y < caixa.y1 - tolerance || y > caixa.y2 + tolerance) continue;
     if (elemento.tipo === "parede" || elemento.tipo === "cota" || elemento.tipo === "traco" || elemento.tipo === "arco") {
       const points = elemento.tipo === "cota" ? [elemento.a, { x: elemento.a.x, y: elemento.a.y + elemento.deslocamentoMm }, { x: elemento.b.x, y: elemento.b.y + elemento.deslocamentoMm }, elemento.b] : elemento.tipo === "parede" ? [elemento.a, elemento.b] : elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
@@ -298,6 +301,12 @@ const DesenhoElemento = memo(function DesenhoElemento({ elemento, selecionado, c
     strokeLinecap="round" strokeLinejoin="round" />;
 });
 
+/** O desenho como um bloco memorizado: re-renderizar o editor (a cada movimento do
+ *  cursor) não percorre os milhares de elementos filhos. */
+const CamadaDesenho = memo(function CamadaDesenho({ children }: { children: React.ReactNode }) {
+  return <g>{children}</g>;
+});
+
 /** Ponto dentro dos anéis pela regra par-ímpar, a mesma do preenchimento na tela. */
 function dentroDosAneis(aneis: { x: number; y: number }[][], x: number, y: number) {
   let dentro = false;
@@ -370,6 +379,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   // não teria o que reler.
   const dxfEscolhido = useRef<File | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Largura da tela guardada pelo observador: ler do DOM a cada movimento forçava o
+  // navegador a recalcular o layout de milhares de nós.
+  const larguraTela = useRef(0);
+  const [tamanhoTela, definirTamanhoTela] = useState({ largura: 0, altura: 0 });
   const arrastando = useRef<{ ids: string[]; de: { x: number; y: number }; documento: Documento; mudou: boolean } | null>(null);
   const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
   const verticeArrastado = useRef<{ id: string; indice: number; documento: Documento; mudou: boolean } | null>(null);
@@ -397,10 +411,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const conferencia = useMemo(() => conferir(documento), [documento]);
   const visiveis = useMemo(() => elementosVisiveis(documento), [documento]);
 
-  const aplicar = useCallback((proximo: Documento) => {
+  const aplicar = useCallback((proximo: Documento, jaValidado = false) => {
     if (!canEdit) return false;
-    const validacao = documentoSchema.safeParse(proximo);
-    if (!validacao.success) { toast.error("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
+    // Só o que mudou é validado: validar o desenho inteiro a cada gesto travava plantas grandes.
+    if (!jaValidado && !validarAlteracao(documento, proximo)) { toast.error("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
     definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
     definirRefeitos([]);
     definirDocumento(proximo);
@@ -479,23 +493,32 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
+    // Vários passos da roda no mesmo quadro viram um zoom só: cada zoom redesenha a prancha.
+    let acumulado = 1, ancoraPendente: { x: number; y: number } | null = null, quadro = 0;
     const roda = (evento: WheelEvent) => {
       const ancora = paraMilimetros(evento);
       if (!ancora) return;
       evento.preventDefault();
       const delta = evento.deltaY * (evento.deltaMode === 1 ? 16 : evento.deltaMode === 2 ? 640 : 1);
-      const fator = Math.exp(Math.max(-1, Math.min(1, delta * 0.002)));
-      definirVista(anterior => zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, ancora));
+      acumulado *= Math.exp(Math.max(-1, Math.min(1, delta * 0.002)));
+      ancoraPendente = ancora;
+      if (quadro) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = 0;
+        const fator = acumulado, ponto = ancoraPendente!;
+        acumulado = 1;
+        definirVista(anterior => zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, ponto));
+      });
     };
     svg.addEventListener("wheel", roda, { passive: false });
-    return () => svg.removeEventListener("wheel", roda);
+    return () => { svg.removeEventListener("wheel", roda); if (quadro) cancelAnimationFrame(quadro); };
   }, [paraMilimetros]);
 
   /** Raio de captura em milímetros de desenho, derivado do zoom. O que a mão sente é a
    *  distância na TELA: um raio fixo em milímetros seria impossível de acertar afastado
    *  e agarraria tudo de perto. */
   const toleranciaMm = useCallback(() => {
-    const largura = svgRef.current?.getBoundingClientRect().width ?? 0;
+    const largura = larguraTela.current || (svgRef.current?.getBoundingClientRect().width ?? 0);
     return largura > 0 ? vista.largura / largura * 14 : vista.largura / 80;
   }, [vista.largura]);
 
@@ -586,10 +609,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (evento.button !== 0) return;
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
+    // Selecionar, aparar e estender apontam elementos pelo clique cru: encaixar ali só
+    // custaria tempo (em planta grande, montar o índice de encaixe).
+    const semEncaixe = ["selecionar", "janelaSelecao", "aparar", "estender"].includes(ferramenta);
     const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0] : pendentes.at(-1) ?? null;
-    const encaixe = encaixarEm(bruto, origem);
+    const encaixe = semEncaixe ? { tipo: "malha" as const, ponto: bruto } : encaixarEm(bruto, origem);
     const ponto = encaixe.ponto;
-    definirEncaixeAtual(encaixe);
+    definirEncaixeAtual(semEncaixe ? null : encaixe);
 
     if (ferramenta === "janelaSelecao") {
       janelaRef.current = { a: bruto, b: bruto, manter: evento.shiftKey };
@@ -718,10 +744,45 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "traco", pontos, espessuraMm: 25 })) definirPendentes([]);
   }
 
+  // Um processamento por quadro: o navegador dispara o movimento do ponteiro bem mais vezes
+  // do que a tela redesenha, e cada processamento encaixa, move e redesenha.
+  const movimentoPendente = useRef<{ clientX: number; clientY: number; buttons: number } | null>(null);
+  const quadroMovimento = useRef(0);
+  const ultimoMovimento = useRef(0);
+  const processarRef = useRef<(dados: { clientX: number; clientY: number; buttons: number }) => void>(() => undefined);
+  useEffect(() => () => { if (quadroMovimento.current) cancelAnimationFrame(quadroMovimento.current); }, []);
+
   function aoMover(evento: React.PointerEvent<SVGSVGElement>) {
+    const dados = { clientX: evento.clientX, clientY: evento.clientY, buttons: evento.buttons };
+    const agora = performance.now();
+    if (!quadroMovimento.current && agora - ultimoMovimento.current >= 16) {
+      ultimoMovimento.current = agora;
+      processarMovimento(dados);
+      return;
+    }
+    movimentoPendente.current = dados;
+    if (!quadroMovimento.current) {
+      quadroMovimento.current = requestAnimationFrame(() => {
+        quadroMovimento.current = 0;
+        const pendente = movimentoPendente.current;
+        movimentoPendente.current = null;
+        if (pendente) { ultimoMovimento.current = performance.now(); processarRef.current(pendente); }
+      });
+    }
+  }
+
+  /** Aplica o último movimento ainda na fila (ao soltar, o gesto termina onde a mão parou). */
+  function esvaziarMovimento() {
+    if (quadroMovimento.current) { cancelAnimationFrame(quadroMovimento.current); quadroMovimento.current = 0; }
+    const pendente = movimentoPendente.current;
+    movimentoPendente.current = null;
+    if (pendente) processarMovimento(pendente);
+  }
+
+  function processarMovimento(evento: { clientX: number; clientY: number; buttons: number }) {
     if (panorama.current) {
       const svg = svgRef.current;
-      const escala = svg ? vista.largura / svg.getBoundingClientRect().width : 1;
+      const escala = svg ? vista.largura / (larguraTela.current || svg.getBoundingClientRect().width) : 1;
       definirVista((anterior) => ({
         ...anterior,
         x: panorama.current!.vista.x - (evento.clientX - panorama.current!.x) * escala,
@@ -734,6 +795,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (janelaRef.current) {
       janelaRef.current = { ...janelaRef.current, b: bruto }; definirJanelaSelecao(janelaRef.current); return;
     }
+    const gesto = verticeArrastado.current ?? arrastando.current;
+    // Selecionando sem arrastar, o encaixe não serve para nada — e custa, em planta grande.
+    if (!gesto && (ferramenta === "selecionar" || ferramenta === "janelaSelecao")) {
+      definirCursor(bruto); definirEncaixeAtual(null);
+      return;
+    }
     const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0]
       : pendentes.length ? pendentes[pendentes.length - 1] : arrastando.current?.de ?? null;
     const encaixe = encaixarEm(bruto, origem);
@@ -741,14 +808,22 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     definirCursor(ponto);
     definirEncaixeAtual(encaixe);
 
-    const gesto = verticeArrastado.current ?? arrastando.current;
     if (gesto) {
+      const ids = "indice" in gesto ? null : new Set(gesto.ids);
+      const movidos: Elemento[] = [];
       const proximo = { ...gesto.documento, elementos: gesto.documento.elementos.map(item => {
-        if ("indice" in gesto) return item.id === gesto.id ? moverVertice(item, gesto.indice, ponto) : item;
-        return gesto.ids.includes(item.id) ? moverElemento(item, ponto.x - gesto.de.x, ponto.y - gesto.de.y, 1) : item;
+        if ("indice" in gesto) { if (item.id !== gesto.id) return item; const novo = moverVertice(item, gesto.indice, ponto); movidos.push(novo); return novo; }
+        if (!ids!.has(item.id)) return item;
+        const novo = moverElemento(item, ponto.x - gesto.de.x, ponto.y - gesto.de.y, 1);
+        movidos.push(novo);
+        return novo;
       }) };
-      if (!documentoSchema.safeParse(proximo).success) return;
-      const mudou = JSON.stringify(proximo.elementos) !== JSON.stringify(gesto.documento.elementos);
+      // Só o que se move é conferido: serializar e validar o desenho inteiro a cada
+      // movimento do mouse travava o arrasto em planta grande.
+      if (movidos.some((elemento) => !elementoSchema.safeParse(elemento).success)) return;
+      const mudou = "indice" in gesto
+        ? JSON.stringify(movidos[0]) !== JSON.stringify(gesto.documento.elementos.find((e) => e.id === gesto.id))
+        : ponto.x !== gesto.de.x || ponto.y !== gesto.de.y;
       if (!gesto.mudou && mudou) {
         definirHistorico(h => [...h, gesto.documento].slice(-LIMITE_HISTORICO)); definirRefeitos([]);
       }
@@ -762,7 +837,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     }
   }
 
+  useEffect(() => { processarRef.current = processarMovimento; });
+
   function aoSoltar(evento?: React.PointerEvent<SVGSVGElement>) {
+    esvaziarMovimento();
     if (evento?.currentTarget.hasPointerCapture?.(evento.pointerId)) evento.currentTarget.releasePointerCapture(evento.pointerId);
     if (janelaRef.current) {
       const janela = janelaRef.current;
@@ -943,7 +1021,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (!importado || !canEdit) return;
     try {
       const proximo = mergeCadImport(documento, importado);
-      aplicar(proximo);
+      aplicar(proximo, true);
       definirVista(enquadrarElementos(elementosVisiveis(proximo)));
       toast.success(`${importado.elementos.length.toLocaleString("pt-BR")} elemento(s) em ${importado.camadas.length} camada(s) importados. Grave para guardar.`);
       definirImportado(null);
@@ -1052,12 +1130,39 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     for (const elemento of documento.elementos) contagem.set(elemento.camada, (contagem.get(elemento.camada) ?? 0) + 1);
     return contagem;
   }, [documento.elementos]);
+  const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
+  // Planta grande vai para o canvas; o SVG desenha só a seleção por cima dela.
+  const modoCanvas = visiveis.length > LIMITE_SVG;
   // O desenho inteiro memorizado: mover o cursor, encaixar ou aproximar não o refaz.
-  const desenho = useMemo(() => visiveis.map((elemento) => {
+  const desenho = useMemo(() => (modoCanvas ? visiveis.filter((elemento) => selecionadosSet.has(elemento.id)) : visiveis).map((elemento) => {
     const camada = camadasPorId.get(elemento.camada);
     return <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={selecionadosSet.has(elemento.id)} realceCor={realceCor}
       cor={corNaTela(elemento.cor ?? camada?.cor ?? null, fundoEscuro)} tracejado={tracejadoPara(elemento.tipoLinha ?? camada?.tipoLinha, documento.escala)} />;
-  }), [visiveis, camadasPorId, selecionadosSet, fundoEscuro, realceCor, documento.escala]);
+  }), [modoCanvas, visiveis, camadasPorId, selecionadosSet, fundoEscuro, realceCor, documento.escala]);
+
+  // Tamanho da tela observado, não lido a cada movimento.
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg || typeof ResizeObserver === "undefined") return;
+    const observador = new ResizeObserver(([entrada]) => {
+      larguraTela.current = entrada.contentRect.width;
+      definirTamanhoTela({ largura: entrada.contentRect.width, altura: entrada.contentRect.height });
+    });
+    observador.observe(svg);
+    return () => observador.disconnect();
+  }, []);
+
+  // Pinta o canvas no próximo quadro sempre que o desenho, a vista ou a aparência mudam.
+  const [imagensProntas, definirImagensProntas] = useState(0);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!modoCanvas || !canvas) return;
+    const quadro = requestAnimationFrame(() => desenharPrancha(canvas, {
+      documento, visiveis, camadasPorId, vista: { ...vista, proporcao: 0.62 }, fundoEscuro, realceCor, passoMalha,
+      tracejadoDe: tracejadoPara, aoCarregarImagem: () => definirImagensProntas((n) => n + 1),
+    }));
+    return () => cancelAnimationFrame(quadro);
+  }, [modoCanvas, documento, visiveis, camadasPorId, vista, fundoEscuro, realceCor, passoMalha, tamanhoTela, imagensProntas]);
   const camadasFiltradas = useMemo(() => {
     const termo = filtroCamada.trim().toLowerCase();
     return termo ? documento.camadas.filter((camada) => camada.nome.toLowerCase().includes(termo)) : documento.camadas;
@@ -1082,7 +1187,6 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     aplicar({ ...documento, camadas: documento.camadas.filter((camada) => camada.id !== id) });
     if (camadaEscolhida === id) definirCamadaEscolhida("");
   }
-  const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
 
   return <div className={`prancheta space-y-4 ${fullPage ? "prancheta-ampla" : ""}`}>
     <header className="prancheta-barra flex flex-wrap items-center gap-2">
@@ -1299,10 +1403,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       </aside>
 
       <div className="prancheta-mesa self-start overflow-hidden rounded-md border border-hoikos-200 bg-white">
+        <div className="relative">
+        {modoCanvas && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />}
         <svg ref={svgRef} role="application" aria-label={`Prancha ${nome}`}
           viewBox={`${vista.x} ${vista.y} ${vista.largura} ${vista.largura * 0.62}`}
           className={fullPage ? "w-full touch-none" : "h-[min(70svh,640px)] w-full touch-none"}
-          style={{ ...(fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : {}), background: fundoEscuro ? "#1f2227" : "#ffffff", ["--traco-min" as string]: `${vista.largura / 900}px` } as CSSProperties}
+          style={{ ...(fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : {}), background: modoCanvas ? "transparent" : fundoEscuro ? "#1f2227" : "#ffffff", position: "relative", ["--traco-min" as string]: `${vista.largura / 900}px` } as CSSProperties}
           onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={() => { const gesto = arrastando.current ?? verticeArrastado.current; if (gesto?.mudou) { definirDocumento(gesto.documento); definirHistorico(h => h.slice(0, -1)); } arrastando.current = null; verticeArrastado.current = null; panorama.current = null; janelaRef.current = null; definirJanelaSelecao(null); definirPendentes([]); }} onPointerLeave={() => definirCursor(null)}
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
@@ -1310,11 +1416,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke={fundoEscuro ? "#4a4f57" : "#B5B19E"} strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
             </pattern>
           </defs>
-          <rect x={vista.x} y={vista.y} width={vista.largura} height={vista.largura} fill="url(#prancheta-malha-padrao)" />
-          {documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
+          {!modoCanvas && <rect x={vista.x} y={vista.y} width={vista.largura} height={vista.largura} fill="url(#prancheta-malha-padrao)" />}
+          {!modoCanvas && documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
-          {desenho}
+          <CamadaDesenho>{desenho}</CamadaDesenho>
           {janelaSelecao && <rect x={Math.min(janelaSelecao.a.x, janelaSelecao.b.x)} y={Math.min(janelaSelecao.a.y, janelaSelecao.b.y)} width={Math.abs(janelaSelecao.b.x - janelaSelecao.a.x)} height={Math.abs(janelaSelecao.b.y - janelaSelecao.a.y)} fill="#846100" fillOpacity={0.1} stroke="#846100" strokeWidth={vista.largura / 800} />}
           {ferramenta === "retangulo" && pendentes[0] && cursor && <rect x={Math.min(pendentes[0].x, cursor.x)} y={Math.min(pendentes[0].y, cursor.y)} width={Math.abs(pendentes[0].x - cursor.x)} height={Math.abs(pendentes[0].y - cursor.y)} fill="none" stroke="#846100" strokeWidth={vista.largura / 800} />}
           {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
@@ -1361,6 +1467,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           </g>}
           {cursor && ferramenta !== "selecionar" && <circle cx={cursor.x} cy={cursor.y} r={vista.largura / 160} fill="#846100" />}
         </svg>
+        </div>
         <div className="flex flex-wrap items-center gap-3 border-t border-hoikos-200 px-3 py-2 text-xs text-hoikos-500">
           <span className="flex items-center gap-1.5">
             <Grid2x2 aria-hidden="true" className="size-3.5" />

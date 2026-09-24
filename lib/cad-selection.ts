@@ -1,5 +1,5 @@
 import { executeCadCommand } from "@/lib/cad-commands";
-import { camadaBloqueada, elementosVisiveis, limitesDoElemento, type Documento } from "@/lib/prancheta";
+import { camadaBloqueada, elementosVisiveis, limitesEmCache, type Documento } from "@/lib/prancheta";
 import type { Ponto } from "@/lib/prancheta-cad";
 
 const GROUP_COMMANDS = new Set(["M", "MOVE", "CO", "COPY", "RO", "ROTATE", "SC", "SCALE", "MI", "MIRROR", "O", "OFFSET", "AR", "ARRAY", "AP", "ARRAYPOLAR", "E", "ERASE", "J", "CLOSE"]);
@@ -29,7 +29,7 @@ export function selecionarNaJanela(documento: Documento, a: Ponto, b: Ponto): st
   const y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
   return elementosVisiveis(documento).filter(e => {
     if (camadaBloqueada(documento, e.camada)) return false;
-    const box = limitesDoElemento(e);
+    const box = limitesEmCache(e);
     return box.x1 >= x1 && box.x2 <= x2 && box.y1 >= y1 && box.y2 <= y2;
   }).map(e => e.id);
 }

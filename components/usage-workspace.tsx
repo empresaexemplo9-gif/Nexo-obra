@@ -57,8 +57,9 @@ export function useUsageHeartbeat(enabled: boolean, accessId?: string) {
     };
     const schedule = () => { timer = window.setInterval(() => { void beat(); }, 30_000); };
     const kick = window.setTimeout(() => { void beat(); schedule(); }, 0);
-    document.addEventListener("visibilitychange", () => { void beat(); });
-    return () => { stopped = true; window.clearTimeout(kick); window.clearInterval(timer); };
+    const aoVoltar = () => { void beat(); };
+    document.addEventListener("visibilitychange", aoVoltar);
+    return () => { stopped = true; window.clearTimeout(kick); window.clearInterval(timer); document.removeEventListener("visibilitychange", aoVoltar); };
   }, [enabled, accessId]);
 }
 

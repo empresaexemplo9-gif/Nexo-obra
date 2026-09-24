@@ -761,3 +761,13 @@ test("encaixe em desenho grande usa o índice e acha o mesmo ponto que a varredu
   const ignorado = encaixePerto(grande, { x: 3_456_790, y: 30 }, { ...padrao, ignorar: new Set(["p3456"]) });
   assert.notEqual(ignorado.elementoId, "p3456", "o que está sendo arrastado não encaixa em si mesmo");
 });
+
+test("a edição valida só o que mudou, mas ainda recusa o que é inválido", async () => {
+  const { validarAlteracao } = await vite.ssrLoadModule("/lib/prancheta.ts");
+  const base = doc([parede("p1", { x: 0, y: 0 }, { x: 1000, y: 0 }), parede("p2", { x: 0, y: 0 }, { x: 0, y: 1000 })]);
+  const movida = { ...base, elementos: [base.elementos[0], { ...base.elementos[1], b: { x: 0, y: 2000 } }] };
+  assert.equal(validarAlteracao(base, movida), true);
+  assert.equal(validarAlteracao(base, { ...base, elementos: [...base.elementos, { ...base.elementos[0], espessuraMm: -5, id: "p3" }] }), false, "elemento novo inválido");
+  assert.equal(validarAlteracao(base, { ...base, elementos: [...base.elementos, { ...base.elementos[0] }] }), false, "identificador repetido");
+  assert.equal(validarAlteracao(base, { ...base, camadas: [] }), false, "prancha sem camada");
+});
