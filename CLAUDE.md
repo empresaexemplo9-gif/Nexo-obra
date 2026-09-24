@@ -20,6 +20,14 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 10. Não crie card, menu, gráfico ou filtro sem uma pergunta real que ele responda.
 11. Runtime de produção usa somente persistência e integrações reais. Mock, demo, fixture, seed fictício e fallback demonstrativo ficam restritos a testes automatizados e nunca alimentam API ou interface de produção.
 
+## Publicação em GitHub e GitLab
+
+Toda implementação e toda implantação vão aos dois repositórios: o mesmo commit e a mesma branch são enviados ao GitHub (`origin`) e ao GitLab (remoto `gitlab`). Pull request no GitHub e merge request no GitLab acompanham a mesma entrega.
+
+- O remoto `gitlab` usa a URL do projeto em `GITLAB_REPO_URL` e o token em `GITLAB_TOKEN` (escopos `write_repository` e `api`), configurados nas variáveis do ambiente — nunca no código, em commit ou no chat.
+- Monte a URL autenticada só na hora do envio (`https://oauth2:$GITLAB_TOKEN@...`) e não a grave em `.git/config`.
+- Sem essas variáveis, ou se o envio ao GitLab falhar, diga isso explicitamente na resposta e no pull request. Nunca dê a entrega como publicada nos dois lugares sem a confirmação de ambos.
+
 ## Regra de interface
 
 Cada tela precisa ter:
