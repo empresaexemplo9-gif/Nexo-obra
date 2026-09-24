@@ -8,12 +8,7 @@ export const diaryJson = (data: unknown, status = 200) => Response.json(data, { 
 export async function diaryContext(request: Request, action: "view" | "edit" = "view") {
   const context = await requireOrganizationContext(request);
   requireModulePermission(context, "diary", action);
-  if (action === "edit") {
-    const origin = request.headers.get("origin");
-    if (origin && ![new URL(request.url).origin, "https://nexo-obra-jet.vercel.app", "https://nexo-obra.thiagohcarvalho09.chatgpt.site"].includes(origin)) {
-      throw new ApiError(403, "invalid_origin", "Origem não permitida.");
-    }
-  }
+  // A trava contra outro site vale para toda escrita em requireOrganizationContext.
   return context;
 }
 

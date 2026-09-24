@@ -17,6 +17,8 @@ const ALLOWED_TYPES = new Set([
   "application/msword",
   "application/vnd.ms-excel",
   "application/vnd.ms-powerpoint",
+  // Desenho técnico: é o arquivo que um escritório de arquitetura mais troca com a obra.
+  "image/vnd.dwg", "application/acad", "image/vnd.dxf", "application/dxf",
 ]);
 
 type FileRow = {
@@ -126,8 +128,11 @@ export async function POST(request: Request) {
       .bind(projectId, context.organization.id).first<{ id: string }>();
     if (!project) throw new ApiError(400, "invalid_project", "O projeto não pertence à empresa atual.");
     if (!file.size || file.size > MAX_FILE_BYTES) throw new ApiError(413, "file_too_large", "Cada arquivo pode ter no máximo 15 MB.");
-    if (!ALLOWED_TYPES.has(file.type)) {
-      throw new ApiError(415, "invalid_file_type", "Use PDF, imagem, texto, CSV ou documento do Office. HTML, SVG e executáveis não são aceitos.");
+    // .dwg e .dxf costumam chegar sem tipo; a extensão decide só nesse caso.
+    const extension = file.name.toLowerCase().split(".").pop();
+    const fileType = file.type || (extension === "dwg" ? "image/vnd.dwg" : extension === "dxf" ? "image/vnd.dxf" : "");
+    if (!ALLOWED_TYPES.has(fileType)) {
+      throw new ApiError(415, "invalid_file_type", "Use PDF, imagem, texto, CSV, documento do Office, DWG ou DXF. HTML, SVG e executáveis não são aceitos.");
     }
     const name = safeName(file.name);
     const bytes = await file.arrayBuffer();
@@ -136,7 +141,7 @@ export async function POST(request: Request) {
     ).bind(context.organization.id, projectId, name).first<{ version: number }>();
     const version = Number(previous?.version ?? 0) + 1;
     const id = crypto.randomUUID();
-    const key = await putObject(`files/${context.organization.id}/${projectId}/${id}`, bytes, file.type);
+    const key = await putObject(`files/${context.organization.id}/${projectId}/${id}`, bytes, fileType);
     try {
       await context.db.batch([
         context.db.prepare(
@@ -147,7 +152,7 @@ export async function POST(request: Request) {
             revision, version, uploaded_by_user_id, uploaded_by_member_id, created_at
           ) VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?6, ?7, ?7, ?8, ?8, ?9, ?10, CURRENT_TIMESTAMP)`,
         ).bind(
-          id, context.organization.id, projectId, key, name, file.type, file.size,
+          id, context.organization.id, projectId, key, name, fileType, file.size,
           version, context.member.externalUserId, context.member.id,
         ),
         auditStatement(context, "file.uploaded", "project_file", id, { projectId, name, version, sizeBytes: file.size }),

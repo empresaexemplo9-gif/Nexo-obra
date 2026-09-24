@@ -67,6 +67,7 @@ test("o ponto só é separador de milhar quando existe vírgula", () => {
   assert.equal(lerValorBrasileiro("12.000"), 12000);
   assert.equal(lerValorBrasileiro("1.234.567"), 1234567);
   assert.equal(lerValorBrasileiro("1.5"), 1.5);
+  assert.equal(lerValorBrasileiro("0.125"), 0.125, "grupo inicial zero não é milhar");
 });
 
 test("valor ilegível devolve nulo, nunca zero", () => {

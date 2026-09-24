@@ -1,6 +1,8 @@
 import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 
 import { ApiError } from "@/lib/server/api-error";
+import { getDatabase } from "@/db";
+import { ensureLoginAttemptsTable } from "@/lib/server/migrations";
 
 type SuperAdminRuntimeEnv = {
   SUPERADMIN_EMAIL?: string;
@@ -156,6 +158,55 @@ export async function readSuperAdminIdentity(request: Request) {
     expiresAt: session.expiresAt,
     scope: "superadmin" as const,
   };
+}
+
+/** O e-mail é o do superadministrador configurado? Sem configuração, ninguém é. */
+export async function isSuperAdminEmail(email: string) {
+  const configured = runtimeEnv().SUPERADMIN_EMAIL;
+  return configured ? emailMatches(email, configured) : false;
+}
+
+const SUPERADMIN_WINDOW_MS = 15 * 60 * 1000;
+const SUPERADMIN_MAX_ATTEMPTS = 5;
+
+/**
+ * Entrada do superadministrador, com bloqueio de 15 minutos após cinco erros pela mesma
+ * origem. É chamada pelo login único: quem digita as credenciais da plataforma vai para o
+ * painel, sem uma segunda tela só para isso.
+ */
+export async function signInSuperAdmin(request: Request, email: string, password: string) {
+  const db = getDatabase();
+  await ensureLoginAttemptsTable(db);
+  const fingerprint = await loginFingerprint(request);
+  const now = Date.now();
+  const attempt = await db.prepare(
+    "SELECT failed_count, window_started_at, locked_until FROM superadmin_login_attempts WHERE fingerprint = ?1",
+  ).bind(fingerprint).first<{ failed_count: number; window_started_at: number; locked_until: number }>();
+  if (attempt && attempt.locked_until > now) {
+    throw new ApiError(429, "superadmin_login_locked", "Muitas tentativas. Aguarde 15 minutos e tente novamente.");
+  }
+  if (!await verifySuperAdminCredentials(email, password)) {
+    const withinWindow = attempt && now - attempt.window_started_at < SUPERADMIN_WINDOW_MS;
+    const failedCount = withinWindow ? attempt.failed_count + 1 : 1;
+    await db.prepare(
+      `INSERT INTO superadmin_login_attempts (fingerprint, failed_count, window_started_at, locked_until, updated_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)
+       ON CONFLICT(fingerprint) DO UPDATE SET
+         failed_count = excluded.failed_count, window_started_at = excluded.window_started_at,
+         locked_until = excluded.locked_until, updated_at = excluded.updated_at`,
+    ).bind(fingerprint, failedCount, withinWindow ? attempt.window_started_at : now,
+      failedCount >= SUPERADMIN_MAX_ATTEMPTS ? now + SUPERADMIN_WINDOW_MS : 0, now).run();
+    throw new ApiError(401, "invalid_superadmin_credentials", "Usuário ou senha inválidos.");
+  }
+  await db.prepare("DELETE FROM superadmin_login_attempts WHERE fingerprint = ?1").bind(fingerprint).run();
+  return createSuperAdminSessionCookie();
+}
+
+/** O mesmo e-mail pode ter conta de empresa. Entrando nela, a tentativa não conta como erro. */
+export async function clearSuperAdminFailures(request: Request) {
+  const db = getDatabase();
+  await ensureLoginAttemptsTable(db);
+  await db.prepare("DELETE FROM superadmin_login_attempts WHERE fingerprint = ?1").bind(await loginFingerprint(request)).run();
 }
 
 export function rejectCrossSiteMutation(request: Request) {

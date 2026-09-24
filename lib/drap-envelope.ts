@@ -55,7 +55,7 @@ export function lerValorBrasileiro(bruto: string): number | null {
   // Sem vírgula, ponto seguido de grupos de exatamente três dígitos é milhar, como no
   // Excel em português e na planilha da plataforma: "1.500" é mil e quinhentos, não 1,5.
   const normalizado = limpo.includes(",") ? limpo.replace(/\./g, "").replace(",", ".")
-    : /^[+-]?\d{1,3}(\.\d{3})+$/.test(limpo) ? limpo.replace(/\./g, "") : limpo;
+    : /^[+-]?[1-9]\d{0,2}(\.\d{3})+$/.test(limpo) ? limpo.replace(/\./g, "") : limpo;
   const numero = Number(normalizado);
   return Number.isFinite(numero) ? numero : null;
 }

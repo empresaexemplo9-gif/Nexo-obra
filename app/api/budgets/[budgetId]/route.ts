@@ -38,8 +38,8 @@ export async function PATCH(request: Request, route: RouteContext) {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "budgets", "edit");
     const { budgetId } = await route.params;
-    const current = ensureFound(await context.db.prepare("SELECT id, status, sent_at, approved_at FROM budget_versions WHERE id = ?1 AND organization_id = ?2")
-      .bind(budgetId, context.organization.id).first<BudgetState>(), "Orçamento");
+    const current = ensureFound(await context.db.prepare("SELECT id, status, sent_at, approved_at, bdi_percent, margin_percent FROM budget_versions WHERE id = ?1 AND organization_id = ?2")
+      .bind(budgetId, context.organization.id).first<BudgetState & { bdi_percent: number; margin_percent: number }>(), "Orçamento");
     const parsed = updateBudgetSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
@@ -70,10 +70,25 @@ export async function PATCH(request: Request, route: RouteContext) {
     if (data.marginPercent !== undefined) add("margin_percent", data.marginPercent);
     if (!columns.length) return Response.json({ budget: budgetResponse(ensureFound(await context.db.prepare(`${budgetSelect} WHERE b.id = ?1 AND b.organization_id = ?2`).bind(budgetId, context.organization.id).first<BudgetRow>(), "Orçamento")) });
     columns.push("updated_at = CURRENT_TIMESTAMP");
-    await context.db.batch([
-      context.db.prepare(`UPDATE budget_versions SET ${columns.join(", ")} WHERE id = ?${values.length + 1} AND organization_id = ?${values.length + 2}`).bind(...values, budgetId, context.organization.id),
+    // Mudar BDI ou margem num rascunho reprecifica os itens com preço automático (custo ×
+    // fator); o preço digitado à mão fica. Antes a tela mostrava "BDI 25%" com o total antigo.
+    const fator = (bdi: number, margem: number) => (1 + bdi / 100) * (1 + margem / 100);
+    const antigo = fator(current.bdi_percent, current.margin_percent);
+    const novo = fator(data.bdiPercent ?? current.bdi_percent, data.marginPercent ?? current.margin_percent);
+    const reprecificar = current.status === "draft" && antigo !== novo;
+    // O status atual entra no WHERE: aprovar e rejeitar ao mesmo tempo não podem os dois
+    // responder 200 com o último vencendo em silêncio.
+    const results = await context.db.batch([
+      context.db.prepare(`UPDATE budget_versions SET ${columns.join(", ")} WHERE id = ?${values.length + 1} AND organization_id = ?${values.length + 2} AND status = ?${values.length + 3}`).bind(...values, budgetId, context.organization.id, current.status),
+      ...(reprecificar ? [
+        context.db.prepare(`UPDATE budget_items SET unit_price_cents = CAST(ROUND(unit_cost_cents * ?1) AS INTEGER)
+          WHERE budget_version_id = ?2 AND unit_price_cents = CAST(ROUND(unit_cost_cents * ?3) AS INTEGER)
+          AND EXISTS (SELECT 1 FROM budget_versions WHERE id = ?2 AND organization_id = ?4 AND status = 'draft')`).bind(novo, budgetId, antigo, context.organization.id),
+        context.db.prepare(`UPDATE budget_versions SET total_cents = (SELECT COALESCE(ROUND(SUM(quantity * unit_price_cents)), 0) FROM budget_items WHERE budget_version_id = ?1) WHERE id = ?1 AND organization_id = ?2`).bind(budgetId, context.organization.id),
+      ] : []),
       auditStatement(context, "budget.updated", "budget", budgetId, { fields: Object.keys(data), previousStatus: current.status, status: data.status ?? current.status }),
     ]);
+    if (!results[0]?.meta?.changes) throw new ApiError(409, "budget_changed", "O orçamento mudou em outro acesso. Recarregue para ver a situação atual.");
     const budget = await context.db.prepare(`${budgetSelect} WHERE b.id = ?1 AND b.organization_id = ?2`).bind(budgetId, context.organization.id).first<BudgetRow>();
     if (!budget) throw new ApiError(404, "not_found", "Orçamento não encontrado.");
     return Response.json({ budget: budgetResponse(budget) });

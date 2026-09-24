@@ -30,7 +30,7 @@ export function PortalManager({ canEdit, canManage, canReadDiary, projectId }: {
   const [link, setLink] = useState(""); const [copyState, setCopyState] = useState("");
   const [withdraw, setWithdraw] = useState<PortalItem | null>(null);
   function changed(result?: { access: PortalAccess; invitationUrl?: string | null }) {
-    if (result?.invitationUrl) { setLink(result.invitationUrl); setCopyState(""); }
+    if (result?.invitationUrl) { setLink(new URL(result.invitationUrl, window.location.origin).toString()); setCopyState(""); }
     if (result?.access) setSelectedId(result.access.id);
     setMode(null); resource.refresh(); items.refresh();
   }

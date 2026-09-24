@@ -111,12 +111,19 @@ test("uma falha que não é do banco continua aparecendo como erro", async () =>
   assert.match(textOf(container), /Falha inesperada no servidor/);
 });
 
-test("sem sessão, o painel pede a senha e não revela nada", async () => {
+test("sem sessão, o painel manda para o login único e não revela nada", async () => {
+  const replace = window.location.replace;
+  let destino = "";
+  try {
+    Object.defineProperty(window.location, "replace", { configurable: true, value: (url) => { destino = url; } });
+  } catch { /* jsdom pode não permitir: o link visível abaixo cobre o caso */ }
   await abrir({ "/api/superadmin/session": () => ({ __status: 401, error: "Entre como superadministrador." }) });
   const texto = textOf(container);
-  assert.match(texto, /Entrar como superadmin/);
   assert.doesNotMatch(texto, /Banco de dados/);
-  assert.ok(container.querySelector('input[type="password"]'));
+  assert.equal(container.querySelector('input[type="password"]'), null, "não há um segundo formulário de senha");
+  assert.ok(container.querySelector('a[href="/entrar?return_to=/superadmin"]'));
+  if (destino) assert.equal(destino, "/entrar?return_to=/superadmin");
+  try { Object.defineProperty(window.location, "replace", { configurable: true, value: replace }); } catch { /* idem */ }
 });
 
 test("o painel diz qual versão está no ar", async () => {

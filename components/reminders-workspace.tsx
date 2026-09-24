@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Progress } from "@/components/ui/progress";
+import { lerValorBrasileiro } from "@/lib/drap-envelope";
 
 export type Reminder = {
   key: string; group: "cobranca" | "boleto" | "followup" | "tarefa" | "meta";
@@ -101,7 +102,8 @@ function GoalForm({ metrics, members, onCreated }: {
     event.preventDefault();
     setSaving(true); setError("");
     try {
-      const raw = Number(target.replace(/\./g, "").replace(",", "."));
+      // "1.5" virava 15 e "50.5" em reais virava R$ 5.050,00: tirava todo ponto.
+      const raw = lerValorBrasileiro(target) ?? Number.NaN;
       if (!Number.isFinite(raw) || raw <= 0) throw new Error("Informe um alvo maior que zero.");
       await api("/api/goals", { method: "POST", body: JSON.stringify({
         name, metric, targetValue: isMoney ? Math.round(raw * 100) : Math.round(raw),

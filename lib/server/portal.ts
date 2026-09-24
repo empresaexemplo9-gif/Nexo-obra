@@ -15,10 +15,12 @@ export async function portalRoute(action: () => Promise<Response>) {
   for (const [key, value] of Object.entries(portalHeaders)) response.headers.set(key, value);
   return response;
 }
-export const PORTAL_ORIGIN = "https://nexo-obra-jet.vercel.app";
+// O link do convite é um caminho; a tela completa com o próprio endereço. Antes ele saía
+// sempre com um domínio fixo, e em domínio próprio ou prévia o cliente ia parar em outro site.
+const invitationPath = (token: string) => `/portal/convite/${token}`;
 export function checkPortalOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && ![new URL(request.url).origin, PORTAL_ORIGIN, "https://nexo-obra.thiagohcarvalho09.chatgpt.site"].includes(origin))) throw new ApiError(403, "invalid_origin", "Origem não permitida.");
+  if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== new URL(request.url).origin)) throw new ApiError(403, "invalid_origin", "Origem não permitida.");
 }
 export async function portalManager(request: Request, action: "view" | "edit" = "view", manageAccess = false) {
   const context = await requireOrganizationContext(request);
@@ -93,7 +95,7 @@ export async function createPortalAccess(context: OrganizationContext, body: unk
     if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "portal_access_exists", "Este e-mail já possui um acesso nesta obra. Use Renovar convite no acesso existente.");
     throw error;
   }
-  return { access: accessResponse(await managerAccess(context, id)), invitationUrl: `${PORTAL_ORIGIN}/portal/convite/${token}` };
+  return { access: accessResponse(await managerAccess(context, id)), invitationUrl: invitationPath(token) };
 }
 function conditionalAudit(context: OrganizationContext, action: string, type: string, id: string, metadata: object = {}) {
   return context.db.prepare(`INSERT INTO audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, metadata_json, created_at)
@@ -116,7 +118,7 @@ export async function changePortalAccess(context: OrganizationContext, id: strin
     conditionalAudit(context, `portal.access_${data.action}`, "client_portal_access", id),
   ]);
   if (!updated.results.length) throw new ApiError(409, "portal_access_conflict", "Este acesso mudou. Atualize a lista antes de tentar novamente.");
-  return { access: accessResponse(await managerAccess(context, id)), invitationUrl: token ? `${PORTAL_ORIGIN}/portal/convite/${token}` : null };
+  return { access: accessResponse(await managerAccess(context, id)), invitationUrl: token ? invitationPath(token) : null };
 }
 export async function portalInvitation(request: Request, token: string) {
   const identity = await portalIdentity(request);

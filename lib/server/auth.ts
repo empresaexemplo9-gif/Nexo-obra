@@ -162,8 +162,9 @@ export async function signIn(request: Request, email: string, password: string) 
   return { id: credential.user_id, email: credential.email, displayName: credential.display_name };
 }
 
-// Grava a senha de quem aceita um convite. Idempotente por e-mail: reaceitar troca a senha
-// em vez de criar uma segunda credencial para a mesma pessoa.
+// Cria a senha de quem aceita um convite pela primeira vez. NUNCA sobrescreve: se o e-mail
+// já tem credencial, nada muda. Sobrescrever permitia a quem emite um convite para o e-mail
+// de outra pessoa trocar a senha dela pelo link.
 export function saveCredentialStatement(
   db: D1Database,
   user: { id: string; email: string; displayName: string },
@@ -173,9 +174,7 @@ export function saveCredentialStatement(
   return db.prepare(
     `INSERT INTO user_credentials (user_id, email, password_hash, display_name, active, password_updated_at, created_at)
      VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)
-     ON CONFLICT(email) DO UPDATE SET
-       password_hash = excluded.password_hash, display_name = excluded.display_name,
-       active = 1, password_updated_at = excluded.password_updated_at`,
+     ON CONFLICT(email) DO NOTHING`,
   ).bind(user.id, user.email.trim().toLowerCase(), passwordHash, user.displayName, now);
 }
 

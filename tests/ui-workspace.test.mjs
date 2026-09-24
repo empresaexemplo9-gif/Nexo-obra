@@ -220,7 +220,8 @@ test("sem sessão, a tela pede e-mail e senha e não vaza nada da empresa", asyn
   assert.ok(container.querySelector("#account-email"), "pede o e-mail da conta");
   assert.ok(container.querySelector("#account-password"), "pede a senha da conta");
   assert.doesNotMatch(texto, /ChatGPT/, "nada do produto depende de conta de terceiro");
-  assert.ok(container.querySelector("#initial-superadmin-email"));
+  assert.equal(container.querySelector("#initial-superadmin-email"), null, "um só lugar para entrar");
+  assert.doesNotMatch(texto, /Entrar como superadmin|Escolha o tipo de acesso/);
 });
 
 test("os termos pendentes bloqueiam o produto até o aceite", async () => {

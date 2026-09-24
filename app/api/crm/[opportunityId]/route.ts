@@ -109,6 +109,10 @@ export async function POST(request: Request, route: RouteContext) {
       .bind(context.organization.id, data.code).first();
     if (duplicate) throw new ApiError(409, "project_code_conflict", "Este código de projeto já está em uso.");
     const projectId = crypto.randomUUID();
+    // Duas abas convertendo ao mesmo tempo criavam duas obras e a segunda sobrescrevia o
+    // vínculo. Agora a obra só nasce se a oportunidade ainda não tiver sido convertida, e o
+    // vínculo só é gravado sobre oportunidade livre — tudo no mesmo lote.
+    try {
     await context.db.batch([
       context.db.prepare(
         `INSERT INTO projects (
@@ -117,22 +121,29 @@ export async function POST(request: Request, route: RouteContext) {
           owner_member_id, starts_at, start_date, deadline_at, target_date,
           budget_cents, drap_cost_center_id, external_financial_cost_center_id,
           created_at, updated_at
-        ) VALUES (
+        ) SELECT
           ?1, ?2, ?3, ?4, ?5,
           ?6, ?6, 'active', ?7, ?7, 0, 0,
           ?8, NULL, NULL, ?9, ?9,
           ?10, NULL, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-        )`,
+        WHERE EXISTS (SELECT 1 FROM crm_opportunities WHERE id = ?11 AND organization_id = ?2 AND won_project_id IS NULL)`,
       ).bind(
         projectId, context.organization.id, current.client_id, data.code,
         data.projectName ?? current.title, data.kind, data.phase,
-        current.owner_member_id, data.targetDate ?? null, current.estimated_value_cents,
+        current.owner_member_id, data.targetDate ?? null, current.estimated_value_cents, opportunityId,
       ),
-      context.db.prepare("UPDATE crm_opportunities SET stage = 'won', probability_percent = 100, won_project_id = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2 AND organization_id = ?3")
+      context.db.prepare(`UPDATE crm_opportunities SET stage = 'won', probability_percent = 100, won_project_id = ?1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?2 AND organization_id = ?3 AND won_project_id IS NULL AND EXISTS (SELECT 1 FROM projects WHERE id = ?1 AND organization_id = ?3)`)
         .bind(projectId, opportunityId, context.organization.id),
       auditStatement(context, "crm.opportunity_converted", "crm_opportunity", opportunityId, { projectId }),
       auditStatement(context, "project.created_from_crm", "project", projectId, { opportunityId }),
     ]);
+    } catch (error) {
+      if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "project_code_conflict", "Este código de projeto já está em uso.");
+      throw error;
+    }
+    const criado = await context.db.prepare("SELECT id FROM projects WHERE id = ?1 AND organization_id = ?2").bind(projectId, context.organization.id).first();
+    if (!criado) throw new ApiError(409, "opportunity_converted", "Esta oportunidade já foi convertida em projeto.");
     return Response.json({ projectId, opportunity: opportunityResponse(await record(context, opportunityId)) }, { status: 201 });
   });
 }

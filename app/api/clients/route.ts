@@ -92,6 +92,9 @@ export async function POST(request: Request) {
 
     const clientId = crypto.randomUUID();
     const data = parsed.data;
+    if (data.externalFinancialId && !context.member.permissions.finance.edit) {
+      throw new ApiError(403, "finance_permission_required", "Seu perfil não pode definir o vínculo financeiro do cliente.");
+    }
     try {
       await context.db.batch([
         context.db

@@ -12,7 +12,7 @@ import { invitationTokenHash, validateInvitationState } from "@/lib/server/invit
 import { parseStoredPermissions } from "@/lib/permissions";
 import { requestEvidenceHashes } from "@/lib/server/terms";
 import {
-  assertPasswordStrength, createSessionCookie, hashPassword, saveCredentialStatement,
+  assertPasswordStrength, createSessionCookie, credentialExists, hashPassword, saveCredentialStatement,
 } from "@/lib/server/auth";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { z } from "zod";
@@ -60,7 +60,9 @@ export async function POST(request: Request, route: RouteContext) {
     if (!existing && !parsed.data.password) {
       throw new ApiError(400, "password_required", "Crie uma senha para o seu acesso.");
     }
-    if (parsed.data.password) assertPasswordStrength(parsed.data.password);
+    // Com sessão aberta a senha não é tocada: aceitar convite não é trocar senha.
+    const newPassword = existing ? undefined : parsed.data.password;
+    if (newPassword) assertPasswordStrength(newPassword);
     const { token } = await route.params;
     if (token.length < 32 || token.length > 100) throw new ApiError(404, "invitation_not_found", "Convite não encontrado.");
     const db = getDatabase();
@@ -74,6 +76,12 @@ export async function POST(request: Request, route: RouteContext) {
     // Quem já está autenticado precisa ser a pessoa convidada. Quem não está passa a ser.
     if (existing && existing.email.trim().toLowerCase() !== invitation.email.trim().toLowerCase()) {
       throw new ApiError(403, "invitation_email_mismatch", `Entre com o e-mail ${invitation.email} para aceitar este convite.`);
+    }
+    // O convite só cria senha para quem ainda não tem. Sem esta trava, quem emitiu o convite
+    // (e portanto tem o link) abria o link deslogado, escolhia uma senha e tomava a conta de
+    // quem já usava a plataforma em outra empresa.
+    if (!existing && await credentialExists(invitation.email)) {
+      throw new ApiError(409, "account_exists", `O e-mail ${invitation.email} já tem acesso à H.OIKOS. Entre com a sua senha e abra o convite de novo para aceitar.`);
     }
     const identity = existing ?? {
       id: crypto.randomUUID(),
@@ -96,8 +104,17 @@ export async function POST(request: Request, route: RouteContext) {
     const permissions = parseStoredPermissions(invitation.permissions_json, role);
     const evidence = await requestEvidenceHashes(request);
 
-    const passwordHash = parsed.data.password ? await hashPassword(parsed.data.password) : null;
+    const passwordHash = newPassword ? await hashPassword(newPassword) : null;
 
+    // Reivindica o convite antes de tudo: dois aceites simultâneos criavam dois membros
+    // para o mesmo e-mail, porque o UPDATE no meio do lote não impedia o resto dele.
+    const claimed = await db.prepare(
+      `UPDATE organization_invitations SET accepted_at = ?1, accepted_by_user_id = ?2
+       WHERE id = ?3 AND accepted_at IS NULL AND revoked_at IS NULL`,
+    ).bind(now, identity.id, invitation.id).run();
+    if (!claimed.meta?.changes) throw new ApiError(409, "invitation_already_accepted", "Este convite já foi aceito.");
+
+    try {
     await db.batch([
       db.prepare(
         `INSERT OR IGNORE INTO users (id, email, display_name, created_at, updated_at)
@@ -124,11 +141,6 @@ export async function POST(request: Request, route: RouteContext) {
            WHEN organization_members.role = 'owner' THEN 'owner' ELSE excluded.role END`,
       ).bind(memberId, invitation.organization_id, userId, role, now),
       db.prepare(
-        `UPDATE organization_invitations
-         SET accepted_at = ?1, accepted_by_user_id = ?2
-         WHERE id = ?3 AND accepted_at IS NULL AND revoked_at IS NULL`,
-      ).bind(now, identity.id, invitation.id),
-      db.prepare(
         `INSERT INTO terms_acceptances (
           id, organization_id, external_user_id, email, terms_version,
           invitation_id, ip_hash, user_agent_hash, accepted_at
@@ -145,6 +157,12 @@ export async function POST(request: Request, route: RouteContext) {
         ) VALUES (?1, ?2, ?3, 'invitation.accepted', 'invitation', ?4, ?5, ?6)`,
       ).bind(crypto.randomUUID(), invitation.organization_id, userId, invitation.id, JSON.stringify({ role }), now),
     ]);
+    } catch (error) {
+      // O lote falhou: devolve o convite para que a pessoa possa tentar de novo.
+      await db.prepare("UPDATE organization_invitations SET accepted_at = NULL, accepted_by_user_id = NULL WHERE id = ?1 AND accepted_at = ?2")
+        .bind(invitation.id, now).run();
+      throw error;
+    }
 
     // Aceitar já abre a sessão: sem isso a pessoa criaria a senha e continuaria de fora.
     const headers = new Headers();

@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { apiRoute, jsonBody, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import { clearSessionCookie, createSessionCookie, readSessionUser, signIn } from "@/lib/server/auth";
-import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
+import { clearSuperAdminFailures, isSuperAdminEmail, rejectCrossSiteMutation, signInSuperAdmin } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +26,27 @@ export async function POST(request: Request) {
     rejectCrossSiteMutation(request);
     const parsed = credentialsSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
-    const user = await signIn(request, parsed.data.email, parsed.data.password);
+    const { email, password } = parsed.data;
+    // Um só lugar para entrar. O que leva ao painel da plataforma são as credenciais do
+    // superadministrador; qualquer outra combinação é conta de empresa. O mesmo e-mail pode
+    // ter as duas: senha da plataforma abre o painel, senha da empresa abre a empresa.
+    const superadmin = await isSuperAdminEmail(email);
+    if (superadmin) {
+      try {
+        const session = await signInSuperAdmin(request, email, password);
+        return Response.json(
+          { authenticated: true, scope: "superadmin", redirectTo: "/superadmin", expiresAt: session.expiresAt },
+          { headers: { "Set-Cookie": session.cookie, "Cache-Control": "private, no-store" } },
+        );
+      } catch (error) {
+        if (!(error instanceof ApiError && error.code === "invalid_superadmin_credentials")) throw error;
+      }
+    }
+    const user = await signIn(request, email, password);
+    if (superadmin) await clearSuperAdminFailures(request);
     const session = await createSessionCookie(user);
     return Response.json(
-      { authenticated: true, user, expiresAt: session.expiresAt },
+      { authenticated: true, scope: "account", redirectTo: "/", user, expiresAt: session.expiresAt },
       { headers: { "Set-Cookie": session.cookie, "Cache-Control": "private, no-store" } },
     );
   });

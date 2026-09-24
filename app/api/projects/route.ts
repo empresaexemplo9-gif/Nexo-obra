@@ -57,7 +57,9 @@ export async function GET(request: Request) {
     };
     if (kind === "project" || kind === "work") add("p.kind = ?", kind);
     if (status) add("p.status = ?", status);
-    if (query) add("(p.name LIKE ? OR p.code LIKE ? OR c.name LIKE ?)", `%${query}%`);
+    // Buscar pelo nome do cliente só para quem pode ver clientes: senão a lista de obras
+    // que casam com "?q=" revelaria quem são os clientes a quem não tem acesso ao CRM.
+    if (query) add(context.member.permissions.crm.view ? "(p.name LIKE ? OR p.code LIKE ? OR c.name LIKE ?)" : "(p.name LIKE ? OR p.code LIKE ?)", `%${query}%`);
 
     const result = await context.db
       .prepare(`${projectSelect} WHERE ${filters.join(" AND ")} ORDER BY p.updated_at DESC LIMIT 100`)
@@ -79,6 +81,10 @@ export async function POST(request: Request) {
     const parsed = createProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    // Orçamento previsto é dado de orçamento: quem só edita obras não o define.
+    if (data.budgetCents && !context.member.permissions.budgets.edit) {
+      throw new ApiError(403, "budget_permission_required", "Seu perfil não pode definir o orçamento previsto da obra.");
+    }
     validatePeriod(data.startDate, data.targetDate);
     await verifyRelation(context.db, "clients", data.clientId, context.organization.id, "O cliente");
     await verifyRelation(context.db, "members", data.ownerMemberId, context.organization.id, "O responsável");

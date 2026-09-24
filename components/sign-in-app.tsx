@@ -33,10 +33,11 @@ export function SignInApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
-      const body = await response.json().catch(() => ({})) as { error?: string };
+      const body = await response.json().catch(() => ({})) as { error?: string; redirectTo?: string };
       if (!response.ok) throw new Error(body.error ?? "Não foi possível entrar.");
-      // O destino é lido só agora, na hora de navegar: não há estado para sincronizar.
-      window.location.assign(safeReturnTo(new URLSearchParams(window.location.search).get("return_to")));
+      // Credenciais do superadministrador levam ao painel da plataforma; as demais, ao destino
+      // pedido. O destino é lido só agora, na hora de navegar: não há estado para sincronizar.
+      window.location.assign(body.redirectTo === "/superadmin" ? "/superadmin" : safeReturnTo(new URLSearchParams(window.location.search).get("return_to")));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
       setLoading(false);

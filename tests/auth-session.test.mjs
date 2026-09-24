@@ -236,3 +236,56 @@ test("hash de senha: sal por senha, verificação exata e formato sem $", async 
   // O formato antigo, com $ como separador, continua sendo lido.
   assert.equal(await auth.passwordMatches(SENHA, primeiro.replaceAll(":", "$")), true);
 });
+
+test("convite para e-mail que já tem conta não troca a senha de ninguém", async () => {
+  // Quem emite um convite tem o link. Antes, abrir o link deslogado e escolher uma senha
+  // sobrescrevia a senha de quem já usava a plataforma e abria a sessão como essa pessoa.
+  const primeiro = await convite();
+  assert.equal((await aceitar(primeiro.token, { acceptTerms: true, password: SENHA })).status, 200);
+  const hashOriginal = db.sqlite.prepare("SELECT password_hash FROM user_credentials WHERE email = ?").get(EMAIL).password_hash;
+
+  const outraEmpresa = await convite();
+  const tomada = await aceitar(outraEmpresa.token, { acceptTerms: true, password: "OutraSenhaForte#2026" });
+  assert.equal(tomada.status, 409);
+  assert.equal((await tomada.json()).code, "account_exists");
+  assert.doesNotMatch(cookiesDe(tomada), /__Host-nexo-session=/, "nenhuma sessão é aberta");
+  assert.equal(db.sqlite.prepare("SELECT password_hash FROM user_credentials WHERE email = ?").get(EMAIL).password_hash, hashOriginal);
+  assert.equal((await entrar({ email: EMAIL, password: SENHA })).status, 200, "a senha original continua valendo");
+
+  // Com a própria sessão, a pessoa aceita normalmente — e a senha enviada é ignorada.
+  const sessao = cookiesDe(await entrar({ email: EMAIL, password: SENHA }));
+  const aceite = await aceitar(outraEmpresa.token, { acceptTerms: true, password: "OutraSenhaForte#2026" }, { cookie: sessao });
+  assert.equal(aceite.status, 200, await aceite.clone().text());
+  assert.equal(db.sqlite.prepare("SELECT password_hash FROM user_credentials WHERE email = ?").get(EMAIL).password_hash, hashOriginal);
+});
+
+test("o mesmo convite aceito duas vezes cria um membro só", async () => {
+  const { token, organizationId } = await convite("dupla@teste.test");
+  const respostas = await Promise.all([
+    aceitar(token, { acceptTerms: true, password: SENHA }),
+    aceitar(token, { acceptTerms: true, password: SENHA }),
+  ]);
+  assert.deepEqual(respostas.map((r) => r.status).sort(), [200, 409]);
+  assert.equal(db.sqlite.prepare("SELECT COUNT(*) n FROM members WHERE organization_id = ? AND email = ?").get(organizationId, "dupla@teste.test").n, 1);
+});
+
+test("um só login: as credenciais da plataforma levam ao painel do superadministrador", async () => {
+  const certo = await entrar({ email: "Plataforma@Nexo.test", password: "senha-da-plataforma-2026" });
+  assert.equal(certo.status, 200, await certo.clone().text());
+  const corpo = await certo.json();
+  assert.equal(corpo.scope, "superadmin");
+  assert.equal(corpo.redirectTo, "/superadmin");
+  assert.doesNotMatch(cookiesDe(certo), /__Host-nexo-session=/, "não abre sessão de empresa");
+  assert.match(cookiesDe(certo), /__Host-nexo-superadmin=/, "abre a sessão do painel");
+
+  const errado = await entrar({ email: "plataforma@nexo.test", password: "senha-errada-qualquer" });
+  assert.equal(errado.status, 401);
+  assert.equal((await errado.json()).code, "invalid_credentials", "mesma resposta de qualquer senha errada: não revela quem é o superadministrador");
+
+  // Conta de empresa segue pelo mesmo formulário.
+  const { token } = await convite();
+  assert.equal((await aceitar(token, { acceptTerms: true, password: SENHA })).status, 200);
+  const empresa = await entrar({ email: EMAIL, password: SENHA });
+  assert.equal(empresa.status, 200);
+  assert.equal((await empresa.json()).redirectTo, "/");
+});

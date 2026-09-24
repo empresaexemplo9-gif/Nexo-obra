@@ -189,9 +189,12 @@ test("keeps superadmin credentials and authorization on the server", async () =>
   assert.match(auth, /SUPERADMIN_EMAIL/);
   assert.match(auth, /PBKDF2/);
   assert.match(auth, /HttpOnly; Secure; SameSite=Strict/);
-  assert.match(session, /superadmin_login_attempts/);
+  assert.match(auth, /superadmin_login_attempts/, "o bloqueio por tentativas vive junto da verificação");
+  assert.match(session, /signInSuperAdmin/);
   assert.match(overview, /requireSuperAdmin/);
-  assert.match(await source("components/nexo-app.tsx"), /initial-superadmin-email/);
+  // Um só formulário de entrada: o superadministrador é reconhecido pelas credenciais.
+  assert.doesNotMatch(await source("components/nexo-app.tsx"), /initial-superadmin-email|Entrar como superadmin/);
+  assert.match(await source("app/api/auth/session/route.ts"), /signInSuperAdmin/);
   assert.doesNotMatch(`${auth}\n${session}\n${overview}\n${ui}`, /147532159/);
 });
 
