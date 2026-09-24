@@ -53,10 +53,10 @@ export function WorksheetAdvancedPanel({ computed, settings, columns, selectedRa
     onChange(result.data);
   }
   const numeric = (text: string) => text.trim() === "" ? undefined : Number(text.replace(",", "."));
-  return <details className="rounded-md border p-3 text-sm">
+  return <details id="planilha-avancado" className="rounded-md border p-3 text-sm">
     <summary className="cursor-pointer font-medium">Validação, cores, gráficos e tabelas dinâmicas</summary>
     <div className="mt-3 space-y-4">
-      <p className="text-xs">As regras e os resumos acompanham as alterações dos dados. Salve para guardar a configuração. Datas usam AAAA-MM-DD.</p>
+      <p className="text-xs">As regras e os resumos acompanham as alterações dos dados. Salve para guardar a configuração. Datas aceitam DD/MM/AAAA.</p>
       {issues.size > 0 && <div role="alert" className="rounded border border-red-300 p-2"><p>{issues.size} célula(s) inválida(s). Corrija os valores ou as regras antes de salvar.</p><ul>{[...issues].slice(0, 15).map(([key, message]) => <li key={key}>{key}: {message}</li>)}</ul>{issues.size > 15 && <p>Exibindo as primeiras 15.</p>}</div>}
       {!readOnly && <>
         <label className="block">Intervalo das novas regras e resumos<Input aria-label="Intervalo avançado" value={actualRange} onChange={event => setRange(event.target.value.toUpperCase())} placeholder="A1:B50" className="mt-1 max-w-xs" /></label>

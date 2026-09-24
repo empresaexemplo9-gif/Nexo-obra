@@ -55,7 +55,32 @@ test("inserção e exclusão deslocam regras, removendo somente referências exc
   assert.equal(moved.validations[0].range, "C2:C5"); assert.equal(moved.views[0].valueColumn, 2); assert.equal(moved.views[0].range, "A1:C6");
   const deleted = advanced.moveAdvanced(rules, "column", 1, -1);
   assert.equal(deleted.validations.length, 0); assert.equal(deleted.views.length, 0); assert.equal(deleted.conditions.length, 1);
-  assert.throws(() => advanced.moveAdvanced(settings({ validations: [{ range: "AZ1", kind: "number" }] }), "column", 0, 1), /limite/);
+  // Regra que já está na última coluna sai da grade junto com as células; não cancela a inserção.
+  assert.deepEqual(advanced.moveAdvanced(settings({ validations: [{ range: "AZ1", kind: "number" }] }), "column", 0, 1).validations, []);
+});
+
+test("regra que cobre a coluna inteira não impede inserir linha", () => {
+  // A2:A500 é o jeito natural de validar a coluna toda. Antes, inserir qualquer linha
+  // lançava erro e a inserção inteira era descartada.
+  const moved = advanced.moveAdvanced(settings({ validations: [{ range: "A2:A500", kind: "number" }] }), "row", 3, 1);
+  assert.equal(moved.validations[0].range, "A2:A500");
+});
+
+test("cor 'igual a' lê o valor da regra como número brasileiro", () => {
+  const rules = settings({ conditions: [
+    { range: "A1", kind: "equal", value: "1500,5", color: "green" },
+    { range: "A2", kind: "equal", value: "1.500", color: "blue" },
+    { range: "A3", kind: "equal", value: "obra", color: "red" },
+    { range: "A4", kind: "greater", value: "1.000", color: "yellow" },
+  ] });
+  assert.deepEqual(advanced.conditionalColors(evaluateSheet({ A1: "=3001/2", A2: "1500", A3: "Obra ", A4: "1200" }), rules),
+    { A1: "#dcfce7", A2: "#dbeafe", A3: "#fee2e2", A4: "#fef9c3" });
+});
+
+test("validação de data aceita o formato brasileiro e o de HOJE()", () => {
+  const rules = settings({ validations: [{ range: "A1:A5", kind: "date" }] });
+  const issues = advanced.validationIssues(evaluateSheet({ A1: "23/09/2026", A2: "2026-09-23", A3: "31/02/2026", A4: "=HOJE()", A5: "9/3/2026" }), rules);
+  assert.deepEqual([...issues.keys()], ["A3"]);
 });
 
 test("XLSX exporta números, texto literal, fórmulas de referência e formatos sem execução", async () => {
@@ -109,4 +134,44 @@ test("XLSX recusa truncamento, dimensões, payload excessivo e limites reais de 
   await assert.rejects(importXlsx(compressed), /grande/);
   const unsafe = new JSZip(); unsafe.file("xl/externalLinks/externalLink1.xml", "url");
   await assert.rejects(importXlsx(await unsafe.generateAsync({ type: "nodebuffer" })), /vínculos externos/);
+});
+
+test("o servidor recusa célula fora da grade, que travaria a exportação", () => {
+  assert.equal(contentSchema.safeParse({ cells: { AZ500: "1" } }).success, true);
+  for (const key of ["BA1", "A501", "ZZ9999"]) assert.equal(contentSchema.safeParse({ cells: { [key]: "1" } }).success, false, key);
+  assert.equal(contentSchema.safeParse({ bold: ["A9999"] }).success, false);
+});
+
+test("XLSX leva o formato contábil e as colunas fixas", async () => {
+  const content = contentSchema.parse({ cells: { A1: "Etapa", B1: "-10" }, formats: { B: "contabil" }, frozenColumns: 1 });
+  const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(await exportXlsx("Custos", content, 2));
+  assert.match(workbook.worksheets[0].getCell("B1").numFmt, /\[Red\]/);
+  assert.equal(workbook.worksheets[0].views[0].state, "frozen");
+  assert.equal(workbook.worksheets[0].views[0].xSplit, 1);
+});
+
+test("XLSX leva e traz negrito, itálico, alinhamento, quebra, cores e mesclagem", async () => {
+  const content = contentSchema.parse({
+    cells: { A1: "Orçamento da obra", A2: "Item", B2: "Valor" }, bold: ["A1"],
+    styles: { A1: { align: "center", italic: true, fill: "yellow" }, A2: { underline: true, wrap: true, color: "red" }, B2: { align: "right", strike: true } },
+    merges: ["A1:C1"],
+  });
+  const bytes = await exportXlsx("Orçamento", content, 3);
+  const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(bytes);
+  const aba = workbook.worksheets[0];
+  assert.equal(aba.getCell("A1").font.bold, true);
+  assert.equal(aba.getCell("A1").font.italic, true, "negrito e itálico convivem");
+  assert.equal(aba.getCell("A1").alignment.horizontal, "center");
+  assert.equal(aba.getCell("A1").fill.fgColor.argb, "FFFEF9C3");
+  assert.equal(aba.getCell("A2").font.color.argb, "FFB91C1C");
+  assert.equal(aba.getCell("B1").isMerged, true);
+
+  const [importada] = await importXlsx(Buffer.from(bytes));
+  assert.deepEqual(importada.merges, ["A1:C1"]);
+  assert.deepEqual(importada.bold, ["A1"]);
+  assert.deepEqual(importada.styles.A1, { italic: true, align: "center" }, "cor não volta: a paleta do arquivo é livre");
+  assert.deepEqual(importada.styles.A2, { underline: true, wrap: true });
+  assert.deepEqual(importada.styles.B2, { strike: true, align: "right" });
+  assert.equal(importada.cells.B1, undefined, "a célula coberta não repete o título");
+  assert.equal(contentSchema.safeParse({ cells: importada.cells, bold: importada.bold, styles: importada.styles, merges: importada.merges }).success, true);
 });

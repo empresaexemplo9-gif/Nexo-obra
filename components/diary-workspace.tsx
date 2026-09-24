@@ -71,7 +71,9 @@ export function DiaryWorkspace({ projectId, canEdit, query = "" }: { projectId?:
   if (selectedProject !== "all") filters.set("projectId", selectedProject);
   if (from) filters.set("from", from);
   if (to) filters.set("to", to);
-  if (query.trim()) filters.set("q", query.trim());
+  // A API aceita até 100 caracteres; uma busca global mais longa quebrava o diário com
+  // "Revise os campos informados".
+  if (query.trim()) filters.set("q", query.trim().slice(0, 100));
   if (occurrencesOnly) filters.set("occurrencesOnly", "true");
   const filterString = filters.toString();
   const page = pagination.filters === filterString ? pagination.page : 1;

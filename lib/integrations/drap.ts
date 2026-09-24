@@ -159,13 +159,6 @@ export function isDrapTransactionsConfigured() {
   return isDrapConfigured();
 }
 
-/** A rota de cobrança existe na Drap desde `/api/v1/cobrancas`, então a
- *  capacidade deixa de depender de `DRAP_CHARGES_PATH` estar configurado —
- *  a variável segue aceita pra apontar outro caminho em homologação. */
-export function isDrapChargesConfigured() {
-  return isDrapConfigured();
-}
-
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -506,65 +499,47 @@ async function somarResumoPelosLancamentos(externalCompanyId: string): Promise<F
   } satisfies FinancialSummary;
 }
 
-export async function createDrapCharge(input: {
-  externalCompanyId: string;
-  externalCustomerId: string;
-  costCenterId: string;
-  description: string;
-  amountCents: number;
-  dueDate: string;
-  idempotencyKey: string;
-  reminders: { daysBefore: number; onDueDate: boolean; overdueIntervalDays: number };
-}) {
-  const config = runtimeEnv();
-  if (!isDrapChargesConfigured()) throw new Error("DRAP charges are not configured");
+// ─────────────── Cobrança ───────────────
+//
+// Contrato real de `/api/v1/cobrancas` (PR #9, HOMOLOGACAO-DRAP.md). O formato remoto
+// para aqui: a rota fala de centavos, obra e cliente; nunca de `parceiro_id` ou `valor`.
 
-  const headers = await requestHeaders(input.externalCompanyId);
-  // Sem esta chave, um timeout depois de a Drap aceitar deixa a H.OIKOS sem
-  // resposta e o cliente com boleto emitido — e a retentativa manda o segundo.
-  headers.set("Idempotency-Key", input.idempotencyKey);
+/** Corpo da cobrança. A Drap trabalha em reais; a conversão de centavos acontece só aqui.
+ *  Centro de custo e política de lembretes não existem na cobrança dela e não entram. */
+export function corpoDaCobranca(input: { externalCustomerId: string; description: string; amountCents: number; dueDate: string }) {
+  return {
+    // O cliente é um parceiro da empresa na Drap, que exige CNPJ/CPF nele — sem documento
+    // o Asaas recusa e a Drap devolve 422 dizendo qual parceiro completar.
+    parceiro_id: input.externalCustomerId,
+    descricao: input.description,
+    valor: input.amountCents / 100,
+    vencimento: input.dueDate,
+    // Deixa o pagador escolher entre PIX, boleto e cartão.
+    forma: "UNDEFINED",
+  };
+}
 
-  const response = await fetch(drapUrl(config.DRAP_CHARGES_PATH ?? "/api/v1/cobrancas"), {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      // O cliente é um parceiro da empresa no cadastro da Drap. Ela exige
-      // CNPJ/CPF nele — sem documento o Asaas recusa, e a Drap devolve 422
-      // dizendo qual parceiro completar.
-      parceiro_id: input.externalCustomerId,
-      descricao: input.description,
-      // A Drap trabalha o valor em reais; aqui ele vive em centavos. A
-      // conversão acontece só nesta borda.
-      valor: input.amountCents / 100,
-      vencimento: input.dueDate,
-      // Deixa o pagador escolher entre PIX, boleto e cartão.
-      forma: "UNDEFINED",
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-
-  // Dois campos do contrato da H.OIKOS não existem na cobrança da Drap e
-  // ficam SÓ aqui, de propósito:
-  //   - centro de custo: a cobrança da Drap não carrega obra. O vínculo por
-  //     obra continua valendo pro lançamento, não pro boleto;
-  //   - política de lembretes: quem lembra o cliente é a H.OIKOS, com os
-  //     prazos gravados em financial_charge_requests.
-  if (!response.ok) throw new Error(`DRAP charge request failed with status ${response.status}`);
-
-  const root = asRecord(await response.json());
+/** Lê a cobrança devolvida. Resposta repetida (200 com `reaproveitada`) é a mesma cobrança
+ *  válida. Sem link https, nenhum link — nunca um inventado. */
+export function lerCobrancaDaDrap(value: unknown): DrapCharge {
+  const root = asRecord(value);
   const data = asRecord(root.cobranca ?? root.data ?? root.charge ?? root);
-  const id = readString(data, ["id", "chargeId", "charge_id"]);
+  const id = readString(data, ["id", "chargeId", "charge_id", "cobranca_id"]);
   if (!id) throw new Error("DRAP charge response has no id");
-
-  // `invoice_url` é a página de pagamento da Drap/Asaas; o boleto puro serve
-  // de segunda opção quando ela não vem.
-  const shareUrl = readString(data, ["invoice_url", "invoiceUrl", "shareUrl", "share_url", "paymentUrl", "payment_url", "bank_slip_url", "bankSlipUrl"]);
-
+  // `invoice_url` é a página de pagamento da Drap/Asaas; o boleto puro é a segunda opção.
+  const shareUrl = readString(data, ["invoice_url", "invoiceUrl", "shareUrl", "share_url", "paymentUrl", "payment_url", "link_pagamento", "bank_slip_url", "bankSlipUrl"]);
   return {
     id,
     status: readString(data, ["status", "situacao"]) ?? "created",
     shareUrl: shareUrl && /^https:\/\//i.test(shareUrl) ? shareUrl : null,
-  } satisfies DrapCharge;
+  };
+}
+
+/** Motivo curto de uma recusa da Drap (parceiro sem documento, Asaas desconectado). */
+export function motivoDaRecusaDrap(detail: unknown): string | null {
+  const body = asRecord(detail);
+  const reason = readString(body, ["detail", "error", "message", "mensagem"]);
+  return reason ? reason.slice(0, 300) : null;
 }
 
 export class DrapApiError extends Error {
@@ -587,7 +562,6 @@ export async function requestDrapApi<T>(
   const headers = await requestHeaders(externalCompanyId);
   // Escrita financeira é operação distribuída (regra 5 do CLAUDE.md): um tempo esgotado
   // numa requisição que a Drap já efetivou faz a tentativa seguinte duplicar o registro.
-  // `createDrapCharge` já mandava a chave; as rotas operacionais não mandavam nenhuma.
   if (init.idempotencyKey) headers.set("Idempotency-Key", init.idempotencyKey);
   const response = await fetch(drapUrl(path), {
     method,

@@ -55,29 +55,30 @@ const dayLabel = (day: string) => new Date(`${day}T12:00:00.000Z`).toLocaleDateS
 // O realizado de uma meta vem sempre da tabela dona do dado, nunca de um contador à parte.
 async function goalProgress(context: OrganizationContext, goal: GoalRow) {
   const { db, organization } = context;
-  const startMs = usageDayStart(goal.period_start, organization.timezone, Date.parse(`${goal.period_start}T12:00:00.000Z`));
-  const endMs = usageDayStart(goal.period_end, organization.timezone, Date.parse(`${goal.period_end}T12:00:00.000Z`)) + 86_400_000 - 1;
   const owner = goal.owner_member_id;
 
   switch (goal.metric as GoalMetric) {
+    // Todas guardam data como texto (ISO ou CURRENT_TIMESTAMP). Comparar com milissegundos,
+    // como era antes, nunca casava: essas três metas ficavam em zero para sempre.
     case "tasks_done": {
       const row = await db.prepare(
         `SELECT COUNT(*) AS total FROM tasks WHERE organization_id = ?1 AND status = 'done'
-         AND completed_at BETWEEN ?2 AND ?3 AND (?4 IS NULL OR assignee_member_id = ?4)`,
-      ).bind(organization.id, startMs, endMs, owner).first<{ total: number }>();
+         AND substr(completed_at, 1, 10) BETWEEN ?2 AND ?3 AND (?4 IS NULL OR assignee_member_id = ?4)`,
+      ).bind(organization.id, goal.period_start, goal.period_end, owner).first<{ total: number }>();
       return Number(row?.total ?? 0);
     }
     case "clients_new": {
       const row = await db.prepare(
-        "SELECT COUNT(*) AS total FROM clients WHERE organization_id = ?1 AND created_at BETWEEN ?2 AND ?3",
-      ).bind(organization.id, startMs, endMs).first<{ total: number }>();
+        "SELECT COUNT(*) AS total FROM clients WHERE organization_id = ?1 AND substr(created_at, 1, 10) BETWEEN ?2 AND ?3",
+      ).bind(organization.id, goal.period_start, goal.period_end).first<{ total: number }>();
       return Number(row?.total ?? 0);
     }
     case "projects_done": {
+      // O status de obra concluída é 'completed'; 'done' é o das tarefas.
       const row = await db.prepare(
-        `SELECT COUNT(*) AS total FROM projects WHERE organization_id = ?1 AND status = 'done'
-         AND updated_at BETWEEN ?2 AND ?3 AND (?4 IS NULL OR owner_member_id = ?4)`,
-      ).bind(organization.id, startMs, endMs, owner).first<{ total: number }>();
+        `SELECT COUNT(*) AS total FROM projects WHERE organization_id = ?1 AND status = 'completed'
+         AND substr(updated_at, 1, 10) BETWEEN ?2 AND ?3 AND (?4 IS NULL OR owner_member_id = ?4)`,
+      ).bind(organization.id, goal.period_start, goal.period_end, owner).first<{ total: number }>();
       return Number(row?.total ?? 0);
     }
     // As tabelas abaixo guardam data como texto, então a comparação é pelo trecho AAAA-MM-DD.

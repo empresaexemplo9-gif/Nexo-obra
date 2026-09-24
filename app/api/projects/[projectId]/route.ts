@@ -74,6 +74,14 @@ export async function PATCH(request: Request, route: RouteContext) {
     const parsed = updateProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    // Orçamento previsto e vínculo com o centro de custo da Drap são dados de orçamento e de
+    // financeiro. Quem só edita obras não os altera: o vínculo decide onde caem os lançamentos.
+    if (data.budgetCents !== undefined && !context.member.permissions.budgets.edit) {
+      throw new ApiError(403, "budget_permission_required", "Seu perfil não pode alterar o orçamento previsto da obra.");
+    }
+    if (data.externalFinancialCostCenterId !== undefined && !context.member.permissions.finance.edit) {
+      throw new ApiError(403, "finance_permission_required", "Seu perfil não pode alterar o vínculo financeiro da obra.");
+    }
     validatePeriod(data.startDate === undefined ? current.start_date : data.startDate, data.targetDate === undefined ? current.target_date : data.targetDate);
     if (data.clientId !== undefined) await verifyRelation(context.db, "clients", data.clientId, context.organization.id);
     if (data.ownerMemberId !== undefined) await verifyRelation(context.db, "members", data.ownerMemberId, context.organization.id);
@@ -103,11 +111,16 @@ export async function PATCH(request: Request, route: RouteContext) {
     const idPosition = values.length + 1;
     const orgPosition = values.length + 2;
 
-    await context.db.batch([
-      context.db.prepare(`UPDATE projects SET ${columns.join(", ")} WHERE id = ?${idPosition} AND organization_id = ?${orgPosition}`)
-        .bind(...values, projectId, context.organization.id),
-      auditStatement(context, "project.updated", "project", projectId, { fields: Object.keys(data) }),
-    ]);
+    try {
+      await context.db.batch([
+        context.db.prepare(`UPDATE projects SET ${columns.join(", ")} WHERE id = ?${idPosition} AND organization_id = ?${orgPosition}`)
+          .bind(...values, projectId, context.organization.id),
+        auditStatement(context, "project.updated", "project", projectId, { fields: Object.keys(data) }),
+      ]);
+    } catch (error) {
+      if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "project_code_conflict", "Este código de projeto já está em uso.");
+      throw error;
+    }
 
     const project = ensureFound(
       await context.db.prepare(`${projectSelect} WHERE p.id = ?1 AND p.organization_id = ?2`)
@@ -139,11 +152,20 @@ export async function DELETE(request: Request, route: RouteContext) {
     if ((linked?.total ?? 0) > 0) {
       throw new ApiError(409, "project_in_use", "Este projeto possui tarefas, arquivos, orçamentos ou diários vinculados.");
     }
-    await context.db.batch([
-      context.db.prepare("DELETE FROM projects WHERE id = ?1 AND organization_id = ?2")
-        .bind(projectId, context.organization.id),
-      auditStatement(context, "project.deleted", "project", projectId),
-    ]);
+    try {
+      await context.db.batch([
+        context.db.prepare("DELETE FROM projects WHERE id = ?1 AND organization_id = ?2")
+          .bind(projectId, context.organization.id),
+        auditStatement(context, "project.deleted", "project", projectId),
+      ]);
+    } catch (error) {
+      // Oportunidade ganha, portal do cliente, horas, cobranças, notas e desenhos também
+      // apontam para a obra. A lista acima não cobre todos; o banco cobre.
+      if (String(error).includes("FOREIGN KEY constraint")) {
+        throw new ApiError(409, "project_in_use", "Este projeto tem registros vinculados (CRM, portal, horas, cobranças, notas ou desenhos) e não pode ser excluído. Arquive-o.");
+      }
+      throw error;
+    }
     return new Response(null, { status: 204 });
   });
 }

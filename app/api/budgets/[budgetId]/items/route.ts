@@ -54,11 +54,15 @@ export async function POST(request: Request, route: RouteContext) {
     const statements = parsed.data.items.map((item, index) => {
       const factor = (1 + budget.bdi_percent / 100) * (1 + budget.margin_percent / 100);
       const unitPrice = item.unitPriceCents ?? Math.round(item.unitCostCents * factor);
-      return context.db.prepare(`INSERT INTO budget_items (id, budget_version_id, parent_item_id, sort_order, code, description, unit, quantity, unit_cost_cents, unit_price_cents, source, source_reference) VALUES (?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`).bind(crypto.randomUUID(), budgetId, (current?.max_order ?? -1) + index + 1, item.code ?? null, item.description, item.unit, item.quantity, item.unitCostCents, unitPrice, item.source, item.sourceReference ?? null);
+      // Só entra em rascunho: o status é conferido no próprio INSERT, e não antes dele, para
+      // o item não cair numa versão enviada um instante antes (que deveria estar imutável).
+      return context.db.prepare(`INSERT INTO budget_items (id, budget_version_id, parent_item_id, sort_order, code, description, unit, quantity, unit_cost_cents, unit_price_cents, source, source_reference)
+        SELECT ?1, ?2, NULL, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11 WHERE EXISTS (SELECT 1 FROM budget_versions WHERE id = ?2 AND status = 'draft')`).bind(crypto.randomUUID(), budgetId, (current?.max_order ?? -1) + index + 1, item.code ?? null, item.description, item.unit, item.quantity, item.unitCostCents, unitPrice, item.source, item.sourceReference ?? null);
     });
     statements.push(context.db.prepare(`UPDATE budget_versions SET direct_cost_cents = (SELECT COALESCE(ROUND(SUM(quantity * unit_cost_cents)), 0) FROM budget_items WHERE budget_version_id = ?1), total_cents = (SELECT COALESCE(ROUND(SUM(quantity * unit_price_cents)), 0) FROM budget_items WHERE budget_version_id = ?1), updated_at = CURRENT_TIMESTAMP WHERE id = ?1 AND organization_id = ?2`).bind(budgetId, context.organization.id));
     statements.push(auditStatement(context, "budget.items_added", "budget", budgetId, { count: parsed.data.items.length }));
-    await context.db.batch(statements);
+    const results = await context.db.batch(statements);
+    if (!results[0]?.meta?.changes) throw new ApiError(409, "budget_locked", "O orçamento foi enviado e está imutável. Crie uma nova versão para alterar os itens.");
     const result = await context.db.prepare("SELECT id, code, description, unit, quantity, unit_cost_cents, unit_price_cents, source, source_reference, sort_order FROM budget_items WHERE budget_version_id = ?1 ORDER BY sort_order, description").bind(budgetId).all<ItemRow>();
     return Response.json({ items: result.results.map(response) }, { status: 201 });
   });

@@ -20,6 +20,12 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 10. Não crie card, menu, gráfico ou filtro sem uma pergunta real que ele responda.
 11. Runtime de produção usa somente persistência e integrações reais. Mock, demo, fixture, seed fictício e fallback demonstrativo ficam restritos a testes automatizados e nunca alimentam API ou interface de produção.
 
+## Repositório
+
+O GitHub (`origin`) é o repositório principal: toda implementação vai para lá, com pull request.
+
+O GitLab é espelho opcional. Só quando `GITLAB_REPO_URL` e `GITLAB_TOKEN` (escopo `write_repository`) estiverem nas variáveis do ambiente, envie também a mesma branch ao GitLab, montando a URL autenticada só na hora do envio e sem gravá-la em `.git/config`. Token nunca vai para código, commit ou chat.
+
 ## Regra de interface
 
 Cada tela precisa ter:

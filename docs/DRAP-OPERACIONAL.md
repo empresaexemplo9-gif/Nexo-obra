@@ -57,7 +57,9 @@ Isso **não** é proxy aberto: o primeiro segmento precisa existir na allowlist,
 
 Toda escrita pela ponte exige `Idempotency-Key` válida e a mesma chave é encaminhada à DRAP. Assim um timeout pode ser repetido sem transformar a mesma intenção da pessoa em duas operações financeiras.
 
-Cobranças usam a mesma descoberta em tempo de execução. A capacidade deixa de depender de `DRAP_CHARGES_PATH` existir no ambiente: a H.OIKOS primeiro comprova que o recurso `cobrancas` existe para aquele tenant e só então tenta criar a cobrança. A solicitação local continua idempotente e a `Idempotency-Key` chega ao backend DRAP.
+A mesma exigência vale para as rotas dedicadas: `POST /lancamentos`, `PATCH`/`DELETE /lancamentos/{id}`, `POST /parceiros`, `PATCH`/`DELETE /parceiros/{id}` e `POST /categorias` respondem `400 idempotency_key_required` sem a chave, antes de qualquer chamada remota.
+
+Cobranças usam a mesma descoberta em tempo de execução. A capacidade deixa de depender de `DRAP_CHARGES_PATH` existir no ambiente: a H.OIKOS primeiro comprova que o recurso `cobrancas` existe para aquele tenant e só então tenta criar a cobrança. A solicitação local continua idempotente e a `Idempotency-Key` chega ao backend DRAP. O corpo segue o contrato real de `/api/v1/cobrancas` (`parceiro_id`, `descricao`, `valor` em reais, `vencimento`, `forma`), montado em `lib/integrations/drap.ts`; centro de custo e política de lembretes ficam só na H.OIKOS. Reenviar com a mesma chave depois de falha tenta de novo na DRAP (que devolve a cobrança já criada, se houver) em vez de responder a falha antiga como sucesso; a tela gera uma chave por abertura do formulário e só troca de chave depois de uma recusa definitiva.
 
 ## Códigos HTTP
 

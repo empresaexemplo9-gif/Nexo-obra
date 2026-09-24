@@ -91,8 +91,75 @@ incluir e virar `#CIRCULAR!`. Sem nada selecionado vale a coluna do cursor.
 
 Inserir e remover linha ou coluna **reajusta as referências das fórmulas**: `SOMA(A1:A2)`
 vira `SOMA(A1:A3)` quando entra uma linha no meio, e o que apontava para a linha removida
-passa a `#REF!` em vez de somar a célula errada. Preencher para baixo desloca as
-referências relativas. Ordenar é recusado quando há fórmula nas linhas a mover.
+passa a `#REF!` em vez de somar a célula errada. Formatação, negrito e mesclagens andam
+junto: inserir dentro de uma mesclagem a estica, remover a encolhe.
+
+Preencher para baixo desloca as referências relativas. Com um retângulo marcado, **cada
+coluna** dele é preenchida a partir da primeira linha até a última do retângulo.
+
+Ordenar move o bloco de dados abaixo do cabeçalho até a linha de total do modelo, que fica
+no lugar. Fórmula que só usa a própria linha (`=D5*E5`, o caso de todo modelo) anda junto e
+é reescrita para a linha nova; linhas só com as fórmulas do modelo, sem nada digitado, vão
+para o fim. Números vêm antes de texto e vazios ficam por último nas duas direções. A
+ordenação é recusada quando uma fórmula liga uma linha a outra (saldo acumulado), quando
+uma célula fora do bloco aponta para uma linha específica dele, ou quando há mesclagem
+ocupando mais de uma linha — nesses casos ordenar mudaria o cálculo sem aviso. Negrito,
+estilo e mesclagem de uma linha só acompanham a linha.
+
+## Formatação
+
+A barra de formatação vale para o que está marcado — o retângulo, as células avulsas ou a
+linha/coluna inteira:
+
+- negrito (`Ctrl` + `B`), itálico (`Ctrl` + `I`), sublinhado (`Ctrl` + `U`) e tachado;
+- alinhamento à esquerda, ao centro ou à direita (clicar de novo volta ao automático:
+  número à direita, texto à esquerda);
+- quebra de texto na célula;
+- cor do texto e preenchimento, de uma paleta fixa. A cor condicional, que é regra de dado,
+  vence o preenchimento escolhido à mão;
+- **mesclar**: junta o retângulo numa célula só e centraliza. Como no Excel, só o conteúdo
+  do canto superior esquerdo fica — a tela pergunta antes de apagar o resto, e o desfazer
+  traz de volta. As setas atravessam o bloco pela borda e param na âncora;
+- limpar formatação, formato numérico da coluna (geral, número, moeda, contábil com
+  negativo entre parênteses e em vermelho, percentual) e até duas colunas fixas ao rolar.
+
+A largura da coluna muda arrastando a borda do cabeçalho, ou com as setas do teclado sobre
+ela (`Shift` para passos maiores). O servidor só aceita marcas conhecidas e cores da paleta.
+
+Ao digitar uma fórmula, a barra sugere as funções que completam o nome em andamento; `Tab`
+aceita a primeira. **Imprimir ou PDF** monta uma página com os valores calculados e
+formatados, recortada até a última célula preenchida, e o navegador salva em PDF pela mesma
+janela.
+
+## Botão direito
+
+O menu do botão direito tem as ações de célula do Excel e do Google Planilhas. Ele também
+abre pela tecla Menu ou `Shift` + `F10` e com toque longo no celular. Clicar fora da seleção
+mira a célula clicada; dentro dela, a ação vale para o intervalo todo. No cabeçalho, vale
+para a linha ou a coluna inteira.
+
+- **Recortar, copiar e colar.** A área de transferência do sistema recebe o texto em TSV,
+  que o Excel entende. Colar dentro da planilha o que foi copiado aqui leva fórmulas, estilos
+  e notas, e a fórmula anda como no Excel: `=A1*2` copiada uma coluna à direita vira `=B1*2`,
+  e o que está travado com `$` fica. Referência que sairia da grade vira `#REF!`.
+- **Colar especial:** somente valores (a fórmula vai como resultado), somente formatação ou
+  transposto (linhas viram colunas; fórmula vai como resultado, porque transpor referência
+  relativa produziria outra conta).
+- **Inserir e excluir** tantas linhas ou colunas quantas estiverem marcadas, acima, abaixo,
+  à esquerda ou à direita. Tudo o que guarda posição anda junto.
+- **Limpar** conteúdo (mantém formatação e nota), formatação ou tudo. `Delete` limpa o
+  conteúdo de toda a seleção, não só da célula do cursor.
+- **Nota** na célula: marca no canto, aparece ao passar o mouse e entra no nome acessível.
+  Vai e volta no XLSX.
+- **Ocultar** linhas e colunas: saem da tela e da impressão, mas continuam nas contas. Um
+  aviso acima da grade diz quantas estão ocultas e reexibe com um clique. Ocultar não é
+  permitido quando corta uma mesclagem, e mesclar não é permitido sobre algo oculto.
+- **Ajustar largura ao conteúdo**, **fixar até esta coluna** (no máximo A e B), **preencher
+  para baixo ou à direita**, **inserir SOMA**, **ordenar**, **filtrar pelo valor desta
+  célula**, **selecionar linha ou coluna** e atalhos para **validação** e **formatação
+  condicional**.
+
+Em acesso somente de leitura, o menu oferece só copiar, filtrar e selecionar.
 
 ## Saúde financeira
 

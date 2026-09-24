@@ -114,7 +114,10 @@ export async function POST(request: Request) {
     const categoria = String(formulario.get("categoria") ?? "referencia");
     if (!CATEGORIAS.has(categoria)) throw new ApiError(400, "invalid_category", "Categoria inválida para a biblioteca.");
     if (!arquivo.size || arquivo.size > MAX_BYTES) throw new ApiError(413, "file_too_large", "Cada arquivo pode ter no máximo 12 MB.");
-    if (!TIPOS_DESENHAVEIS.has(arquivo.type) && !TIPOS_ANEXO.has(arquivo.type)) {
+    // O navegador costuma mandar .dwg e .dxf sem tipo nenhum; a extensão decide nesse caso.
+    const extensao = arquivo.name.toLowerCase().split(".").pop();
+    const tipo = arquivo.type || (extensao === "dwg" ? "image/vnd.dwg" : extensao === "dxf" ? "image/vnd.dxf" : "");
+    if (!TIPOS_DESENHAVEIS.has(tipo) && !TIPOS_ANEXO.has(tipo)) {
       throw new ApiError(415, "invalid_file_type", "Use imagem (PNG, JPEG, WebP ou AVIF), PDF, DWG ou DXF.");
     }
     const larguraMm = medida(formulario.get("larguraMm"));
@@ -122,14 +125,14 @@ export async function POST(request: Request) {
     const nome = nomeSeguro(arquivo.name);
     const id = crypto.randomUUID();
     const bytes = await arquivo.arrayBuffer();
-    const chave = await putObject(`studio/${context.organization.id}/${id}`, bytes, arquivo.type);
+    const chave = await putObject(`studio/${context.organization.id}/${id}`, bytes, tipo);
     try {
       await context.db.batch([
         context.db.prepare(
           `INSERT INTO studio_assets (id, organization_id, storage_key, nome, mime_type, size_bytes,
              categoria, largura_mm, altura_mm, enviado_por_membro_id, created_at)
            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, CURRENT_TIMESTAMP)`,
-        ).bind(id, context.organization.id, chave, nome, arquivo.type, arquivo.size,
+        ).bind(id, context.organization.id, chave, nome, tipo, arquivo.size,
           categoria, larguraMm, alturaMm, context.member.id),
         auditStatement(context, "studio.asset.uploaded", "studio_asset", id, { nome, categoria, sizeBytes: arquivo.size }),
       ]);

@@ -91,7 +91,9 @@ export async function PATCH(request: Request, route: RouteContext) {
     if (data.description !== undefined) add("description", data.description);
     if (data.status !== undefined) {
       add("status", data.status);
-      add("completed_at", data.status === "done" ? new Date().toISOString() : null);
+      // A tela manda o status em toda edição. Só mexer na data de conclusão quando o status
+      // muda: corrigir o título de uma tarefa do mês passado a "concluía" hoje.
+      if (data.status !== current.status) add("completed_at", data.status === "done" ? new Date().toISOString() : null);
     }
     if (data.priority !== undefined) add("priority", data.priority);
     if (data.assigneeMemberId !== undefined) {

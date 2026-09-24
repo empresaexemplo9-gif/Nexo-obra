@@ -6,6 +6,7 @@ import { CheckCircle2, ClipboardCheck, LoaderCircle, LogOut, RefreshCw } from "l
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -28,7 +29,7 @@ function PortalFrame({ children }: { children: React.ReactNode }) {
   return <main className="min-h-svh bg-background"><header className="border-b border-white/10 bg-primary text-white"><div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-5 sm:px-6"><BrandLogo variant="lockup" dark className="w-[190px]" /><span className="ml-auto text-sm text-hoikos-200">Portal do cliente</span><Button variant="ghost" size="icon" aria-label="Sair do portal" onClick={() => void leavePortal()}><LogOut className="size-4" /></Button></div></header><div className="mx-auto max-w-6xl space-y-6 px-4 py-7 sm:px-6">{children}</div></main>;
 }
 function SignInCard({ returnTo }: { returnTo: string }) {
-  return <Card className="mx-auto mt-10 max-w-lg"><CardContent className="space-y-5 p-7"><ClipboardCheck className="size-10 text-hoikos-600" /><h1 className="display-heading text-3xl">Acompanhe sua obra</h1><p className="text-base leading-7 text-hoikos-600">Entre com o mesmo e-mail que recebeu o convite da empresa. A senha é criada no link do convite, e ele não libera acesso para outra pessoa.</p><Button asChild className="w-full"><a href={`/entrar?return_to=${encodeURIComponent(returnTo)}`}>Entrar</a></Button><p className="text-sm text-hoikos-500">Ainda não recebeu um convite? Solicite à empresa responsável pela obra.</p></CardContent></Card>;
+  return <Card className="mx-auto mt-10 max-w-lg"><CardContent className="space-y-5 p-7"><ClipboardCheck className="size-10 text-hoikos-600" /><h1 className="display-heading text-3xl">Acompanhe sua obra</h1><p className="text-base leading-7 text-hoikos-600">Entre com o mesmo e-mail que recebeu o convite da empresa. No primeiro acesso, a senha é criada pelo link do convite, que não libera acesso para outra pessoa.</p><Button asChild className="w-full"><a href={`/entrar?return_to=${encodeURIComponent(returnTo)}`}>Entrar</a></Button><p className="text-sm text-hoikos-500">Ainda não recebeu um convite? Solicite à empresa responsável pela obra.</p></CardContent></Card>;
 }
 export function ClientPortalApp() {
   const session = useLiveResource<PortalSession>("/api/portal");
@@ -48,11 +49,44 @@ function PortalTerms({ endpoint, version, onAccepted, buttonText = "Aceitar e co
   return <Card><CardContent className="space-y-4 p-6"><h2 className="text-xl font-semibold">Confirme seu acesso</h2><p className="text-base leading-7 text-hoikos-600">Você verá somente as obras e os conteúdos que a empresa compartilhar. Aprovações e pedidos de ajuste ficam registrados com sua identidade, data e conteúdo apresentado.</p><div className="flex items-start gap-3"><Checkbox id="portal-terms" checked={checked} onCheckedChange={(value) => setChecked(value === true)} disabled={busy} /><Label htmlFor="portal-terms" className="block leading-6">Li e aceito os <a href="/termos" target="_blank" rel="noreferrer" className="text-hoikos-700 underline">Termos de Uso</a> (versão {version}).</Label></div>{error && <PortalError message={error} />}<Button disabled={!checked || busy} onClick={() => void accept()}>{busy && <LoaderCircle className="size-4 animate-spin" />}{buttonText}</Button></CardContent></Card>;
 }
 
+/**
+ * Primeiro acesso pelo link do convite: cria a senha e aceita os termos numa ida só. Quem
+ * já tem conta entra com a própria senha e volta ao convite.
+ */
+function FirstAccessCard({ token, version, onDone }: { token: string; version: string; onDone: () => void }) {
+  const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState("");
+  const [checked, setChecked] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const returnTo = `/portal/convite/${encodeURIComponent(token)}`;
+  const problema = password && password.length < 10 ? "A senha precisa de pelo menos 10 caracteres." : confirmation && confirmation !== password ? "As senhas não conferem." : "";
+  async function submit(event: FormEvent) {
+    event.preventDefault(); if (busy || problema) return;
+    setBusy(true); setError("");
+    try {
+      await resourceJson(`/api/portal/invitations/${encodeURIComponent(token)}/primeiro-acesso`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password, accepted: true, version }) });
+      onDone();
+    } catch (cause) { setError(resourceMessage(cause)); } finally { setBusy(false); }
+  }
+  return <Card className="mx-auto mt-10 max-w-lg"><CardContent className="space-y-5 p-7">
+    <ClipboardCheck className="size-10 text-hoikos-600" />
+    <h1 className="display-heading text-3xl">Acompanhe sua obra</h1>
+    <p className="text-base leading-7 text-hoikos-600">Primeiro acesso? Crie a sua senha. Ela vale só para o e-mail que recebeu este convite.</p>
+    <form onSubmit={submit} className="space-y-4">
+      <div className="space-y-2"><Label htmlFor="portal-password">Crie sua senha</Label><Input id="portal-password" type="password" autoComplete="new-password" minLength={10} required value={password} onChange={(event) => setPassword(event.target.value)} aria-describedby="portal-password-hint" className="h-11 bg-white" /><p id="portal-password-hint" className="text-xs text-hoikos-500">Pelo menos 10 caracteres.</p></div>
+      <div className="space-y-2"><Label htmlFor="portal-password-confirmation">Repita a senha</Label><Input id="portal-password-confirmation" type="password" autoComplete="new-password" required value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className="h-11 bg-white" /></div>
+      <div className="flex items-start gap-3"><Checkbox id="portal-first-terms" checked={checked} onCheckedChange={(value) => setChecked(value === true)} disabled={busy} /><Label htmlFor="portal-first-terms" className="block leading-6">Li e aceito os <a href="/termos" target="_blank" rel="noreferrer" className="text-hoikos-700 underline">Termos de Uso</a> (versão {version}).</Label></div>
+      {problema ? <p className="text-sm text-hoikos-700">{problema}</p> : null}
+      {error && <PortalError message={error} />}
+      <Button type="submit" className="w-full" disabled={busy || !checked || !password || !!problema || confirmation !== password}>{busy && <LoaderCircle className="size-4 animate-spin" />}Criar senha e acessar</Button>
+    </form>
+    <p className="text-center text-sm text-hoikos-500">Já tem senha? <a href={`/entrar?return_to=${encodeURIComponent(returnTo)}`} className="font-medium text-hoikos-700 underline underline-offset-2">Entrar</a></p>
+  </CardContent></Card>;
+}
+
 export function ClientPortalInvitation({ token }: { token: string }) {
   const session = useLiveResource<PortalSession>("/api/portal", 0);
   const invitation = useLiveResource<{ access: PortalAccess; termsVersion: string }>(session.data?.authenticated ? `/api/portal/invitations/${encodeURIComponent(token)}` : null, 0);
   const [accepted, setAccepted] = useState(false);
-  return <PortalFrame><div className="mx-auto max-w-xl">{session.error && <PortalError message={session.error} retry={session.refresh} />}{session.loading || invitation.loading ? <Skeleton className="h-72 rounded-md" /> : session.data && !session.data.authenticated ? <SignInCard returnTo={`/portal/convite/${encodeURIComponent(token)}`} /> : invitation.error ? <PortalError message={invitation.error} retry={invitation.refresh} /> : accepted ? <Card><CardContent className="space-y-5 p-7 text-center"><CheckCircle2 className="mx-auto size-12 text-hoikos-600" /><h1 className="display-heading text-3xl">Acesso confirmado</h1><Button asChild><Link href="/portal">Abrir meu portal</Link></Button></CardContent></Card> : invitation.data ? <div className="space-y-5"><h1 className="display-heading text-3xl">Convite de {invitation.data.access.organizationName}</h1><p className="text-base text-hoikos-600">{invitation.data.access.projectName} · {invitation.data.access.email}</p><PortalTerms endpoint={`/api/portal/invitations/${encodeURIComponent(token)}`} version={invitation.data.termsVersion} onAccepted={() => setAccepted(true)} buttonText="Aceitar convite" /></div> : null}</div></PortalFrame>;
+  return <PortalFrame><div className="mx-auto max-w-xl">{session.error && <PortalError message={session.error} retry={session.refresh} />}{session.loading || invitation.loading ? <Skeleton className="h-72 rounded-md" /> : session.data && !session.data.authenticated ? (accepted ? <Card><CardContent className="space-y-5 p-7 text-center"><CheckCircle2 className="mx-auto size-12 text-hoikos-600" /><h1 className="display-heading text-3xl">Acesso criado</h1><Button asChild><Link href="/portal">Abrir meu portal</Link></Button></CardContent></Card> : <FirstAccessCard token={token} version={session.data.termsVersion} onDone={() => setAccepted(true)} />) : invitation.error ? <PortalError message={invitation.error} retry={invitation.refresh} /> : accepted ? <Card><CardContent className="space-y-5 p-7 text-center"><CheckCircle2 className="mx-auto size-12 text-hoikos-600" /><h1 className="display-heading text-3xl">Acesso confirmado</h1><Button asChild><Link href="/portal">Abrir meu portal</Link></Button></CardContent></Card> : invitation.data ? <div className="space-y-5"><h1 className="display-heading text-3xl">Convite de {invitation.data.access.organizationName}</h1><p className="text-base text-hoikos-600">{invitation.data.access.projectName} · {invitation.data.access.email}</p><PortalTerms endpoint={`/api/portal/invitations/${encodeURIComponent(token)}`} version={invitation.data.termsVersion} onAccepted={() => setAccepted(true)} buttonText="Aceitar convite" /></div> : null}</div></PortalFrame>;
 }
 
 function ClientProject({ access, onAccessChanged }: { access: PortalAccess; onAccessChanged: () => void }) {

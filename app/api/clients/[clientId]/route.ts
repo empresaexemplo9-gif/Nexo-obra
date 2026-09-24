@@ -78,6 +78,10 @@ export async function PATCH(request: Request, route: RouteContext) {
       values.push(value);
     };
     const data = parsed.data;
+    // O vínculo com o parceiro da Drap decide para quem vai a cobrança: é dado do financeiro.
+    if (data.externalFinancialId !== undefined && !context.member.permissions.finance.edit) {
+      throw new ApiError(403, "finance_permission_required", "Seu perfil não pode alterar o vínculo financeiro do cliente.");
+    }
     if (data.name !== undefined) add("name", data.name);
     if (data.document !== undefined) add("document", data.document);
     if (data.email !== undefined) add("email", data.email);
@@ -91,12 +95,17 @@ export async function PATCH(request: Request, route: RouteContext) {
     const idPosition = values.length + 1;
     const orgPosition = values.length + 2;
 
-    await context.db.batch([
-      context.db
-        .prepare(`UPDATE clients SET ${columns.join(", ")} WHERE id = ?${idPosition} AND organization_id = ?${orgPosition}`)
-        .bind(...values, clientId, context.organization.id),
-      auditStatement(context, "client.updated", "client", clientId, { fields: Object.keys(data) }),
-    ]);
+    try {
+      await context.db.batch([
+        context.db
+          .prepare(`UPDATE clients SET ${columns.join(", ")} WHERE id = ?${idPosition} AND organization_id = ?${orgPosition}`)
+          .bind(...values, clientId, context.organization.id),
+        auditStatement(context, "client.updated", "client", clientId, { fields: Object.keys(data) }),
+      ]);
+    } catch (error) {
+      if (String(error).includes("UNIQUE constraint")) throw new ApiError(409, "client_financial_conflict", "Outro cliente já está vinculado a este cadastro financeiro.");
+      throw error;
+    }
 
     const client = ensureFound(
       await context.db.prepare(clientSelect).bind(clientId, context.organization.id).first<ClientRow>(),
@@ -125,11 +134,18 @@ export async function DELETE(request: Request, route: RouteContext) {
       throw new ApiError(409, "client_in_use", "Remova ou transfira os projetos deste cliente antes de excluí-lo.");
     }
 
-    await context.db.batch([
-      context.db.prepare("DELETE FROM clients WHERE id = ?1 AND organization_id = ?2")
-        .bind(clientId, context.organization.id),
-      auditStatement(context, "client.deleted", "client", clientId),
-    ]);
+    try {
+      await context.db.batch([
+        context.db.prepare("DELETE FROM clients WHERE id = ?1 AND organization_id = ?2")
+          .bind(clientId, context.organization.id),
+        auditStatement(context, "client.deleted", "client", clientId),
+      ]);
+    } catch (error) {
+      if (String(error).includes("FOREIGN KEY constraint")) {
+        throw new ApiError(409, "client_in_use", "Este cliente tem oportunidades, cobranças ou notas vinculadas e não pode ser excluído.");
+      }
+      throw error;
+    }
     return new Response(null, { status: 204 });
   });
 }

@@ -133,7 +133,8 @@ export function DrapLancamentos({ canEdit, habilitado, centroCusto, escopo }: { 
     if (!window.confirm("Excluir este lançamento na Drap? A ação vale no sistema financeiro oficial.")) return;
     setExcluindo(id);
     try {
-      await pedir(`/api/integrations/drap/lancamentos/${encodeURIComponent(id)}`, { method: "DELETE" });
+      // Uma chave por confirmação: a Drap exige Idempotency-Key em toda escrita.
+      await pedir(`/api/integrations/drap/lancamentos/${encodeURIComponent(id)}`, { method: "DELETE", headers: { "Idempotency-Key": crypto.randomUUID() } });
       toast.success("Lançamento excluído na Drap.");
       await carregar();
     } catch (causa) {

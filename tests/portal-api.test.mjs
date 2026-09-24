@@ -188,3 +188,36 @@ test('selected diary photos are project scoped, private, and disappear after wit
   assert.equal((await withdrawRoutes.PATCH(request('/', { method: 'PATCH', json: { accessId: invitation.access.id, reason: 'Registro substituído por atualização.' } }), params({ itemId: item.id }))).status, 200);
   assert.equal((await photoRoutes.GET(customer(), pp)).status, 404);
 });
+
+const firstAccess = await vite.ssrLoadModule('/app/api/portal/invitations/[token]/primeiro-acesso/route.ts');
+const { hashPassword } = await vite.ssrLoadModule('/lib/server/auth.ts');
+const primeiro = (token, json) => firstAccess.POST(new Request('https://diary.test/x', { method: 'POST', headers: { 'content-type': 'application/json', 'user-agent': 'teste' }, body: JSON.stringify(json) }), params({ token }));
+
+test('cliente novo cria a senha pelo link do convite e já entra no portal', async () => {
+  // Antes o convite exigia estar logado e não havia onde criar a senha: beco sem saída.
+  runtime.SESSION_SECRET = 'segredo-de-teste-com-pelo-menos-32-caracteres';
+  const invitation = await invited();
+  const fraca = await primeiro(invitation.token, { password: '123', accepted: true, version: CURRENT_TERMS_VERSION });
+  assert.equal(fraca.status, 400);
+  const resposta = await primeiro(invitation.token, { password: 'SenhaDoCliente#2026', accepted: true, version: CURRENT_TERMS_VERSION });
+  assert.equal(resposta.status, 201, await resposta.clone().text());
+  assert.match(resposta.headers.get('set-cookie') ?? '', /__Host-nexo-session=/, 'já entra');
+  const acesso = db.sqlite.prepare('SELECT status, external_user_id FROM client_portal_access WHERE id = ?').get(invitation.access.id);
+  assert.equal(acesso.status, 'active');
+  assert.equal(db.sqlite.prepare('SELECT user_id FROM user_credentials WHERE email = ?').get('client@example.test').user_id, acesso.external_user_id);
+  assert.equal(db.sqlite.prepare('SELECT COUNT(*) n FROM client_portal_acceptances WHERE access_id = ?').get(invitation.access.id).n, 1, 'aceite registrado');
+  const denovo = await primeiro(invitation.token, { password: 'OutraSenha#2026xx', accepted: true, version: CURRENT_TERMS_VERSION });
+  assert.equal(denovo.status, 409, 'o link não serve duas vezes');
+});
+
+test('convite do portal não troca a senha de quem já tem conta', async () => {
+  runtime.SESSION_SECRET = 'segredo-de-teste-com-pelo-menos-32-caracteres';
+  const original = await hashPassword('SenhaOriginal#2026');
+  db.sqlite.prepare("INSERT INTO user_credentials (user_id, email, password_hash, display_name, active, password_updated_at, created_at) VALUES ('antigo', 'client@example.test', ?, 'Cliente', 1, 0, 0)").run(original);
+  const invitation = await invited();
+  const resposta = await primeiro(invitation.token, { password: 'SenhaDoInvasor#2026', accepted: true, version: CURRENT_TERMS_VERSION });
+  assert.equal(resposta.status, 409);
+  assert.equal((await resposta.json()).code, 'account_exists');
+  assert.equal(db.sqlite.prepare('SELECT password_hash FROM user_credentials WHERE email = ?').get('client@example.test').password_hash, original);
+  assert.equal(db.sqlite.prepare('SELECT status FROM client_portal_access WHERE id = ?').get(invitation.access.id).status, 'pending');
+});

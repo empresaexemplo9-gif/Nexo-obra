@@ -89,3 +89,42 @@ test("colar valores conserva texto literal, booleanos e erros ao copiar", () => 
   assert.equal(result.A3.value, "00123");
   assert.equal(tools.selectionToTsv(cells, ["A4"]), "#DIV/0!");
 });
+
+test("formato contábil põe o negativo entre parênteses e só ele fica em destaque", () => {
+  const [negativo, positivo] = [{ value: -1500.5, error: null, display: "-1500,5" }, { value: 20, error: null, display: "20" }];
+  assert.equal(tools.formattedCell(negativo, "contabil").replace(/\s/g, " "), "(R$ 1.500,50)");
+  assert.equal(tools.formattedCell(positivo, "contabil").replace(/\s/g, " "), "R$ 20,00");
+  assert.equal(tools.negativoEmDestaque(negativo, "contabil"), true);
+  assert.equal(tools.negativoEmDestaque(negativo, "moeda"), false, "desvio negativo pode ser economia: só o contábil pinta");
+  assert.equal(tools.negativoEmDestaque(positivo, "contabil"), false);
+  assert.equal(contentSchema.safeParse({ formats: { A: "contabil" } }).success, true);
+});
+
+test("sugestão de função completa o nome digitado no fim da fórmula", () => {
+  assert.deepEqual(tools.sugestoesDeFuncao("=SO"), { parcial: "SO", funcoes: ["SOMA", "SOMASE"] });
+  assert.deepEqual(tools.sugestoesDeFuncao("=A1+méd").funcoes, ["MEDIA", "MEDIANA"], "acento e minúscula não atrapalham");
+  assert.deepEqual(tools.sugestoesDeFuncao("=SE(A1>0;ar").funcoes, ["ARRED"]);
+  assert.deepEqual(tools.sugestoesDeFuncao("=A1").funcoes, [], "referência completa não sugere");
+  assert.deepEqual(tools.sugestoesDeFuncao("SO").funcoes, [], "fora de fórmula não sugere");
+  assert.deepEqual(tools.sugestoesDeFuncao('=CONCAT("so').funcoes, [], "dentro de texto não sugere");
+  assert.deepEqual(tools.sugestoesDeFuncao("=SOMA").funcoes, ["SOMASE"], "o nome completo não se sugere de novo");
+  assert.equal(tools.aplicarSugestao("=A1+méd", "méd", "MEDIA"), "=A1+MEDIA(");
+});
+
+test("impressão leva os valores formatados, recortados até a última célula preenchida", () => {
+  const cells = { A1: "Item", B1: "Total", A2: "Areia", B2: "=10*-3", D9: "" };
+  const { letras, linhas } = tools.tabelaParaImpressao(sheet.evaluateSheet(cells), { B: "contabil" }, ["A1"], 12, 60);
+  assert.deepEqual(letras, ["A", "B"]);
+  assert.equal(linhas.length, 2);
+  assert.equal(linhas[0][0].negrito, true);
+  assert.equal(linhas[1][1].texto.replace(/\s/g, " "), "(R$ 30,00)");
+  assert.equal(linhas[1][1].numero, true);
+  assert.equal(linhas[1][1].negativo, true);
+  assert.deepEqual(tools.tabelaParaImpressao({}, {}, [], 12, 60), { letras: [], linhas: [], numeros: [] });
+});
+
+test("colunas fixas: no máximo duas, e zero por padrão", () => {
+  assert.equal(contentSchema.parse({}).frozenColumns, 0);
+  assert.equal(contentSchema.safeParse({ frozenColumns: 2 }).success, true);
+  assert.equal(contentSchema.safeParse({ frozenColumns: 3 }).success, false);
+});

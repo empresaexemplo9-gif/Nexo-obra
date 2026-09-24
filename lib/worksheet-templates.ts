@@ -263,7 +263,7 @@ export function buildTemplateContent(template: WorksheetTemplate) {
     cells,
     body: "",
     widths: template.widths ?? {},
-    formats: {} as Record<string, "texto" | "numero" | "moeda" | "percentual">,
+    formats: {} as Record<string, "texto" | "numero" | "moeda" | "contabil" | "percentual">,
     bold,
     analysis: {
       headerRow,

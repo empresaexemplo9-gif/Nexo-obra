@@ -1,4 +1,4 @@
-import { callOperationalDrap, chaveIdempotenciaDe, drapOperationalRoute, operationalDrapBody, operationalDrapContext } from "@/lib/server/drap-operational";
+import { callOperationalDrap, drapOperationalRoute, operationalDrapBody, operationalDrapContext, requireChaveIdempotencia } from "@/lib/server/drap-operational";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return drapOperationalRoute(async () => {
     const { connection } = await operationalDrapContext(request, "edit");
+    const idempotencyKey = requireChaveIdempotencia(request);
     const body = await operationalDrapBody(request);
-    return callOperationalDrap(connection.external_company_id, "/api/v1/lancamentos", { method: "POST", body, idempotencyKey: chaveIdempotenciaDe(request) });
+    return callOperationalDrap(connection.external_company_id, "/api/v1/lancamentos", { method: "POST", body, idempotencyKey });
   });
 }

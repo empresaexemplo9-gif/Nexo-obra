@@ -160,12 +160,15 @@ test("cada acesso recebe o que a permissão dele permite, e a tarefa própria se
 });
 
 test("o realizado da meta é calculado do dado real, não digitado", async () => {
+  // A tabela grava created_at como texto (CURRENT_TIMESTAMP), não em milissegundos. O teste
+  // usava milissegundos e por isso não via que a meta de clientes nunca saía do zero.
+  const texto = (offset) => new Date(ms(offset)).toISOString().replace("T", " ").slice(0, 19);
   db.sqlite.prepare("INSERT INTO goals(id,organization_id,name,metric,target_value,period_start,period_end,created_by_name,active,created_at,updated_at) VALUES ('g1',?,'Clientes','clients_new',4,?,?,'Contratante',1,0,0)")
     .run(orgA, day(-5), day(5));
-  for (const [id, at] of [["c1", ms(-1)], ["c2", ms(-2)], ["c3", ms(-30)]]) {
+  for (const [id, at] of [["c1", texto(-1)], ["c2", texto(-2)], ["c3", texto(-30)]]) {
     db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES (?,?,?,?,?)").run(id, orgA, `Cliente ${id}`, at, at);
   }
-  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('outra',?,'De outra empresa',?,?)").run(orgB, ms(-1), ms(-1));
+  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('outra',?,'De outra empresa',?,?)").run(orgB, texto(-1), texto(-1));
 
   const agenda = await agendaFor(owner());
   const goal = agenda.goals[0];
@@ -174,8 +177,8 @@ test("o realizado da meta é calculado do dado real, não digitado", async () =>
   assert.equal(goal.percent, 50);
   assert.ok(agenda.reminders.some((item) => item.key === "meta:g1"));
 
-  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('c4',?,'Quarto',?,?)").run(orgA, ms(0), ms(0));
-  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('c5',?,'Quinto',?,?)").run(orgA, ms(0), ms(0));
+  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('c4',?,'Quarto',?,?)").run(orgA, texto(0), texto(0));
+  db.sqlite.prepare("INSERT INTO clients(id,organization_id,name,created_at,updated_at) VALUES ('c5',?,'Quinto',?,?)").run(orgA, texto(0), texto(0));
   const batida = await agendaFor(owner());
   assert.equal(batida.goals[0].current, 4);
   assert.equal(batida.reminders.some((item) => item.key === "meta:g1"), false, "meta batida deixa de lembrar");
@@ -219,4 +222,19 @@ test("lembretes e metas não atravessam empresas", async () => {
   const outra = await agendaFor(as("owner-b", "owner-b@example.test", orgB));
   assert.equal(outra.reminders.length, 0);
   assert.equal(outra.goals.length, 0);
+});
+
+test("metas de tarefas e obras concluídas contam o que foi concluído no período", async () => {
+  const hoje = new Date(ms(0)).toISOString();
+  db.sqlite.prepare("INSERT INTO goals(id,organization_id,name,metric,target_value,period_start,period_end,created_by_name,active,created_at,updated_at) VALUES ('gt',?,'Tarefas','tasks_done',2,?,?,'Contratante',1,0,0)")
+    .run(orgA, day(-5), day(5));
+  db.sqlite.prepare("INSERT INTO goals(id,organization_id,name,metric,target_value,period_start,period_end,created_by_name,active,created_at,updated_at) VALUES ('gp',?,'Obras','projects_done',1,?,?,'Contratante',1,0,0)")
+    .run(orgA, day(-5), day(5));
+  db.sqlite.prepare("UPDATE projects SET status = 'completed', updated_at = ? WHERE id = 'p'").run(hoje.replace("T", " ").slice(0, 19));
+  db.sqlite.prepare("INSERT INTO tasks(id,organization_id,project_id,title,status,priority,completed_at,created_at,updated_at) VALUES ('feita',?,'p','Feita hoje','done','low',?,0,0)").run(orgA, hoje);
+  db.sqlite.prepare("INSERT INTO tasks(id,organization_id,project_id,title,status,priority,completed_at,created_at,updated_at) VALUES ('antiga',?,'p','Feita mês passado','done','low',?,0,0)").run(orgA, new Date(ms(-40)).toISOString());
+  const agenda = await agendaFor(owner());
+  const porId = Object.fromEntries(agenda.goals.map((goal) => [goal.id, goal.current]));
+  assert.equal(porId.gt, 1, "só a tarefa concluída no período conta");
+  assert.equal(porId.gp, 1, "obra concluída tem status 'completed', não 'done'");
 });
