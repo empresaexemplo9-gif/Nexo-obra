@@ -22,9 +22,9 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 
 ## Repositório
 
-O GitHub (`origin`) é o repositório principal: toda implementação vai para lá, com pull request.
+O GitHub (`origin`) é o repositório principal e **só existe a branch `main`**. Toda implementação e toda implantação são feitas direto na `main`: não crie branches nem pull requests. Antes de enviar, rode lint, tipagem, testes e build; a `main` publica em produção, então só vai para ela o que passou em tudo.
 
-O GitLab é espelho opcional. Só quando `GITLAB_REPO_URL` e `GITLAB_TOKEN` (escopo `write_repository`) estiverem nas variáveis do ambiente, envie também a mesma branch ao GitLab, montando a URL autenticada só na hora do envio e sem gravá-la em `.git/config`. Token nunca vai para código, commit ou chat.
+O GitLab é espelho opcional. Só quando `GITLAB_REPO_URL` e `GITLAB_TOKEN` (escopo `write_repository`) estiverem nas variáveis do ambiente, envie também a `main` ao GitLab, montando a URL autenticada só na hora do envio e sem gravá-la em `.git/config`. Token nunca vai para código, commit ou chat.
 
 ## Regra de interface
 
