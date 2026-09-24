@@ -169,6 +169,13 @@
       "when": 1790224947501,
       "tag": "0023_busy_riptide",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790228378526,
+      "tag": "0024_previous_metal_master",
+      "breakpoints": true
     }
   ]
 }

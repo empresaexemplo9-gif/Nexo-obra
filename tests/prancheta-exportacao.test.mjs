@@ -121,3 +121,14 @@ test("imagem decodificada vira PDF sem perda e abre no leitor", async () => {
   const operators = await (await document.getPage(1)).getOperatorList();
   assert.ok(operators.fnArray.includes(pdfjs.OPS.paintImageXObject), "a imagem é desenhada na página");
 });
+
+test("texto com acento vai no fluxo do PDF em WinAnsi e o leitor devolve igual", async () => {
+  const { buildPdf, textoWinAnsi } = await vite.ssrLoadModule("/lib/pdf-writer.ts");
+  assert.equal(textoWinAnsi("Ação — m²"), "<41E7E36F2097206DB2>");
+  const titulo = "Proposta — Cozinha e Área de Serviço";
+  const conteudo = new TextEncoder().encode(`BT /F2 18 Tf 40 60 Td ${textoWinAnsi(titulo)} Tj ET`);
+  const bytes = buildPdf([{ width: 600, height: 100, content: conteudo, contentCompressed: false, fonts: true }]);
+  const document = await abrir(bytes);
+  const texto = await (await document.getPage(1)).getTextContent();
+  assert.equal(texto.items.map((item) => item.str).join(""), titulo);
+});

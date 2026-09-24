@@ -53,6 +53,11 @@ function validDay(value: string) {
 
 /** Todo membro chega a uma empresa que já tem o canal Geral. */
 export async function ensureGeneralChannel(context: OrganizationContext) {
+  // Leitura antes da escrita: a lista é consultada a cada poucos segundos e o canal quase
+  // sempre já existe. Escrever toda vez gastaria o banco sem mudar nada.
+  const existe = await context.db.prepare("SELECT 1 AS ok FROM chat_channels WHERE organization_id = ?1 AND key = 'canal:geral'")
+    .bind(context.organization.id).first();
+  if (existe) return;
   await context.db.prepare(
     `INSERT INTO chat_channels (id, organization_id, kind, key, name, created_by_member_id, created_at)
      VALUES (?1, ?2, 'canal', 'canal:geral', 'Geral', ?3, ?4) ON CONFLICT(organization_id, key) DO NOTHING`,
@@ -225,6 +230,8 @@ export async function listMessages(context: OrganizationContext, channelId: stri
        ORDER BY m.created_at, m.id LIMIT 500`,
     ).bind(context.organization.id, channelId, options.since).all<MessageRow>();
     rows = result.results;
+    // Sem novidade, nada a marcar como lido: a verificação periódica não escreve no banco.
+    if (!rows.length) return { messages: [], cursor: cursorFrom(serverTime), hasMore: false };
   } else {
     const result = await context.db.prepare(
       `${messageSelect} WHERE m.organization_id = ?1 AND m.channel_id = ?2 AND (?3 IS NULL OR m.created_at < ?3)

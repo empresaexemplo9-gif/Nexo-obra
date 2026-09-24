@@ -24,6 +24,8 @@ export type PdfPage = {
   content: Uint8Array;
   contentCompressed: boolean;
   images?: PdfImage[];
+  /** Helvetica (/F1) e Helvetica-Bold (/F2), fontes padrão do PDF: nenhum arquivo embutido. */
+  fonts?: boolean;
 };
 
 const encoder = new TextEncoder();
@@ -92,7 +94,10 @@ export function buildPdf(pages: PdfPage[], info: { title?: string } = {}): Uint8
     const xobjects = imageIds.length
       ? ` /XObject << ${(page.images ?? []).map((image, index) => `/${image.name} ${imageIds[index]} 0 R`).join(" ")} >>`
       : "";
-    object(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pdfNumber(page.width)} ${pdfNumber(page.height)}] /Resources <<${xobjects} >> /Contents ${contentId} 0 R >>`);
+    const fontes = page.fonts
+      ? " /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >> /F2 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >> >>"
+      : "";
+    object(pageId, `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pdfNumber(page.width)} ${pdfNumber(page.height)}] /Resources <<${xobjects}${fontes} >> /Contents ${contentId} 0 R >>`);
     object(contentId, [page.content], `<< /Length ${page.content.byteLength}${page.contentCompressed ? " /Filter /FlateDecode" : ""} >>`);
     (page.images ?? []).forEach((image, index) => {
       object(imageIds[index], [image.data], `<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /${image.colorSpace} /BitsPerComponent 8 /Filter /${image.filter} /Length ${image.data.byteLength} >>`);
@@ -145,4 +150,28 @@ export async function pdfDeImagem(imagem: { tipo: "jpeg"; bytes: Uint8Array } | 
   const width = image.width * 72 / 150, height = image.height * 72 / 150;
   const content = encoder.encode(`q ${pdfNumber(width)} 0 0 ${pdfNumber(height)} 0 0 cm /Im0 Do Q`);
   return buildPdf([{ width, height, content, contentCompressed: false, images: [image] }], { title: titulo });
+}
+
+// Windows-1252 nos pontos em que difere do Latin-1: aspas curvas, travessão, reticências, euro.
+const WIN_ANSI: Record<string, number> = {
+  "€": 0x80, "…": 0x85, "‘": 0x91, "’": 0x92, "“": 0x93, "”": 0x94, "•": 0x95, "–": 0x96, "—": 0x97, "™": 0x99, "²": 0xb2, "³": 0xb3,
+};
+
+/**
+ * Texto para as fontes padrão (WinAnsiEncoding), como string hexadecimal: o fluxo de
+ * conteúdo continua ASCII e o acento sai certo. Caractere fora da tabela vira "?".
+ */
+export function textoWinAnsi(texto: string) {
+  let hex = "";
+  for (const caractere of texto) {
+    const codigo = WIN_ANSI[caractere] ?? caractere.codePointAt(0)!;
+    const byte = codigo <= 0xff && !(codigo >= 0x80 && codigo <= 0x9f && !WIN_ANSI[caractere]) ? codigo : 0x3f;
+    hex += byte.toString(16).padStart(2, "0");
+  }
+  return `<${hex.toUpperCase()}>`;
+}
+
+/** Largura aproximada de um texto em Helvetica, em pontos (média 0,52 em) — para alinhar e cortar. */
+export function larguraHelvetica(texto: string, tamanho: number) {
+  return texto.length * tamanho * 0.52;
 }

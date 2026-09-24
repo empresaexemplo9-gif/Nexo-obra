@@ -934,3 +934,22 @@ export const chatReminders = sqliteTable("chat_reminders", {
   uniqueIndex("uidx_chat_reminders_message").on(table.messageId),
   index("idx_chat_reminders_due").on(table.organizationId, table.doneAt, table.dueDay),
 ]);
+
+// Criador de layout: planta com móveis, eletrodomésticos e veículos, e prévia 3D gerada
+// dela. O conteúdo é geometria validada (lib/layout.ts); imagem nunca é guardada aqui, é
+// gerada do documento e vai para a Prancheta quando a pessoa exporta.
+export const layouts = sqliteTable("layouts", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").references(() => projects.id),
+  name: text("name").notNull(),
+  contentJson: text("content_json").notNull(),
+  // Controle de edição concorrente: salvar exige a revisão que a pessoa abriu.
+  revision: integer("revision").notNull().default(1),
+  createdByName: text("created_by_name").notNull(),
+  updatedByName: text("updated_by_name").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("idx_layouts_org_updated").on(table.organizationId, table.updatedAt),
+]);

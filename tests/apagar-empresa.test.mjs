@@ -56,7 +56,18 @@ async function semear(orgId, sufixo) {
   await run("INSERT OR IGNORE INTO users (id, email, created_at, updated_at) VALUES ('autor', 'autor@x.com', ?1, ?1)", agora);
   await run("INSERT INTO audit_events (id, organization_id, actor_user_id, action, entity_type, entity_id, created_at) VALUES (?1, ?2, 'autor', 'a', 'e', 'x', ?3)", `ae-${sufixo}`, orgId, agora);
   await run("INSERT INTO worksheets (id, organization_id, name, created_by_name, created_at, updated_at) VALUES (?1, ?2, 'Planilha', 'Alguém', ?3, ?3)", `ws-${sufixo}`, orgId, agora);
+  // Prancheta e Comunicação: arquivo em partes, anexo que aponta para ele e para a
+  // mensagem, e lembrete que aponta para a mensagem e para o canal — quatro níveis.
+  await run("INSERT INTO org_files (id, organization_id, project_id, name, mime_type, size_bytes, chunk_size, chunk_count, status, in_library, uploaded_by_member_id, uploaded_by_name) VALUES (?1, ?2, ?3, 'planta.dwg', 'image/vnd.dwg', 10, 3145728, 1, 'ready', 1, 'm', 'Nome')", `of-${sufixo}`, orgId, `prj-${sufixo}`);
+  await run("INSERT INTO org_file_chunks (id, file_id, organization_id, chunk_index, storage_key, size_bytes) VALUES (?1, ?2, ?3, 0, ?4, 10)", `ofc-${sufixo}`, `of-${sufixo}`, orgId, `chave-${sufixo}`);
+  await run("INSERT INTO chat_channels (id, organization_id, kind, key, name, created_by_member_id, created_at) VALUES (?1, ?2, 'canal', 'canal:geral', 'Geral', 'm', 'x')", `ch-${sufixo}`, orgId);
+  await run("INSERT INTO chat_participants (id, channel_id, organization_id, member_id) VALUES (?1, ?2, ?3, 'm')", `cp-${sufixo}`, `ch-${sufixo}`, orgId);
+  await run("INSERT INTO chat_messages (id, organization_id, channel_id, author_member_id, author_name, client_key, body, created_at) VALUES (?1, ?2, ?3, 'm', 'Nome', ?1, 'oi', 'x')", `msg-${sufixo}`, orgId, `ch-${sufixo}`);
+  await run("INSERT INTO chat_message_files (id, message_id, organization_id, file_id) VALUES (?1, ?2, ?3, ?4)", `mf-${sufixo}`, `msg-${sufixo}`, orgId, `of-${sufixo}`);
+  await run("INSERT INTO chat_reminders (id, organization_id, channel_id, message_id, created_by_member_id, created_by_name, text, due_day, created_at) VALUES (?1, ?2, ?3, ?4, 'm', 'Nome', 'Lembrar', '2026-09-24', 'x')", `cr-${sufixo}`, orgId, `ch-${sufixo}`, `msg-${sufixo}`);
 }
+
+const TABELAS_NOVAS = ["org_files", "org_file_chunks", "chat_channels", "chat_participants", "chat_messages", "chat_message_files", "chat_reminders"];
 
 async function vincular(userId, email, orgId, sufixo) {
   await run("INSERT OR IGNORE INTO users (id, email, created_at, updated_at) VALUES (?1, ?2, ?3, ?3)", userId, email, agora);
@@ -108,14 +119,14 @@ test("apagar a empresa leva tudo, e não encosta na empresa do lado", async () =
   await db.batch(instrucoes);
 
   assert.equal(await contar("organizations", "id", "org-a"), 0);
-  for (const tabela of ["clients", "projects", "tasks", "budget_versions", "audit_events", "worksheets"]) {
+  for (const tabela of ["clients", "projects", "tasks", "budget_versions", "audit_events", "worksheets", ...TABELAS_NOVAS]) {
     assert.equal(await contar(tabela, "organization_id", "org-a"), 0, `sobrou linha em ${tabela}`);
   }
   assert.equal(await contar("budget_items", "id", "bi-a"), 0, "o item de orçamento sobreviveu à exclusão");
 
   // A empresa vizinha fica intacta — o filtro é por organização, não um "limpar tudo".
   assert.equal(await contar("organizations", "id", "org-b"), 1);
-  for (const tabela of ["clients", "projects", "tasks", "budget_versions", "audit_events", "worksheets"]) {
+  for (const tabela of ["clients", "projects", "tasks", "budget_versions", "audit_events", "worksheets", ...TABELAS_NOVAS]) {
     assert.equal(await contar(tabela, "organization_id", "org-b"), 1, `${tabela} da outra empresa foi afetada`);
   }
   assert.equal(await contar("budget_items", "id", "bi-b"), 1);
