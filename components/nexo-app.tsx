@@ -10,6 +10,8 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowUpRight,
   BellRing,
+  DraftingCompass,
+  MessagesSquare,
   BookOpenText,
   Building2,
   Calculator,
@@ -48,6 +50,8 @@ import { ClientPortalApp } from "@/components/client-portal-app";
 import { CrmWorkspace } from "@/components/crm-workspace";
 import { ScheduleWorkspace } from "@/components/schedule-workspace";
 import { FilesWorkspace } from "@/components/files-workspace";
+import { PranchetaWorkspace } from "@/components/prancheta/prancheta-workspace";
+import { ComunicacaoWorkspace } from "@/components/comunicacao/comunicacao-workspace";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -105,7 +109,7 @@ import {
 } from "@/components/ui/table";
 import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders" | "prancheta" | "comunicacao";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -167,14 +171,17 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   usage: { title: "Tempo de uso", description: "Tempo online por dia, medido no servidor." },
   sheets: { title: "Planilha e documento", description: "Cálculo sobre os dados reais da empresa." },
   reminders: { title: "Lembretes do dia", description: "Cobranças, boletos, follow-ups, prazos e metas." },
+  prancheta: { title: "Prancheta", description: "Abrir, converter e compartilhar arquivos de projeto." },
+  comunicacao: { title: "Comunicação", description: "Mensagens, arquivos e lembretes da equipe." },
 };
 
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
   schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
-  usage: "overview", sheets: "overview", reminders: "overview",
+  usage: "overview", sheets: "overview", reminders: "overview", prancheta: "studio", comunicacao: "overview",
 };
-const alwaysVisibleModules: ModuleId[] = ["usage", "sheets", "reminders"];
+// Conversar com a própria equipe não depende de módulo: toda pessoa da empresa usa.
+const alwaysVisibleModules: ModuleId[] = ["usage", "sheets", "reminders", "comunicacao"];
 
 const roleLabels: Record<string, string> = { ...accessProfileLabels, client: "Cliente" };
 function Brand({ variant = "lockup", dark = false, className }: { variant?: BrandVariant; dark?: boolean; className?: string }) {
@@ -362,6 +369,20 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const [quickKind, setQuickKind] = useState<CreateKind>("project");
   const [companyOpen, setCompanyOpen] = useState(false);
   const { agenda, error: remindersError, reload: reloadReminders, mark: markReminder, pending } = useReminders(true);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  // Contador de mensagens não lidas no menu, atualizado a cada minuto com a aba visível.
+  useEffect(() => {
+    if (!session.organization?.id) return;
+    let vivo = true;
+    const atualizar = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetch("/api/conversas", { cache: "no-store" }).then((response) => response.ok ? response.json() : null)
+        .then((body: { unreadTotal?: number } | null) => { if (vivo && body) setUnreadMessages(Number(body.unreadTotal ?? 0)); }).catch(() => undefined);
+    };
+    const inicio = window.setTimeout(atualizar, 1500);
+    const intervalo = window.setInterval(atualizar, 60_000);
+    return () => { vivo = false; window.clearTimeout(inicio); window.clearInterval(intervalo); };
+  }, [session.organization?.id]);
   const canView = useCallback((module: ModuleId) => alwaysVisibleModules.includes(module) || Boolean(session.member?.permissions[modulePermissionMap[module]].view), [session.member]);
   const canEdit = useCallback((module: ModuleId) => Boolean(session.member?.permissions[modulePermissionMap[module]].edit), [session.member]);
 
@@ -388,7 +409,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
       setLoadErrors(errors); setLoading(false);
   }, [canView, startRequest]);
   useEffect(() => { const timer = window.setTimeout(() => { void loadData(); }, 0); return () => window.clearTimeout(timer); }, [loadData, session.organization?.id]);
-  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
+  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "prancheta", "comunicacao", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
 
   async function switchOrganization(organizationId: string) { try { await requestJson("/api/session", { method: "POST", body: JSON.stringify({ organizationId }) }); await reloadSession(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trocar de empresa."); } }
   // "Nova obra" abre o formulário já como obra: antes vinha como projeto e a obra criada
@@ -403,7 +424,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const activeProjects = projects.filter((project) => project.status === "active");
   const canCreateAny = canEdit("projects") || canEdit("crm") || canEdit("tasks");
   const navSections = ([
-    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }] },
+    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }, { id: "prancheta", label: "Prancheta", icon: DraftingCompass }, { id: "comunicacao", label: "Comunicação", icon: MessagesSquare, badge: unreadMessages || undefined }] },
     { label: "Negócio", items: [{ id: "crm", label: "CRM e clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "sheets", label: "Planilha e documento", icon: Sigma }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[]).map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) })).filter((section) => section.items.length);
@@ -411,7 +432,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const dependencies: Partial<Record<ModuleId, (keyof typeof loadErrors)[]>> = {
     overview: ["clients", "projects", "tasks", "members"], projects: ["projects"], works: ["projects"],
     crm: ["clients"], tasks: ["tasks"], schedule: ["tasks"], team: ["members", "tasks"],
-    files: ["projects"], finance: ["projects"], budgets: ["projects"],
+    files: ["projects"], prancheta: ["projects"], finance: ["projects"], budgets: ["projects"],
   };
   const error = (dependencies[activeModule] ?? []).map(key => loadErrors[key]).filter(Boolean).join(" ");
   const content = loading ? <Card><Empty className="min-h-72 border-0"><LoaderCircle className="size-7 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando dados da empresa…</p></Empty></Card> : error ? <HonestEmpty icon={CircleAlert} title="Não foi possível carregar" description={error} action={loadData} actionLabel="Tentar novamente" /> : (() => {
@@ -456,6 +477,8 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "crm") return <CrmWorkspace key={session.organization?.id} clients={clients} members={members.map((member) => ({ id: member.id, name: member.name }))} query={query} canEdit={canEdit("crm")} canConvert={canEdit("projects")} onProjectsChanged={loadData} />;
     if (activeModule === "schedule") return <ScheduleWorkspace projects={projects} tasks={tasks} query={query} canEdit={canEdit("schedule") && canEdit("tasks")} onChanged={loadData} />;
     if (activeModule === "files") return <FilesWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("files")} />;
+    if (activeModule === "prancheta") return <PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("prancheta")} />;
+    if (activeModule === "comunicacao") return <ComunicacaoWorkspace key={session.organization?.id} canUseLibrary={canView("prancheta")} onUnread={setUnreadMessages} />;
     if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager key={session.organization?.id} currentMemberId={session.member?.id} members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;

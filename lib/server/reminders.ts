@@ -1,11 +1,12 @@
 import { requireModulePermission, type OrganizationContext } from "@/lib/server/backend";
+import { pendingChatReminders } from "@/lib/server/chat";
 import { usageDayKey, usageDayStart } from "@/lib/server/usage";
 
 // Lembretes do dia. Nada aqui inventa pendência: cada item aponta para um registro real
 // e some sozinho quando o registro deixa de estar pendente. Dispensar vale só para o dia.
 
 export type ReminderSeverity = "atrasado" | "hoje" | "proximo";
-export type ReminderGroup = "cobranca" | "boleto" | "followup" | "tarefa" | "meta";
+export type ReminderGroup = "cobranca" | "boleto" | "followup" | "tarefa" | "meta" | "recado";
 
 export type Reminder = {
   key: string;
@@ -191,6 +192,16 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
       title: due < today ? `Tarefa vencida: ${task.title}` : `Tarefa com prazo: ${task.title}`,
       detail: `${task.project_name ?? "Sem projeto"} · ${dayLabel(due)}${task.assignee_member_id === context.member.id ? " · atribuída a você" : ""}`,
       amountCents: null, dueDay: due, module: "tasks", entityId: task.id,
+    });
+  }
+
+  // Recado com data, criado na Comunicação para esta pessoa ou para todos da conversa.
+  for (const item of await pendingChatReminders(context, horizon)) {
+    reminders.push({
+      key: `recado:${item.id}`, group: "recado", severity: severityFor(item.due_day, today),
+      title: item.text,
+      detail: `${item.created_by_name} · ${item.kind === "canal" ? `canal ${item.channel_name ?? ""}` : "conversa direta"}${item.target_member_id ? "" : " · para todos"} · ${dayLabel(item.due_day)}`,
+      amountCents: null, dueDay: item.due_day, module: "comunicacao", entityId: item.channel_id,
     });
   }
 

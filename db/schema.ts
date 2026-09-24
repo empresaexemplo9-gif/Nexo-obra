@@ -807,3 +807,130 @@ export const parametroFontes = sqliteTable("parametro_fontes", {
   revisadoEm: integer("revisado_em"),
   revisadoPor: text("revisado_por"),
 });
+
+// Arquivo da empresa guardado em partes cifradas.
+//
+// A função da Vercel recusa corpo acima de 4,5 MB, e planta em DWG ou PDF passa disso
+// com frequência. Então o arquivo sobe em partes de até 3 MB, cada uma cifrada como as
+// fotos do diário, e desce do mesmo jeito: o navegador junta as partes e devolve o
+// arquivo byte a byte, no formato original.
+//
+// Um mesmo arquivo serve à Prancheta e à Comunicação. `in_library` diz se ele aparece
+// na biblioteca da Prancheta; mensagens apontam para ele por `chat_message_files`. O
+// objeto só é apagado quando não está na biblioteca e nenhuma mensagem o usa.
+export const orgFiles = sqliteTable("org_files", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").references(() => projects.id),
+  name: text("name").notNull(),
+  extension: text("extension").notNull().default(""),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  chunkSize: integer("chunk_size").notNull(),
+  chunkCount: integer("chunk_count").notNull(),
+  // uploading | ready
+  status: text("status").notNull().default("uploading"),
+  inLibrary: integer("in_library").notNull().default(0),
+  // Arquivo de origem de uma conversão e o tipo dela (dwg-dxf, dxf-pdf, pdf-png…).
+  sourceFileId: text("source_file_id"),
+  conversion: text("conversion"),
+  uploadedByMemberId: text("uploaded_by_member_id").notNull(),
+  uploadedByName: text("uploaded_by_name").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  readyAt: text("ready_at"),
+}, (table) => [
+  index("idx_org_files_library").on(table.organizationId, table.inLibrary, table.status),
+  index("idx_org_files_source").on(table.organizationId, table.sourceFileId, table.conversion),
+]);
+
+export const orgFileChunks = sqliteTable("org_file_chunks", {
+  id: text("id").primaryKey(),
+  fileId: text("file_id").notNull().references(() => orgFiles.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  chunkIndex: integer("chunk_index").notNull(),
+  storageKey: text("storage_key").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_org_file_chunks_part").on(table.fileId, table.chunkIndex),
+  uniqueIndex("uidx_org_file_chunks_storage_key").on(table.storageKey),
+]);
+
+// Comunicação interna da empresa. Canal é aberto a todo membro ativo da empresa;
+// conversa direta só aos dois participantes. `key` impede canal repetido e duas
+// conversas diretas entre as mesmas pessoas.
+export const chatChannels = sqliteTable("chat_channels", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  // canal | direta
+  kind: text("kind").notNull(),
+  key: text("key").notNull(),
+  name: text("name"),
+  createdByMemberId: text("created_by_member_id").notNull(),
+  createdAt: text("created_at").notNull(),
+  lastMessageAt: text("last_message_at"),
+}, (table) => [
+  uniqueIndex("uidx_chat_channels_key").on(table.organizationId, table.key),
+]);
+
+// Participante da conversa direta e marca de leitura de qualquer conversa.
+export const chatParticipants = sqliteTable("chat_participants", {
+  id: text("id").primaryKey(),
+  channelId: text("channel_id").notNull().references(() => chatChannels.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  memberId: text("member_id").notNull(),
+  isMember: integer("is_member").notNull().default(0),
+  lastReadAt: text("last_read_at"),
+}, (table) => [
+  uniqueIndex("uidx_chat_participants_member").on(table.channelId, table.memberId),
+  index("idx_chat_participants_org_member").on(table.organizationId, table.memberId),
+]);
+
+export const chatMessages = sqliteTable("chat_messages", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  channelId: text("channel_id").notNull().references(() => chatChannels.id),
+  authorMemberId: text("author_member_id").notNull(),
+  authorName: text("author_name").notNull(),
+  // Gerado pelo navegador: reenviar depois de falha de rede não duplica a mensagem.
+  clientKey: text("client_key").notNull(),
+  body: text("body").notNull().default(""),
+  // mensagem | lembrete
+  kind: text("kind").notNull().default("mensagem"),
+  createdAt: text("created_at").notNull(),
+  editedAt: text("edited_at"),
+  deletedAt: text("deleted_at"),
+}, (table) => [
+  uniqueIndex("uidx_chat_messages_client_key").on(table.organizationId, table.authorMemberId, table.clientKey),
+  index("idx_chat_messages_channel").on(table.organizationId, table.channelId, table.createdAt),
+]);
+
+export const chatMessageFiles = sqliteTable("chat_message_files", {
+  id: text("id").primaryKey(),
+  messageId: text("message_id").notNull().references(() => chatMessages.id),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  fileId: text("file_id").notNull().references(() => orgFiles.id),
+  position: integer("position").notNull().default(0),
+}, (table) => [
+  uniqueIndex("uidx_chat_message_files").on(table.messageId, table.fileId),
+  index("idx_chat_message_files_file").on(table.organizationId, table.fileId),
+]);
+
+// Lembrete criado na conversa. Aparece em "Lembretes do dia" para quem ele se destina
+// (uma pessoa, ou todos que participam da conversa) até alguém marcar como feito.
+export const chatReminders = sqliteTable("chat_reminders", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  channelId: text("channel_id").notNull().references(() => chatChannels.id),
+  messageId: text("message_id").notNull().references(() => chatMessages.id),
+  createdByMemberId: text("created_by_member_id").notNull(),
+  createdByName: text("created_by_name").notNull(),
+  targetMemberId: text("target_member_id"),
+  text: text("text").notNull(),
+  dueDay: text("due_day").notNull(),
+  doneAt: text("done_at"),
+  doneByName: text("done_by_name"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_chat_reminders_message").on(table.messageId),
+  index("idx_chat_reminders_due").on(table.organizationId, table.doneAt, table.dueDay),
+]);

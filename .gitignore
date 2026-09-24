@@ -41,3 +41,6 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# ativos dos visualizadores, copiados de node_modules no build
+/public/vendor/

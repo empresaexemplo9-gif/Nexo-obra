@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { lerValorBrasileiro } from "@/lib/drap-envelope";
 
 export type Reminder = {
-  key: string; group: "cobranca" | "boleto" | "followup" | "tarefa" | "meta";
+  key: string; group: "cobranca" | "boleto" | "followup" | "tarefa" | "meta" | "recado";
   severity: "atrasado" | "hoje" | "proximo";
   title: string; detail: string; amountCents: number | null; dueDay: string | null;
   module: string; entityId: string;
@@ -29,7 +29,7 @@ export type Agenda = {
 };
 
 const groupLabels: Record<Reminder["group"], string> = {
-  cobranca: "Cobrança", boleto: "Boleto", followup: "Follow-up", tarefa: "Tarefa", meta: "Meta",
+  cobranca: "Cobrança", boleto: "Boleto", followup: "Follow-up", tarefa: "Tarefa", meta: "Meta", recado: "Recado",
 };
 const severityLabels: Record<Reminder["severity"], string> = {
   atrasado: "Atrasado", hoje: "Hoje", proximo: "Próximos dias",
@@ -198,7 +198,7 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
           {agenda.counts.hoje ? <Badge variant="outline">{agenda.counts.hoje} para hoje</Badge> : null}
         </CardTitle>
         <p className="text-sm leading-6 text-hoikos-500">
-          Cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo e metas em aberto até {dayLabel(agenda.horizon)}.
+          Cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo, recados da Comunicação e metas em aberto até {dayLabel(agenda.horizon)}.
           Cada lembrete aponta para um registro real e some sozinho quando o registro deixa de estar pendente.
           {agenda.dismissedCount ? ` ${agenda.dismissedCount} dispensado(s) hoje.` : ""}
         </p>
@@ -209,7 +209,7 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
       <Card><CardContent className="grid min-h-48 place-items-center p-6 text-center"><div>
         <Check className="mx-auto size-7 text-hoikos-600" />
         <p className="mt-3 font-medium text-hoikos-900">Nada pendente para hoje</p>
-        <p className="mt-1 text-sm text-hoikos-500">Nenhuma cobrança, boleto, follow-up, tarefa ou meta exige ação agora.</p>
+        <p className="mt-1 text-sm text-hoikos-500">Nenhuma cobrança, boleto, follow-up, tarefa, recado ou meta exige ação agora.</p>
       </div></CardContent></Card>
     ) : (["atrasado", "hoje", "proximo"] as const).filter((severity) => grouped[severity].length).map((severity) => (
       <Card key={severity} className="overflow-hidden">

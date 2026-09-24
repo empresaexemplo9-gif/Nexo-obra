@@ -30,7 +30,7 @@ function configuracao(): DwgRuntimeEnv {
   return platformEnv() as unknown as DwgRuntimeEnv;
 }
 
-async function converterRemotamente(bytes: Uint8Array, url: string, token?: string): Promise<string> {
+async function converterRemotamente(bytes: Uint8Array, url: string, token?: string): Promise<Uint8Array> {
   let destino: URL;
   try {
     destino = new URL(url);
@@ -68,8 +68,7 @@ async function converterRemotamente(bytes: Uint8Array, url: string, token?: stri
 
   if (!resposta.body) throw new DwgConversorIndisponivel("O conversor DWG devolveu uma resposta vazia.");
   const reader = resposta.body.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: false });
-  const parts: string[] = [];
+  const parts: Uint8Array[] = [];
   let total = 0;
   try {
     while (true) {
@@ -80,15 +79,17 @@ async function converterRemotamente(bytes: Uint8Array, url: string, token?: stri
         await reader.cancel();
         throw new DwgConversorIndisponivel("A conversão DWG excedeu o limite de 48 MB.");
       }
-      parts.push(decoder.decode(value, { stream: true }));
+      parts.push(value);
     }
   } catch (error) {
     if (error instanceof DwgConversorIndisponivel) throw error;
     throw new DwgConversorIndisponivel("A resposta do conversor DWG foi interrompida.");
   } finally { reader.releaseLock(); }
   if (!total) throw new DwgConversorIndisponivel("O conversor DWG devolveu uma resposta vazia.");
-  parts.push(decoder.decode());
-  return parts.join("");
+  const saida = new Uint8Array(total);
+  let offset = 0;
+  for (const parte of parts) { saida.set(parte, offset); offset += parte.byteLength; }
+  return saida;
 }
 
 /**
@@ -96,7 +97,7 @@ async function converterRemotamente(bytes: Uint8Array, url: string, token?: stri
  * é exclusivo por pedido e sempre removido; nenhum desenho do cliente fica persistido no
  * servidor. O serviço HTTP continua opcional para instalações que prefiram isolar a carga.
  */
-async function converterLocalmente(bytes: Uint8Array): Promise<string> {
+async function converterLocalmente(bytes: Uint8Array): Promise<Uint8Array> {
   const pasta = await mkdtemp(join(tmpdir(), "nexo-dwg-"));
   const origem = join(pasta, "entrada.dwg");
   const destino = join(pasta, "saida.dxf");
@@ -112,7 +113,7 @@ async function converterLocalmente(bytes: Uint8Array): Promise<string> {
     const dxf = await readFile(destino);
     if (!dxf.byteLength) throw new DwgConversaoFalhou("O conversor DWG devolveu uma resposta vazia.");
     if (dxf.byteLength > MAX_OUTPUT_BYTES) throw new DwgConversaoFalhou("A conversão DWG excedeu o limite de 48 MB.");
-    return new TextDecoder("utf-8", { fatal: false }).decode(dxf);
+    return new Uint8Array(dxf);
   } catch (erro) {
     if (erro instanceof DwgConversaoFalhou) throw erro;
     throw new DwgConversorIndisponivel("Não foi possível iniciar o conversor DWG local.");
@@ -121,13 +122,22 @@ async function converterLocalmente(bytes: Uint8Array): Promise<string> {
   }
 }
 
-/** Converte DWG bruto em DXF ASCII para o leitor CAD interno. */
-export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
+/**
+ * DWG bruto em DXF, byte a byte como o conversor escreveu. O DXF do LibreDWG declara a
+ * página de código em $DWGCODEPAGE (ANSI_1252 em planta brasileira); decodificar como
+ * UTF-8 aqui trocaria cada acento por "�" no arquivo entregue.
+ */
+export async function converterDwgParaDxfBytes(bytes: Uint8Array): Promise<Uint8Array> {
   const env = configuracao();
   const url = env.DWG_CONVERTER_URL?.trim();
   return url
     ? converterRemotamente(bytes, url, env.DWG_CONVERTER_TOKEN)
     : converterLocalmente(bytes);
+}
+
+/** Converte DWG bruto em DXF ASCII para o leitor CAD interno. */
+export async function converterDwgParaDxf(bytes: Uint8Array): Promise<string> {
+  return new TextDecoder("utf-8", { fatal: false }).decode(await converterDwgParaDxfBytes(bytes));
 }
 
 export function estadoDoConversorDwg(): "ok" | "nao_configurado" | "configuracao_invalida" {
