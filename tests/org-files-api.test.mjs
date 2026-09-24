@@ -202,3 +202,29 @@ test("a cópia de visualização some quando o DWG original é excluído", async
   assert.equal(h.db.sqlite.prepare("SELECT COUNT(*) AS n FROM org_files").get().n, 0);
   assert.equal(h.objects.size, 0);
 });
+
+test("o Editor CAD importa um DXF grande direto da biblioteca, só da própria empresa", async () => {
+  const importar = await h.load("/app/api/studio/importar/route.ts");
+  const linhas = ["0", "SECTION", "2", "HEADER", "9", "$INSUNITS", "70", "4", "9", "$ACADVER", "1", "AC1015", "9", "$DWGCODEPAGE", "3", "ANSI_1252", "0", "ENDSEC",
+    "0", "SECTION", "2", "TABLES", "0", "TABLE", "2", "LAYER", "70", "2",
+    "0", "LAYER", "2", "0", "70", "0", "62", "7", "6", "CONTINUOUS",
+    "0", "LAYER", "2", "ÁREAS", "70", "0", "62", "3", "6", "CONTINUOUS", "0", "ENDTAB", "0", "ENDSEC",
+    "0", "SECTION", "2", "ENTITIES"];
+  for (let i = 0; i < 3000; i += 1) linhas.push("0", "LINE", "8", "ÁREAS", "10", String(i), "20", "0", "11", String(i + 1), "21", "0");
+  linhas.push("0", "TEXT", "8", "ÁREAS", "10", "0", "20", "0", "40", "100", "1", "Área útil", "0", "ENDSEC", "0", "EOF");
+  // Arquivo de 2004 grava texto em Windows-1252, não em UTF-8.
+  const texto = `${linhas.join("\r\n")}\r\n`;
+  const bytes = new Uint8Array([...texto].map((c) => c.charCodeAt(0) <= 255 ? c.charCodeAt(0) : 63));
+  const arquivo = await upload("owner", "planta.dxf", bytes);
+  const resposta = await importar.POST(h.request("owner", "/api/studio/importar", { method: "POST", json: { fileId: arquivo.id } }));
+  assert.equal(resposta.status, 200, await resposta.clone().text());
+  const lido = await resposta.json();
+  assert.equal(lido.elementos.length, 3001);
+  assert.deepEqual(lido.camadas.map((c) => c.nome), ["0", "ÁREAS"], "o nome acentuado da camada vem certo");
+  assert.equal(lido.elementos.at(-1).texto, "Área útil");
+  const deOutra = await importar.POST(h.request("owner-b", "/api/studio/importar", { method: "POST", json: { fileId: arquivo.id }, org: orgB }));
+  assert.equal(deOutra.status, 404);
+  const png = await upload("owner", "foto.png", new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]));
+  const errado = await importar.POST(h.request("owner", "/api/studio/importar", { method: "POST", json: { fileId: png.id } }));
+  assert.equal(errado.status, 415);
+});

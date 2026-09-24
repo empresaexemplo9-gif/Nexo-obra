@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import { documentoSchema, documentoVazio } from "@/lib/prancheta";
-import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { documentoParaBanco, lerCorpo } from "@/lib/server/studio-corpo";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "studio", "edit");
-    const analisado = criarSchema.safeParse(await jsonBody(request));
+    const analisado = criarSchema.safeParse(await lerCorpo(request));
     if (!analisado.success) throw validationError(analisado.error.flatten().fieldErrors);
     const { nome, especie, documento } = analisado.data;
     const projectId = analisado.data.projectId ?? null;
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
           criado_por_membro_id, atualizado_por_membro_id, created_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
       ).bind(id, context.organization.id, projectId, nome, especie,
-        JSON.stringify(documento ?? documentoVazio()), context.member.id),
+        await documentoParaBanco(documento ?? documentoVazio()), context.member.id),
       auditStatement(context, "studio.drawing.created", "studio_drawing", id, { nome, especie, projectId }),
     ]);
     const linha = await context.db.prepare(`${selecao} WHERE d.id = ?1 AND d.organization_id = ?2`)

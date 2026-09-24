@@ -130,13 +130,85 @@ export type OpcoesEncaixe = {
   ativos?: readonly TipoEncaixe[];
 };
 
+type ArcoDoc = Extract<Elemento, { tipo: "arco" }>;
+type Caixa = { x1: number; y1: number; x2: number; y2: number };
+
+/**
+ * Índice do desenho para o encaixe: segmentos, pontos notáveis e arcos numa grade.
+ *
+ * O encaixe roda a cada movimento do mouse. Varrer o desenho inteiro servia para uma
+ * planta desenhada à mão; um DWG importado tem dezenas de milhares de traços, e a tela
+ * travava. O índice é montado uma vez por versão do documento e consultado só em volta
+ * do cursor.
+ */
+class IndiceEncaixe {
+  readonly segmentos: Segmento[];
+  readonly notaveis: Encaixe[];
+  readonly arcos: ArcoDoc[];
+  readonly arcoIds: Set<string>;
+  private celula = 1;
+  private grade: Map<string, { s: number[]; n: number[]; a: number[] }> | null = null;
+  private grandes: { s: number[]; a: number[] } = { s: [], a: [] };
+
+  constructor(documento: Documento) {
+    this.segmentos = segmentosDo(documento);
+    this.notaveis = pontosNotaveis(documento);
+    this.arcos = elementosVisiveis(documento).filter((e): e is ArcoDoc => e.tipo === "arco" && !camadaBloqueada(documento, e.camada));
+    this.arcoIds = new Set(documento.elementos.filter((e) => e.tipo === "arco").map((e) => e.id));
+    const total = this.segmentos.length + this.notaveis.length + this.arcos.length;
+    if (total < 3000) return; // desenho pequeno: a varredura direta é mais rápida que montar a grade
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    for (const n of this.notaveis) { x1 = Math.min(x1, n.ponto.x); y1 = Math.min(y1, n.ponto.y); x2 = Math.max(x2, n.ponto.x); y2 = Math.max(y2, n.ponto.y); }
+    this.celula = Math.max(10, Math.max(x2 - x1, y2 - y1, 1) / 256);
+    const grade = new Map<string, { s: number[]; n: number[]; a: number[] }>();
+    const cela = (i: number, j: number) => { const chave = `${i}:${j}`; let c = grade.get(chave); if (!c) { c = { s: [], n: [], a: [] }; grade.set(chave, c); } return c; };
+    const espalhar = (caixa: Caixa, tipo: "s" | "a", indice: number) => {
+      const i1 = Math.floor(caixa.x1 / this.celula), i2 = Math.floor(caixa.x2 / this.celula);
+      const j1 = Math.floor(caixa.y1 / this.celula), j2 = Math.floor(caixa.y2 / this.celula);
+      if ((i2 - i1 + 1) * (j2 - j1 + 1) > 64) { this.grandes[tipo].push(indice); return; }
+      for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) cela(i, j)[tipo].push(indice);
+    };
+    this.segmentos.forEach((seg, k) => espalhar({ x1: Math.min(seg.a.x, seg.b.x), y1: Math.min(seg.a.y, seg.b.y), x2: Math.max(seg.a.x, seg.b.x), y2: Math.max(seg.a.y, seg.b.y) }, "s", k));
+    this.arcos.forEach((arco, k) => espalhar({ x1: arco.centro.x - arco.raioMm, y1: arco.centro.y - arco.raioMm, x2: arco.centro.x + arco.raioMm, y2: arco.centro.y + arco.raioMm }, "a", k));
+    this.notaveis.forEach((n, k) => cela(Math.floor(n.ponto.x / this.celula), Math.floor(n.ponto.y / this.celula)).n.push(k));
+    this.grade = grade;
+  }
+
+  /** O que está a até `raio` do alvo (por caixa): candidatos, não resposta final. */
+  perto(alvo: Ponto, raio: number) {
+    if (!this.grade) return { segmentos: this.segmentos, notaveis: this.notaveis, arcos: this.arcos };
+    const i1 = Math.floor((alvo.x - raio) / this.celula), i2 = Math.floor((alvo.x + raio) / this.celula);
+    const j1 = Math.floor((alvo.y - raio) / this.celula), j2 = Math.floor((alvo.y + raio) / this.celula);
+    if ((i2 - i1 + 1) * (j2 - j1 + 1) > 4096) return { segmentos: this.segmentos, notaveis: this.notaveis, arcos: this.arcos };
+    const s = new Set(this.grandes.s), n = new Set<number>(), a = new Set(this.grandes.a);
+    for (let i = i1; i <= i2; i += 1) for (let j = j1; j <= j2; j += 1) {
+      const c = this.grade.get(`${i}:${j}`);
+      if (!c) continue;
+      for (const k of c.s) s.add(k); for (const k of c.n) n.add(k); for (const k of c.a) a.add(k);
+    }
+    return {
+      segmentos: [...s].sort((x, y) => x - y).map((k) => this.segmentos[k]),
+      notaveis: [...n].sort((x, y) => x - y).map((k) => this.notaveis[k]),
+      arcos: [...a].sort((x, y) => x - y).map((k) => this.arcos[k]),
+    };
+  }
+}
+
+const indices = new WeakMap<Documento, IndiceEncaixe>();
+function indiceDe(documento: Documento) {
+  let indice = indices.get(documento);
+  if (!indice) { indice = new IndiceEncaixe(documento); indices.set(documento, indice); }
+  return indice;
+}
+
 /**
  * O encaixe escolhido para uma posição do cursor.
  *
  * Nunca devolve nada: quando não há entidade por perto, cai na malha, que é o
  * comportamento anterior. Assim a ferramenta funciona igual em desenho vazio.
+ * `ignorar` tira elementos da disputa (o que está sendo arrastado não encaixa em si).
  */
-export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEncaixe): Encaixe {
+export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEncaixe & { ignorar?: ReadonlySet<string> }): Encaixe {
   const ativos = opcoes.ativos ?? TIPOS_ENCAIXE;
   const tolerancia = Math.max(1, opcoes.toleranciaMm);
   const naMalha: Encaixe = {
@@ -145,22 +217,24 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
   };
   if (!ativos.length) return naMalha;
 
+  const indice = indiceDe(documento);
+  const ignorar = opcoes.ignorar;
+  const vale = (id?: string) => !ignorar || !id || !ignorar.has(id);
+  const vizinhanca = indice.perto(alvo, tolerancia);
   const candidatos: Encaixe[] = [];
   const perto = (ponto: Ponto) => distancia(ponto, alvo) <= tolerancia;
 
-  for (const candidato of pontosNotaveis(documento)) {
-    if (!ativos.includes(candidato.tipo)) continue;
+  for (const candidato of vizinhanca.notaveis) {
+    if (!ativos.includes(candidato.tipo) || !vale(candidato.elementoId)) continue;
     if (perto(candidato.ponto)) candidatos.push(candidato);
   }
 
   // Interseção e perpendicular custam mais, então só se olha o que passa perto do alvo.
-  const proximos = ativos.includes("interseccao") || ativos.includes("perpendicular")
-    ? segmentosDo(documento).filter((segmento) =>
-      Math.min(segmento.a.x, segmento.b.x) - tolerancia <= alvo.x
-      && Math.max(segmento.a.x, segmento.b.x) + tolerancia >= alvo.x
-      && Math.min(segmento.a.y, segmento.b.y) - tolerancia <= alvo.y
-      && Math.max(segmento.a.y, segmento.b.y) + tolerancia >= alvo.y)
-    : [];
+  const proximos = vizinhanca.segmentos.filter((segmento) => vale(segmento.elementoId)
+    && Math.min(segmento.a.x, segmento.b.x) - tolerancia <= alvo.x
+    && Math.max(segmento.a.x, segmento.b.x) + tolerancia >= alvo.x
+    && Math.min(segmento.a.y, segmento.b.y) - tolerancia <= alvo.y
+    && Math.max(segmento.a.y, segmento.b.y) + tolerancia >= alvo.y);
 
   if (ativos.includes("interseccao")) {
     for (let i = 0; i < proximos.length; i += 1) {
@@ -182,15 +256,14 @@ export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEn
   }
 
   if (ativos.includes("proximo")) {
-    const arcos = new Set(documento.elementos.filter(e => e.tipo === "arco").map(e => e.id));
-    for (const segment of segmentosDo(documento)) {
-      if (arcos.has(segment.elementoId)) continue;
+    for (const segment of proximos) {
+      if (indice.arcoIds.has(segment.elementoId)) continue;
       const point = nearestOnSegment(alvo, segment.a, segment.b);
       if (perto(point)) candidatos.push({ tipo: "proximo", ponto: point, elementoId: segment.elementoId });
     }
   }
-  for (const element of elementosVisiveis(documento)) {
-    if (element.tipo !== "arco" || camadaBloqueada(documento, element.camada)) continue;
+  for (const element of vizinhanca.arcos) {
+    if (!vale(element.id)) continue;
     const onArc = (p: Ponto) => {
       const angle = ((Math.atan2(element.centro.y - p.y, p.x - element.centro.x) * 180 / Math.PI - element.inicioGraus) % 360 + 360) % 360;
       return angle <= element.varreduraGraus + 1e-9;
@@ -530,6 +603,26 @@ export function espelhar(elemento: Elemento, a: Ponto, b: Ponto): Elemento | nul
         inicioGraus: normalizarGraus(-(2 * anguloDoEixo + elemento.inicioGraus + elemento.varreduraGraus)),
       };
     }
+    case "hachura": {
+      const aneis = elemento.aneis.map((anel) => anel.map(espelho));
+      if (aneis.some((anel) => anel.some((ponto) => !ponto))) return null;
+      return { ...elemento, aneis: aneis.map((anel) => (anel as Ponto[]).reverse()) };
+    }
+    case "texto": {
+      // Texto espelhado continua legível (MIRRTEXT 0 do AutoCAD): a caixa do texto é
+      // refletida, mas as letras não. Das duas direções da reta refletida vale a que lê da
+      // esquerda para a direita; a âncora troca de lado para o texto ocupar a caixa
+      // refletida, não a original.
+      const posicao = espelho(elemento.posicao);
+      if (!posicao) return null;
+      const refletido = giroEspelhado(elemento.rotacaoGraus);
+      const legivel = Math.cos(refletido * Math.PI / 180) > 1e-9 || (Math.abs(Math.cos(refletido * Math.PI / 180)) <= 1e-9 && Math.sin(refletido * Math.PI / 180) < 0);
+      const rotacaoGraus = legivel ? refletido : normalizarGraus(refletido + 180);
+      const { ancoraH: h, ancoraV: v, ...resto } = elemento;
+      const ancoraH = legivel ? h : h === "fim" ? undefined : h === "meio" ? "meio" : "fim";
+      const ancoraV = legivel ? (v === "topo" ? undefined : v === "meio" ? "meio" : "topo") : v;
+      return { ...resto, posicao, rotacaoGraus, ...(ancoraH && ancoraH !== "inicio" ? { ancoraH } : {}), ...(ancoraV && ancoraV !== "base" ? { ancoraV } : {}) };
+    }
     default: {
       const posicao = espelho(elemento.posicao);
       if (!posicao) return null;
@@ -571,69 +664,248 @@ export function matrizRetangular(elemento: Elemento, matriz: Matriz, novoId: () 
   return copias;
 }
 
-/** Onde a RETA que contém `a`–`b` cruza o segmento cortante. Devolve também a posição
- *  relativa `t` ao longo de `a`–`b`: `t < 0` é antes de `a`, `t > 1` é depois de `b`. */
-function cruzamentoComCortante(a: Ponto, b: Ponto, cortante: Segmento): { ponto: Ponto; t: number } | null {
-  const r = { x: b.x - a.x, y: b.y - a.y };
-  const s = { x: cortante.b.x - cortante.a.x, y: cortante.b.y - cortante.a.y };
-  const denominador = r.x * s.y - r.y * s.x;
-  if (Math.abs(denominador) < 1e-9) return null;
-  const diferenca = { x: cortante.a.x - a.x, y: cortante.a.y - a.y };
-  const t = (diferenca.x * s.y - diferenca.y * s.x) / denominador;
-  const u = (diferenca.x * r.y - diferenca.y * r.x) / denominador;
-  // O corte precisa cair DENTRO do cortante: aparar contra o prolongamento de uma parede
-  // que não chega ali cortaria num lugar onde não há nada desenhado.
-  if (u < 0 || u > 1) return null;
-  return { ponto: preciso({ x: a.x + t * r.x, y: a.y + t * r.y }), t };
+// ## Aparar e estender
+//
+// Como no AutoCAD: aponta-se o PEDAÇO que deve sumir, e ele some entre os dois cortes
+// mais próximos do clique (ou até a ponta, quando só há corte de um lado). Uma polilinha
+// cortada no meio vira duas; um círculo cortado em dois pontos vira arco. O vizinho do
+// trecho aparado não se mexe — antes, aparar perto de um vértice arrastava o segmento
+// anterior junto.
+
+/** Limite de corte: um segmento ou um arco (círculo com varredura 360). Ângulos na
+ *  convenção do desenho técnico, como o elemento `arco`. */
+export type Limite =
+  | { tipo: "segmento"; a: Ponto; b: Ponto; elementoId: string }
+  | { tipo: "arco"; centro: Ponto; raio: number; inicio: number; varredura: number; elementoId: string };
+
+const EPS = 1e-6;
+const grausDe = (centro: Ponto, p: Ponto) => ((Math.atan2(-(p.y - centro.y), p.x - centro.x) * 180 / Math.PI) % 360 + 360) % 360;
+/** Posição angular dentro do arco, de 0 à varredura; fora dele, negativo. */
+function noArco(limite: { inicio: number; varredura: number }, graus: number) {
+  const relativo = ((graus - limite.inicio) % 360 + 360) % 360;
+  if (limite.varredura >= 360) return relativo;
+  return relativo <= limite.varredura + 1e-7 ? relativo : relativo >= 360 - 1e-7 ? 0 : -1;
 }
 
-/** Qual segmento do elemento está mais perto do ponto, e o índice da ponta mais próxima. */
-function segmentoMaisPerto(elemento: Elemento, ponto: Ponto) {
-  const partes = elemento.tipo === "parede"
-    ? [{ a: elemento.a, b: elemento.b, indice: 0 }]
-    : elemento.tipo === "traco"
-      ? elemento.pontos.slice(0, -1).map((a, indice) => ({ a, b: elemento.pontos[indice + 1], indice }))
-      : [];
-  if (!partes.length) return null;
-  let melhor = partes[0];
-  let menor = Infinity;
-  for (const parte of partes) {
-    const pe = pePerpendicular(ponto, { ...parte, elementoId: "" });
-    const perto = pe ? distancia(pe, ponto) : Math.min(distancia(parte.a, ponto), distancia(parte.b, ponto));
-    if (perto < menor) { menor = perto; melhor = parte; }
+/** Cruzamentos da reta a→b (parâmetro t: 0 em a, 1 em b) com um limite. `u` diz se caiu
+ *  dentro do limite. */
+function cruzamentosDaReta(a: Ponto, b: Ponto, limite: Limite): number[] {
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  if (limite.tipo === "segmento") {
+    const s = { x: limite.b.x - limite.a.x, y: limite.b.y - limite.a.y };
+    const den = r.x * s.y - r.y * s.x;
+    if (Math.abs(den) < 1e-12) return [];
+    const d = { x: limite.a.x - a.x, y: limite.a.y - a.y };
+    const t = (d.x * s.y - d.y * s.x) / den, u = (d.x * r.y - d.y * r.x) / den;
+    return u >= -EPS && u <= 1 + EPS ? [t] : [];
+  }
+  const f = { x: a.x - limite.centro.x, y: a.y - limite.centro.y };
+  const A = r.x * r.x + r.y * r.y, B = 2 * (f.x * r.x + f.y * r.y), C = f.x * f.x + f.y * f.y - limite.raio * limite.raio;
+  const disc = B * B - 4 * A * C;
+  if (A === 0 || disc < 0) return [];
+  const raiz = Math.sqrt(disc);
+  return [(-B - raiz) / (2 * A), (-B + raiz) / (2 * A)]
+    .filter((t, i, lista) => i === 0 || Math.abs(t - lista[0]) > 1e-12)
+    .filter((t) => noArco(limite, grausDe(limite.centro, { x: a.x + r.x * t, y: a.y + r.y * t })) >= 0);
+}
+
+/** Cruzamentos de um círculo (centro, raio) com um limite, em graus do desenho técnico. */
+function cruzamentosDoCirculo(centro: Ponto, raio: number, limite: Limite): number[] {
+  if (limite.tipo === "segmento") {
+    const r = { x: limite.b.x - limite.a.x, y: limite.b.y - limite.a.y };
+    const f = { x: limite.a.x - centro.x, y: limite.a.y - centro.y };
+    const A = r.x * r.x + r.y * r.y, B = 2 * (f.x * r.x + f.y * r.y), C = f.x * f.x + f.y * f.y - raio * raio;
+    const disc = B * B - 4 * A * C;
+    if (A === 0 || disc < 0) return [];
+    const raiz = Math.sqrt(disc);
+    return [(-B - raiz) / (2 * A), (-B + raiz) / (2 * A)]
+      .filter((t) => t >= -EPS && t <= 1 + EPS)
+      .map((t) => grausDe(centro, { x: limite.a.x + r.x * t, y: limite.a.y + r.y * t }));
+  }
+  const dx = limite.centro.x - centro.x, dy = limite.centro.y - centro.y, d = Math.hypot(dx, dy);
+  if (d < EPS || d > raio + limite.raio + EPS || d < Math.abs(raio - limite.raio) - EPS) return [];
+  const a = (raio * raio - limite.raio * limite.raio + d * d) / (2 * d);
+  const h = Math.sqrt(Math.max(0, raio * raio - a * a));
+  const m = { x: centro.x + dx * a / d, y: centro.y + dy * a / d };
+  return [{ x: m.x + h * dy / d, y: m.y - h * dx / d }, { x: m.x - h * dy / d, y: m.y + h * dx / d }]
+    .filter((p) => noArco(limite, grausDe(limite.centro, p)) >= 0)
+    .map((p) => grausDe(centro, p));
+}
+
+/** Limites de corte do desenho: tudo que está visível, menos o próprio alvo. Texto,
+ *  símbolo e hachura não cortam — no papel eles não são aresta. */
+export function limitesDeCorte(documento: Documento, excetoId?: string): Limite[] {
+  const saida: Limite[] = [];
+  for (const elemento of elementosVisiveis(documento)) {
+    if (elemento.id === excetoId) continue;
+    if (elemento.tipo === "parede") saida.push({ tipo: "segmento", a: elemento.a, b: elemento.b, elementoId: elemento.id });
+    else if (elemento.tipo === "traco" || elemento.tipo === "comodo") {
+      const pontos = elemento.pontos;
+      const n = elemento.tipo === "comodo" ? pontos.length : pontos.length - 1;
+      for (let i = 0; i < n; i += 1) saida.push({ tipo: "segmento", a: pontos[i], b: pontos[(i + 1) % pontos.length], elementoId: elemento.id });
+    } else if (elemento.tipo === "arco") {
+      saida.push({ tipo: "arco", centro: elemento.centro, raio: elemento.raioMm, inicio: elemento.inicioGraus, varredura: elemento.varreduraGraus, elementoId: elemento.id });
+    }
+  }
+  return saida;
+}
+
+type Caminho = { pontos: Ponto[]; fechado: boolean; acumulado: number[] };
+
+function caminhoDe(elemento: Elemento): Caminho | null {
+  const pontos = elemento.tipo === "parede" ? [elemento.a, elemento.b] : elemento.tipo === "traco" ? elemento.pontos : null;
+  if (!pontos || pontos.length < 2) return null;
+  const primeiro = pontos[0], ultimo = pontos.at(-1)!;
+  const fechado = elemento.tipo === "traco" && pontos.length > 3 && primeiro.x === ultimo.x && primeiro.y === ultimo.y;
+  const acumulado = [0];
+  for (let i = 1; i < pontos.length; i += 1) acumulado.push(acumulado[i - 1] + distancia(pontos[i - 1], pontos[i]));
+  return { pontos, fechado, acumulado };
+}
+
+function pontoNoCaminho(caminho: Caminho, s: number): Ponto {
+  const { pontos, acumulado } = caminho;
+  if (s <= 0) return pontos[0];
+  for (let i = 1; i < pontos.length; i += 1) {
+    if (s <= acumulado[i] + EPS) {
+      const trecho = acumulado[i] - acumulado[i - 1] || 1;
+      const t = Math.min(1, Math.max(0, (s - acumulado[i - 1]) / trecho));
+      return preciso({ x: pontos[i - 1].x + (pontos[i].x - pontos[i - 1].x) * t, y: pontos[i - 1].y + (pontos[i].y - pontos[i - 1].y) * t });
+    }
+  }
+  return pontos.at(-1)!;
+}
+
+/** Trecho do caminho entre dois comprimentos (de < ate), com os vértices do meio. */
+function trechoDoCaminho(caminho: Caminho, de: number, ate: number): Ponto[] {
+  const saida = [pontoNoCaminho(caminho, de)];
+  for (let i = 1; i < caminho.pontos.length - 1; i += 1) if (caminho.acumulado[i] > de + EPS && caminho.acumulado[i] < ate - EPS) saida.push(caminho.pontos[i]);
+  saida.push(pontoNoCaminho(caminho, ate));
+  return saida.filter((p, i, l) => i === 0 || p.x !== l[i - 1].x || p.y !== l[i - 1].y);
+}
+
+function comprimentoNoClique(caminho: Caminho, clique: Ponto) {
+  let melhor = 0, menor = Infinity;
+  for (let i = 1; i < caminho.pontos.length; i += 1) {
+    const a = caminho.pontos[i - 1], b = caminho.pontos[i];
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((clique.x - a.x) * dx + (clique.y - a.y) * dy) / l2)) : 0;
+    const d = Math.hypot(a.x + dx * t - clique.x, a.y + dy * t - clique.y);
+    if (d < menor) { menor = d; melhor = caminho.acumulado[i - 1] + Math.sqrt(l2) * t; }
   }
   return melhor;
 }
 
-function comSegmentoTrocado(elemento: Elemento, indice: number, a: Ponto, b: Ponto): Elemento | null {
-  if (a.x === b.x && a.y === b.y) return null; // Segmento de comprimento zero não é traço.
-  if (elemento.tipo === "parede") return { ...elemento, a, b };
-  if (elemento.tipo === "traco") {
-    const pontos = [...elemento.pontos];
-    pontos[indice] = a;
-    pontos[indice + 1] = b;
-    return { ...elemento, pontos };
-  }
+function comPontos(elemento: Elemento, pontos: Ponto[]): Elemento | null {
+  if (pontos.length < 2) return null;
+  const total = pontos.slice(1).reduce((soma, p, i) => soma + distancia(pontos[i], p), 0);
+  if (total < 1e-3) return null;
+  if (elemento.tipo === "parede") return { ...elemento, a: pontos[0], b: pontos.at(-1)! };
+  if (elemento.tipo === "traco") return { ...elemento, pontos };
   return null;
 }
+
+/**
+ * Apara o trecho clicado entre os cortes vizinhos. Devolve os pedaços que ficam (um ou
+ * dois; o primeiro mantém o identificador do original) ou `null` quando nada corta ali.
+ */
+export function apararElemento(elemento: Elemento, limites: Limite[], clique: Ponto): Elemento[] | null {
+  if (elemento.tipo === "arco") return apararArco(elemento, limites, clique);
+  const caminho = caminhoDe(elemento);
+  if (!caminho) return null;
+  const total = caminho.acumulado.at(-1)!;
+  const cortes: number[] = [];
+  for (let i = 1; i < caminho.pontos.length; i += 1) {
+    const a = caminho.pontos[i - 1], b = caminho.pontos[i], trecho = caminho.acumulado[i] - caminho.acumulado[i - 1];
+    if (!trecho) continue;
+    for (const limite of limites) {
+      if (limite.elementoId === elemento.id) continue;
+      for (const t of cruzamentosDaReta(a, b, limite)) if (t >= -EPS && t <= 1 + EPS) cortes.push(caminho.acumulado[i - 1] + Math.max(0, Math.min(1, t)) * trecho);
+    }
+  }
+  // Corte na própria ponta não divide nada: é onde o traço já termina.
+  const uteis = cortes.filter((s) => (caminho.fechado || (s > 1e-3 && s < total - 1e-3))).sort((x, y) => x - y);
+  if (!uteis.length) return null;
+  const s = comprimentoNoClique(caminho, clique);
+  const antes = uteis.filter((c) => c < s - EPS).at(-1), depois = uteis.find((c) => c > s + EPS);
+  if (caminho.fechado) {
+    if (uteis.length < 2) return null;
+    // No fechado, o que sobra é o caminho do corte seguinte até o anterior, dando a volta.
+    const de = depois ?? uteis[0], ate = antes ?? uteis.at(-1)!;
+    const pontos = de < ate ? trechoDoCaminho(caminho, de, ate)
+      : [...trechoDoCaminho(caminho, de, total), ...trechoDoCaminho(caminho, 0, ate).slice(1)];
+    const resto = comPontos(elemento, pontos);
+    return resto ? [resto] : [];
+  }
+  if (antes === undefined && depois === undefined) return null;
+  const pedacos: Elemento[] = [];
+  if (antes !== undefined) { const p = comPontos(elemento, trechoDoCaminho(caminho, 0, antes)); if (p) pedacos.push(p); }
+  if (depois !== undefined) { const p = comPontos(elemento, trechoDoCaminho(caminho, depois, total)); if (p) pedacos.push(pedacos.length ? { ...p, id: "" } : p); }
+  return pedacos;
+}
+
+function apararArco(arco: Extract<Elemento, { tipo: "arco" }>, limites: Limite[], clique: Ponto): Elemento[] | null {
+  const cortes: number[] = [];
+  for (const limite of limites) {
+    if (limite.elementoId === arco.id) continue;
+    for (const graus of cruzamentosDoCirculo(arco.centro, arco.raioMm, limite)) {
+      const posicao = noArco({ inicio: arco.inicioGraus, varredura: arco.varreduraGraus }, graus);
+      if (posicao >= 0) cortes.push(posicao);
+    }
+  }
+  const circulo = arco.varreduraGraus >= 360;
+  const uteis = [...new Set(cortes.map((c) => Math.round(c * 1e6) / 1e6))]
+    .filter((c) => circulo || (c > 1e-6 && c < arco.varreduraGraus - 1e-6)).sort((x, y) => x - y);
+  if (!uteis.length || (circulo && uteis.length < 2)) return null;
+  const alvo = noArco({ inicio: arco.inicioGraus, varredura: arco.varreduraGraus }, grausDe(arco.centro, clique));
+  const s = alvo < 0 ? 0 : alvo;
+  const antes = uteis.filter((c) => c < s).at(-1), depois = uteis.find((c) => c > s);
+  const novo = (de: number, varredura: number, id: string): Elemento | null => varredura < 1e-6 ? null
+    : { ...arco, id, inicioGraus: normalizarGraus(Math.round((arco.inicioGraus + de) * 1e6) / 1e6) % 360, varreduraGraus: Math.min(360, Math.round(varredura * 1e6) / 1e6) };
+  if (circulo) {
+    const de = depois ?? uteis[0], ate = antes ?? uteis.at(-1)!;
+    const resto = novo(de, ((ate - de) % 360 + 360) % 360, arco.id);
+    return resto ? [resto] : [];
+  }
+  if (antes === undefined && depois === undefined) return null;
+  const pedacos: Elemento[] = [];
+  if (antes !== undefined) { const p = novo(0, antes, arco.id); if (p) pedacos.push(p); }
+  if (depois !== undefined) { const p = novo(depois, arco.varreduraGraus - depois, pedacos.length ? "" : arco.id); if (p) pedacos.push(p); }
+  return pedacos;
+}
+
+/** Estende a ponta mais perto do clique até o primeiro limite no caminho dela. */
+export function estenderElemento(elemento: Elemento, limites: Limite[], clique: Ponto): Elemento | null {
+  const caminho = caminhoDe(elemento);
+  if (!caminho || caminho.fechado) return null;
+  const pontos = caminho.pontos;
+  const noFim = distancia(clique, pontos.at(-1)!) < distancia(clique, pontos[0]);
+  const ponta = noFim ? pontos.at(-1)! : pontos[0], vizinho = noFim ? pontos.at(-2)! : pontos[1];
+  if (ponta.x === vizinho.x && ponta.y === vizinho.y) return null;
+  let melhor: number | null = null;
+  for (const limite of limites) {
+    if (limite.elementoId === elemento.id) continue;
+    // Parâmetro da reta vizinho→ponta: 1 é a ponta; além de 1 é o prolongamento.
+    for (const t of cruzamentosDaReta(vizinho, ponta, limite)) if (t > 1 + 1e-9 && (melhor === null || t < melhor)) melhor = t;
+  }
+  if (melhor === null) return null;
+  const destino = preciso({ x: vizinho.x + (ponta.x - vizinho.x) * melhor, y: vizinho.y + (ponta.y - vizinho.y) * melhor });
+  const novos = noFim ? [...pontos.slice(0, -1), destino] : [destino, ...pontos.slice(1)];
+  return comPontos(elemento, novos);
+}
+
+const comoLimite = (cortante: Segmento): Limite => ({ tipo: "segmento", a: cortante.a, b: cortante.b, elementoId: cortante.elementoId });
 
 /**
  * Apara o elemento no cortante, removendo o lado em que se clicou.
  *
  * Clicar no pedaço que sobra é como se apara em qualquer CAD, e é o gesto certo: a
- * pessoa aponta o que quer que suma, não o que quer que fique.
+ * pessoa aponta o que quer que suma, não o que quer que fique. Só parede e traço, e só
+ * quando sobra um pedaço (a versão com vários limites é `apararElemento`).
  */
 export function aparar(elemento: Elemento, cortante: Segmento, pontoClicado: Ponto): Elemento | null {
-  const parte = segmentoMaisPerto(elemento, pontoClicado);
-  if (!parte) return null;
-  const cruzamento = cruzamentoComCortante(parte.a, parte.b, cortante);
-  // Fora de 0..1 o corte cairia fora do traço: não há o que aparar.
-  if (!cruzamento || cruzamento.t <= 0 || cruzamento.t >= 1) return null;
-  const distanciaA = distancia(parte.a, pontoClicado);
-  const distanciaB = distancia(parte.b, pontoClicado);
-  return distanciaA < distanciaB
-    ? comSegmentoTrocado(elemento, parte.indice, cruzamento.ponto, parte.b)
-    : comSegmentoTrocado(elemento, parte.indice, parte.a, cruzamento.ponto);
+  if (elemento.tipo !== "parede" && elemento.tipo !== "traco") return null;
+  const pedacos = apararElemento(elemento, [comoLimite(cortante)], pontoClicado);
+  return pedacos && pedacos.length === 1 ? pedacos[0] : null;
 }
 
 /**
@@ -643,11 +915,5 @@ export function aparar(elemento: Elemento, cortante: Segmento, pontoClicado: Pon
  * a coisa errada calada é pior do que não fazer nada.
  */
 export function estender(elemento: Elemento, cortante: Segmento, pontoClicado: Ponto): Elemento | null {
-  const parte = segmentoMaisPerto(elemento, pontoClicado);
-  if (!parte) return null;
-  const cruzamento = cruzamentoComCortante(parte.a, parte.b, cortante);
-  if (!cruzamento) return null;
-  if (cruzamento.t < 0) return comSegmentoTrocado(elemento, parte.indice, cruzamento.ponto, parte.b);
-  if (cruzamento.t > 1) return comSegmentoTrocado(elemento, parte.indice, parte.a, cruzamento.ponto);
-  return null;
+  return estenderElemento(elemento, [comoLimite(cortante)], pontoClicado);
 }

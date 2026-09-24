@@ -291,7 +291,7 @@ test("o nome da camada vai sem acento e sem colisão, porque o DXF R12 não os a
   const saida = exportarDxf(documento);
   assert.ok(!/[ÁÀÂÃÉÊÍÓÔÕÚÇáàâãéêíóôõúç]/.test(saida), "acento no nome faz o CAD recusar o arquivo");
   const lido = lerDxf(saida, { unidade: "mm" });
-  assert.equal(lido.camadas[0].nome, "LUMINOTECNICO");
+  assert.ok(lido.camadas.some((camada) => camada.nome === "LUMINOTECNICO"), "a camada volta pelo nome sem acento");
   const nomes = [...saida.matchAll(/^2\nLUMINOTECNICO.*$/gm)].map((casado) => casado[0]);
   assert.equal(new Set(nomes).size, nomes.length, "duas camadas não podem virar o mesmo nome");
 });
@@ -714,4 +714,50 @@ test("o que não é traço nem parede não apara nem estende", () => {
   const corte = cortante({ x: 0, y: -1000 }, { x: 0, y: 1000 });
   assert.equal(aparar(comodo("c1", [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }]), corte, { x: 500, y: 0 }), null);
   assert.equal(estender(arco("a1", { x: 0, y: 0 }, 500, 0, 90), corte, { x: 500, y: 0 }), null);
+});
+
+// ## Ferramentas corrigidas: aparar pelo clique, estender pela ponta, encaixe em desenho grande
+
+test("aparar no meio de uma polilinha não arrasta o segmento vizinho e a divide em duas", () => {
+  const { apararElemento, limitesDeCorte } = cad;
+  const traco = { id: "t1", camada: "layout", tipo: "traco", espessuraMm: 10,
+    pontos: [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 4000 }, { x: 8000, y: 4000 }] };
+  const cortes = [parede("c1", { x: 3000, y: 1000 }, { x: 5000, y: 1000 }), parede("c2", { x: 3000, y: 3000 }, { x: 5000, y: 3000 })];
+  const pedacos = apararElemento(traco, limitesDeCorte(doc([traco, ...cortes]), "t1"), { x: 4000, y: 2000 });
+  assert.equal(pedacos.length, 2);
+  assert.deepEqual(pedacos[0].pontos, [{ x: 0, y: 0 }, { x: 4000, y: 0 }, { x: 4000, y: 1000 }], "o primeiro trecho segue intacto até o corte");
+  assert.deepEqual(pedacos[1].pontos, [{ x: 4000, y: 3000 }, { x: 4000, y: 4000 }, { x: 8000, y: 4000 }]);
+  assert.equal(pedacos[0].id, "t1");
+  for (const pedaco of pedacos) assert.equal(elementoSchema.safeParse({ ...pedaco, id: pedaco.id || "novo" }).success, true);
+});
+
+test("círculo cortado por duas linhas vira o arco que sobra, do lado oposto ao clique", () => {
+  const { apararElemento, limitesDeCorte } = cad;
+  const circulo = arco("a1", { x: 0, y: 0 }, 1000, 0, 360);
+  const linha = parede("l1", { x: -2000, y: 0 }, { x: 2000, y: 0 });
+  // Clique na metade de cima (y negativo na tela): sobra a de baixo, de 180° a 360°.
+  const [resto] = apararElemento(circulo, limitesDeCorte(doc([circulo, linha]), "a1"), { x: 0, y: -1000 });
+  assert.equal(resto.tipo, "arco");
+  assert.equal(resto.inicioGraus, 180);
+  assert.equal(resto.varreduraGraus, 180);
+});
+
+test("estender só mexe na ponta da polilinha, nunca num segmento do meio", () => {
+  const { estenderElemento, limitesDeCorte } = cad;
+  const traco = { id: "t1", camada: "layout", tipo: "traco", espessuraMm: 10, pontos: [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 1000 }] };
+  const limite = parede("l1", { x: 0, y: 3000 }, { x: 2000, y: 3000 });
+  const esticado = estenderElemento(traco, limitesDeCorte(doc([traco, limite]), "t1"), { x: 1000, y: 900 });
+  assert.deepEqual(esticado.pontos, [{ x: 0, y: 0 }, { x: 1000, y: 0 }, { x: 1000, y: 3000 }]);
+  assert.equal(estenderElemento(traco, limitesDeCorte(doc([traco, limite]), "t1"), { x: 0, y: 0 }), null, "a outra ponta não tem nada no caminho");
+});
+
+test("encaixe em desenho grande usa o índice e acha o mesmo ponto que a varredura", () => {
+  const elementos = [];
+  for (let i = 0; i < 5000; i += 1) elementos.push(parede(`p${i}`, { x: i * 1000, y: 0 }, { x: i * 1000 + 800, y: 0 }));
+  const grande = doc(elementos);
+  const encaixe = encaixePerto(grande, { x: 3_456_790, y: 30 }, padrao);
+  assert.equal(encaixe.tipo, "extremo");
+  assert.deepEqual(encaixe.ponto, { x: 3_456_800, y: 0 });
+  const ignorado = encaixePerto(grande, { x: 3_456_790, y: 30 }, { ...padrao, ignorar: new Set(["p3456"]) });
+  assert.notEqual(ignorado.elementoId, "p3456", "o que está sendo arrastado não encaixa em si mesmo");
 });

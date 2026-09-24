@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
-  ArrowLeft, Blinds, Circle, CircleDashed, DoorOpen, Download, Eye, EyeOff, Grid2x2, Lamp, LoaderCircle,
-  Lock, LockOpen, Minus, MousePointer2, PencilLine, Plug, Redo2, Ruler, Save, Sofa,
-  Copy, FlipHorizontal2, Grid3x3, Magnet, MoveHorizontal, Scissors, Spline, Square,
+  ArrowLeft, Blinds, BrickWall, ChevronsLeftRight, CircleDashed, DoorOpen, Download, Eye, EyeOff, Grid2x2, Image as ImageIcon, LandPlot, LoaderCircle,
+  Lock, LockOpen, Moon, MousePointer2, PencilLine, Plug, RectangleHorizontal, Redo2, Ruler, Save, Search, Slash, Sofa, SquareDashedMousePointer, Sun,
+  Copy, FlipHorizontal2, Grid3x3, Magnet, MoveHorizontal, Scissors, Spline, Waypoints,
   Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { exportarDxf } from "@/lib/integrations/dxf";
+import { corNaTela, TIPOS_LINHA, tipoLinhaLabels, tracejadoPara, type TipoLinha } from "@/lib/cad-cores";
+import { CABECALHO_ACEITA, corpoComprimido, JSON_GZIP, jsonDaResposta } from "@/lib/compressao";
+import { uploadOrgFile } from "@/lib/org-files-client";
 import { nearestOnSegment } from "@/packages/cad-core";
 import { zoomNaVista, enquadrarElementos } from "@/lib/prancheta-viewport";
 import { executarNaSelecao, selecionarNaJanela } from "@/lib/cad-selection";
@@ -23,11 +26,11 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Encaixe, TIPOS_ENCAIXE, TipoEncaixe, encaixeLabels, encaixePerto, moverVertice,
-  aparar, espelhar, estender, lerMedida, matrizRetangular, ortogonal, paralelaDe,
-  resolverEntrada, segmentosDo, verticesDe,
+  apararElemento, espelhar, estenderElemento, lerMedida, limitesDeCorte, matrizRetangular, ortogonal, paralelaDe,
+  resolverEntrada, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
-  Camada, Documento, Elemento, FAMILIAS_SIMBOLO, areaM2, camadaBloqueada, documentoSchema,
+  Camada, DISCIPLINAS, Documento, Elemento, FAMILIAS_SIMBOLO, LIMITE_CAMADAS, LIMITE_ELEMENTOS, areaM2, camadaBloqueada, caminhoDosAneis, documentoSchema,
   comprimentoM, disciplinaLabels, elementosVisiveis, encaixar, exportarSvg, glifoDoSimbolo,
   pontosDoArco,
   limitesDoElemento, moverElemento, quantitativo, simboloLabels,
@@ -52,18 +55,18 @@ export type Prancha = {
 
 const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2; atalho: string }[] = [
   { id: "selecionar", rotulo: "Selecionar e mover", icone: MousePointer2, atalho: "V" },
-  { id: "janelaSelecao", rotulo: "Selecionar por janela", icone: Square, atalho: "B" },
-  { id: "linha", rotulo: "Linha", icone: Minus, atalho: "F" },
-  { id: "polilinha", rotulo: "Polilinha", icone: Spline, atalho: "W" },
-  { id: "retangulo", rotulo: "Retângulo", icone: Square, atalho: "Q" },
-  { id: "parede", rotulo: "Parede", icone: Minus, atalho: "P" },
-  { id: "comodo", rotulo: "Cômodo", icone: Square, atalho: "C" },
+  { id: "janelaSelecao", rotulo: "Selecionar por janela", icone: SquareDashedMousePointer, atalho: "B" },
+  { id: "linha", rotulo: "Linha", icone: Slash, atalho: "F" },
+  { id: "polilinha", rotulo: "Polilinha", icone: Waypoints, atalho: "W" },
+  { id: "retangulo", rotulo: "Retângulo", icone: RectangleHorizontal, atalho: "Q" },
+  { id: "parede", rotulo: "Parede", icone: BrickWall, atalho: "P" },
+  { id: "comodo", rotulo: "Cômodo", icone: LandPlot, atalho: "C" },
   { id: "porta", rotulo: "Porta", icone: DoorOpen, atalho: "D" },
   { id: "janela", rotulo: "Janela", icone: Blinds, atalho: "J" },
-  { id: "passagem", rotulo: "Passagem", icone: Circle, atalho: "G" },
+  { id: "passagem", rotulo: "Passagem", icone: ChevronsLeftRight, atalho: "G" },
   { id: "simbolo", rotulo: "Ponto elétrico ou luminária", icone: Plug, atalho: "E" },
   { id: "mobilia", rotulo: "Mobília", icone: Sofa, atalho: "M" },
-  { id: "imagem", rotulo: "Imagem da biblioteca", icone: Lamp, atalho: "I" },
+  { id: "imagem", rotulo: "Imagem da biblioteca", icone: ImageIcon, atalho: "I" },
   { id: "texto", rotulo: "Texto", icone: Type, atalho: "T" },
   { id: "cota", rotulo: "Cota", icone: Ruler, atalho: "K" },
   { id: "traco", rotulo: "Traço livre", icone: PencilLine, atalho: "L" },
@@ -71,7 +74,7 @@ const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2
   { id: "arco", rotulo: "Arco — centro, início e fim", icone: Spline, atalho: "A" },
   { id: "espelhar", rotulo: "Espelhar a seleção — marque os dois pontos do eixo", icone: FlipHorizontal2, atalho: "H" },
   { id: "aparar", rotulo: "Aparar — clique no pedaço que deve sumir", icone: Scissors, atalho: "X" },
-  { id: "estender", rotulo: "Estender — clique na ponta que deve crescer", icone: MoveHorizontal, atalho: "N" },
+  { id: "estender", rotulo: "Estender — clique perto da ponta que deve crescer", icone: MoveHorizontal, atalho: "N" },
 ];
 
 const instrucoes: Record<Ferramenta, string> = {
@@ -94,8 +97,8 @@ const instrucoes: Record<Ferramenta, string> = {
   circulo: "Clique no centro e depois no ponto que define o raio.",
   arco: "Clique no centro, no início e no fim do arco.",
   espelhar: "Selecione um elemento, marque dois pontos do eixo e crie sua cópia espelhada.",
-  aparar: "Selecione uma parede ou traço e clique no trecho que deve ser removido.",
-  estender: "Selecione uma parede ou traço e clique na ponta que deve alcançar o limite.",
+  aparar: "Clique no pedaço que deve sumir: parede, linha, polilinha, arco ou círculo é cortado entre as linhas que o cruzam. Um traço cortado no meio vira dois.",
+  estender: "Clique perto da ponta de uma parede ou linha: ela cresce até a primeira linha no caminho.",
 };
 
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
@@ -112,6 +115,11 @@ type Importado = {
   nomeArquivo: string; unidade: string; unidadeDeclarada: boolean;
   camadas: Camada[]; elementos: Elemento[]; avisos: string[]; truncado: boolean;
   report?: ImportReport;
+};
+
+const rotuloDoTipo: Record<Elemento["tipo"], string> = {
+  parede: "Parede", comodo: "Cômodo", abertura: "Abertura", simbolo: "Símbolo", mobilia: "Mobília", imagem: "Imagem",
+  texto: "Texto", cota: "Cota", traco: "Linha", arco: "Arco", hachura: "Hachura",
 };
 
 const UNIDADES_ROTULO: Record<string, string> = {
@@ -138,17 +146,6 @@ function alturaPelaProporcao(url: string, larguraMm: number): Promise<number> {
     imagem.onerror = () => rejeitar(new Error("não abriu"));
     imagem.src = url;
   });
-}
-
-/** Quanto um ajuste deslocou as pontas do elemento. Serve para escolher, entre vários
- *  limites possíveis, o que mexe menos — que é o que a pessoa vê e espera. */
-function alteracaoDe(antes: Elemento, depois: Elemento) {
-  const pontosDe = (elemento: Elemento) => elemento.tipo === "parede" ? [elemento.a, elemento.b]
-    : elemento.tipo === "traco" ? elemento.pontos : [];
-  const um = pontosDe(antes);
-  const outro = pontosDe(depois);
-  if (um.length !== outro.length) return Infinity;
-  return um.reduce((soma, ponto, i) => soma + Math.hypot(outro[i].x - ponto.x, outro[i].y - ponto.y), 0);
 }
 
 /** Ângulo do desenho técnico entre dois pontos: 0° à direita, crescendo no anti-horário.
@@ -188,6 +185,7 @@ function elementoNoPonto(documento: Documento, x: number, y: number, tolerance: 
       }
       if (!dentro) continue;
     }
+    if (elemento.tipo === "hachura" && !dentroDosAneis(elemento.aneis, x, y)) continue;
     if (elemento.tipo === "mobilia" || elemento.tipo === "imagem") {
       const r = elemento.rotacaoGraus * Math.PI / 180;
       const dx = x - elemento.posicao.x, dy = y - elemento.posicao.y;
@@ -206,15 +204,23 @@ function Glifo({ familia }: { familia: string }) {
   </svg>;
 }
 
-function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: Elemento; selecionado: boolean; minimumStroke: number }) {
-  const realce = selecionado ? { stroke: "#846100", strokeWidth: 60, strokeOpacity: 0.35 } : null;
+/** Traço fino que não some ao afastar: o maior entre a espessura real e um fio da tela.
+ *  A variável fica no SVG, então aproximar não obriga a redesenhar cada elemento. */
+const fio = (espessuraMm: number): CSSProperties => ({ strokeWidth: `max(${espessuraMm}px, var(--traco-min))` });
+
+// Memorizado: um DWG importado tem dezenas de milhares de elementos, e redesenhar todos a
+// cada movimento do cursor travava a tela. Só o que mudou volta a ser desenhado.
+const DesenhoElemento = memo(function DesenhoElemento({ elemento, selecionado, cor, tracejado, realceCor }: {
+  elemento: Elemento; selecionado: boolean; cor: string; tracejado?: string; realceCor: string;
+}) {
+  const realce = selecionado ? { stroke: realceCor, strokeWidth: 60, strokeOpacity: 0.35 } : null;
   const giro = "rotacaoGraus" in elemento && elemento.rotacaoGraus
     ? `rotate(${elemento.rotacaoGraus} ${elemento.posicao.x} ${elemento.posicao.y})` : undefined;
 
   if (elemento.tipo === "parede") {
     return <g>
       {realce && <line x1={elemento.a.x} y1={elemento.a.y} x2={elemento.b.x} y2={elemento.b.y} {...realce} strokeWidth={elemento.espessuraMm + 140} />}
-      <line x1={elemento.a.x} y1={elemento.a.y} x2={elemento.b.x} y2={elemento.b.y} stroke="#1C190F" strokeWidth={elemento.espessuraMm} strokeLinecap="square" />
+      <line x1={elemento.a.x} y1={elemento.a.y} x2={elemento.b.x} y2={elemento.b.y} stroke={cor} strokeWidth={elemento.espessuraMm} strokeLinecap="square" />
     </g>;
   }
   if (elemento.tipo === "comodo") {
@@ -223,16 +229,16 @@ function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: E
       x: soma.x + ponto.x / elemento.pontos.length, y: soma.y + ponto.y / elemento.pontos.length,
     }), { x: 0, y: 0 });
     return <g>
-      <polygon points={pontos} fill="#B5B19E" fillOpacity={selecionado ? 0.34 : 0.18} stroke="#846100" strokeWidth={selecionado ? 50 : 20} />
+      <polygon points={pontos} fill="#B5B19E" fillOpacity={selecionado ? 0.34 : 0.18} stroke={realceCor} strokeWidth={selecionado ? 50 : 20} />
       {elemento.nome && <>
-        <text x={centro.x} y={centro.y} fontSize={220} textAnchor="middle" fill="#38301B">{elemento.nome}</text>
-        <text x={centro.x} y={centro.y + 260} fontSize={170} textAnchor="middle" fill="#846100">{metrosQuadrados(areaM2(elemento.pontos))}</text>
+        <text x={centro.x} y={centro.y} fontSize={220} textAnchor="middle" fill={cor}>{elemento.nome}</text>
+        <text x={centro.x} y={centro.y + 260} fontSize={170} textAnchor="middle" fill={realceCor}>{metrosQuadrados(areaM2(elemento.pontos))}</text>
       </>}
     </g>;
   }
   if (elemento.tipo === "abertura") {
     const meia = elemento.larguraMm / 2;
-    return <g transform={giro} stroke={selecionado ? "#846100" : "#38301B"}>
+    return <g transform={giro} stroke={selecionado ? realceCor : cor}>
       {elemento.especie === "porta"
         ? <path d={`M ${elemento.posicao.x - meia} ${elemento.posicao.y} l ${elemento.larguraMm} 0 m ${-elemento.larguraMm} 0 a ${elemento.larguraMm} ${elemento.larguraMm} 0 0 1 ${elemento.larguraMm} ${elemento.larguraMm}`} fill="none" strokeWidth={40} />
         : <line x1={elemento.posicao.x - meia} y1={elemento.posicao.y} x2={elemento.posicao.x + meia} y2={elemento.posicao.y}
@@ -243,8 +249,8 @@ function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: E
     const glifo = glifoDoSimbolo(elemento.familia);
     return <g transform={giro}>
       <g transform={`translate(${elemento.posicao.x} ${elemento.posicao.y})`}>
-        {selecionado && <circle r={420} fill="#846100" fillOpacity={0.14} />}
-        <path d={glifo.d} fill={glifo.preenchido ? "#846100" : "none"} stroke="#846100" strokeWidth={35} />
+        {selecionado && <circle r={420} fill={realceCor} fillOpacity={0.14} />}
+        <path d={glifo.d} fill={glifo.preenchido ? realceCor : "none"} stroke={realceCor} strokeWidth={35} />
       </g>
     </g>;
   }
@@ -252,7 +258,7 @@ function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: E
     return <g transform={giro}>
       <rect x={elemento.posicao.x - elemento.larguraMm / 2} y={elemento.posicao.y - elemento.alturaMm / 2}
         width={elemento.larguraMm} height={elemento.alturaMm} rx={40}
-        fill="#F4F2E9" stroke={selecionado ? "#846100" : "#38301B"} strokeWidth={selecionado ? 60 : 25} />
+        fill="#F4F2E9" fillOpacity={0.9} stroke={selecionado ? realceCor : cor} strokeWidth={selecionado ? 60 : 25} />
       <text x={elemento.posicao.x} y={elemento.posicao.y + 60} fontSize={150} textAnchor="middle" fill="#38301B">{elemento.rotulo}</text>
     </g>;
   }
@@ -261,34 +267,55 @@ function DesenhoElemento({ elemento, selecionado, minimumStroke }: { elemento: E
       <image href={elemento.chave} x={elemento.posicao.x - elemento.larguraMm / 2} y={elemento.posicao.y - elemento.alturaMm / 2}
         width={elemento.larguraMm} height={elemento.alturaMm} preserveAspectRatio="xMidYMid slice" />
       {selecionado && <rect x={elemento.posicao.x - elemento.larguraMm / 2} y={elemento.posicao.y - elemento.alturaMm / 2}
-        width={elemento.larguraMm} height={elemento.alturaMm} fill="none" stroke="#846100" strokeWidth={60} />}
+        width={elemento.larguraMm} height={elemento.alturaMm} fill="none" stroke={realceCor} strokeWidth={60} />}
     </g>;
   }
   if (elemento.tipo === "texto") {
     return <g transform={giro}>
-      <text x={elemento.posicao.x} y={elemento.posicao.y} fontSize={elemento.alturaMm} fill={selecionado ? "#846100" : "#1C190F"}>{elemento.texto}</text>
+      <text x={elemento.posicao.x} y={elemento.posicao.y} fontSize={elemento.alturaMm} fontFamily="Arial, Helvetica, sans-serif" fill={selecionado ? realceCor : cor}
+        textAnchor={elemento.ancoraH === "meio" ? "middle" : elemento.ancoraH === "fim" ? "end" : "start"}
+        dominantBaseline={elemento.ancoraV === "meio" ? "central" : elemento.ancoraV === "topo" ? "hanging" : "alphabetic"}>{elemento.texto}</text>
     </g>;
   }
   if (elemento.tipo === "cota") {
     const meio = { x: (elemento.a.x + elemento.b.x) / 2, y: (elemento.a.y + elemento.b.y) / 2 + elemento.deslocamentoMm };
-    return <g stroke="#846100" strokeWidth={selecionado ? 40 : 18} fill="none">
+    return <g stroke={realceCor} strokeWidth={selecionado ? 40 : 18} fill="none">
       <line x1={elemento.a.x} y1={elemento.a.y + elemento.deslocamentoMm} x2={elemento.b.x} y2={elemento.b.y + elemento.deslocamentoMm} />
       <line x1={elemento.a.x} y1={elemento.a.y} x2={elemento.a.x} y2={elemento.a.y + elemento.deslocamentoMm} />
       <line x1={elemento.b.x} y1={elemento.b.y} x2={elemento.b.x} y2={elemento.b.y + elemento.deslocamentoMm} />
-      <text x={meio.x} y={meio.y - 80} fontSize={180} textAnchor="middle" fill="#846100" stroke="none">{metros(comprimentoM(elemento.a, elemento.b))}</text>
+      <text x={meio.x} y={meio.y - 80} fontSize={180} textAnchor="middle" fill={realceCor} stroke="none">{metros(comprimentoM(elemento.a, elemento.b))}</text>
     </g>;
+  }
+  if (elemento.tipo === "hachura") {
+    return <path d={caminhoDosAneis(elemento.aneis)} fill={cor} fillOpacity={elemento.solida ? (selecionado ? 0.6 : 1) : selecionado ? 0.5 : 0.28} fillRule="evenodd"
+      stroke={selecionado ? realceCor : "none"} style={selecionado ? fio(1) : undefined} />;
   }
   // Arco e traço desenham a mesma coisa: uma polilinha. O arco chega em pontos pela
   // mesma tessellation que alimenta o arquivo exportado, então tela e papel concordam.
   const linha = elemento.tipo === "arco" ? pontosDoArco(elemento) : elemento.pontos;
   return <polyline points={linha.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} fill="none"
-    stroke={selecionado ? "#846100" : "#1C190F"} strokeWidth={Math.max(elemento.espessuraMm, minimumStroke)} strokeLinecap="round" strokeLinejoin="round" />;
+    stroke={selecionado ? realceCor : cor} style={fio(elemento.espessuraMm)} strokeDasharray={tracejado}
+    strokeLinecap="round" strokeLinejoin="round" />;
+});
+
+/** Ponto dentro dos anéis pela regra par-ímpar, a mesma do preenchimento na tela. */
+function dentroDosAneis(aneis: { x: number; y: number }[][], x: number, y: number) {
+  let dentro = false;
+  for (const anel of aneis) {
+    for (let a = 0, b = anel.length - 1; a < anel.length; b = a++) {
+      const p = anel[a], q = anel[b];
+      if ((p.y > y) !== (q.y > y) && x < (q.x - p.x) * (y - p.y) / (q.y - p.y) + p.x) dentro = !dentro;
+    }
+  }
+  return dentro;
 }
 
-export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false }: {
+export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false, importarDaBiblioteca = null }: {
   prancha: Prancha; canEdit: boolean; onVoltar: () => void;
   onSalvo: (atualizada: Prancha) => void;
   fullPage?: boolean;
+  /** Arquivo DWG/DXF da biblioteca da Prancheta para importar assim que o editor abre. */
+  importarDaBiblioteca?: { id: string; nome: string } | null;
 }) {
   const [documento, definirDocumento] = useState<Documento>(prancha.documento);
   const [revisao, definirRevisao] = useState(prancha.revisao);
@@ -329,6 +356,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const [importado, definirImportado] = useState<Importado | null>(null);
   const [importando, definirImportando] = useState(false);
   const [unidadeImportacao, definirUnidadeImportacao] = useState("");
+  // Fundo escuro como o espaço do modelo do AutoCAD: as cores do DWG foram escolhidas
+  // para ele. É preferência de quem olha, então fica no navegador.
+  const [fundoEscuro, definirFundoEscuro] = useState(() => {
+    try { return typeof window !== "undefined" && window.localStorage.getItem("hoikos-cad-fundo") === "escuro"; } catch { return false; }
+  });
+  const [filtroCamada, definirFiltroCamada] = useState("");
+  // Arquivo grande importado pela biblioteca: trocar a unidade relê pelo identificador.
+  const arquivoDaBiblioteca = useRef<{ id: string; nome: string } | null>(null);
   const arquivoDxf = useRef<HTMLInputElement | null>(null);
   // O arquivo fica guardado aqui, e não no input: o input é limpo logo após a leitura
   // para aceitar o mesmo arquivo duas vezes seguidas, e sem esta cópia trocar a unidade
@@ -347,7 +382,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function aguardarAjuda(id: Ferramenta) {
     esconderAjuda();
-    temporizadorAjuda.current = setTimeout(() => definirAjudaVisivel(id), 4000);
+    temporizadorAjuda.current = setTimeout(() => definirAjudaVisivel(id), 700);
   }
 
   useEffect(() => () => {
@@ -466,9 +501,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   const encaixarEm = useCallback((bruto: { x: number; y: number }, origem?: { x: number; y: number } | null) => {
     const alvo = orto && origem ? ortogonal(origem, bruto) : bruto;
-    const ignorar = new Set(arrastando.current?.ids ?? (verticeArrastado.current ? [verticeArrastado.current.id] : []));
-    const referencia = ignorar.size ? { ...documento, elementos: documento.elementos.filter(e => !ignorar.has(e.id)) } : documento;
-    const encaixe = encaixePerto(referencia, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe });
+    // Durante o arrasto, o encaixe olha o desenho de antes do gesto (que não muda a cada
+    // movimento, então o índice de encaixe é montado uma vez só) e ignora o que se move.
+    const gesto = arrastando.current ?? verticeArrastado.current;
+    const ignorar = gesto ? new Set("ids" in gesto ? gesto.ids : [gesto.id]) : undefined;
+    const referencia = gesto?.documento ?? documento;
+    const encaixe = encaixePerto(referencia, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe, ignorar });
     // Com a trava ortogonal ligada, só vale o encaixe que não sai do eixo — senão a
     // trava seria desfeita pelo próprio encaixe, calada.
     if (orto && origem && encaixe.tipo !== "malha"
@@ -590,18 +628,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       }
       return;
     }
-    if (ferramenta === "espelhar" || ferramenta === "aparar" || ferramenta === "estender") {
-      // Estas três agem sobre a SELEÇÃO, então quem manda é a camada dela. A guarda logo
-      // abaixo olha a camada da ferramenta, e recusaria espelhar uma tomada só porque a
-      // camada de layout está travada.
+    if (ferramenta === "espelhar") {
+      // Espelhar age sobre a SELEÇÃO, então quem manda é a camada dela, não a da ferramenta.
       if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
-      if (!selecoes.length || (ferramenta !== "espelhar" && !selecionado)) { toast.error("Selecione um elemento para aparar/estender, ou um grupo para espelhar."); return; }
+      if (!selecoes.length) { toast.error("Selecione o que deve ser espelhado antes de marcar o eixo."); return; }
       if (documento.elementos.some(e => selecoes.includes(e.id) && camadaBloqueada(documento, e.camada))) {
         toast.error("A camada do elemento selecionado está travada. Destrave-a no painel de camadas.");
         return;
       }
-    }
-    if (ferramenta === "espelhar") {
       if (!pendentes.length) { definirPendentes([ponto]); return; }
       const copias = documento.elementos.filter(e => selecoes.includes(e.id)).map(e => espelhar(e, pendentes[0], ponto));
       definirPendentes([]);
@@ -611,24 +645,28 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       return;
     }
     if (ferramenta === "aparar" || ferramenta === "estender") {
-      // O cortante é o que está por baixo do clique; o alvo é o que está selecionado.
-      // Selecionar primeiro e apontar depois é a ordem de todo CAD.
-      if (!selecionado) { toast.error("Selecione a parede ou o traço a ajustar antes de apontar o limite."); return; }
-      const cortantes = segmentosDo(documento).filter((segmento) => segmento.elementoId !== selecionado.id);
-      const ajustados = cortantes
-        .map((corte) => ferramenta === "aparar" ? aparar(selecionado, corte, bruto) : estender(selecionado, corte, bruto))
-        .filter((resultado): resultado is Elemento => Boolean(resultado));
-      if (!ajustados.length) {
-        toast.error(ferramenta === "aparar"
-          ? "Nada cruza este traço aqui. Aparar precisa de um limite que o atravesse de verdade."
-          : "Nada para estender até aqui. O limite precisa estar além da ponta, no caminho dela.");
+      // Como no AutoCAD: aponta-se direto o que deve mudar, e todo o resto do desenho
+      // visível serve de limite. Nada precisa estar selecionado antes.
+      if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
+      const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
+      const aceita = ferramenta === "aparar" ? ["parede", "traco", "arco"] : ["parede", "traco"];
+      if (!alvo || !aceita.includes(alvo.tipo)) {
+        toast.error(ferramenta === "aparar" ? "Clique em cima de uma parede, linha, polilinha, arco ou círculo." : "Clique perto da ponta de uma parede ou linha.");
         return;
       }
-      // Entre vários limites possíveis, vale o que mexe menos: é o que a pessoa vê e
-      // espera, e evita a parede saltar para o outro lado do desenho.
-      const escolhido = ajustados.reduce((melhor, candidato) =>
-        alteracaoDe(selecionado, candidato) < alteracaoDe(selecionado, melhor) ? candidato : melhor);
-      trocar(selecionado.id, escolhido as Partial<Elemento>);
+      const limites = limitesDeCorte(documento, alvo.id);
+      if (ferramenta === "estender") {
+        const esticado = estenderElemento(alvo, limites, bruto);
+        if (!esticado) { toast.error("Nada no caminho desta ponta. Estender precisa de uma linha além dela."); return; }
+        trocar(alvo.id, esticado as Partial<Elemento>);
+        return;
+      }
+      const pedacos = apararElemento(alvo, limites, bruto);
+      if (!pedacos) { toast.error("Nada cruza este trecho. Aparar precisa de uma linha que o atravesse."); return; }
+      const novos = pedacos.map((pedaco, i) => ({ ...pedaco, id: i === 0 ? alvo.id : novoId() }) as Elemento);
+      const indice = documento.elementos.findIndex((e) => e.id === alvo.id);
+      const elementos = [...documento.elementos.slice(0, indice), ...novos, ...documento.elementos.slice(indice + 1)];
+      if (aplicar({ ...documento, elementos })) definirSelecoes(novos.map((e) => e.id));
       return;
     }
     if (!podeDesenhar) {
@@ -779,8 +817,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       toast.error("Revise a matriz: precisa de pelo menos uma repetição, com passo diferente de zero e no máximo 400 cópias.");
       return;
     }
-    if (documento.elementos.length + copias.length > 20000) {
-      toast.error("O desenho passaria do limite de 20 mil elementos.");
+    if (documento.elementos.length + copias.length > LIMITE_ELEMENTOS) {
+      toast.error(`O desenho passaria do limite de ${LIMITE_ELEMENTOS.toLocaleString("pt-BR")} elementos.`);
       return;
     }
     if (!aplicar({ ...documento, elementos: [...documento.elementos, ...copias] })) return;
@@ -800,6 +838,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   useEffect(() => {
     function tecla(evento: KeyboardEvent) {
+      // Ctrl+S grava de qualquer lugar, inclusive com o cursor num campo.
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") { evento.preventDefault(); if (canEdit && sujo) void salvar(); return; }
       const alvo = evento.target as HTMLElement | null;
       if (alvo && (["INPUT", "TEXTAREA", "SELECT"].includes(alvo.tagName) || alvo.isContentEditable)) return;
       if (evento.ctrlKey || evento.metaKey) {
@@ -842,19 +882,37 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   function operarSelecao(input: string) {
     if (!canEdit) return;
     try {
-      const result = executarNaSelecao(documento, input, selecoes);
+      const result = executarNaSelecao(documento, input, selecoes, undefined, camadaEscolhida || undefined);
       if (aplicar(result.document)) { definirSelecoes(result.selectedIds); definirMensagemComando(result.message); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível editar a seleção."); }
   }
 
-  async function importar(arquivo: File, unidade: string) {
+  /** Lê o arquivo no servidor. Até 3,5 MB vai no próprio pedido; maior que isso vai
+   *  antes para a biblioteca da Prancheta, em partes, e é lido de lá — o corpo de uma
+   *  função não comporta um DWG inteiro. A resposta volta comprimida. */
+  async function importar(arquivo: File | null, unidade: string) {
     definirImportando(true);
     try {
-      const formulario = new FormData();
-      formulario.append("file", arquivo);
-      if (unidade) formulario.append("unidade", unidade);
-      const resposta = await fetch("/api/studio/importar", { method: "POST", body: formulario });
-      const corpo = await resposta.json().catch(() => ({})) as Importado & { error?: string };
+      let resposta: Response;
+      if (arquivo && arquivo.size <= 3.5 * 1024 * 1024) {
+        const formulario = new FormData();
+        formulario.append("file", arquivo);
+        if (unidade) formulario.append("unidade", unidade);
+        resposta = await fetch("/api/studio/importar", { method: "POST", body: formulario, headers: { [CABECALHO_ACEITA]: JSON_GZIP } });
+      } else {
+        if (arquivo) {
+          toast.info("Arquivo grande: enviando para a biblioteca da Prancheta antes de ler.");
+          const guardado = await uploadOrgFile(arquivo, arquivo.name, { area: "prancheta", projectId: prancha.projectId });
+          arquivoDaBiblioteca.current = { id: guardado.id, nome: guardado.name };
+        }
+        const daBiblioteca = arquivoDaBiblioteca.current;
+        if (!daBiblioteca) throw new Error("Escolha o arquivo de novo.");
+        resposta = await fetch("/api/studio/importar", {
+          method: "POST", headers: { "Content-Type": "application/json", [CABECALHO_ACEITA]: JSON_GZIP },
+          body: JSON.stringify({ fileId: daBiblioteca.id, ...(unidade ? { unidade } : {}) }),
+        });
+      }
+      const corpo = await jsonDaResposta<Importado & { error?: string }>(resposta).catch(() => ({}) as Importado & { error?: string });
       if (!resposta.ok) throw new Error(corpo.error ?? "Não foi possível ler o arquivo.");
       definirImportado(corpo);
       definirUnidadeImportacao(corpo.unidade);
@@ -866,6 +924,18 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     }
   }
 
+  // Aberto a partir da biblioteca ("Editar no Editor CAD"): importa na chegada.
+  const importouNaAbertura = useRef(false);
+  useEffect(() => {
+    if (!importarDaBiblioteca || importouNaAbertura.current || !canEdit) return;
+    importouNaAbertura.current = true;
+    arquivoDaBiblioteca.current = importarDaBiblioteca;
+    const relogio = window.setTimeout(() => { void importar(null, ""); }, 0);
+    return () => window.clearTimeout(relogio);
+    // importar lê o estado corrente; a importação da abertura acontece uma vez só.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importarDaBiblioteca, canEdit]);
+
   // A importação só entra no desenho depois que alguém confirma a unidade. Um arquivo
   // lido em metro quando era centímetro entra cem vezes maior, e nada na tela denuncia
   // isso antes de a cota ser medida.
@@ -875,9 +945,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       const proximo = mergeCadImport(documento, importado);
       aplicar(proximo);
       definirVista(enquadrarElementos(elementosVisiveis(proximo)));
-      toast.success(`${importado.elementos.length} elemento(s) importados.`);
+      toast.success(`${importado.elementos.length.toLocaleString("pt-BR")} elemento(s) em ${importado.camadas.length} camada(s) importados. Grave para guardar.`);
       definirImportado(null);
       dxfEscolhido.current = null;
+      arquivoDaBiblioteca.current = null;
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível importar."); }
   }
 
@@ -889,7 +960,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       else if (normalized === "U" || normalized === "UNDO") { desfazer(); definirMensagemComando("Desfazer concluído."); }
       else if (normalized === "REDO") { refazer(); definirMensagemComando("Refazer concluído."); }
       else {
-        const result = executarNaSelecao(documento, comando, selecoes);
+        const result = executarNaSelecao(documento, comando, selecoes, undefined, camadaEscolhida || undefined);
         aplicar(result.document);
         definirSelecoes(result.selectedIds);
         definirMensagemComando(result.message);
@@ -907,12 +978,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     salvamentoEmCurso.current = true;
     definirSalvando(true); definirConflito(false);
     try {
-      const resposta = await fetch(`/api/studio/${prancha.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documento, revisao, nome }),
-      });
-      const corpo = await resposta.json().catch(() => ({})) as { prancha?: Prancha; error?: string; code?: string };
+      // Comprimido: uma planta vinda de DWG passa do teto de 4,5 MB por pedido.
+      const corpoJson = JSON.stringify({ documento, revisao, nome });
+      const { body, headers } = corpoJson.length > 1_000_000
+        ? await corpoComprimido({ documento, revisao, nome })
+        : { body: corpoJson, headers: { "Content-Type": "application/json" } };
+      const resposta = await fetch(`/api/studio/${prancha.id}`, { method: "PUT", headers, body });
+      const corpo = await jsonDaResposta<{ prancha?: Prancha; error?: string; code?: string }>(resposta).catch(() => ({}) as { prancha?: Prancha; error?: string; code?: string });
       if (!resposta.ok) {
         if (corpo.code === "revision_conflict") definirConflito(true);
         throw new Error(corpo.error ?? "Não foi possível gravar a prancha.");
@@ -972,6 +1044,44 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   }
 
   const faltas = conferencia.achados.filter((achado) => achado.severidade === "falta").length;
+  const realceCor = fundoEscuro ? "#e0b23a" : "#846100";
+  const camadasPorId = useMemo(() => new Map(documento.camadas.map((camada) => [camada.id, camada])), [documento.camadas]);
+  const selecionadosSet = useMemo(() => new Set(selecoes), [selecoes]);
+  const contagemPorCamada = useMemo(() => {
+    const contagem = new Map<string, number>();
+    for (const elemento of documento.elementos) contagem.set(elemento.camada, (contagem.get(elemento.camada) ?? 0) + 1);
+    return contagem;
+  }, [documento.elementos]);
+  // O desenho inteiro memorizado: mover o cursor, encaixar ou aproximar não o refaz.
+  const desenho = useMemo(() => visiveis.map((elemento) => {
+    const camada = camadasPorId.get(elemento.camada);
+    return <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={selecionadosSet.has(elemento.id)} realceCor={realceCor}
+      cor={corNaTela(elemento.cor ?? camada?.cor ?? null, fundoEscuro)} tracejado={tracejadoPara(elemento.tipoLinha ?? camada?.tipoLinha, documento.escala)} />;
+  }), [visiveis, camadasPorId, selecionadosSet, fundoEscuro, realceCor, documento.escala]);
+  const camadasFiltradas = useMemo(() => {
+    const termo = filtroCamada.trim().toLowerCase();
+    return termo ? documento.camadas.filter((camada) => camada.nome.toLowerCase().includes(termo)) : documento.camadas;
+  }, [documento.camadas, filtroCamada]);
+
+  function alternarFundo() {
+    definirFundoEscuro((atual) => {
+      try { window.localStorage.setItem("hoikos-cad-fundo", atual ? "claro" : "escuro"); } catch { /* preferência só desta visita */ }
+      return !atual;
+    });
+  }
+
+  /** Liga ou desliga várias camadas de uma vez (todas, as filtradas ou todas menos uma). */
+  function visibilidadeEmLote(visivel: (camada: Camada) => boolean) {
+    if (!canEdit) return;
+    aplicar({ ...documento, camadas: documento.camadas.map((camada) => ({ ...camada, visivel: visivel(camada) })) });
+    definirSelecoes([]);
+  }
+
+  function apagarCamadaVazia(id: string) {
+    if (!canEdit || contagemPorCamada.get(id) || documento.camadas.length <= 1) return;
+    aplicar({ ...documento, camadas: documento.camadas.filter((camada) => camada.id !== id) });
+    if (camadaEscolhida === id) definirCamadaEscolhida("");
+  }
   const passoMalha = documento.malhaMm * (vista.largura > 40000 ? 10 : vista.largura > 12000 ? 5 : 1);
 
   return <div className={`prancheta space-y-4 ${fullPage ? "prancheta-ampla" : ""}`}>
@@ -990,6 +1100,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               const arquivo = evento.target.files?.[0] ?? null;
               evento.target.value = "";
               dxfEscolhido.current = arquivo;
+              arquivoDaBiblioteca.current = null;
               if (arquivo) void importar(arquivo, "");
             }} />
           <Button variant="outline" size="sm" onClick={() => arquivoDxf.current?.click()} disabled={importando}>
@@ -1026,7 +1137,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             onChange={(evento) => {
               const escolhida = evento.target.value;
               definirUnidadeImportacao(escolhida);
-              if (dxfEscolhido.current) void importar(dxfEscolhido.current, escolhida);
+              if (arquivoDaBiblioteca.current) void importar(null, escolhida);
+              else if (dxfEscolhido.current) void importar(dxfEscolhido.current, escolhida);
             }}>
             {Object.entries(UNIDADES_ROTULO).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
           </NativeSelect>
@@ -1034,7 +1146,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         <Button size="sm" onClick={aceitarImportacao} disabled={importando || !importado.elementos.length}>
           Colocar na prancha
         </Button>
-        <Button variant="outline" size="sm" onClick={() => { definirImportado(null); dxfEscolhido.current = null; }}>Descartar</Button>
+        <Button variant="outline" size="sm" onClick={() => { definirImportado(null); dxfEscolhido.current = null; arquivoDaBiblioteca.current = null; }}>Descartar</Button>
       </div>
       <p className="text-xs leading-5 text-hoikos-600">
         {importado.report?.format === "nexo" ? "Documento Nexo: coordenadas em milímetros, sem conversão de unidade." : importado.unidadeDeclarada
@@ -1050,14 +1162,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     <section aria-label="Linha de comando CAD" className="rounded-xl border border-hoikos-200 bg-hoikos-50 p-3 space-y-2">
       <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); executarComando(); }}>
         <Label htmlFor="cad-command">Comando CAD</Label>
-        <Input id="cad-command" list="cad-command-options" value={comando} onChange={(event) => definirComando(event.target.value)} disabled={!canEdit} autoComplete="off" placeholder="L 0,0 3000,0" className="min-w-60 flex-1 font-mono" />
+        <Input id="cad-command" list="cad-command-options" value={comando} onChange={(event) => definirComando(event.target.value)} disabled={!canEdit} autoComplete="off" placeholder="L 0,0 3000,0" className="min-w-0 flex-1 basis-48 font-mono" />
         <datalist id="cad-command-options">{CAD_COMMANDS.map((item) => <option key={item.alias} value={item.syntax}>{item.description}</option>)}</datalist>
         <Button type="submit" disabled={!canEdit || !comando.trim()}>Executar</Button>
       </form>
       <p role="status" aria-live="polite" className="text-xs">{mensagemComando}</p>
       <details className="text-xs"><summary className="cursor-pointer">Comandos e exemplos</summary><div className="grid gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-3">{CAD_COMMANDS.map((item) => <button key={item.alias} type="button" className="rounded border p-2 text-left" onClick={() => definirComando(item.syntax)} disabled={!canEdit}><code>{item.syntax}</code><span className="block pt-1">{item.description}</span></button>)}</div></details>
     </section>
-    <div className="prancheta-area grid gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
+    <div className="prancheta-area grid grid-cols-1 gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">
         <div className="grid grid-cols-4 gap-1 xl:grid-cols-3">
           {ferramentas.map((item) => <div key={item.id} className="relative">
@@ -1181,27 +1293,28 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             <Button variant="outline" size="sm" className="flex-1" onClick={enquadrar} aria-label="Enquadrar desenho"><Grid2x2 /></Button>
             <Button variant="outline" size="sm" className="flex-1" onClick={() => ampliar(0.8)} aria-label="Aproximar"><ZoomIn /></Button>
             <Button variant="outline" size="sm" className="flex-1" onClick={() => ampliar(1.25)} aria-label="Afastar"><ZoomOut /></Button>
+            <Button variant="outline" size="sm" className="flex-1" onClick={alternarFundo} aria-pressed={fundoEscuro} aria-label={fundoEscuro ? "Fundo claro" : "Fundo escuro"} title={fundoEscuro ? "Fundo claro" : "Fundo escuro, como no AutoCAD"}>{fundoEscuro ? <Sun /> : <Moon />}</Button>
           </div>
         </div>
       </aside>
 
-      <div className="prancheta-mesa overflow-hidden rounded-md border border-hoikos-200 bg-white">
+      <div className="prancheta-mesa self-start overflow-hidden rounded-md border border-hoikos-200 bg-white">
         <svg ref={svgRef} role="application" aria-label={`Prancha ${nome}`}
           viewBox={`${vista.x} ${vista.y} ${vista.largura} ${vista.largura * 0.62}`}
           className={fullPage ? "w-full touch-none" : "h-[min(70svh,640px)] w-full touch-none"}
-          style={fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : undefined}
+          style={{ ...(fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : {}), background: fundoEscuro ? "#1f2227" : "#ffffff", ["--traco-min" as string]: `${vista.largura / 900}px` } as CSSProperties}
           onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={() => { const gesto = arrastando.current ?? verticeArrastado.current; if (gesto?.mudou) { definirDocumento(gesto.documento); definirHistorico(h => h.slice(0, -1)); } arrastando.current = null; verticeArrastado.current = null; panorama.current = null; janelaRef.current = null; definirJanelaSelecao(null); definirPendentes([]); }} onPointerLeave={() => definirCursor(null)}
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
             <pattern id="prancheta-malha-padrao" width={passoMalha} height={passoMalha} patternUnits="userSpaceOnUse">
-              <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke="#B5B19E" strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
+              <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke={fundoEscuro ? "#4a4f57" : "#B5B19E"} strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
             </pattern>
           </defs>
           <rect x={vista.x} y={vista.y} width={vista.largura} height={vista.largura} fill="url(#prancheta-malha-padrao)" />
           {documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
-          {visiveis.map((elemento) => <DesenhoElemento key={elemento.id} elemento={elemento} selecionado={selecoes.includes(elemento.id)} minimumStroke={vista.largura / 800} />)}
+          {desenho}
           {janelaSelecao && <rect x={Math.min(janelaSelecao.a.x, janelaSelecao.b.x)} y={Math.min(janelaSelecao.a.y, janelaSelecao.b.y)} width={Math.abs(janelaSelecao.b.x - janelaSelecao.a.x)} height={Math.abs(janelaSelecao.b.y - janelaSelecao.a.y)} fill="#846100" fillOpacity={0.1} stroke="#846100" strokeWidth={vista.largura / 800} />}
           {ferramenta === "retangulo" && pendentes[0] && cursor && <rect x={Math.min(pendentes[0].x, cursor.x)} y={Math.min(pendentes[0].y, cursor.y)} width={Math.abs(pendentes[0].x - cursor.x)} height={Math.abs(pendentes[0].y - cursor.y)} fill="none" stroke="#846100" strokeWidth={vista.largura / 800} />}
           {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
@@ -1260,11 +1373,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               ? `raio ${metros(comprimentoM(pendentes[0], pendentes[1] ?? cursor))}`
               : metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
           </span>}
-          {canEdit && <form className="ml-auto flex items-center gap-2"
+          {canEdit && <form className="ml-auto flex min-w-0 max-w-full flex-1 items-center justify-end gap-2"
             onSubmit={(evento) => { evento.preventDefault(); confirmarEntrada(); }}>
             <Label htmlFor="prancheta-medida" className="text-xs">Medida</Label>
             <Input id="prancheta-medida" value={entrada} onChange={(evento) => definirEntrada(evento.target.value)}
-              placeholder="3150 · 3150<90 · @3000,1500" className="h-8 w-56 text-xs"
+              placeholder="3150 · 3150<90 · @3000,1500" className="h-8 w-full min-w-0 max-w-56 text-xs"
               disabled={!pendentes.length} />
             <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!pendentes.length || !entrada.trim()}>
               Aplicar
@@ -1275,7 +1388,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
       <aside className="prancheta-painel">
         <Tabs defaultValue="propriedades">
-          <TabsList>
+          <TabsList className="h-auto w-full flex-wrap">
             <TabsTrigger value="propriedades">Seleção</TabsTrigger>
             <TabsTrigger value="camadas">Camadas</TabsTrigger>
             <TabsTrigger value="quantitativo">Quantitativo</TabsTrigger>
@@ -1310,7 +1423,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             </section>}
 
             {!selecionado ? <p className="text-sm text-hoikos-500">{selecoes.length > 1 ? "Seleção múltipla ativa. Para editar propriedades individuais, selecione um único elemento." : "Nada selecionado."} Use a ferramenta de seleção e clique sobre um elemento do desenho.</p> : <>
-              <p className="eyebrow text-hoikos-600">{selecionado.tipo}</p>
+              <p className="eyebrow text-hoikos-600">{rotuloDoTipo[selecionado.tipo]} · {camadasPorId.get(selecionado.camada)?.nome ?? "sem camada"}</p>
               {"rotulo" in selecionado && <div className="space-y-1">
                 <Label htmlFor="prop-rotulo" className="text-xs">Rótulo</Label>
                 <Input id="prop-rotulo" value={selecionado.rotulo ?? ""} disabled={!canEdit}
@@ -1326,6 +1439,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-texto" className="text-xs">Texto</Label>
                 <Input id="prop-texto" value={selecionado.texto} disabled={!canEdit}
                   onChange={(evento) => trocar(selecionado.id, { texto: evento.target.value.slice(0, 500) || " " } as Partial<Elemento>)} />
+                <Label htmlFor="prop-alinhamento" className="text-xs">Alinhamento</Label>
+                <NativeSelect id="prop-alinhamento" value={selecionado.ancoraH ?? "inicio"} disabled={!canEdit}
+                  onChange={(evento) => trocar(selecionado.id, { ancoraH: evento.target.value === "inicio" ? undefined : evento.target.value } as Partial<Elemento>)}>
+                  <option value="inicio">À esquerda do ponto</option><option value="meio">Centrado no ponto</option><option value="fim">À direita do ponto</option>
+                </NativeSelect>
               </div>}
               {"larguraMm" in selecionado && <div className="space-y-1">
                 <Label htmlFor="prop-largura" className="text-xs">Largura (mm)</Label>
@@ -1380,6 +1498,23 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   {selecionado.varreduraGraus >= 360 ? "Círculo completo." : `Arco de ${selecionado.varreduraGraus}° a partir de ${selecionado.inicioGraus}°.`}
                 </p>
               </>}
+              {["traco", "arco", "parede", "texto", "hachura"].includes(selecionado.tipo) && <div className="grid grid-cols-[auto_1fr] items-center gap-2 border-t border-hoikos-200 pt-3">
+                <Label htmlFor="prop-cor" className="text-xs">Cor</Label>
+                <div className="flex items-center gap-2">
+                  <input id="prop-cor" type="color" value={selecionado.cor ?? camadasPorId.get(selecionado.camada)?.cor ?? "#1c190f"} disabled={!canEdit}
+                    onChange={(evento) => trocar(selecionado.id, { cor: evento.target.value } as Partial<Elemento>)} className="h-8 w-12 cursor-pointer rounded border" />
+                  {selecionado.cor && canEdit && <Button size="sm" variant="ghost" onClick={() => trocar(selecionado.id, { cor: undefined } as Partial<Elemento>)}>Da camada</Button>}
+                </div>
+                {(selecionado.tipo === "traco" || selecionado.tipo === "arco") && <>
+                  <Label htmlFor="prop-linha" className="text-xs">Linha</Label>
+                  <NativeSelect id="prop-linha" value={selecionado.tipoLinha ?? ""} disabled={!canEdit}
+                    onChange={(evento) => trocar(selecionado.id, { tipoLinha: evento.target.value || undefined } as Partial<Elemento>)}>
+                    <option value="">Da camada</option>
+                    {TIPOS_LINHA.map((tipo) => <option key={tipo} value={tipo}>{tipoLinhaLabels[tipo]}</option>)}
+                  </NativeSelect>
+                </>}
+              </div>}
+              {selecionado.tipo === "hachura" && <p className="text-xs text-hoikos-500">{selecionado.solida ? "Preenchimento sólido" : `Hachura${selecionado.padrao ? ` ${selecionado.padrao}` : ""}`} · {selecionado.aneis.length} contorno(s) · {metrosQuadrados(Math.abs(selecionado.aneis.reduce((soma, anel, i) => soma + (i === 0 ? 1 : -1) * areaM2(anel), 0)))}</p>}
               {selecionado.tipo === "cota" && <label className="text-xs">Afastamento da cota (mm)<Input type="number" step="any" value={selecionado.deslocamentoMm} disabled={!canEdit} onChange={e => { const v = Number(e.target.value); if (Number.isFinite(v)) trocar(selecionado.id, { deslocamentoMm: v }); }} /></label>}
               {selecionado.tipo === "parede" && <p className="text-xs text-hoikos-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
               {canEdit && <div className="space-y-2 border-t border-hoikos-200 pt-3">
@@ -1427,29 +1562,76 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               e.preventDefault(); const nome = novaCamada.trim(); if (!nome) return;
               const id = novoId();
               if (aplicar({ ...documento, camadas: [...documento.camadas, { id, nome, disciplina: "layout", visivel: true, bloqueada: false }] })) { definirNovaCamada(""); definirCamadaEscolhida(id); }
-            }}><Input aria-label="Nome da nova camada" maxLength={60} value={novaCamada} onChange={e => definirNovaCamada(e.target.value)} placeholder="Nova camada" /><Button type="submit" disabled={!novaCamada.trim() || documento.camadas.length >= 60}>Criar</Button></form>}
+            }}><Input aria-label="Nome da nova camada" maxLength={255} value={novaCamada} onChange={e => definirNovaCamada(e.target.value)} placeholder="Nova camada" /><Button type="submit" disabled={!novaCamada.trim() || documento.camadas.length >= LIMITE_CAMADAS}>Criar</Button></form>}
 
-            {documento.camadas.map((camada) => {
-              const quantos = documento.elementos.filter((elemento) => elemento.camada === camada.id).length;
-              return <div key={camada.id} className="flex items-center gap-2 rounded-md border border-hoikos-200 bg-white px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-hoikos-800">{camada.nome}</p>
-                  <p className="text-xs text-hoikos-500">{quantos} elemento{quantos === 1 ? "" : "s"}</p>
-                </div>
-                <button type="button" onClick={() => trocarCamada(camada.id, { visivel: !camada.visivel })}
-                  aria-label={`${camada.visivel ? "Esconder" : "Mostrar"} ${camada.nome}`}
-                  className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
-                  {camada.visivel ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
-                </button>
-                <button type="button" onClick={() => trocarCamada(camada.id, { bloqueada: !camada.bloqueada })}
-                  aria-label={`${camada.bloqueada ? "Destravar" : "Travar"} ${camada.nome}`}
-                  className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
-                  {camada.bloqueada ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
-                </button>
-              </div>;
-            })}
+            <div className="relative">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" />
+              <Input aria-label="Filtrar camadas pelo nome" value={filtroCamada} onChange={(e) => definirFiltroCamada(e.target.value)} placeholder={`Filtrar ${documento.camadas.length} camadas`} className="pl-8" />
+            </div>
+            <p className="text-xs text-hoikos-500">{documento.camadas.filter((c) => c.visivel).length} de {documento.camadas.length} visíveis{filtroCamada ? ` · ${camadasFiltradas.length} no filtro` : ""}</p>
+            {canEdit && <div className="flex flex-wrap gap-1">
+              <Button size="sm" variant="outline" onClick={() => visibilidadeEmLote(() => true)}><Eye />Mostrar todas</Button>
+              <Button size="sm" variant="outline" onClick={() => visibilidadeEmLote(() => false)}><EyeOff />Esconder todas</Button>
+              {filtroCamada && <Button size="sm" variant="outline" onClick={() => { const ids = new Set(camadasFiltradas.map((c) => c.id)); visibilidadeEmLote((c) => ids.has(c.id)); }}>Só as filtradas</Button>}
+            </div>}
+
+            <ul className="max-h-[60svh] space-y-1 overflow-y-auto pr-1">
+              {camadasFiltradas.map((camada) => {
+                const quantos = contagemPorCamada.get(camada.id) ?? 0;
+                return <li key={camada.id} className="rounded-md border border-hoikos-200 bg-white px-2 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <label className="relative grid size-6 shrink-0 place-items-center" title="Cor da camada">
+                      <span className="size-4 rounded-sm border border-hoikos-300" style={{ background: camada.cor ?? (fundoEscuro ? "#f2f0e8" : "#1C190F") }} />
+                      <input type="color" aria-label={`Cor da camada ${camada.nome}`} value={camada.cor ?? "#1c190f"} disabled={!canEdit}
+                        onChange={(e) => trocarCamada(camada.id, { cor: e.target.value })} className="absolute inset-0 cursor-pointer opacity-0" />
+                    </label>
+                    <div className="min-w-0 flex-1">
+                      {canEdit ? <input aria-label={`Nome da camada ${camada.nome}`} defaultValue={camada.nome} maxLength={255}
+                        onBlur={(e) => { const nome = e.target.value.trim(); if (nome && nome !== camada.nome) trocarCamada(camada.id, { nome }); else e.target.value = camada.nome; }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        className="w-full truncate rounded bg-transparent px-1 text-sm font-medium text-hoikos-800 focus:bg-hoikos-50 focus:outline-1" />
+                        : <p className="truncate text-sm font-medium text-hoikos-800" title={camada.nome}>{camada.nome}</p>}
+                      <p className="px-1 text-xs text-hoikos-500">{quantos.toLocaleString("pt-BR")} elemento{quantos === 1 ? "" : "s"}</p>
+                    </div>
+                    <button type="button" onClick={() => trocarCamada(camada.id, { visivel: !camada.visivel })}
+                      aria-label={`${camada.visivel ? "Esconder" : "Mostrar"} ${camada.nome}`} aria-pressed={camada.visivel}
+                      className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
+                      {camada.visivel ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
+                    </button>
+                    <button type="button" onClick={() => trocarCamada(camada.id, { bloqueada: !camada.bloqueada })}
+                      aria-label={`${camada.bloqueada ? "Destravar" : "Travar"} ${camada.nome}`} aria-pressed={camada.bloqueada}
+                      className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
+                      {camada.bloqueada ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
+                    </button>
+                  </div>
+                  <details className="mt-1 text-xs">
+                    <summary className="cursor-pointer px-1 text-hoikos-600">Mais opções</summary>
+                    <div className="mt-2 grid gap-2">
+                      <Label htmlFor={`linha-${camada.id}`} className="text-xs">Tipo de linha</Label>
+                      <NativeSelect id={`linha-${camada.id}`} value={camada.tipoLinha ?? "continua"} disabled={!canEdit}
+                        onChange={(e) => trocarCamada(camada.id, { tipoLinha: e.target.value === "continua" ? undefined : e.target.value as TipoLinha })}>
+                        {TIPOS_LINHA.map((tipo) => <option key={tipo} value={tipo}>{tipoLinhaLabels[tipo]}</option>)}
+                      </NativeSelect>
+                      <Label htmlFor={`disciplina-${camada.id}`} className="text-xs">Disciplina</Label>
+                      <NativeSelect id={`disciplina-${camada.id}`} value={camada.disciplina} disabled={!canEdit}
+                        onChange={(e) => trocarCamada(camada.id, { disciplina: e.target.value as Camada["disciplina"] })}>
+                        {DISCIPLINAS.map((d) => <option key={d} value={d}>{disciplinaLabels[d]}</option>)}
+                      </NativeSelect>
+                      <div className="flex flex-wrap gap-1">
+                        <Button size="sm" variant="outline" disabled={!quantos || !camada.visivel || camada.bloqueada}
+                          onClick={() => { definirFerramenta("selecionar"); definirSelecoes(documento.elementos.filter((e) => e.camada === camada.id).map((e) => e.id)); }}>Selecionar tudo</Button>
+                        <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => visibilidadeEmLote((c) => c.id === camada.id)}>Isolar</Button>
+                        {canEdit && !camada.cor ? null : canEdit && <Button size="sm" variant="ghost" onClick={() => trocarCamada(camada.id, { cor: undefined })}>Cor de tinta</Button>}
+                        {canEdit && !quantos && documento.camadas.length > 1 && <Button size="sm" variant="ghost" onClick={() => apagarCamadaVazia(camada.id)}><Trash2 />Apagar vazia</Button>}
+                      </div>
+                    </div>
+                  </details>
+                </li>;
+              })}
+            </ul>
             <p className="text-xs leading-5 text-hoikos-500">
               Esconder é visualização, não exclusão: a camada escondida sai da tela e do arquivo exportado, e continua contando no quantitativo.
+              Camadas vindas do DWG trazem cor, tipo de linha e o estado que tinham no arquivo.
             </p>
           </TabsContent>
 

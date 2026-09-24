@@ -3,6 +3,8 @@ import "./globals.css";
 import "./hoikos-polish.css";
 import "./hoikos-workspaces.css";
 
+import { Toaster } from "@/components/ui/sonner";
+
 export const metadata: Metadata = {
   title: "H.OIKOS | Ecossistema para arquitetos",
   description:
@@ -27,7 +29,9 @@ export default function RootLayout({
         <link rel="preload" href="/fonts/ador-hairline-light.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
         <meta name="theme-color" content="#1C190F" />
       </head>
-      <body>{children}</body>
+      {/* Avisos em todas as páginas: o Editor CAD e a página de projeto abrem fora do
+          aplicativo principal, e sem isto seus erros e confirmações não apareciam. */}
+      <body>{children}<Toaster position="bottom-right" /></body>
     </html>
   );
 }

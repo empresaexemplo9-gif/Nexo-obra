@@ -239,14 +239,14 @@ test("todo elemento devolvido passa pelo esquema da prancha", () => {
 
 test("entidade que o leitor não conhece é contada e dita pelo nome", () => {
   const resultado = lerDxf(arquivo(secao("ENTITIES",
-    ["0", "HATCH", "8", "0", "10", "0", "20", "0"],
-    ["0", "HATCH", "8", "0", "10", "0", "20", "0"],
-    ["0", "SPLINE", "8", "0", "10", "0", "20", "0"],
+    ["0", "REGION", "8", "0", "70", "1"],
+    ["0", "REGION", "8", "0", "70", "1"],
+    ["0", "3DSOLID", "8", "0", "70", "1"],
     linha(0, 0, 1000, 0),
   )), { unidade: "mm" });
-  assert.equal(resultado.ignorados.HATCH, 2);
-  assert.equal(resultado.ignorados.SPLINE, 1);
-  assert.match(resultado.avisos.join(" "), /2 × HATCH/);
+  assert.equal(resultado.ignorados.REGION, 2);
+  assert.equal(resultado.ignorados["3DSOLID"], 1);
+  assert.match(resultado.avisos.join(" "), /2 × REGION/);
   assert.equal(tracos(resultado).length, 1, "o que dava para ler foi lido mesmo assim");
 });
 
@@ -258,10 +258,10 @@ test("arquivo sem geometria diz isso em vez de abrir uma prancha muda", () => {
 
 test("desenho grande demais é cortado com o corte declarado", () => {
   const muitas = [];
-  for (let i = 0; i < 6100; i += 1) muitas.push(linha(i, 0, i + 1, 0));
-  const resultado = lerDxf(arquivo(secao("ENTITIES", muitas)), { unidade: "mm" });
+  for (let i = 0; i < 130; i += 1) muitas.push(linha(i, 0, i + 1, 0));
+  const resultado = lerDxf(arquivo(secao("ENTITIES", muitas)), { unidade: "mm", limiteElementos: 100 });
   assert.equal(resultado.truncado, true);
-  assert.equal(resultado.elementos.length, 6000);
+  assert.equal(resultado.elementos.length, 100);
   assert.match(resultado.avisos.join(" "), /cortado/i);
 });
 
@@ -297,4 +297,187 @@ test("a versão do DWG é lida do cabeçalho, para a mensagem dizer qual arquivo
   assert.equal(versaoDoDwg(dwg("AC1099")).nome, "versão não catalogada");
   assert.equal(versaoDoDwg(dwg("%PDF-1")), null);
   assert.equal(versaoDoDwg(new Uint8Array([1, 2])), null);
+});
+
+// ## Leitura completa de DWG/DXF: camadas, blocos transformados e entidades de planta real
+
+const tabelaDeCamadas = (...camadas) => secao("TABLES", "0", "TABLE", "2", "LAYER", "70", String(camadas.length), ...camadas.flat(), "0", "ENDTAB");
+const camadaDxf = (nome, cor, { flags = 0, linha = "CONTINUOUS", rgb } = {}) =>
+  ["0", "LAYER", "2", nome, "70", String(flags), "62", String(cor), "6", linha, ...(rgb !== undefined ? ["420", String(rgb)] : [])];
+
+test("todas as camadas da tabela entram, inclusive vazias, com cor, tipo de linha e estado", () => {
+  const resultado = lerDxf(arquivo(
+    tabelaDeCamadas(
+      camadaDxf("0", 7),
+      camadaDxf("A-PAREDE", 1),
+      camadaDxf("A-EIXO", 4, { linha: "CENTER" }),
+      camadaDxf("HIDDEN-LINES", 3, { linha: "HIDDEN" }),
+      camadaDxf("DESLIGADA", -2),
+      camadaDxf("CONGELADA", 5, { flags: 1 }),
+      camadaDxf("TRAVADA", 6, { flags: 4 }),
+      camadaDxf("RGB", 7, { rgb: 0x3366cc }),
+      camadaDxf("VAZIA", 30),
+    ),
+    secao("ENTITIES", linha(0, 0, 1000, 0, "A-PAREDE")),
+  ), { unidade: "mm" });
+  const porNome = Object.fromEntries(resultado.camadas.map((c) => [c.nome, c]));
+  assert.deepEqual(resultado.camadas.map((c) => c.nome), ["0", "A-PAREDE", "A-EIXO", "HIDDEN-LINES", "DESLIGADA", "CONGELADA", "TRAVADA", "RGB", "VAZIA"]);
+  assert.equal(porNome["0"].cor, undefined, "cor 7 é a tinta, que muda com o fundo");
+  assert.equal(porNome["A-PAREDE"].cor, "#ff0000");
+  assert.equal(porNome["A-EIXO"].tipoLinha, "traco-ponto");
+  assert.equal(porNome["HIDDEN-LINES"].tipoLinha, "tracejada");
+  assert.equal(porNome.DESLIGADA.visivel, false);
+  assert.equal(porNome.CONGELADA.visivel, false);
+  assert.equal(porNome.TRAVADA.bloqueada, true);
+  assert.equal(porNome.RGB.cor, "#3366cc");
+  assert.ok(porNome.VAZIA.cor, "a camada vazia vem com a cor da paleta");
+  assert.match(resultado.avisos.join(" "), /2 camada\(s\) vieram desligadas ou congeladas/);
+});
+
+test("bloco inserido com giro e escala sai no lugar e no tamanho certos", () => {
+  const resultado = lerDxf(arquivo(
+    secao("BLOCKS", "0", "BLOCK", "2", "PECA", "10", "0", "20", "0", linha(0, 0, 100, 0, "PECAS"), "0", "ENDBLK"),
+    secao("ENTITIES", ["0", "INSERT", "8", "0", "2", "PECA", "10", "1000", "20", "0", "41", "2", "42", "2", "50", "90"]),
+  ), { unidade: "mm" });
+  assert.deepEqual(tracos(resultado)[0].pontos, [{ x: 1000, y: 0 }, { x: 1000, y: -200 }]);
+});
+
+test("bloco espelhado (escala negativa) mantém o arco como arco, virado para o outro lado", () => {
+  const resultado = lerDxf(arquivo(
+    secao("BLOCKS", "0", "BLOCK", "2", "PORTA", "10", "0", "20", "0",
+      ["0", "ARC", "8", "0", "10", "0", "20", "0", "40", "800", "50", "0", "51", "90"], "0", "ENDBLK"),
+    secao("ENTITIES", ["0", "INSERT", "8", "ESQUADRIAS", "2", "PORTA", "10", "0", "20", "0", "41", "-1", "42", "1"]),
+  ), { unidade: "mm" });
+  const [arco] = resultado.elementos.filter((e) => e.tipo === "arco");
+  assert.equal(arco.raioMm, 800);
+  assert.equal(arco.inicioGraus, 90);
+  assert.equal(arco.varreduraGraus, 90);
+  assert.equal(resultado.camadas.find((c) => c.id === arco.camada).nome, "ESQUADRIAS", "o que está na camada 0 herda a camada do INSERT");
+});
+
+test("arco com extrusão invertida (espelhado no AutoCAD) entra do lado certo", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES",
+    ["0", "ARC", "8", "0", "10", "100", "20", "0", "40", "50", "50", "0", "51", "90", "210", "0", "220", "0", "230", "-1"])), { unidade: "mm" });
+  const [arco] = resultado.elementos.filter((e) => e.tipo === "arco");
+  assert.deepEqual(arco.centro, { x: -100, y: 0 });
+  assert.equal(arco.inicioGraus, 90);
+  assert.equal(arco.varreduraGraus, 90);
+});
+
+test("polilinha antiga (POLYLINE com VERTEX) não perde os vértices", () => {
+  const vertice = (x, y) => ["0", "VERTEX", "8", "0", "10", String(x), "20", String(y)];
+  const resultado = lerDxf(arquivo(secao("ENTITIES",
+    ["0", "POLYLINE", "8", "0", "66", "1", "10", "0", "20", "0", "70", "1"],
+    vertice(0, 0), vertice(3000, 0), vertice(3000, 2000), vertice(0, 2000),
+    ["0", "SEQEND", "8", "0"],
+  )), { unidade: "mm" });
+  assert.deepEqual(tracos(resultado)[0].pontos, [{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: -2000 }, { x: 0, y: -2000 }, { x: 0, y: 0 }]);
+});
+
+test("trecho curvo de polilinha (bulge) vira curva, não reta", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES", [
+    "0", "LWPOLYLINE", "8", "0", "90", "2", "70", "0", "10", "0", "20", "0", "42", "1", "10", "1000", "20", "0",
+  ])), { unidade: "mm" });
+  const pontos = tracos(resultado)[0].pontos;
+  assert.ok(pontos.length > 10);
+  assert.ok(pontos.some((p) => Math.abs(p.x - 500) < 0.01 && Math.abs(p.y - 500) < 0.01), "o meio do semicírculo passa a 500 mm da corda, do lado certo");
+});
+
+test("cor por bloco herda do INSERT e cor própria só aparece quando difere da camada", () => {
+  const resultado = lerDxf(arquivo(
+    tabelaDeCamadas(camadaDxf("0", 7), camadaDxf("MOB", 3)),
+    secao("BLOCKS", "0", "BLOCK", "2", "CAMA", "10", "0", "20", "0",
+      ["0", "LINE", "8", "0", "62", "0", "10", "0", "20", "0", "11", "10", "21", "0"],
+      ["0", "LINE", "8", "0", "10", "0", "20", "10", "11", "10", "21", "10"],
+      "0", "ENDBLK"),
+    secao("ENTITIES", ["0", "INSERT", "8", "MOB", "62", "1", "2", "CAMA", "10", "0", "20", "0"]),
+  ), { unidade: "mm" });
+  const [porBloco, porCamada] = tracos(resultado);
+  assert.equal(porBloco.cor, "#ff0000");
+  assert.equal(porCamada.cor, undefined, "por camada segue a camada");
+  assert.equal(resultado.camadas.find((c) => c.id === porCamada.camada).nome, "MOB");
+});
+
+test("texto alinhado ao centro usa o ponto de alinhamento e a âncora", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES",
+    ["0", "TEXT", "8", "0", "10", "0", "20", "0", "40", "200", "1", "SALA", "72", "1", "11", "2000", "21", "1000", "73", "2"])), { unidade: "mm" });
+  const [texto] = resultado.elementos.filter((e) => e.tipo === "texto");
+  assert.deepEqual(texto.posicao, { x: 2000, y: -1000 });
+  assert.equal(texto.ancoraH, "meio");
+  assert.equal(texto.ancoraV, "meio");
+});
+
+test("MTEXT em várias linhas vira uma linha por texto, com acentos e símbolos", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES", [
+    "0", "MTEXT", "8", "0", "10", "0", "20", "0", "40", "100", "71", "1",
+    "1", "{\\fArial|b0;\\U+00C1REA ÚTIL}\\PPISO %%c10\\P\\S1/2;",
+  ])), { unidade: "mm" });
+  const textos = resultado.elementos.filter((e) => e.tipo === "texto");
+  assert.deepEqual(textos.map((t) => t.texto), ["ÁREA ÚTIL", "PISO Ø10", "1/2"]);
+  assert.ok(textos.every((t) => t.ancoraV === "topo"));
+  assert.ok(textos[1].posicao.y > textos[0].posicao.y, "a segunda linha fica abaixo da primeira");
+});
+
+test("hachura sólida vira área preenchida com o contorno do arquivo", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES", [
+    "0", "HATCH", "8", "PILARES", "10", "0", "20", "0", "30", "0", "2", "SOLID", "70", "1", "71", "0", "91", "1",
+    "92", "2", "72", "0", "73", "1", "93", "4", "10", "0", "20", "0", "10", "200", "20", "0", "10", "200", "20", "300", "10", "0", "20", "300",
+    "97", "0", "75", "0", "76", "1", "98", "1", "10", "100", "20", "100",
+  ])), { unidade: "mm" });
+  const [area] = resultado.elementos.filter((e) => e.tipo === "hachura");
+  assert.equal(area.solida, true);
+  assert.deepEqual(area.aneis, [[{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: -300 }, { x: 0, y: -300 }]]);
+});
+
+test("spline, elipse e sólido entram como geometria", () => {
+  const resultado = lerDxf(arquivo(secao("ENTITIES",
+    ["0", "SPLINE", "8", "0", "70", "8", "71", "2", "72", "6", "73", "3", "40", "0", "40", "0", "40", "0", "40", "1", "40", "1", "40", "1",
+      "10", "0", "20", "0", "10", "500", "20", "1000", "10", "1000", "20", "0"],
+    ["0", "ELLIPSE", "8", "0", "10", "0", "20", "0", "11", "1000", "21", "0", "40", "0.5", "41", "0", "42", String(2 * Math.PI)],
+    ["0", "SOLID", "8", "0", "10", "0", "20", "0", "11", "100", "21", "0", "12", "0", "22", "100", "13", "100", "23", "100"],
+  )), { unidade: "mm" });
+  const [spline, elipse] = tracos(resultado);
+  assert.deepEqual(spline.pontos[0], { x: 0, y: 0 });
+  assert.deepEqual(spline.pontos.at(-1), { x: 1000, y: 0 });
+  assert.ok(spline.pontos.some((p) => Math.abs(p.x - 500) < 1 && Math.abs(p.y + 500) < 1), "o meio da parábola passa a 500 mm");
+  assert.ok(elipse.pontos.some((p) => Math.abs(p.y + 500) < 1) && elipse.pontos.some((p) => Math.abs(p.x - 1000) < 1));
+  const [solido] = resultado.elementos.filter((e) => e.tipo === "hachura");
+  assert.deepEqual(solido.aneis[0], [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: -100 }, { x: 0, y: -100 }], "a ordem 1-2-4-3 do SOLID vira o quadrado");
+});
+
+test("cota é desenhada pelo bloco do próprio arquivo, e o espaço de papel fica de fora", () => {
+  const resultado = lerDxf(arquivo(
+    secao("BLOCKS", "0", "BLOCK", "2", "*D1", "10", "0", "20", "0", linha(0, 500, 3000, 500), "0", "ENDBLK"),
+    secao("ENTITIES",
+      ["0", "DIMENSION", "8", "COTAS", "2", "*D1", "10", "0", "20", "500", "13", "0", "23", "0", "14", "3000", "24", "0"],
+      ["0", "LINE", "8", "0", "67", "1", "10", "0", "20", "0", "11", "1", "21", "1"]),
+  ), { unidade: "mm" });
+  const [cota] = tracos(resultado);
+  assert.deepEqual(cota.pontos, [{ x: 0, y: -500 }, { x: 3000, y: -500 }]);
+  assert.equal(resultado.camadas.find((c) => c.id === cota.camada).nome, "COTAS");
+  assert.match(resultado.avisos.join(" "), /espaço de papel/);
+});
+
+test("arquivo com todas as camadas desenhadas desligadas entra visível, com aviso", () => {
+  const resultado = lerDxf(arquivo(
+    tabelaDeCamadas(camadaDxf("0", -7), camadaDxf("PAREDES", -1)),
+    secao("ENTITIES", linha(0, 0, 1000, 0, "PAREDES")),
+  ), { unidade: "mm" });
+  assert.ok(resultado.camadas.every((c) => c.visivel));
+  assert.match(resultado.avisos.join(" "), /todas as camadas com desenho como desligadas/);
+});
+
+test("a paleta do AutoCAD dá as cores certas, e a 7 é a tinta", async () => {
+  const { corAci, aciMaisProximo, corVerdadeira } = await vite.ssrLoadModule("/lib/cad-cores.ts");
+  assert.equal(corAci(1), "#ff0000");
+  assert.equal(corAci(7), null);
+  assert.equal(corAci(10), "#ff0000");
+  assert.equal(corAci(11), "#ff8080");
+  assert.equal(corAci(30), "#ff8000");
+  assert.equal(corAci(12), "#a50000");
+  assert.equal(corAci(250), "#333333");
+  assert.equal(aciMaisProximo("#ff0000"), 1);
+  assert.equal(aciMaisProximo(null), 7);
+  assert.equal(corVerdadeira(0x3366cc), "#3366cc");
+  assert.equal(corVerdadeira(0xffffff), null);
 });

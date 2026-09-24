@@ -8,6 +8,7 @@ import { ArrowLeft, CircleAlert, LoaderCircle } from "lucide-react";
 import { PranchetaEditor, type Prancha } from "@/components/prancheta-editor";
 import { useUsageHeartbeat } from "@/components/usage-workspace";
 import { Button } from "@/components/ui/button";
+import { CABECALHO_ACEITA, JSON_GZIP, jsonDaResposta } from "@/lib/compressao";
 
 type Session = {
   authenticated?: boolean;
@@ -15,7 +16,7 @@ type Session = {
   terms?: { accepted: boolean };
 };
 
-export function PranchetaStandalone({ drawingId }: { drawingId: string }) {
+export function PranchetaStandalone({ drawingId, importar = null }: { drawingId: string; importar?: { id: string; nome: string } | null }) {
   const [prancha, definirPrancha] = useState<Prancha | null>(null);
   const [canEdit, definirCanEdit] = useState(false);
   const [carregando, definirCarregando] = useState(true);
@@ -33,8 +34,8 @@ export function PranchetaStandalone({ drawingId }: { drawingId: string }) {
         if (!sessaoResposta.ok || !sessao.authenticated) throw new Error("Entre na H.OIKOS para abrir esta prancha.");
         if (sessao.terms && !sessao.terms.accepted) throw new Error("Aceite os termos na H.OIKOS antes de abrir a prancha.");
         if (!sessao.member?.permissions?.studio?.view) throw new Error("Seu acesso não permite ver esta prancha.");
-        const resposta = await fetch(`/api/studio/${drawingId}`, { cache: "no-store" });
-        const corpo = await resposta.json() as { prancha?: Prancha; error?: string };
+        const resposta = await fetch(`/api/studio/${drawingId}`, { cache: "no-store", headers: { [CABECALHO_ACEITA]: JSON_GZIP } });
+        const corpo = await jsonDaResposta<{ prancha?: Prancha; error?: string }>(resposta);
         if (!resposta.ok || !corpo.prancha) throw new Error(corpo.error ?? "Não foi possível abrir a prancha.");
         if (!ativa) return;
         definirCanEdit(Boolean(sessao.member.permissions.studio.edit));
@@ -60,6 +61,6 @@ export function PranchetaStandalone({ drawingId }: { drawingId: string }) {
 
   return <main className="prancheta-autonoma min-h-svh bg-hoikos-50 p-3 sm:p-4">
     <PranchetaEditor prancha={prancha} canEdit={canEdit} onVoltar={voltar}
-      onSalvo={(atualizada) => definirPrancha(atualizada)} fullPage />
+      onSalvo={(atualizada) => definirPrancha(atualizada)} fullPage importarDaBiblioteca={importar} />
   </main>;
 }

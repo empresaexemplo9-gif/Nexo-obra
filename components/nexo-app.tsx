@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   BellRing,
   DraftingCompass,
+  PencilRuler,
   MessagesSquare,
   Sofa,
   BookOpenText,
@@ -52,6 +53,7 @@ import { CrmWorkspace } from "@/components/crm-workspace";
 import { ScheduleWorkspace } from "@/components/schedule-workspace";
 import { FilesWorkspace } from "@/components/files-workspace";
 import { PranchetaWorkspace } from "@/components/prancheta/prancheta-workspace";
+import { PranchetaWorkspace as EditorCadWorkspace } from "@/components/prancheta-workspace";
 import { ComunicacaoWorkspace } from "@/components/comunicacao/comunicacao-workspace";
 import { LayoutWorkspace } from "@/components/layout/layout-workspace";
 import { Button } from "@/components/ui/button";
@@ -109,9 +111,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Toaster } from "@/components/ui/sonner";
 
-type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders" | "prancheta" | "comunicacao" | "layout";
+type ModuleId = "overview" | "projects" | "works" | "budgets" | "schedule" | "diary" | "portal" | "crm" | "finance" | "team" | "tasks" | "files" | "usage" | "sheets" | "reminders" | "prancheta" | "studio" | "comunicacao" | "layout";
 type CreateKind = "client" | "project" | "task";
 
 type Organization = { id: string; name: string; slug: string; timezone: string; role?: string };
@@ -174,6 +175,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
   sheets: { title: "Planilha e documento", description: "Cálculo sobre os dados reais da empresa." },
   reminders: { title: "Lembretes do dia", description: "Cobranças, boletos, follow-ups, prazos e metas." },
   prancheta: { title: "Prancheta", description: "Abrir, converter e compartilhar arquivos de projeto." },
+  studio: { title: "Editor CAD", description: "Desenho técnico em camadas: planta, elétrico, luminotécnico e interiores. Importa DWG e DXF com todas as camadas." },
   comunicacao: { title: "Comunicação", description: "Mensagens, arquivos e lembretes da equipe." },
   layout: { title: "Criador de layout", description: "Planta com móveis e veículos e prévia 3D para a proposta." },
 };
@@ -181,7 +183,7 @@ const moduleTitles: Record<ModuleId, { title: string; description: string }> = {
 const modulePermissionMap: Record<ModuleId, PermissionModule> = {
   overview: "overview", projects: "projects", works: "projects", budgets: "budgets",
   schedule: "schedule", diary: "diary", portal: "portal", crm: "crm", finance: "finance", team: "team", tasks: "tasks", files: "files",
-  usage: "overview", sheets: "overview", reminders: "overview", prancheta: "studio", comunicacao: "overview", layout: "studio",
+  usage: "overview", sheets: "overview", reminders: "overview", prancheta: "studio", studio: "studio", comunicacao: "overview", layout: "studio",
 };
 // Conversar com a própria equipe não depende de módulo: toda pessoa da empresa usa.
 const alwaysVisibleModules: ModuleId[] = ["usage", "sheets", "reminders", "comunicacao"];
@@ -412,7 +414,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
       setLoadErrors(errors); setLoading(false);
   }, [canView, startRequest]);
   useEffect(() => { const timer = window.setTimeout(() => { void loadData(); }, 0); return () => window.clearTimeout(timer); }, [loadData, session.organization?.id]);
-  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "prancheta", "layout", "comunicacao", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
+  useEffect(() => { if (!canView(activeModule)) { const first = (["overview", "projects", "works", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "prancheta", "studio", "layout", "comunicacao", "usage", "sheets", "reminders"] as ModuleId[]).find(canView); const timer = window.setTimeout(() => { if (first) setActiveModule(first); }, 0); return () => window.clearTimeout(timer); } }, [activeModule, canView]);
 
   async function switchOrganization(organizationId: string) { try { await requestJson("/api/session", { method: "POST", body: JSON.stringify({ organizationId }) }); await reloadSession(); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível trocar de empresa."); } }
   // "Nova obra" abre o formulário já como obra: antes vinha como projeto e a obra criada
@@ -427,7 +429,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const activeProjects = projects.filter((project) => project.status === "active");
   const canCreateAny = canEdit("projects") || canEdit("crm") || canEdit("tasks");
   const navSections = ([
-    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }, { id: "prancheta", label: "Prancheta", icon: DraftingCompass }, { id: "layout", label: "Criador de layout", icon: Sofa }, { id: "comunicacao", label: "Comunicação", icon: MessagesSquare, badge: unreadMessages || undefined }] },
+    { label: "Trabalho", items: [{ id: "overview", label: "Visão geral", icon: LayoutDashboard }, { id: "reminders", label: "Lembretes do dia", icon: BellRing, badge: pending || undefined }, { id: "projects", label: "Projetos", icon: FolderKanban, badge: projects.filter((p) => p.kind === "project").length }, { id: "works", label: "Obras", icon: Building2, badge: projects.filter((p) => p.kind === "work").length }, { id: "budgets", label: "Orçamentos", icon: Calculator }, { id: "schedule", label: "Cronograma", icon: CalendarRange }, { id: "prancheta", label: "Prancheta", icon: DraftingCompass }, { id: "studio", label: "Editor CAD", icon: PencilRuler }, { id: "layout", label: "Criador de layout", icon: Sofa }, { id: "comunicacao", label: "Comunicação", icon: MessagesSquare, badge: unreadMessages || undefined }] },
     { label: "Negócio", items: [{ id: "crm", label: "CRM e clientes", icon: Target, badge: clients.length }, { id: "portal", label: "Portal do cliente", icon: ShieldCheck }, { id: "finance", label: "Financeiro", icon: WalletCards }, { id: "team", label: "Equipe", icon: Users, badge: members.length }] },
     { label: "Organização", items: [{ id: "diary", label: "Diário de obra", icon: BookOpenText }, { id: "tasks", label: "Tarefas", icon: ListChecks, badge: tasks.filter((t) => t.status !== "done").length }, { id: "files", label: "Arquivos", icon: Files }, { id: "sheets", label: "Planilha e documento", icon: Sigma }, { id: "usage", label: "Tempo de uso", icon: Clock }] },
   ] satisfies { label: string; items: { id: ModuleId; label: string; icon: LucideIcon; badge?: number }[] }[]).map((section) => ({ ...section, items: section.items.filter((item) => canView(item.id)) })).filter((section) => section.items.length);
@@ -435,7 +437,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
   const dependencies: Partial<Record<ModuleId, (keyof typeof loadErrors)[]>> = {
     overview: ["clients", "projects", "tasks", "members"], projects: ["projects"], works: ["projects"],
     crm: ["clients"], tasks: ["tasks"], schedule: ["tasks"], team: ["members", "tasks"],
-    files: ["projects"], prancheta: ["projects"], layout: ["projects"], finance: ["projects"], budgets: ["projects"],
+    files: ["projects"], prancheta: ["projects"], studio: ["projects"], layout: ["projects"], finance: ["projects"], budgets: ["projects"],
   };
   const error = (dependencies[activeModule] ?? []).map(key => loadErrors[key]).filter(Boolean).join(" ");
   const content = loading ? <Card><Empty className="min-h-72 border-0"><LoaderCircle className="size-7 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando dados da empresa…</p></Empty></Card> : error ? <HonestEmpty icon={CircleAlert} title="Não foi possível carregar" description={error} action={loadData} actionLabel="Tentar novamente" /> : (() => {
@@ -481,6 +483,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "schedule") return <ScheduleWorkspace projects={projects} tasks={tasks} query={query} canEdit={canEdit("schedule") && canEdit("tasks")} onChanged={loadData} />;
     if (activeModule === "files") return <FilesWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("files")} />;
     if (activeModule === "prancheta") return <PranchetaWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("prancheta")} />;
+    if (activeModule === "studio") return <div className="space-y-5"><PageIntro module="studio" /><EditorCadWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("studio")} /></div>;
     if (activeModule === "layout") return <LayoutWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("layout")} empresa={session.organization?.name ?? ""} />;
     if (activeModule === "comunicacao") return <ComunicacaoWorkspace key={session.organization?.id} canUseLibrary={canView("prancheta")} onUnread={setUnreadMessages} />;
     if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
@@ -500,7 +503,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     <Sidebar collapsible="icon" className="nexo-sidebar border-r-0"><SidebarHeader className="p-3.5"><div className="group-data-[collapsible=icon]:hidden"><Brand variant="lockup" dark className="w-[186px]" /></div><div className="hidden group-data-[collapsible=icon]:block"><Brand variant="symbol" dark className="w-7" /></div><div className="mt-2 group-data-[collapsible=icon]:hidden"><Select value={session.organization?.id} onValueChange={(value) => void switchOrganization(value)}><SelectTrigger aria-label="Empresa atual" className="hoikos-company-select h-10 w-full text-left"><SelectValue /></SelectTrigger><SelectContent>{session.organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select></div></SidebarHeader><SidebarSeparator /><SidebarContent className="px-1 py-2">{navSections.map((section) => <SidebarGroup key={section.label}><SidebarGroupLabel className="text-xs uppercase tracking-[0.16em] text-hoikos-500">{section.label}</SidebarGroupLabel><SidebarGroupContent><SidebarMenu>{section.items.map((item) => <SidebarMenuItem key={item.id}><SidebarMenuButton tooltip={item.label} isActive={activeModule === item.id} onClick={() => setActiveModule(item.id)} className="h-10 rounded-lg text-hoikos-300 data-[active=true]:bg-hoikos-300 data-[active=true]:text-hoikos-950 hover:bg-white/[0.07] hover:text-white"><item.icon /><span>{item.label}</span></SidebarMenuButton>{item.badge ? <SidebarMenuBadge className={activeModule === item.id ? "text-hoikos-950" : "text-hoikos-500"}>{item.badge}</SidebarMenuBadge> : null}</SidebarMenuItem>)}</SidebarMenu></SidebarGroupContent></SidebarGroup>)}</SidebarContent><SidebarSeparator /><SidebarFooter className="p-3"><SidebarMenu>{session.member?.role === "owner" ? <SidebarMenuItem><SidebarMenuButton onClick={() => setCompanyOpen(true)} tooltip="Nova empresa" className="text-hoikos-300 hover:text-white"><Building2 /><span>Nova empresa</span></SidebarMenuButton></SidebarMenuItem> : null}<SidebarMenuItem><SidebarMenuButton size="lg" tooltip="Conta" className="text-hoikos-300 hover:text-white"><span className="grid size-9 place-items-center rounded-full bg-hoikos-300 text-xs font-semibold text-hoikos-950">{session.user?.displayName.slice(0, 2).toUpperCase()}</span><span className="min-w-0"><span className="block truncate text-sm font-medium text-white">{session.user?.displayName}</span><span className="block truncate text-xs text-hoikos-500">{roleLabels[session.member?.role ?? ""] ?? session.member?.role}</span></span></SidebarMenuButton></SidebarMenuItem><SidebarMenuItem>{session.authMethod === "superadmin" ? <SidebarMenuButton asChild tooltip="Painel da plataforma" className="text-hoikos-300 hover:text-white"><a href="/superadmin"><ShieldCheck /><span>Painel da plataforma</span></a></SidebarMenuButton> : session.authMethod === "maintenance" ? <SidebarMenuButton onClick={() => void logoutMaintenance()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton> : <SidebarMenuButton onClick={() => void logoutAccount()} tooltip="Sair" className="text-hoikos-500 hover:text-white"><LogOut /><span>Sair</span></SidebarMenuButton>}</SidebarMenuItem></SidebarMenu></SidebarFooter><SidebarRail /></Sidebar>
     <SidebarInset><header className="nexo-header sticky top-0 z-20 flex h-[4.5rem] items-center gap-3 border-b border-border px-4 sm:px-6"><SidebarTrigger className="size-10 rounded-md border border-hoikos-200 bg-white" /><p className="hidden text-sm font-semibold text-hoikos-700 sm:block">{moduleTitles[activeModule].title}</p>{(session.maintenanceEnvironment ?? session.authMethod === "maintenance") ? <Badge className="hidden border-hoikos-200 bg-hoikos-50 text-hoikos-800 sm:inline-flex">Ambiente de manutenção</Badge> : null}{session.authMethod === "superadmin" ? <Badge className="border-hoikos-800 bg-hoikos-900 text-white">Superadmin · acesso total</Badge> : null}<div className="mx-auto w-full max-w-md sm:ml-auto sm:mr-0"><div className="relative"><Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" /><Input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Buscar nesta empresa" placeholder="Buscar nesta empresa…" className="h-10 rounded-md bg-white pl-10" /></div></div><ReminderBell pending={pending} onOpen={() => setActiveModule("reminders")} />{canCreateAny ? <Button size="sm" aria-label="Criar" onClick={() => openCreate(canEdit("projects") ? "project" : canEdit("crm") ? "client" : "task")} className="rounded-md"><Plus /><span className="hidden sm:inline">Criar</span></Button> : null}</header><main data-module={activeModule} className="nexo-canvas min-h-[calc(100svh-4.5rem)] p-4 sm:p-6 lg:p-8"><div className="hoikos-workspace-content mx-auto max-w-[1480px]">{content}</div></main></SidebarInset>
     <QuickCreate key={`${quickKind}-${quickProjectKind}-${quickOpen}`} projectKind={quickProjectKind} open={quickOpen} onOpenChange={setQuickOpen} projects={projects} clients={clients} initialKind={quickKind} allowedKinds={allowedKinds} onCreated={loadData} />
-    <Dialog open={companyOpen} onOpenChange={setCompanyOpen}><DialogContent><DialogHeader><DialogTitle>Nova empresa</DialogTitle><DialogDescription>Crie outro ambiente totalmente separado dos dados atuais.</DialogDescription></DialogHeader><OrganizationForm embedded onCreated={async () => { setCompanyOpen(false); await reloadSession(); }} /></DialogContent></Dialog><Toaster position="bottom-right" />
+    <Dialog open={companyOpen} onOpenChange={setCompanyOpen}><DialogContent><DialogHeader><DialogTitle>Nova empresa</DialogTitle><DialogDescription>Crie outro ambiente totalmente separado dos dados atuais.</DialogDescription></DialogHeader><OrganizationForm embedded onCreated={async () => { setCompanyOpen(false); await reloadSession(); }} /></DialogContent></Dialog>
   </SidebarProvider>;
 }
 

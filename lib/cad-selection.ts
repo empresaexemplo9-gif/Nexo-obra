@@ -5,7 +5,7 @@ import type { Ponto } from "@/lib/prancheta-cad";
 const GROUP_COMMANDS = new Set(["M", "MOVE", "CO", "COPY", "RO", "ROTATE", "SC", "SCALE", "MI", "MIRROR", "O", "OFFSET", "AR", "ARRAY", "AP", "ARRAYPOLAR", "E", "ERASE", "J", "CLOSE"]);
 
 /** Uma operação em grupo só é entregue depois que TODOS os elementos foram validados. */
-export function executarNaSelecao(documento: Documento, input: string, ids: readonly string[], novoId?: () => string) {
+export function executarNaSelecao(documento: Documento, input: string, ids: readonly string[], novoId?: () => string, camada?: string) {
   const command = input.trim().split(/\s+/)[0].toUpperCase();
   const grupo = GROUP_COMMANDS.has(command);
   if (!grupo && ids.length > 1 && ["TR", "TRIM", "EX", "EXTEND"].includes(command)) throw new Error("Apare ou estenda um elemento por vez.");
@@ -15,7 +15,7 @@ export function executarNaSelecao(documento: Documento, input: string, ids: read
   const selecionados: string[] = [];
   let mensagem = "";
   for (const id of alvos) {
-    const result = executeCadCommand(proximo, input, id, novoId);
+    const result = executeCadCommand(proximo, input, id, novoId, camada);
     proximo = result.document;
     if (result.selectedId) selecionados.push(result.selectedId);
     mensagem = result.message;

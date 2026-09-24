@@ -61,22 +61,39 @@ function transformed(element: Elemento, matrix: Matrix, factor = 1, angle = 0): 
   if (element.tipo === "cota") return { ...element, a: p(element.a), b: p(element.b), deslocamentoMm: element.deslocamentoMm * factor };
   if (element.tipo === "traco" || element.tipo === "comodo") return { ...element, pontos: element.pontos.map(p) };
   if (element.tipo === "arco") return { ...element, centro: p(element.centro), raioMm: element.raioMm * factor, inicioGraus: rotationOf(element.inicioGraus) };
+  if (element.tipo === "hachura") return { ...element, aneis: element.aneis.map((anel) => anel.map(p)) };
+  if (element.tipo === "texto") return { ...element, posicao: p(element.posicao), alturaMm: element.alturaMm * factor, rotacaoGraus: ((element.rotacaoGraus - angle) % 360 + 360) % 360 };
   const result = { ...element, posicao: p(element.posicao), rotacaoGraus: ((element.rotacaoGraus - angle) % 360 + 360) % 360 };
   if ("larguraMm" in result) result.larguraMm *= factor;
   if ("alturaMm" in result) result.alturaMm *= factor;
   return result;
 }
+/** Camada onde o comando desenha: a escolhida na tela, se existir e estiver livre; senão a
+ *  padrão do tipo de desenho; senão a primeira livre. Desenho vindo de DWG não tem as
+ *  camadas "layout" e "anotacao", e o comando falhava sem dizer por quê. */
+function camadaDoComando(document: Documento, preferida: string | undefined, padrao: string) {
+  const livre = (id: string | undefined) => {
+    const camada = id ? document.camadas.find((c) => c.id === id) : undefined;
+    return camada && camada.visivel && !camada.bloqueada ? camada.id : null;
+  };
+  if (preferida && document.camadas.some((c) => c.id === preferida) && !livre(preferida)) throw new Error("A camada escolhida está travada ou oculta.");
+  if (!preferida && document.camadas.some((c) => c.id === padrao) && !livre(padrao)) throw new Error("A camada de destino está bloqueada ou oculta.");
+  return livre(preferida) ?? livre(padrao) ?? document.camadas.find((c) => c.visivel && !c.bloqueada)?.id ?? preferida ?? padrao;
+}
+
 type Result = { document: Documento; message: string; selectedId: string | null };
 export function executeCadCommand(input: string, context: CadCommandContext): Result;
-export function executeCadCommand(document: Documento, input: string, selectedId: string | null, id?: () => string): Result;
-export function executeCadCommand(documentOrInput: Documento | string, inputOrContext: string | CadCommandContext, selectedId: string | null = null, id: () => string = () => crypto.randomUUID()): Result {
+export function executeCadCommand(document: Documento, input: string, selectedId: string | null, id?: () => string, camada?: string): Result;
+export function executeCadCommand(documentOrInput: Documento | string, inputOrContext: string | CadCommandContext, selectedId: string | null = null, id: () => string = () => crypto.randomUUID(), camadaEscolhida?: string): Result {
   if (typeof documentOrInput === "string") return executeLegacy(documentOrInput, inputOrContext as CadCommandContext);
   const document = documentOrInput;
   const input = inputOrContext as string;
+  const desenho = () => camadaDoComando(document, camadaEscolhida, "layout");
+  const anotacao = () => camadaDoComando(document, camadaEscolhida, "anotacao");
   const [raw, ...args] = input.trim().split(/\s+/);
   if (["TR", "TRIM", "EX", "EXTEND"].includes(raw.toUpperCase())) {
     if (args.length < 2 || args.length > 3) throw new Error("Use TR/EX x1,y1 x2,y2 [ponto].");
-    return executeLegacy(input, { document, selectedId, layerId: "layout", createId: id });
+    return executeLegacy(input, { document, selectedId, layerId: camadaEscolhida ?? "layout", createId: id });
   }
   if (["RO", "ROTATE", "SC", "SCALE"].includes(raw.toUpperCase()) && args[0]?.includes(",")) args.reverse();
   const command = CAD_COMMANDS.find((c) => c.alias === raw.toUpperCase() || c.name === raw.toUpperCase());
@@ -94,8 +111,8 @@ export function executeCadCommand(documentOrInput: Documento | string, inputOrCo
   const requireArgs = (count: number) => { if (args.length !== count) throw new Error(`Use: ${command.syntax}`); };
   const newId = id();
   switch (command.alias) {
-    case "REC": { requireArgs(2); const a = point(args[0]), b = point(args[1], a); if (a.x === b.x || a.y === b.y) throw new Error("O retângulo precisa de largura e altura."); added = { id: newId, camada: "layout", tipo: "traco", pontos: [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }, a], espessuraMm: 1 }; break; }
-    case "A": { requireArgs(4); const start = ((number(args[2]) % 360) + 360) % 360; added = { id: newId, camada: "layout", tipo: "arco", centro: point(args[0]), raioMm: number(args[1]), inicioGraus: start, varreduraGraus: number(args[3]), espessuraMm: 1 }; break; }
+    case "REC": { requireArgs(2); const a = point(args[0]), b = point(args[1], a); if (a.x === b.x || a.y === b.y) throw new Error("O retângulo precisa de largura e altura."); added = { id: newId, camada: desenho(), tipo: "traco", pontos: [a, { x: b.x, y: a.y }, b, { x: a.x, y: b.y }, a], espessuraMm: 1 }; break; }
+    case "A": { requireArgs(4); const start = ((number(args[2]) % 360) + 360) % 360; added = { id: newId, camada: desenho(), tipo: "arco", centro: point(args[0]), raioMm: number(args[1]), inicioGraus: start, varreduraGraus: number(args[3]), espessuraMm: 1 }; break; }
     case "EL": case "POL": {
       requireArgs(3);
       const polygon = command.alias === "POL";
@@ -104,7 +121,7 @@ export function executeCadCommand(documentOrInput: Documento | string, inputOrCo
       const count = polygon ? number(args[0]) : 128;
       if (rx <= 0 || ry <= 0 || !Number.isInteger(count) || count < 3 || count > 1000) throw new Error("Raios positivos e 3 a 1000 lados são necessários.");
       const points = Array.from({ length: count }, (_, i) => ({ x: center.x + rx * Math.cos(2 * Math.PI * i / count), y: center.y - ry * Math.sin(2 * Math.PI * i / count) }));
-      added = { id: newId, camada: "layout", tipo: "traco", pontos: [...points, points[0]], espessuraMm: 1 }; break;
+      added = { id: newId, camada: desenho(), tipo: "traco", pontos: [...points, points[0]], espessuraMm: 1 }; break;
     }
     case "AR": {
       requireArgs(4); const e = requireSelection(); const columns = number(args[0]), rows = number(args[1]), dx = number(args[2]), dy = number(args[3]);
@@ -124,12 +141,12 @@ export function executeCadCommand(documentOrInput: Documento | string, inputOrCo
       if (args.length < 2 || (command.alias === "L" && args.length !== 2)) throw new Error(`Use: ${command.syntax}`);
       const points: Point[] = [];
       for (const arg of args) points.push(point(arg, points.at(-1)));
-      added = { id: newId, camada: "layout", tipo: "traco", pontos: points, espessuraMm: 1 };
+      added = { id: newId, camada: desenho(), tipo: "traco", pontos: points, espessuraMm: 1 };
       break;
     }
-    case "C": requireArgs(2); added = { id: newId, camada: "layout", tipo: "arco", centro: point(args[0]), raioMm: number(args[1]), inicioGraus: 0, varreduraGraus: 360, espessuraMm: 1 }; break;
-    case "DIM": { requireArgs(3); const a = point(args[0]); added = { id: newId, camada: "anotacao", tipo: "cota", a, b: point(args[1], a), deslocamentoMm: number(args[2]) }; break; }
-    case "T": if (args.length < 3) throw new Error(`Use: ${command.syntax}`); added = { id: newId, camada: "anotacao", tipo: "texto", posicao: point(args[0]), alturaMm: number(args[1]), texto: args.slice(2).join(" "), rotacaoGraus: 0 }; break;
+    case "C": requireArgs(2); added = { id: newId, camada: desenho(), tipo: "arco", centro: point(args[0]), raioMm: number(args[1]), inicioGraus: 0, varreduraGraus: 360, espessuraMm: 1 }; break;
+    case "DIM": { requireArgs(3); const a = point(args[0]); added = { id: newId, camada: anotacao(), tipo: "cota", a, b: point(args[1], a), deslocamentoMm: number(args[2]) }; break; }
+    case "T": if (args.length < 3) throw new Error(`Use: ${command.syntax}`); added = { id: newId, camada: anotacao(), tipo: "texto", posicao: point(args[0]), alturaMm: number(args[1]), texto: args.slice(2).join(" "), rotacaoGraus: 0 }; break;
     case "M": case "CO": { requireArgs(1); const e = requireSelection(); const delta = point(args[0], { x: 0, y: 0 }); const moved = transformed(e, [1, 0, 0, 1, delta.x, delta.y]); if (command.alias === "M") changed = moved; else added = { ...moved, id: newId }; break; }
     case "RO": { requireArgs(2); const e = requireSelection(); const angle = number(args[0]); changed = transformed(e, rotation(angle, point(args[1])), 1, angle); break; }
     case "SC": { requireArgs(2); const e = requireSelection(); const factor = number(args[0]); changed = transformed(e, scaling(factor, point(args[1])), factor); break; }

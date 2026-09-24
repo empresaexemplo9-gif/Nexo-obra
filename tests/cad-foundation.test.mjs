@@ -122,7 +122,7 @@ test("Invalid native versions, missing layers and foreign media are rejected", a
   await assert.rejects(registry.import(bytes(JSON.stringify(foreign))), /privadas/);
   await assert.rejects(registry.import(bytes(JSON.stringify({ ...envelope, document: { ...doc, elementos: [{ ...doc.elementos[0], camada: "missing" }] } }))), /sem camada/);
   await assert.rejects(registry.import(new Uint8Array()), /vazio/);
-  await assert.rejects(registry.import(new Uint8Array(formats.MAX_CAD_BYTES + 1)), /12 MB/);
+  await assert.rejects(registry.import(new Uint8Array(formats.MAX_CAD_BYTES + 1)), /60 MB/);
   await assert.rejects(registry.import(bytes("<svg onload='evil()'></svg>")), /não reconhecido/);
 });
 test("DXF content and DWG conversion share the import report pipeline", async () => {

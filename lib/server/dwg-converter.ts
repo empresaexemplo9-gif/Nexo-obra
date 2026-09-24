@@ -2,6 +2,7 @@ import { runtimeEnv as platformEnv } from "@/lib/server/runtime";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import { convertDwgToDxf } from "dwg2dxf-converter";
 
 type DwgRuntimeEnv = {
@@ -93,6 +94,38 @@ async function converterRemotamente(bytes: Uint8Array, url: string, token?: stri
 }
 
 /**
+ * O LibreDWG em WebAssembly tem um estouro de memória ao ler DWG de 2007 em diante: com
+ * o heap ainda no tamanho inicial, a leitura invade a área estática do módulo e o DXF sai
+ * com lixo (nomes de variável e de entidade corrompidos, 7 MB no lugar de 600 kB). Com
+ * folga no heap o estouro cai em memória livre e a conversão sai correta, repetidas vezes.
+ * A folga é reservada uma vez por instância, antes da primeira conversão.
+ */
+let motorPreparado: Promise<void> | null = null;
+function prepararMotor() {
+  motorPreparado ??= (async () => {
+    const exigir = createRequire(import.meta.url);
+    const { loadWasm } = exigir("dwg2dxf-converter/lib/wasm-loader") as { loadWasm: () => Promise<{ _malloc(bytes: number): number; _free(ponteiro: number): void }> };
+    const motor = await loadWasm();
+    const ponteiro = motor._malloc(64 * 1024 * 1024);
+    if (ponteiro) motor._free(ponteiro);
+  })().catch((erro) => { motorPreparado = null; throw erro; });
+  return motorPreparado;
+}
+
+/**
+ * Confere que o DXF gerado é texto de DXF: cabeçalho com variáveis `$NOME` legíveis e
+ * nomes de entidade em maiúsculas. Um DXF corrompido nunca é entregue como se fosse o
+ * desenho — melhor dizer que a conversão falhou.
+ */
+export function dxfParecePerfeito(bytes: Uint8Array) {
+  const inicio = new TextDecoder("latin1").decode(bytes.subarray(0, 200_000));
+  const variaveis = [...inicio.matchAll(/\n\s*9\s*\r?\n([^\r\n]*)/g)].map((m) => m[1]).slice(0, 40);
+  if (!variaveis.length || variaveis.some((nome) => !/^\$[A-Z0-9_]+$/.test(nome))) return false;
+  const entidades = [...inicio.matchAll(/\n\s*0\s*\r?\n([^\r\n]*)/g)].map((m) => m[1]).slice(0, 400);
+  return entidades.every((nome) => /^[A-Z0-9_{}*]+$/.test(nome.trim()));
+}
+
+/**
  * Converte dentro da própria função usando LibreDWG em WebAssembly. O diretório temporário
  * é exclusivo por pedido e sempre removido; nenhum desenho do cliente fica persistido no
  * servidor. O serviço HTTP continua opcional para instalações que prefiram isolar a carga.
@@ -103,6 +136,7 @@ async function converterLocalmente(bytes: Uint8Array): Promise<Uint8Array> {
   const destino = join(pasta, "saida.dxf");
   try {
     await writeFile(origem, bytes);
+    await prepararMotor();
     const resultado = await convertDwgToDxf(origem, destino, { timeout: TIMEOUT_MS });
     if (!resultado.success) {
       throw new DwgConversaoFalhou(resultado.error?.trim() || "O arquivo DWG é inválido ou usa recursos não suportados.");
@@ -112,6 +146,10 @@ async function converterLocalmente(bytes: Uint8Array): Promise<Uint8Array> {
     }
     const dxf = await readFile(destino);
     if (!dxf.byteLength) throw new DwgConversaoFalhou("O conversor DWG devolveu uma resposta vazia.");
+    if (!dxfParecePerfeito(new Uint8Array(dxf))) {
+      // O motor ficou num estado ruim: a próxima conversão começa de uma instância nova.
+      throw new DwgConversaoFalhou("A conversão deste DWG saiu corrompida. Tente de novo; se repetir, exporte como DXF no programa de origem.");
+    }
     if (dxf.byteLength > MAX_OUTPUT_BYTES) throw new DwgConversaoFalhou("A conversão DWG excedeu o limite de 48 MB.");
     return new Uint8Array(dxf);
   } catch (erro) {

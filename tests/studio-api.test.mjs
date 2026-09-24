@@ -439,3 +439,40 @@ test("o desenho importado pode ser gravado sem o servidor recusar nenhum element
   assert.equal(aberta.prancha.documento.elementos.length, 1);
   assert.equal(aberta.prancha.documento.camadas.length, 6);
 });
+
+test("desenho grande vai e volta comprimido e o banco guarda comprimido", async () => {
+  const { comprimirJson, descomprimirJson, JSON_GZIP, CABECALHO_CONTEUDO, CABECALHO_ACEITA } = await vite.ssrLoadModule("/lib/compressao.ts");
+  const criada = await criar();
+  const base = documentoVazio();
+  // 60 mil traços: o JSON passa de 4,5 MB, o teto de corpo das funções do Vercel.
+  const elementos = Array.from({ length: 60000 }, (_, i) => ({ id: `t${i}`, camada: "layout", tipo: "traco", espessuraMm: 10, pontos: [{ x: i * 10.25, y: 0 }, { x: i * 10.25, y: 3000.5 }] }));
+  const documento = { ...base, elementos };
+  assert.ok(JSON.stringify(documento).length > 4.5 * 1024 * 1024);
+  const corpo = await comprimirJson({ documento, revisao: 1 });
+  assert.ok(corpo.byteLength < 1.5 * 1024 * 1024, `comprimido ficou com ${corpo.byteLength} bytes`);
+  const salva = await prancha.PUT(pedido(`/api/studio/${criada.id}`, {
+    method: "PUT", body: corpo, headers: { [CABECALHO_CONTEUDO]: JSON_GZIP, [CABECALHO_ACEITA]: JSON_GZIP, "content-type": "application/octet-stream" },
+  }), parametros(criada.id));
+  assert.equal(salva.status, 200);
+  assert.equal(salva.headers.get(CABECALHO_CONTEUDO), JSON_GZIP);
+  const resposta = await descomprimirJson(new Uint8Array(await salva.arrayBuffer()), 64 * 1024 * 1024);
+  assert.equal(resposta.prancha.documento.elementos.length, 60000);
+  const guardado = db.sqlite.prepare("SELECT documento FROM studio_drawings WHERE id = ?").get(criada.id).documento;
+  assert.ok(guardado.startsWith("gz:") && guardado.length < 2 * 1024 * 1024, "a linha do banco guarda o desenho comprimido");
+  // Sem pedir compressão, a leitura continua JSON comum.
+  const aberta = await prancha.GET(pedido(`/api/studio/${criada.id}`), parametros(criada.id));
+  assert.equal(aberta.headers.get(CABECALHO_CONTEUDO), null);
+  const lida = await aberta.json();
+  assert.deepEqual(lida.prancha.documento.elementos[59999].pontos, [{ x: 59999 * 10.25, y: 0 }, { x: 59999 * 10.25, y: 3000.5 }]);
+});
+
+test("corpo comprimido que se expande além do limite é recusado", async () => {
+  const { JSON_GZIP, CABECALHO_CONTEUDO } = await vite.ssrLoadModule("/lib/compressao.ts");
+  const criada = await criar();
+  const enorme = new Uint8Array(100 * 1024 * 1024).fill(32);
+  const bomba = new Uint8Array(await new Response(new Blob([enorme]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+  const resposta = await prancha.PUT(pedido(`/api/studio/${criada.id}`, {
+    method: "PUT", body: bomba, headers: { [CABECALHO_CONTEUDO]: JSON_GZIP, "content-type": "application/octet-stream" },
+  }), parametros(criada.id));
+  assert.equal(resposta.status, 413);
+});

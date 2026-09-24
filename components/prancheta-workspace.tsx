@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CircleAlert, DraftingCompass, Files, Image as Icone, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { CircleAlert, DraftingCompass, FileInput, Files, Image as Icone, LoaderCircle, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { enviarEAbrirNoEditorCad } from "@/lib/cad-abrir-client";
 
 type Projeto = { id: string; code: string; name: string };
 
@@ -138,9 +139,9 @@ function Biblioteca({ canEdit }: { canEdit: boolean }) {
             {enviando ? <LoaderCircle className="animate-spin" /> : <Upload />}Enviar para a biblioteca
           </Button>
           <p className="mt-2 text-xs leading-5 text-hoikos-500">
-            Imagem (PNG, JPEG, WebP, AVIF) entra na prancha. PDF, DWG e DXF ficam guardados como anexo para consulta e download:
-            não existe leitor livre confiável de DWG, e abrir errado uma planta é pior do que dizer que não abre.
-            A medida real é o que faz o móvel ocupar na planta o espaço que ocupa na sala.
+            Imagem (PNG, JPEG, WebP, AVIF) entra na prancha como mobiliário, textura ou fundo de traçado. Para editar um DWG ou DXF,
+            use Importar DWG ou DXF: ele entra como desenho, com todas as camadas. A medida real é o que faz o móvel ocupar na planta
+            o espaço que ocupa na sala.
           </p>
         </div>
       </form>
@@ -185,6 +186,8 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
   const [criando, definirCriando] = useState(false);
   const [dialogoAberto, definirDialogoAberto] = useState(false);
   const [erro, definirErro] = useState("");
+  const [importando, definirImportando] = useState<number | null>(null);
+  const arquivoCad = useRef<HTMLInputElement | null>(null);
 
   const recarregar = useCallback(async () => {
     definirCarregando(true); definirErro("");
@@ -237,6 +240,18 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
     }
   }
 
+  async function importarCad(arquivo: File) {
+    if (!/\.(dwg|dxf)$/i.test(arquivo.name)) { toast.error("Escolha um arquivo DWG ou DXF."); return; }
+    definirImportando(0);
+    try {
+      await enviarEAbrirNoEditorCad(arquivo, null, (fracao) => definirImportando(fracao));
+      toast.success("O editor abriu em outra aba e está lendo o desenho. Confira a unidade e coloque na prancha.");
+      await recarregar();
+    } catch (causa) {
+      toast.error(causa instanceof Error ? causa.message : "Não foi possível importar o arquivo.");
+    } finally { definirImportando(null); }
+  }
+
   async function apagar(prancha: Resumo) {
     if (!window.confirm(`Apagar a prancha "${prancha.nome}"? O desenho não pode ser recuperado.`)) return;
     try {
@@ -259,9 +274,16 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
     <div className="flex flex-wrap items-center justify-between gap-3">
       <TabsList>
         <TabsTrigger value="pranchas">Pranchas</TabsTrigger>
-        <TabsTrigger value="biblioteca">Biblioteca</TabsTrigger>
+        <TabsTrigger value="biblioteca">Imagens do editor</TabsTrigger>
       </TabsList>
-      {canEdit && <Button onClick={() => definirDialogoAberto(true)}><Plus />Nova prancha</Button>}
+      {canEdit && <div className="flex flex-wrap gap-2">
+        <input ref={arquivoCad} type="file" accept=".dwg,.dxf" className="sr-only" aria-label="Arquivo DWG ou DXF para importar"
+          onChange={(evento) => { const arquivo = evento.target.files?.[0]; evento.target.value = ""; if (arquivo) void importarCad(arquivo); }} />
+        <Button variant="outline" onClick={() => arquivoCad.current?.click()} disabled={importando !== null}>
+          {importando !== null ? <LoaderCircle className="animate-spin" /> : <FileInput />}{importando !== null ? `Enviando ${Math.round(importando * 100)}%` : "Importar DWG ou DXF"}
+        </Button>
+        <Button onClick={() => definirDialogoAberto(true)}><Plus />Nova prancha</Button>
+      </div>}
     </div>
 
     <TabsContent value="pranchas" className="space-y-4">
@@ -271,7 +293,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
             <EmptyTitle>{pranchas.length ? "Nenhuma prancha encontrada" : "Nenhuma prancha nesta empresa"}</EmptyTitle>
             <EmptyDescription>{pranchas.length
               ? "Nenhuma prancha corresponde à busca. Limpe o campo de busca para ver todas."
-              : "Comece uma planta do zero ou suba a planta existente como fundo de traçado na biblioteca."}</EmptyDescription></EmptyHeader>
+              : "Comece uma planta do zero ou importe um DWG ou DXF: todas as camadas entram editáveis."}</EmptyDescription></EmptyHeader>
             {canEdit && !pranchas.length && <EmptyContent><Button onClick={() => definirDialogoAberto(true)}><Plus />Criar a primeira prancha</Button></EmptyContent>}
           </Empty></Card>
         : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -288,9 +310,9 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
             <p className="text-xs text-hoikos-500">
               Revisão {prancha.revisao} · {dataCurta(prancha.atualizadoEm)}{prancha.autor ? ` · ${prancha.autor}` : ""}
             </p>
-            <div className="flex gap-2">
-              <Button size="sm" asChild><a href={`/prancheta/${prancha.id}`} target="_blank" rel="noopener noreferrer">
-                <DraftingCompass />Abrir editor em outra aba
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" asChild><a href={`/prancheta/${prancha.id}`} target="_blank" rel="noopener noreferrer" aria-label={`Abrir ${prancha.nome} no editor, em outra aba`}>
+                <DraftingCompass />Abrir no editor
               </a></Button>
               {canEdit && <Button variant="outline" size="sm" onClick={() => void apagar(prancha)} aria-label={`Apagar ${prancha.nome}`}><Trash2 /></Button>}
             </div>

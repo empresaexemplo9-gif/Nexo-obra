@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   ArrowLeft, Box, Download, File, FileImage, FileSpreadsheet, FileText, FileVideo, LoaderCircle, MessageSquareShare,
-  PenTool, RefreshCw, Trash2, Upload,
+  PenTool, RefreshCw, Trash2, Upload, DraftingCompass,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ import { VisualizadorArquivo } from "@/components/prancheta/visualizador-arquivo
 import type { ControleVisualizador, OpcoesConversao } from "@/components/prancheta/tipos";
 import { CONVERSION_LABELS, MAX_ORG_FILE_LABEL, sizeLabel } from "@/lib/org-files";
 import { checkBeforeUpload, downloadAndSave, saveBlob, uploadOrgFile, type OrgFileInfo } from "@/lib/org-files-client";
+import { abrirNoEditorCad } from "@/lib/cad-abrir-client";
 import { CONVERSOES, FORMATOS_ACEITOS_RESUMO, conversoesPara, visualizadorPara, type Conversao } from "@/lib/prancheta-formatos";
 import { FOLHAS, type Folha } from "@/lib/prancheta-desenho";
 
@@ -154,6 +155,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => void baixar(aberto)} disabled={baixando === aberto.id}>{baixando === aberto.id ? <LoaderCircle className="animate-spin" /> : <Download />}Baixar original</Button>
           <Button size="sm" variant="outline" onClick={() => setCompartilhar(aberto)}><MessageSquareShare />Enviar numa conversa</Button>
+          {canEdit && ["dwg", "dxf"].includes(aberto.extension) ? <Button size="sm" variant="outline" onClick={() => void abrirNoEditorCad(aberto).catch((causa) => toast.error(causa instanceof Error ? causa.message : "Não foi possível abrir no Editor CAD."))}><DraftingCompass />Editar no Editor CAD</Button> : null}
         </div>
       </div>
       {disponiveis.length ? <div className="flex flex-wrap items-center gap-2" aria-label="Converter">

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { corNaTela, TIPOS_LINHA, tracejadoPara } from "@/lib/cad-cores";
+
 // Prancheta: desenho técnico e composição de projeto dentro da plataforma.
 //
 // Duas decisões moldam tudo aqui.
@@ -42,9 +44,12 @@ const coordenada = z.number().finite().min(-2_000_000_000).max(2_000_000_000);
 const ponto = z.object({ x: coordenada, y: coordenada }).strict();
 const idSchema = z.string().min(1).max(64);
 
+const corHex = z.string().regex(/^#[0-9a-f]{6}$/i);
+
 // Cada elemento carrega a camada a que pertence. Sem isso não há como ligar e desligar
-// disciplina, que é a razão de a ferramenta existir.
-const base = { id: idSchema, camada: idSchema };
+// disciplina, que é a razão de a ferramenta existir. Cor e tipo de linha próprios são
+// opcionais: sem eles vale o da camada, como o "por camada" do AutoCAD.
+const base = { id: idSchema, camada: idSchema, cor: corHex.optional(), tipoLinha: z.enum(TIPOS_LINHA).optional() };
 
 export const elementoSchema = z.discriminatedUnion("tipo", [
   // Parede: o traço estrutural. A espessura entra no desenho porque o arquiteto cota a
@@ -58,7 +63,14 @@ export const elementoSchema = z.discriminatedUnion("tipo", [
   // Mobília e imagem: o interior. `chave` aponta para o arquivo cifrado no armazenamento.
   z.object({ ...base, tipo: z.literal("mobilia"), posicao: ponto, larguraMm: mm.min(10).max(50000), alturaMm: mm.min(10).max(50000), rotacaoGraus: z.number().finite().min(0).lt(360), rotulo: z.string().max(60), chave: z.string().max(400).optional() }).strict(),
   z.object({ ...base, tipo: z.literal("imagem"), posicao: ponto, larguraMm: mm.min(10).max(200000), alturaMm: mm.min(10).max(200000), rotacaoGraus: z.number().finite().min(0).lt(360), chave: z.string().min(1).max(400), rotulo: z.string().max(60).optional() }).strict(),
-  z.object({ ...base, tipo: z.literal("texto"), posicao: ponto, texto: z.string().min(1).max(500), alturaMm: mm.min(10).max(5000), rotacaoGraus: z.number().finite().min(0).lt(360) }).strict(),
+  // Âncora: onde a posição fica no texto. Sem âncora, é o começo da linha de base — o
+  // padrão do TEXT do AutoCAD. Texto centrado ou alinhado à direita no DWG entra no lugar
+  // certo só com ela.
+  z.object({
+    ...base, tipo: z.literal("texto"), posicao: ponto, texto: z.string().min(1).max(500), alturaMm: mm.min(0.5).max(50000),
+    rotacaoGraus: z.number().finite().min(0).lt(360),
+    ancoraH: z.enum(["inicio", "meio", "fim"]).optional(), ancoraV: z.enum(["base", "meio", "topo"]).optional(),
+  }).strict(),
   z.object({ ...base, tipo: z.literal("cota"), a: ponto, b: ponto, deslocamentoMm: mm.min(-5000).max(5000) }).strict(),
   z.object({ ...base, tipo: z.literal("traco"), pontos: z.array(ponto).min(2).max(2000), espessuraMm: mm.min(1).max(200) }).strict(),
   // Arco guardado por centro, raio, ângulo de partida e VARREDURA — não por ângulo final.
@@ -72,15 +84,28 @@ export const elementoSchema = z.discriminatedUnion("tipo", [
     varreduraGraus: z.number().finite().gt(0).max(360),
     espessuraMm: mm.min(1).max(1000),
   }).strict(),
+  // Hachura: área preenchida, com furos (anéis internos pela regra par-ímpar). Sólida é a
+  // pintura cheia (pilar, parede em corte); com padrão, é o tom do padrão sobre a área.
+  z.object({
+    ...base, tipo: z.literal("hachura"),
+    aneis: z.array(z.array(ponto).min(3).max(4000)).min(1).max(200),
+    solida: z.boolean(), padrao: z.string().max(40).optional(),
+  }).strict(),
 ]);
 export type Elemento = z.infer<typeof elementoSchema>;
 
+export const LIMITE_CAMADAS = 1000;
+export const LIMITE_ELEMENTOS = 80_000;
+
 export const camadaSchema = z.object({
   id: idSchema,
-  nome: z.string().min(1).max(60),
+  nome: z.string().min(1).max(255),
   disciplina: z.enum(DISCIPLINAS),
   visivel: z.boolean(),
   bloqueada: z.boolean(),
+  /** Cor da camada; sem cor é a tinta (preta no papel, branca no fundo escuro). */
+  cor: corHex.optional(),
+  tipoLinha: z.enum(TIPOS_LINHA).optional(),
 }).strict();
 export type Camada = z.infer<typeof camadaSchema>;
 
@@ -92,8 +117,10 @@ export const documentoSchema = z.object({
   escala: z.number().int().min(1).max(5000),
   // Malha de encaixe em milímetros. 100 mm = 10 cm, o passo com que se desenha planta.
   malhaMm: mm.min(1).max(10000),
-  camadas: z.array(camadaSchema).min(1).max(60),
-  elementos: z.array(elementoSchema).max(20000),
+  // Um DWG de arquitetura tem centenas de camadas e dezenas de milhares de entidades
+  // depois de explodidos os blocos; os limites cabem uma planta real inteira.
+  camadas: z.array(camadaSchema).min(1).max(LIMITE_CAMADAS),
+  elementos: z.array(elementoSchema).max(LIMITE_ELEMENTOS),
   // Fundo de traçado: PDF ou imagem por cima do qual se desenha. O DWG fica como anexo,
   // porque não existe leitor livre confiável do formato — fingir que abre seria pior.
   fundo: z.object({ chave: z.string().min(1).max(400), nome: z.string().max(200), larguraMm: mm, alturaMm: mm, opacidade: z.number().int().min(5).max(100) }).nullable(),
@@ -260,53 +287,72 @@ export function moverElemento(elemento: Elemento, dx: number, dy: number, malhaM
     case "arco":
       // Mover o arco é mover o centro: raio e ângulos são a forma dele, não o lugar.
       return { ...elemento, centro: p(elemento.centro) };
+    case "hachura":
+      return { ...elemento, aneis: elemento.aneis.map((anel) => anel.map(p)) };
     default:
       return { ...elemento, posicao: p(elemento.posicao) };
   }
 }
 
+type Caixa = { x1: number; y1: number; x2: number; y2: number };
+
+/** Caixa de uma lista de pontos, sem espalhar a lista como argumentos: `Math.min(...)`
+ *  estoura a pilha numa hachura de milhares de vértices. */
+function caixaDePontos(pontos: Iterable<{ x: number; y: number }>): Caixa {
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  for (const p of pontos) {
+    if (p.x < x1) x1 = p.x; if (p.x > x2) x2 = p.x;
+    if (p.y < y1) y1 = p.y; if (p.y > y2) y2 = p.y;
+  }
+  return { x1, y1, x2, y2 };
+}
+
+function* pontosDosAneis(aneis: { x: number; y: number }[][]) { for (const anel of aneis) yield* anel; }
+
+/** Largura aproximada do texto: 0,65 do corpo por caractere, a média de fonte técnica. */
+export const larguraDoTexto = (texto: string, alturaMm: number) => texto.length * alturaMm * 0.65;
+
 /** Retângulo que contém o elemento, em milímetros. Serve para acertar o clique e para
  *  enquadrar o desenho na exportação. */
-export function limitesDoElemento(elemento: Elemento): { x1: number; y1: number; x2: number; y2: number } {
+export function limitesDoElemento(elemento: Elemento): Caixa {
   if ("posicao" in elemento) {
     const centro = elemento.posicao;
-    const largura = "larguraMm" in elemento ? elemento.larguraMm : elemento.tipo === "texto" ? elemento.texto.length * elemento.alturaMm * 0.65 : 800;
+    const largura = "larguraMm" in elemento ? elemento.larguraMm : elemento.tipo === "texto" ? larguraDoTexto(elemento.texto, elemento.alturaMm) : 800;
     const altura = "alturaMm" in elemento ? elemento.alturaMm : elemento.tipo === "abertura" ? (elemento.especie === "porta" ? elemento.larguraMm * 2 : 200) : 800;
-    const x1 = elemento.tipo === "texto" ? 0 : -largura / 2, x2 = x1 + largura;
-    const y1 = elemento.tipo === "texto" ? -altura : -altura / 2, y2 = y1 + altura;
+    let x1 = -largura / 2, y1 = -altura / 2;
+    if (elemento.tipo === "texto") {
+      x1 = elemento.ancoraH === "meio" ? -largura / 2 : elemento.ancoraH === "fim" ? -largura : 0;
+      y1 = elemento.ancoraV === "meio" ? -altura / 2 : elemento.ancoraV === "topo" ? 0 : -altura;
+    }
+    const x2 = x1 + largura, y2 = y1 + altura;
     const r = elemento.rotacaoGraus * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r);
-    const cantos = [[x1,y1], [x2,y1], [x2,y2], [x1,y2]].map(([x,y]) => ({ x: centro.x + x*cos - y*sin, y: centro.y + x*sin + y*cos }));
-    return { x1: Math.min(...cantos.map(p => p.x)), x2: Math.max(...cantos.map(p => p.x)), y1: Math.min(...cantos.map(p => p.y)), y2: Math.max(...cantos.map(p => p.y)) };
+    return caixaDePontos([[x1, y1], [x2, y1], [x2, y2], [x1, y2]].map(([x, y]) => ({ x: centro.x + x * cos - y * sin, y: centro.y + x * sin + y * cos })));
   }
   if (elemento.tipo === "cota") {
     const d = elemento.deslocamentoMm;
     return { x1: Math.min(elemento.a.x, elemento.b.x) - 100, x2: Math.max(elemento.a.x, elemento.b.x) + 100,
       y1: Math.min(elemento.a.y, elemento.b.y, elemento.a.y + d - 260, elemento.b.y + d - 260), y2: Math.max(elemento.a.y, elemento.b.y, elemento.a.y + d, elemento.b.y + d) + 100 };
   }
-  const pontos = elemento.tipo === "parede" ? [elemento.a, elemento.b]
-    : elemento.tipo === "comodo" || elemento.tipo === "traco" ? elemento.pontos
+  const caixa = elemento.tipo === "parede" ? caixaDePontos([elemento.a, elemento.b])
+    : elemento.tipo === "comodo" || elemento.tipo === "traco" ? caixaDePontos(elemento.pontos)
     // O arco pela tessellation: a caixa do centro mais o raio abraçaria o círculo inteiro
     // e um arco de 20° ficaria com uma área de clique vinte vezes maior do que o traço.
-    : elemento.tipo === "arco" ? pontosDoArco(elemento)
-    : [];
-  const xs = pontos.map((ponto) => ponto.x);
-  const ys = pontos.map((ponto) => ponto.y);
-  const folga = "espessuraMm" in elemento
-    ? { x: elemento.espessuraMm / 2, y: elemento.espessuraMm / 2 }
-    : { x: 0, y: 0 };
-  return {
-    x1: Math.min(...xs) - folga.x, y1: Math.min(...ys) - folga.y,
-    x2: Math.max(...xs) + folga.x, y2: Math.max(...ys) + folga.y,
-  };
+    : elemento.tipo === "arco" ? caixaDePontos(pontosDoArco(elemento))
+    : elemento.tipo === "hachura" ? caixaDePontos(pontosDosAneis(elemento.aneis))
+    : { x1: 0, y1: 0, x2: 0, y2: 0 };
+  const folga = "espessuraMm" in elemento ? elemento.espessuraMm / 2 : 0;
+  return { x1: caixa.x1 - folga, y1: caixa.y1 - folga, x2: caixa.x2 + folga, y2: caixa.y2 + folga };
 }
 
 export function limitesDoDesenho(elementos: Elemento[]) {
   if (!elementos.length) return null;
-  const caixas = elementos.map(limitesDoElemento);
-  return {
-    x1: Math.min(...caixas.map((c) => c.x1)), y1: Math.min(...caixas.map((c) => c.y1)),
-    x2: Math.max(...caixas.map((c) => c.x2)), y2: Math.max(...caixas.map((c) => c.y2)),
-  };
+  let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+  for (const elemento of elementos) {
+    const c = limitesDoElemento(elemento);
+    if (c.x1 < x1) x1 = c.x1; if (c.y1 < y1) y1 = c.y1;
+    if (c.x2 > x2) x2 = c.x2; if (c.y2 > y2) y2 = c.y2;
+  }
+  return { x1, y1, x2, y2 };
 }
 
 /** Desenho de cada família de símbolo, em milímetros e centrado na origem. O mesmo
@@ -342,12 +388,29 @@ const escaparXml = (valor: string) => valor
 
 const numero = (valor: number) => Number.isInteger(valor) ? String(valor) : valor.toFixed(2);
 
-function elementoParaSvg(elemento: Elemento): string {
+/** Estilo do traço no papel: cor do elemento, senão da camada; tinta é preta no papel. */
+type Estilo = { cor: string; tracejado?: string };
+
+function estiloDo(elemento: Elemento, camadas: Map<string, Camada>, escala: number): Estilo {
+  const camada = camadas.get(elemento.camada);
+  const cor = corNaTela(elemento.cor ?? camada?.cor ?? null, false);
+  return { cor, tracejado: tracejadoPara(elemento.tipoLinha ?? camada?.tipoLinha, escala) };
+}
+
+const ancoraSvg = { inicio: "start", meio: "middle", fim: "end" } as const;
+const baseSvg = { base: "alphabetic", meio: "central", topo: "hanging" } as const;
+
+export function caminhoDosAneis(aneis: { x: number; y: number }[][]) {
+  return aneis.map((anel) => `M ${anel.map((p) => `${numero(p.x)} ${numero(p.y)}`).join(" L ")} Z`).join(" ");
+}
+
+function elementoParaSvg(elemento: Elemento, estilo: Estilo): string {
   const giro = "rotacaoGraus" in elemento && elemento.rotacaoGraus
     ? ` transform="rotate(${elemento.rotacaoGraus} ${numero(elemento.posicao.x)} ${numero(elemento.posicao.y)})"` : "";
+  const traco = estilo.tracejado ? ` stroke-dasharray="${estilo.tracejado}"` : "";
   switch (elemento.tipo) {
     case "parede":
-      return `<line x1="${numero(elemento.a.x)}" y1="${numero(elemento.a.y)}" x2="${numero(elemento.b.x)}" y2="${numero(elemento.b.y)}" stroke="#1C190F" stroke-width="${elemento.espessuraMm}" stroke-linecap="square"/>`;
+      return `<line x1="${numero(elemento.a.x)}" y1="${numero(elemento.a.y)}" x2="${numero(elemento.b.x)}" y2="${numero(elemento.b.y)}" stroke="${estilo.cor}" stroke-width="${elemento.espessuraMm}" stroke-linecap="square"/>`;
     case "comodo": {
       const pontos = elemento.pontos.map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ");
       const centro = elemento.pontos.reduce((soma, p) => ({ x: soma.x + p.x / elemento.pontos.length, y: soma.y + p.y / elemento.pontos.length }), { x: 0, y: 0 });
@@ -360,12 +423,12 @@ function elementoParaSvg(elemento: Elemento): string {
     }
     case "abertura": {
       const meia = elemento.larguraMm / 2;
-      const traco = elemento.especie === "janela"
+      const desenho = elemento.especie === "janela"
         ? `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#38301B" stroke-width="60"/>`
         : elemento.especie === "porta"
         ? `<path d="M ${numero(elemento.posicao.x - meia)} ${numero(elemento.posicao.y)} l ${elemento.larguraMm} 0 m ${-elemento.larguraMm} 0 a ${elemento.larguraMm} ${elemento.larguraMm} 0 0 1 ${elemento.larguraMm} ${elemento.larguraMm}" fill="none" stroke="#38301B" stroke-width="40"/>`
         : `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#38301B" stroke-width="40" stroke-dasharray="180 120"/>`;
-      return `<g${giro}>${traco}</g>`;
+      return `<g${giro}>${desenho}</g>`;
     }
     case "simbolo": {
       const glifo = glifoDoSimbolo(elemento.familia);
@@ -378,7 +441,7 @@ function elementoParaSvg(elemento: Elemento): string {
     case "imagem":
       return `<g${giro}><image href="${escaparXml(elemento.chave)}" x="${numero(elemento.posicao.x - elemento.larguraMm / 2)}" y="${numero(elemento.posicao.y - elemento.alturaMm / 2)}" width="${elemento.larguraMm}" height="${elemento.alturaMm}" preserveAspectRatio="xMidYMid slice"/></g>`;
     case "texto":
-      return `<g${giro}><text x="${numero(elemento.posicao.x)}" y="${numero(elemento.posicao.y)}" font-size="${elemento.alturaMm}" fill="#1C190F">${escaparXml(elemento.texto)}</text></g>`;
+      return `<g${giro}><text x="${numero(elemento.posicao.x)}" y="${numero(elemento.posicao.y)}" font-size="${numero(elemento.alturaMm)}" font-family="Arial, Helvetica, sans-serif" fill="${estilo.cor}" text-anchor="${ancoraSvg[elemento.ancoraH ?? "inicio"]}" dominant-baseline="${baseSvg[elemento.ancoraV ?? "base"]}">${escaparXml(elemento.texto)}</text></g>`;
     case "cota": {
       const medida = comprimentoM(elemento.a, elemento.b);
       const meio = { x: (elemento.a.x + elemento.b.x) / 2, y: (elemento.a.y + elemento.b.y) / 2 + elemento.deslocamentoMm };
@@ -389,9 +452,11 @@ function elementoParaSvg(elemento: Elemento): string {
         + `<text x="${numero(meio.x)}" y="${numero(meio.y - 80)}" font-size="180" text-anchor="middle" fill="#846100">${medida.toFixed(2).replace(".", ",")} m</text>`;
     }
     case "traco":
-      return `<polyline points="${elemento.pontos.map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="#1C190F" stroke-width="${elemento.espessuraMm}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      return `<polyline points="${elemento.pontos.map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="${estilo.cor}" stroke-width="${numero(elemento.espessuraMm)}" stroke-linecap="round" stroke-linejoin="round"${traco}/>`;
     case "arco":
-      return `<polyline points="${pontosDoArco(elemento).map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="#1C190F" stroke-width="${elemento.espessuraMm}" stroke-linecap="round" stroke-linejoin="round"/>`;
+      return `<polyline points="${pontosDoArco(elemento).map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="${estilo.cor}" stroke-width="${numero(elemento.espessuraMm)}" stroke-linecap="round" stroke-linejoin="round"${traco}/>`;
+    case "hachura":
+      return `<path d="${caminhoDosAneis(elemento.aneis)}" fill="${estilo.cor}" fill-opacity="${elemento.solida ? 1 : 0.28}" fill-rule="evenodd" stroke="none"/>`;
   }
 }
 
@@ -407,8 +472,9 @@ export function exportarSvg(documento: Documento, opcoes: { titulo?: string; ori
   const margem = 500;
   const largura = Math.max(1, limites.x2 - limites.x1) + margem * 2;
   const altura = Math.max(1, limites.y2 - limites.y1) + margem * 2;
+  const camadas = new Map(documento.camadas.map((camada) => [camada.id, camada]));
   const corpo = visiveis.map((elemento) => {
-    const desenhado = elementoParaSvg(elemento);
+    const desenhado = elementoParaSvg(elemento, estiloDo(elemento, camadas, documento.escala));
     if (elemento.tipo !== "imagem" || !opcoes.origem) return desenhado;
     return desenhado.replace(`href="${escaparXml(elemento.chave)}"`, `href="${escaparXml(`${opcoes.origem}${elemento.chave}`)}"`);
   }).join("\n  ");

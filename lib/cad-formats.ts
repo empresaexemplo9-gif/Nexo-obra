@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { documentoSchema, type Documento, type Camada, type Elemento } from "@/lib/prancheta";
+import { lerCabecalhoDxf } from "@/lib/dxf-cabecalho";
 import { lerDxf, versaoDoDwg, type Unidade } from "@/lib/integrations/dxf";
 
-export const MAX_CAD_BYTES = 12 * 1024 * 1024;
+export const MAX_CAD_BYTES = 60 * 1024 * 1024;
 export type ImportReport = { format: string; imported: number; discarded: number; warnings: string[] };
 export type CadImport = { camadas: Camada[]; elementos: Elemento[]; unidade: Unidade; unidadeDeclarada: boolean; avisos: string[]; truncado: boolean; report: ImportReport };
 export type FormatAdapter = {
@@ -12,6 +13,13 @@ export type FormatAdapter = {
   capabilities: { read: boolean; write: boolean; editable: boolean; is3D: boolean };
 };
 const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
+/** DXF até 2004 grava texto na página de código do cabeçalho ($DWGCODEPAGE, ANSI_1252 na
+ *  planta brasileira); ler como UTF-8 troca cada acento por "�". De 2007 em diante é UTF-8. */
+export function decodificarDxf(bytes: Uint8Array) {
+  const { codificacao } = lerCabecalhoDxf(bytes.subarray(0, 65536));
+  try { return new TextDecoder(codificacao).decode(bytes); }
+  catch { return new TextDecoder("windows-1252").decode(bytes); }
+}
 export class FormatRegistry {
   private adapters: FormatAdapter[] = [];
   register(adapter: FormatAdapter) {
@@ -25,7 +33,7 @@ export class FormatRegistry {
   }
   async import(bytes: Uint8Array, unit?: Unidade): Promise<CadImport> {
     if (!bytes.length) throw new Error("O arquivo está vazio.");
-    if (bytes.length > MAX_CAD_BYTES) throw new Error("O arquivo pode ter no máximo 12 MB.");
+    if (bytes.length > MAX_CAD_BYTES) throw new Error("O arquivo pode ter no máximo 60 MB.");
     const adapter = this.detect(bytes);
     if (!adapter) throw new Error("Formato não reconhecido pelo conteúdo. Consulte /formatos para ver as alternativas de conversão.");
     return adapter.import(bytes, unit);
@@ -68,11 +76,11 @@ export const dxfAdapter: FormatAdapter = {
   capabilities: { read: true, write: true, editable: true, is3D: false },
   detect: (head) => /(?:^|\r?\n)\s*0\s*\r?\nSECTION\s*(?:\r?\n)/i.test(decode(head)) ? 0.95 : 0,
   import(bytes, unit) {
-    const result = lerDxf(decode(bytes), unit ? { unidade: unit } : {});
+    const result = lerDxf(decodificarDxf(bytes), unit ? { unidade: unit } : {});
     return { ...result, report: { format: "dxf", imported: result.elementos.length, discarded: Object.values(result.ignorados).reduce((a, b) => a + b, 0), warnings: result.avisos } };
   },
 };
-export function createFormatRegistry(convertDwg?: (bytes: Uint8Array) => Promise<string>) {
+export function createFormatRegistry(convertDwg?: (bytes: Uint8Array) => Promise<Uint8Array | string>) {
   return new FormatRegistry().register(nativeAdapter).register(dxfAdapter).register({
     id: "dwg", label: "DWG", extensions: ["dwg"],
     capabilities: { read: Boolean(convertDwg), write: false, editable: true, is3D: false },
@@ -80,7 +88,7 @@ export function createFormatRegistry(convertDwg?: (bytes: Uint8Array) => Promise
     async import(bytes, unit) {
       if (!convertDwg) throw new Error("Conversor DWG indisponível. Exporte como DXF ASCII no programa de origem.");
       const converted = await convertDwg(bytes);
-      const result = await dxfAdapter.import(new TextEncoder().encode(converted), unit);
+      const result = await dxfAdapter.import(typeof converted === "string" ? new TextEncoder().encode(converted) : converted, unit);
       const warnings = ["DWG convertido para DXF pelo motor do servidor. Confira a fidelidade antes de salvar.", ...result.avisos];
       return { ...result, avisos: warnings, report: { ...result.report, format: "dwg", warnings } };
     },
@@ -103,14 +111,14 @@ export function mergeCadImport(document: Documento, imported: Pick<CadImport, "c
     return { ...element, id: unique(), camada: layer };
   });
   const result = documentoSchema.safeParse({ ...document, camadas: [...document.camadas, ...layers], elementos: [...document.elementos, ...elements] });
-  if (!result.success) throw new Error("A importação excede os limites da prancha (60 camadas ou 20 mil elementos). Use uma prancha nova.");
+  if (!result.success) throw new Error("A importação excede os limites da prancha (1.000 camadas ou 80 mil elementos). Use uma prancha nova ou importe o arquivo em partes.");
   return result.data;
 }
 
 export const FORMAT_SUPPORT = [
   ["NEXO v1", "Leitura e exportação 2D", "Geometria e camadas; imagens privadas devem ser reinseridas pela biblioteca."],
-  ["DXF ASCII", "Leitura e exportação 2D", "Subconjunto de entidades; perdas indicadas no relatório. DXF binário não suportado."],
-  ["DWG", "Leitura e conversão 2D", "Convertido no servidor e revisado pelo mesmo leitor DXF; confira medidas e avisos antes de salvar."],
+  ["DXF ASCII", "Leitura e exportação 2D", "Todas as camadas (cor, tipo de linha, desligada, congelada, travada), blocos com escala, giro e espelhamento, polilinhas com arcos, círculos, arcos, elipses, splines, hachuras, sólidos, textos, MTEXT, atributos e cotas. O que não entra aparece no relatório. DXF binário não suportado."],
+  ["DWG", "Leitura e conversão 2D", "Convertido no servidor pelo LibreDWG e lido pelo mesmo leitor DXF, com o mesmo relatório; confira medidas e avisos antes de salvar."],
   ["SVG", "Exportação", "Para importar, converta para DXF. A importação SVG ainda não está implementada."],
   ["PDF, HPGL/PLT, CGM, EMF/WMF", "Não suportados como geometria", "Converta para DXF em uma ferramenta externa."],
   ["DGN, DWF/DWFx", "Não suportados", "Converta para DXF com ferramenta licenciada."],

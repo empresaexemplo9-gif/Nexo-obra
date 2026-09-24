@@ -2,7 +2,8 @@ import { z } from "zod";
 
 import { documentoSchema } from "@/lib/prancheta";
 import { ESPECIES, resposta } from "@/lib/server/studio-response";
-import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { documentoDoBanco, documentoParaBanco, lerCorpo, responder } from "@/lib/server/studio-corpo";
 
 export const dynamic = "force-dynamic";
 
@@ -41,9 +42,9 @@ async function daEmpresa(context: Awaited<ReturnType<typeof requireOrganizationC
 // O documento guardado é validado na leitura, não só na escrita. Uma linha escrita por
 // uma versão anterior do formato voltaria como objeto estranho para a tela e quebraria o
 // editor sem dizer por quê; aqui a falha tem nome.
-function documentoDaLinha(linha: Linha) {
+async function documentoDaLinha(linha: Linha) {
   let cru: unknown;
-  try { cru = JSON.parse(linha.documento); }
+  try { cru = await documentoDoBanco(linha.documento); }
   catch { throw new ApiError(422, "drawing_unreadable", "O desenho desta prancha está ilegível e não pode ser aberto."); }
   const analisado = documentoSchema.safeParse(cru);
   if (!analisado.success) throw new ApiError(422, "drawing_unreadable", "O desenho desta prancha está em um formato que esta versão não abre.");
@@ -56,7 +57,7 @@ export async function GET(request: Request, route: RouteContext) {
     requireModulePermission(context, "studio", "view");
     const { drawingId } = await route.params;
     const linha = await daEmpresa(context, drawingId);
-    return Response.json({ prancha: { ...resposta(linha), documento: documentoDaLinha(linha) } },
+    return responder(request, { prancha: { ...resposta(linha), documento: await documentoDaLinha(linha) } },
       { headers: { "Cache-Control": "private, no-store" } });
   });
 }
@@ -66,7 +67,7 @@ export async function PUT(request: Request, route: RouteContext) {
     const context = await requireOrganizationContext(request);
     requireModulePermission(context, "studio", "edit");
     const { drawingId } = await route.params;
-    const analisado = salvarSchema.safeParse(await jsonBody(request));
+    const analisado = salvarSchema.safeParse(await lerCorpo(request));
     if (!analisado.success) throw validationError(analisado.error.flatten().fieldErrors);
     const atual = await daEmpresa(context, drawingId);
     if (atual.revisao !== analisado.data.revisao) {
@@ -81,7 +82,7 @@ export async function PUT(request: Request, route: RouteContext) {
     }
     const nome = analisado.data.nome ?? atual.nome;
     const especie = analisado.data.especie ?? atual.especie;
-    const documento = JSON.stringify(analisado.data.documento);
+    const documento = await documentoParaBanco(analisado.data.documento);
     // A condição de revisão viaja no próprio UPDATE. Conferir antes e gravar depois deixa
     // uma fresta entre as duas consultas; aqui duas gravações simultâneas não passam as
     // duas: a segunda não encontra a linha e volta como conflito.
@@ -99,7 +100,7 @@ export async function PUT(request: Request, route: RouteContext) {
     await auditStatement(context, "studio.drawing.saved", "studio_drawing", drawingId,
       { nome, especie, elementos: analisado.data.documento.elementos.length }).run();
     const linha = await daEmpresa(context, drawingId);
-    return Response.json({ prancha: { ...resposta(linha), documento: documentoDaLinha(linha) } });
+    return responder(request, { prancha: { ...resposta(linha), documento: await documentoDaLinha(linha) } });
   });
 }
 

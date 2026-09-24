@@ -89,6 +89,7 @@ function mapPoint(element: Elemento, transform: (point: Ponto) => Ponto): Elemen
   if (element.tipo === "parede" || element.tipo === "cota") return { ...element, a: transform(element.a), b: transform(element.b) };
   if (element.tipo === "comodo" || element.tipo === "traco") return { ...element, pontos: element.pontos.map(transform) };
   if (element.tipo === "arco") return { ...element, centro: transform(element.centro) };
+  if (element.tipo === "hachura") return { ...element, aneis: element.aneis.map((anel) => anel.map(transform)) };
   return { ...element, posicao: transform(element.posicao) };
 }
 
