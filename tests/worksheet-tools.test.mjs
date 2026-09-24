@@ -120,7 +120,7 @@ test("impressão leva os valores formatados, recortados até a última célula p
   assert.equal(linhas[1][1].texto.replace(/\s/g, " "), "(R$ 30,00)");
   assert.equal(linhas[1][1].numero, true);
   assert.equal(linhas[1][1].negativo, true);
-  assert.deepEqual(tools.tabelaParaImpressao({}, {}, [], 12, 60), { letras: [], linhas: [] });
+  assert.deepEqual(tools.tabelaParaImpressao({}, {}, [], 12, 60), { letras: [], linhas: [], numeros: [] });
 });
 
 test("colunas fixas: no máximo duas, e zero por padrão", () => {

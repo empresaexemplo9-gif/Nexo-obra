@@ -41,6 +41,11 @@ export const contentSchema = z.object({
   // Itálico, sublinhado, alinhamento, quebra e cores por célula; mesclagens como "A1:C1".
   styles: z.record(cellKeySchema, cellStyleSchema).refine((styles) => Object.keys(styles).length <= 20_000, "Formatação em células demais.").default({}),
   merges: mergesSchema.default([]),
+  // Nota da célula (a "nota" do Google Planilhas, o "comentário" antigo do Excel).
+  notes: z.record(cellKeySchema, z.string().trim().min(1).max(1000)).refine((notes) => Object.keys(notes).length <= 2000, "Notas demais na planilha.").default({}),
+  // Linhas e colunas ocultas, por índice. Continuam nas contas; só saem da tela e da impressão.
+  hiddenRows: z.array(z.number().int().min(0).max(SHEET_MAX_ROWS - 1)).max(SHEET_MAX_ROWS).default([]),
+  hiddenColumns: z.array(z.number().int().min(0).max(SHEET_MAX_COLUMNS - 1)).max(SHEET_MAX_COLUMNS).default([]),
   recipes: z.array(z.object({
     name: z.string().trim().min(1).max(80),
     actions: z.array(z.enum(["trim", "upper", "lower", "number", "values", "clear"])).min(1).max(12),

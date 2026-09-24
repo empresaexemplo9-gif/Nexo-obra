@@ -131,6 +131,36 @@ aceita a primeira. **Imprimir ou PDF** monta uma página com os valores calculad
 formatados, recortada até a última célula preenchida, e o navegador salva em PDF pela mesma
 janela.
 
+## Botão direito
+
+O menu do botão direito tem as ações de célula do Excel e do Google Planilhas. Ele também
+abre pela tecla Menu ou `Shift` + `F10` e com toque longo no celular. Clicar fora da seleção
+mira a célula clicada; dentro dela, a ação vale para o intervalo todo. No cabeçalho, vale
+para a linha ou a coluna inteira.
+
+- **Recortar, copiar e colar.** A área de transferência do sistema recebe o texto em TSV,
+  que o Excel entende. Colar dentro da planilha o que foi copiado aqui leva fórmulas, estilos
+  e notas, e a fórmula anda como no Excel: `=A1*2` copiada uma coluna à direita vira `=B1*2`,
+  e o que está travado com `$` fica. Referência que sairia da grade vira `#REF!`.
+- **Colar especial:** somente valores (a fórmula vai como resultado), somente formatação ou
+  transposto (linhas viram colunas; fórmula vai como resultado, porque transpor referência
+  relativa produziria outra conta).
+- **Inserir e excluir** tantas linhas ou colunas quantas estiverem marcadas, acima, abaixo,
+  à esquerda ou à direita. Tudo o que guarda posição anda junto.
+- **Limpar** conteúdo (mantém formatação e nota), formatação ou tudo. `Delete` limpa o
+  conteúdo de toda a seleção, não só da célula do cursor.
+- **Nota** na célula: marca no canto, aparece ao passar o mouse e entra no nome acessível.
+  Vai e volta no XLSX.
+- **Ocultar** linhas e colunas: saem da tela e da impressão, mas continuam nas contas. Um
+  aviso acima da grade diz quantas estão ocultas e reexibe com um clique. Ocultar não é
+  permitido quando corta uma mesclagem, e mesclar não é permitido sobre algo oculto.
+- **Ajustar largura ao conteúdo**, **fixar até esta coluna** (no máximo A e B), **preencher
+  para baixo ou à direita**, **inserir SOMA**, **ordenar**, **filtrar pelo valor desta
+  célula**, **selecionar linha ou coluna** e atalhos para **validação** e **formatação
+  condicional**.
+
+Em acesso somente de leitura, o menu oferece só copiar, filtrar e selecionar.
+
 ## Saúde financeira
 
 A planilha de análise, com leitura de margem e preço, tem regras próprias de acesso e está

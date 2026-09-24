@@ -71,7 +71,8 @@ export function displayValue(value: number | string | boolean | null): string {
  * `1234.56` é a forma que `/api/worksheets/data` produz (centavos ÷ 100, no máximo duas
  * casas), então a regra nunca colide com o dado que o próprio produto insere.
  */
-const MILHAR = /^[+-]?\d{1,3}(\.\d{3})+$/;
+// Grupo inicial com zero ("0.125") não é milhar: nenhum número se escreve assim.
+const MILHAR = /^[+-]?[1-9]\d{0,2}(\.\d{3})+$/;
 
 // Um texto digitado vira número quando é inequivocamente numérico, aceitando os dois
 // separadores usados no Brasil: "1.234,56" e "1234.56".
@@ -629,6 +630,19 @@ export function deleteRow(cells: SheetCells, at: number) { return moveCells(cell
 export function insertColumn(cells: SheetCells, at: number) { return moveCells(cells, "column", at, 1); }
 export function deleteColumn(cells: SheetCells, at: number) { return moveCells(cells, "column", at, -1); }
 
+/**
+ * A fórmula como ficaria copiada para `linhas` abaixo e `colunas` à direita: referência
+ * relativa anda, a travada com $ fica. Referência que sairia da grade vira #REF!, como no
+ * Excel — somar a célula errada em silêncio seria pior.
+ */
+export function offsetFormula(raw: string, linhas: number, colunas: number): string {
+  if (!raw.startsWith("=") || (linhas === 0 && colunas === 0)) return raw;
+  return `=${rewriteReferences(raw.slice(1), (address, locked) => {
+    const moved = { column: address.column + (locked.column ? 0 : colunas), row: address.row + (locked.row ? 0 : linhas) };
+    return moved.row < 0 || moved.column < 0 || moved.row >= SHEET_MAX_ROWS || moved.column >= SHEET_MAX_COLUMNS ? null : cellKey(moved);
+  })}`;
+}
+
 // Copia a célula para baixo deslocando as referências relativas, como ao arrastar a alça.
 export function fillDown(cells: SheetCells, fromKey: string, untilRow: number): SheetCells {
   const origin = parseCellKey(fromKey);
@@ -636,13 +650,19 @@ export function fillDown(cells: SheetCells, fromKey: string, untilRow: number): 
   if (!origin || raw === undefined || untilRow <= origin.row) return cells;
   const next = { ...cells };
   for (let row = origin.row + 1; row <= untilRow; row += 1) {
-    const offset = row - origin.row;
-    next[cellKey({ column: origin.column, row })] = raw.startsWith("=")
-      ? `=${rewriteReferences(raw.slice(1), (address, locked) => {
-        const moved = { column: address.column, row: address.row + (locked.row ? 0 : offset) };
-        return moved.row < 0 ? null : cellKey(moved);
-      })}`
-      : raw;
+    next[cellKey({ column: origin.column, row })] = offsetFormula(raw, row - origin.row, 0);
+  }
+  return next;
+}
+
+/** O mesmo, para a direita: a fórmula da primeira coluna segue linha afora. */
+export function fillRight(cells: SheetCells, fromKey: string, untilColumn: number): SheetCells {
+  const origin = parseCellKey(fromKey);
+  const raw = cells[fromKey.toUpperCase()];
+  if (!origin || raw === undefined || untilColumn <= origin.column) return cells;
+  const next = { ...cells };
+  for (let column = origin.column + 1; column <= untilColumn; column += 1) {
+    next[cellKey({ column, row: origin.row })] = offsetFormula(raw, 0, column - origin.column);
   }
   return next;
 }

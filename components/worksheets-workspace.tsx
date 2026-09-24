@@ -7,6 +7,10 @@ import {
   ShieldCheck, Sigma, Strikethrough, Table2, TableCellsMerge, TableCellsSplit, Trash2, Underline, Undo2, WrapText,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
+import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WorksheetContextMenu, type AcaoDoMenu } from "@/components/worksheet-context-menu";
+import { colarRecorte, copiarIntervalo, limparChaves, limparIntervalo, mesmoTexto, type ModoDeColagem, type Recorte } from "@/lib/worksheet-clipboard";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { toast } from "sonner";
 
@@ -17,7 +21,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown,
+  cellKey, columnName, deleteColumn, deleteRow, displayValue, evaluateSheet, fillDown, fillRight,
   chavesDoRetangulo, insertColumn, insertRow, moveAnalysis, parseCellKey, resumoDaSelecao,
   rotuloDoRetangulo, sheetToCsv, sortRows,
   axisLastFilled, axisRange, axisTotal,
@@ -29,14 +33,14 @@ import type { AnalysisSettings } from "@/lib/finance-analysis";
 import { templateCategories, worksheetTemplates, type TemplateCategory } from "@/lib/worksheet-templates";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WorksheetToolsPanel, type WorksheetRecipe } from "@/components/worksheet-tools-panel";
-import { aplicarSugestao, formattedCell, negativoEmDestaque, placeTable, selectionToTsv, sugestoesDeFuncao, tabelaParaImpressao } from "@/lib/worksheet-tools";
+import { aplicarSugestao, formattedCell, larguraIdeal, negativoEmDestaque, placeTable, selectionToTsv, sugestoesDeFuncao, tabelaParaImpressao } from "@/lib/worksheet-tools";
 import { useWorksheetHistory } from "@/hooks/use-worksheet-history";
 import { WorksheetAdvancedPanel } from "@/components/worksheet-advanced-panel";
 import { WorksheetXlsxPanel } from "@/components/worksheet-xlsx-panel";
 import { conditionalColors, emptyAdvanced, moveAdvanced, validationIssues, type AdvancedSettings } from "@/lib/worksheet-advanced";
 import {
-  boundsOf, cellsHiddenByMerge, clearStyles, colorLabels, fillColors, mergeAt, mergeLayout, mergeRange, mergeSpansRows, rangeOf,
-  remapRows, setStyle, shiftKeyed, shiftMerges, styleCss, textColors, toggleFlag, unmergeAt, type CellStyle, type CellStyles, type StyleFlag,
+  boundsHaveHidden, boundsOf, cellsHiddenByMerge, mergeCrosses, type Bounds, clearStyles, colorLabels, fillColors, mergeAt, mergeLayout, mergeRange, mergeSpansRows, rangeOf,
+  remapIndices, remapRows, setStyle, shiftIndices, shiftKeyed, shiftMerges, styleCss, textColors, toggleFlag, unmergeAt, type CellStyle, type CellStyles, type StyleFlag,
 } from "@/lib/worksheet-format";
 
 type WorksheetKind = "sheet" | "document" | "analysis";
@@ -52,6 +56,9 @@ type WorksheetContent = {
   frozenColumns?: number;
   styles?: CellStyles;
   merges?: string[];
+  notes?: Record<string, string>;
+  hiddenRows?: number[];
+  hiddenColumns?: number[];
 };
 type Worksheet = WorksheetSummary & { content: WorksheetContent };
 type Access = { canView: boolean; canEdit: boolean; canGovern: boolean; canDelete: boolean; level: string };
@@ -91,6 +98,47 @@ function arredondarExibicao(valor: number | null) {
 }
 
 type AxisSelection = { kind: SheetAxis; index: number };
+export type AlvoDoMenu = { tipo: "celula" } | { tipo: "linha"; index: number } | { tipo: "coluna"; index: number };
+
+/**
+ * Uma linha ou coluna a mais (passo 1) ou a menos (passo -1) em `alvo`, com tudo o que
+ * guarda posição andando junto: fórmulas, parâmetros da leitura financeira, negrito,
+ * estilos, notas, mesclagens, regras, formatos e larguras de coluna e o que está oculto.
+ * Sem deslocar os parâmetros, a coluna marcada como "Custo" passaria a apontar para a
+ * vizinha e a leitura financeira leria a coluna errada, sem erro nenhum na tela.
+ */
+function mudarEstrutura(sheet: Worksheet, eixo: "row" | "column", alvo: number, passo: 1 | -1): Worksheet {
+  const content = sheet.content;
+  const cells = eixo === "row" ? (passo > 0 ? insertRow(content.cells, alvo) : deleteRow(content.cells, alvo))
+    : (passo > 0 ? insertColumn(content.cells, alvo) : deleteColumn(content.cells, alvo));
+  const moveColumns = <T,>(values: Record<string, T>) => {
+    if (eixo !== "column") return values;
+    const output: Record<string, T> = {};
+    for (const [key, value] of Object.entries(values)) {
+      const index = parseCellKey(`${key}1`)?.column;
+      if (index === undefined || (passo < 0 && index === alvo)) continue;
+      output[columnName(index < alvo ? index : index + passo)] = value;
+    }
+    return output;
+  };
+  const bold = Object.keys(shiftKeyed(Object.fromEntries(content.bold.map((key) => [key, true])), eixo, alvo, passo));
+  return {
+    ...sheet,
+    rows: eixo === "row" ? sheet.rows + passo : sheet.rows,
+    columns: eixo === "column" ? sheet.columns + passo : sheet.columns,
+    content: {
+      ...content, cells, bold,
+      analysis: moveAnalysis(content.analysis, eixo, alvo, passo),
+      formats: moveColumns(content.formats), widths: moveColumns(content.widths),
+      advanced: moveAdvanced(content.advanced ?? emptyAdvanced, eixo, alvo, passo),
+      styles: shiftKeyed(content.styles ?? {}, eixo, alvo, passo),
+      notes: shiftKeyed(content.notes ?? {}, eixo, alvo, passo),
+      merges: shiftMerges(content.merges ?? [], eixo, alvo, passo),
+      hiddenRows: eixo === "row" ? shiftIndices(content.hiddenRows ?? [], alvo, passo, SHEET_MAX_ROWS) : content.hiddenRows,
+      hiddenColumns: eixo === "column" ? shiftIndices(content.hiddenColumns ?? [], alvo, passo, SHEET_MAX_COLUMNS) : content.hiddenColumns,
+    },
+  };
+}
 
 const LARGURA_PADRAO = 120, LARGURA_MIN = 60, LARGURA_MAX = 600, LARGURA_GUIA = 48;
 
@@ -98,8 +146,11 @@ function Grid({
   cells, columns, rows, computed, active, selected, axis,
   onActive, onEstender, onAxis, onChange, onColar, onDesfazer, onRefazer,
   formats, bold, widths, filter, readOnly, onCopyCells, colors, issues, frozen: fixasPedidas, onWidth, styles, merges, onFormatar,
+  notes, hiddenRows, hiddenColumns, onContexto, onLimpar, onRecortar,
 }: {
   frozen: number; onWidth: (column: number, width: number) => void;
+  notes: Record<string, string>; hiddenRows: Set<number>; hiddenColumns: Set<number>;
+  onContexto: (alvo: AlvoDoMenu) => void; onLimpar: () => void; onRecortar: () => string | null;
   styles: CellStyles; merges: string[]; onFormatar: (atalho: "bold" | "italic" | "underline") => void;
   colors: Record<string, string>; issues: Map<string, string>;
   formats: Record<string, string>; bold: string[]; widths: Record<string, number>; filter: string; readOnly: boolean;
@@ -124,7 +175,7 @@ function Grid({
   const [larguraAoVivo, setLarguraAoVivo] = useState<{ column: number; width: number } | null>(null);
   const largura = (column: number) => larguraAoVivo?.column === column ? larguraAoVivo.width : widths[columnName(column)] ?? LARGURA_PADRAO;
   // Deslocamento de cada coluna fixa: a guia de números mais a largura das fixas à esquerda.
-  const esquerdaFixa = (column: number) => LARGURA_GUIA + Array.from({ length: column }, (_, index) => largura(index)).reduce((total, value) => total + value, 0);
+  const esquerdaFixa = (column: number) => LARGURA_GUIA + Array.from({ length: column }, (_, index) => hiddenColumns.has(index) ? 0 : largura(index)).reduce((total, value) => total + value, 0);
   const layout = useMemo(() => mergeLayout(merges), [merges]);
   // A guia de números tem largura exata: a coluna fixa é colada nela por `left`, e uma guia
   // mais estreita que o previsto fazia a coluna A cobrir o começo da B.
@@ -173,10 +224,14 @@ function Grid({
     // Saindo de um bloco mesclado, a seta parte da borda dele; entrando, para na âncora.
     const bloco = layout.anchors.get(key)?.bounds;
     const origem = bloco ? { column: deltaColumn > 0 ? bloco.right : address.column, row: deltaRow > 0 ? bloco.bottom : address.row } : address;
-    const vizinha = cellKey({
-      column: Math.max(0, Math.min(columns - 1, origem.column + deltaColumn)),
-      row: Math.max(0, Math.min(rows - 1, origem.row + deltaRow)),
-    });
+    // Linha e coluna ocultas são puladas, como no Excel: a seta vai para a próxima visível.
+    let column = origem.column + deltaColumn, row = origem.row + deltaRow;
+    while (hiddenColumns.has(column) && column > 0 && column < columns - 1) column += Math.sign(deltaColumn) || 1;
+    while (hiddenRows.has(row) && row > 0 && row < rows - 1) row += Math.sign(deltaRow) || 1;
+    column = Math.max(0, Math.min(columns - 1, column)); row = Math.max(0, Math.min(rows - 1, row));
+    if (hiddenColumns.has(column)) column = origem.column;
+    if (hiddenRows.has(row)) row = origem.row;
+    const vizinha = cellKey({ column, row });
     const next = layout.covered.get(vizinha) ?? vizinha;
     if (estender) onEstender(next); else onActive(next);
     document.getElementById(`cell-${next}`)?.focus();
@@ -187,6 +242,11 @@ function Grid({
   return <div ref={gradeRef} className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
     if (editing) return;
     event.preventDefault(); event.clipboardData.setData("text/plain", onCopyCells());
+  }} onCut={event => {
+    if (editing || readOnly) return;
+    const texto = onRecortar();
+    if (texto === null) return;
+    event.preventDefault(); event.clipboardData.setData("text/plain", texto);
   }} onPaste={event => {
     if (readOnly || editing) return;
     const text = event.clipboardData.getData("text/plain");
@@ -198,10 +258,13 @@ function Grid({
       <thead className="sticky top-0 z-10">
         <tr>
           <th style={guia} className="sticky left-0 z-20 border border-hoikos-200 bg-hoikos-100 p-1 text-xs font-medium text-hoikos-600">#</th>
-          {Array.from({ length: columns }, (_, column) => (
-            <th key={column} style={{ ...estiloColuna(column, "var(--color-hoikos-100, #f1f5f9)"), ...(column < frozen ? { zIndex: 25, boxShadow: "1px 0 0 0 var(--color-hoikos-200)" } : {}) }} className="relative border border-hoikos-200 p-0 text-xs font-medium">
+          {Array.from({ length: columns }, (_, column) => hiddenColumns.has(column) ? null : (
+            <th key={column} style={{ ...estiloColuna(column, "var(--color-hoikos-100, #f1f5f9)"), ...(column < frozen ? { zIndex: 25, boxShadow: "1px 0 0 0 var(--color-hoikos-200)" } : {}) }}
+              title={hiddenColumns.has(column - 1) ? "Há coluna oculta antes desta. Botão direito para reexibir." : undefined}
+              className={`relative border border-hoikos-200 p-0 text-xs font-medium ${hiddenColumns.has(column - 1) ? "border-l-4 border-l-hoikos-500" : ""}`}>
               <button
                 type="button" onClick={() => onAxis("column", column)}
+                onContextMenu={() => { onAxis("column", column); onContexto({ tipo: "coluna", index: column }); }}
                 aria-label={`Selecionar coluna ${columnName(column)}`}
                 aria-pressed={axis?.kind === "column" && axis.index === column}
                 className={`h-7 w-full px-1 ${axis?.kind === "column" && axis.index === column ? "bg-hoikos-700 text-white" : "bg-hoikos-100 text-hoikos-700"}`}
@@ -242,11 +305,13 @@ function Grid({
         </tr>
       </thead>
       <tbody>
-        {Array.from({ length: rows }, (_, row) => (
+        {Array.from({ length: rows }, (_, row) => hiddenRows.has(row) ? null : (
           <tr key={row} hidden={!!filter.trim() && !Array.from({ length: columns }, (_, column) => formattedCell(computed[cellKey({ column, row })], formats[columnName(column)])).join(" ").toLocaleLowerCase("pt-BR").includes(filter.trim().toLocaleLowerCase("pt-BR"))}>
-            <th style={guia} className="sticky left-0 z-10 border border-hoikos-200 bg-hoikos-100 p-0 text-xs font-medium">
+            <th style={guia} title={hiddenRows.has(row - 1) ? "Há linha oculta acima desta. Botão direito para reexibir." : undefined}
+              className={`sticky left-0 z-10 border border-hoikos-200 bg-hoikos-100 p-0 text-xs font-medium ${hiddenRows.has(row - 1) ? "border-t-4 border-t-hoikos-500" : ""}`}>
               <button
                 type="button" onClick={() => onAxis("row", row)}
+                onContextMenu={() => { onAxis("row", row); onContexto({ tipo: "linha", index: row }); }}
                 aria-label={`Selecionar linha ${row + 1}`}
                 aria-pressed={axis?.kind === "row" && axis.index === row}
                 className={`h-8 w-full px-1 ${axis?.kind === "row" && axis.index === row ? "bg-hoikos-700 text-white" : "bg-hoikos-100 text-hoikos-600"}`}
@@ -254,7 +319,8 @@ function Grid({
             </th>
             {Array.from({ length: columns }, (_, column) => {
               const key = cellKey({ column, row });
-              if (layout.covered.has(key)) return null;
+              if (layout.covered.has(key) || hiddenColumns.has(column)) return null;
+              const nota = notes[key];
               const bloco = layout.anchors.get(key);
               const estilo = styles[key];
               const result = computed[key];
@@ -267,7 +333,7 @@ function Grid({
               // A cor condicional é regra de dado e vence o preenchimento escolhido à mão.
               const fundo = colors[key] ?? (estilo?.fill ? fillColors[estilo.fill] : undefined);
               return <td
-                key={key} title={issues.get(key)}
+                key={key} title={[issues.get(key), nota ? `Nota: ${nota}` : ""].filter(Boolean).join("\n") || undefined}
                 colSpan={bloco?.colSpan} rowSpan={bloco?.rowSpan}
                 style={{
                   ...estiloColuna(column, fundo ?? (fixa && marcada ? "var(--color-hoikos-50)" : undefined), bloco ? bloco.bounds.right : column),
@@ -280,8 +346,10 @@ function Grid({
                   ...(fixa ? { outline: `${isActive ? 2 : 1}px solid ${isActive ? "var(--color-hoikos-700)" : "var(--color-hoikos-200)"}`, outlineOffset: -1 } : {}),
                   fontWeight: negrito.has(key) ? 700 : undefined,
                 }}
-                className={`border p-0 ${marcada ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}
+                className={`border p-0 ${nota ? "relative" : ""} ${marcada ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}
               >
+                {/* O triângulo do canto é a marca de nota do Excel e do Google Planilhas. */}
+                {nota ? <span aria-hidden="true" className="pointer-events-none absolute top-0 right-0 size-0 border-t-[7px] border-l-[7px] border-t-amber-500 border-l-transparent" /> : null}
                 {isEditing ? (
                   <input
                     autoFocus value={draft} aria-label={`Célula ${key}`}
@@ -297,7 +365,7 @@ function Grid({
                 ) : (
                   <button
                     type="button" id={`cell-${key}`}
-                    aria-label={`Célula ${key}${result?.display ? `, ${result.display}` : ", vazia"}`}
+                    aria-label={`Célula ${key}${result?.display ? `, ${result.display}` : ", vazia"}${nota ? `, nota: ${nota}` : ""}`}
                     aria-pressed={isSelected || inAxis}
                     onMouseDown={() => { pointerFocus.current = true; }}
                     onFocus={() => { if (!pointerFocus.current) onActive(key); }}
@@ -305,6 +373,9 @@ function Grid({
                       // No toque o arrasto rola a grade, que é o gesto esperado no celular
                       // e o único jeito de alcançar a coluna G numa tela de 320 px.
                       if (event.pointerType === "touch") return;
+                      // Botão direito não recomeça a seleção: é ele que abre o menu para agir
+                      // sobre o intervalo marcado.
+                      if (event.button !== 0) return;
                       // Com modificador quem decide é o clique, que chega depois e é o
                       // mesmo caminho do teclado e do toque.
                       if (event.shiftKey || event.ctrlKey || event.metaKey) return;
@@ -329,6 +400,9 @@ function Grid({
                       onActive(key, event.ctrlKey || event.metaKey);
                     }}
                     onDoubleClick={() => { if (!readOnly) { setDraft(cells[key] ?? ""); setEditing(key); } }}
+                    // Botão direito fora da seleção passa a mirar a célula clicada; dentro dela,
+                    // mantém o intervalo — é o que permite copiar ou formatar tudo de uma vez.
+                    onContextMenu={() => { if (!marcada) onActive(key); onContexto({ tipo: "celula" }); }}
                     onKeyDown={(event) => {
                       if (readOnly && !["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Tab"].includes(event.key)) return;
                       // Desfazer/refazer antes de tudo: é atalho com modificador, e o
@@ -346,7 +420,8 @@ function Grid({
                         }
                       }
                       if (event.key === "Enter" || event.key === "F2") { event.preventDefault(); setDraft(cells[key] ?? ""); setEditing(key); return; }
-                      if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onChange(key, ""); return; }
+                      // Delete limpa tudo o que está marcado, não só a célula do cursor.
+                      if (event.key === "Delete" || event.key === "Backspace") { event.preventDefault(); onLimpar(); return; }
                       // Com Shift a seta ESTENDE a faixa em vez de mover o cursor. É o que
                       // todo mundo que veio do Excel tenta antes de tentar arrastar, e no
                       // celular é a única forma sensata de marcar um intervalo.
@@ -560,6 +635,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   }
   function colar(text: string) {
     if (text.length > 2_000_000) { toast.error("A colagem excede 2 MB."); return; }
+    // O que foi copiado aqui mesmo cola com fórmulas, estilos e notas, como no Excel.
+    if (recorteRef.current && mesmoTexto(text, recorteRef.current.texto)) { colarInterno("tudo"); return; }
     // Clipboard from Excel/Sheets is TSV. Guessing commas corrupts decimal values,
     // and guessing semicolons splits formulas. CSV has an explicit delimiter in Tools.
     const table = analisarColagem(text, "\t");
@@ -574,105 +651,60 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   const refazerAgora = () => travelHistory("redo");
 
   // Estrutura da planilha. Cada operação já reajusta as fórmulas em lib/spreadsheet.
-  function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column" | "fill-down") {
+  // `at` e `count` vêm do menu do botão direito: "inserir 3 linhas abaixo" é inserir três
+  // vezes na linha seguinte à seleção. Sem eles vale a posição do cursor, uma vez.
+  function structural(operation: "insert-row" | "delete-row" | "insert-column" | "delete-column", opcoes: { at?: number; count?: number } = {}) {
     const address = parseCellKey(active);
     if (!current || !address || readOnly) return;
-    if (operation === "insert-row" && current.rows >= SHEET_MAX_ROWS) {
-      toast.error(`A planilha já tem o limite de ${SHEET_MAX_ROWS} linhas.`); return;
+    const eixo = operation === "insert-row" || operation === "delete-row" ? "row" : "column";
+    const inserir = operation === "insert-row" || operation === "insert-column";
+    const at = opcoes.at ?? (eixo === "row" ? address.row : address.column);
+    const count = Math.max(1, opcoes.count ?? 1);
+    const total = eixo === "row" ? current.rows : current.columns;
+    const limite = eixo === "row" ? SHEET_MAX_ROWS : SHEET_MAX_COLUMNS;
+    const nome = eixo === "row" ? "linha" : "coluna";
+    if (inserir && total + count > limite) {
+      toast.error(`A planilha tem limite de ${limite} ${nome}s.`); return;
     }
-    if (operation === "insert-column" && current.columns >= SHEET_MAX_COLUMNS) {
-      toast.error(`A planilha já tem o limite de ${SHEET_MAX_COLUMNS} colunas.`); return;
+    if (!inserir && total - count < 1) {
+      toast.error(`A planilha precisa manter pelo menos uma ${nome}.`); return;
     }
-    if (operation === "delete-row" && current.rows <= 1) {
-      toast.error("A planilha precisa manter pelo menos uma linha."); return;
-    }
-    if (operation === "delete-column" && current.columns <= 1) {
-      toast.error("A planilha precisa manter pelo menos uma coluna."); return;
-    }
-
-    const nextRows = operation === "insert-row" ? current.rows + 1
-      : operation === "delete-row" ? current.rows - 1 : current.rows;
-    const nextColumns = operation === "insert-column" ? current.columns + 1
-      : operation === "delete-column" ? current.columns - 1 : current.columns;
-
-    const rotulo =
-      operation === "insert-row" ? `Inserir linha ${address.row + 1}`
-      : operation === "delete-row" ? `Excluir linha ${address.row + 1}`
-      : operation === "insert-column" ? `Inserir coluna ${columnName(address.column)}`
-      : operation === "delete-column" ? `Excluir coluna ${columnName(address.column)}`
-      : "Preencher para baixo";
-
-    // Com um retângulo marcado, cada coluna dele é preenchida a partir da primeira linha —
-    // antes só a coluna do cursor recebia, e as vizinhas ficavam como estavam, sem aviso.
-    // Sem retângulo, a coluna do cursor vai até o fim da planilha.
-    const preencherFaixa = (cells: SheetCells, totalRows: number) => {
-      if (!(selected.length > 1 && faixa)) return fillDown(cells, active, totalRows - 1);
-      const a = parseCellKey(faixa.ancora)!, b = parseCellKey(faixa.foco)!;
-      const topo = Math.min(a.row, b.row), base = Math.max(a.row, b.row);
-      let next = cells;
-      for (let column = Math.min(a.column, b.column); column <= Math.max(a.column, b.column); column += 1) {
-        next = fillDown(next, cellKey({ column, row: topo }), base);
-      }
-      return next;
-    };
+    const posicao = (index: number) => eixo === "row" ? String(index + 1) : columnName(index);
+    const rotulo = `${inserir ? "Inserir" : "Excluir"} ${count > 1 ? `${count} ${nome}s a partir de` : nome} ${posicao(at)}`;
 
     aplicar(rotulo, (sheet) => {
-      const cells = sheet.content.cells;
-      const next =
-        operation === "insert-row" ? insertRow(cells, address.row)
-        : operation === "delete-row" ? deleteRow(cells, address.row)
-        : operation === "insert-column" ? insertColumn(cells, address.column)
-        : operation === "delete-column" ? deleteColumn(cells, address.column)
-        : preencherFaixa(cells, sheet.rows);
-      // Os parâmetros guardam posições (letra de coluna, índice de linha). Sem deslocá-los
-      // junto, a coluna marcada como "Custo" passa a apontar para a vizinha e a leitura
-      // financeira lê a coluna errada, sem erro nenhum na tela.
-      const eixo = operation === "insert-row" || operation === "delete-row" ? "row" : "column";
-      const alvo = eixo === "row" ? address.row : address.column;
-      const passo = operation === "insert-row" || operation === "insert-column" ? 1 : -1;
-      const analysis = operation === "fill-down" ? sheet.content.analysis
-        : moveAnalysis(sheet.content.analysis, eixo, alvo, passo);
-      const boldCells = Object.fromEntries(sheet.content.bold.map(key => [key, "1"]));
-      const bold = operation === "fill-down" ? sheet.content.bold : Object.keys(
-        operation === "insert-row" ? insertRow(boldCells, address.row) : operation === "delete-row" ? deleteRow(boldCells, address.row)
-        : operation === "insert-column" ? insertColumn(boldCells, address.column) : deleteColumn(boldCells, address.column));
-      const moveColumns = <T,>(values: Record<string, T>) => {
-        if (eixo !== "column" || operation === "fill-down") return values;
-        const output: Record<string, T> = {};
-        for (const [key, value] of Object.entries(values)) {
-          const index = parseCellKey(`${key}1`)?.column;
-          if (index === undefined || (passo < 0 && index === alvo)) continue;
-          output[columnName(index < alvo ? index : index + passo)] = value;
-        }
-        return output;
-      };
-      return {
-        ...sheet,
-        rows: nextRows,
-        columns: nextColumns,
-        content: {
-          ...sheet.content, cells: next, analysis, bold, formats: moveColumns(sheet.content.formats), widths: moveColumns(sheet.content.widths),
-          advanced: operation === "fill-down" ? sheet.content.advanced : moveAdvanced(sheet.content.advanced ?? emptyAdvanced, eixo, alvo, passo),
-          // Itálico, cores e mesclagens andam junto com as células, como o negrito.
-          styles: operation === "fill-down" ? sheet.content.styles : shiftKeyed(sheet.content.styles ?? {}, eixo, alvo, passo),
-          merges: operation === "fill-down" ? sheet.content.merges : shiftMerges(sheet.content.merges ?? [], eixo, alvo, passo),
-        },
-      };
+      let next = sheet;
+      for (let vez = 0; vez < count; vez += 1) next = mudarEstrutura(next, eixo, at, inserir ? 1 : -1);
+      return next;
     });
-    if (operation === "delete-row" || operation === "delete-column") {
-      setActive(cellKey({
-        column: Math.min(address.column, nextColumns - 1),
-        row: Math.min(address.row, nextRows - 1),
-      }));
-    }
+    const nextRows = eixo === "row" ? current.rows + (inserir ? count : -count) : current.rows;
+    const nextColumns = eixo === "column" ? current.columns + (inserir ? count : -count) : current.columns;
     // Inserir ou remover desloca os índices. Manter o eixo selecionado faria o
     // total passar a somar outra linha sem aviso nenhum na tela.
-    if (operation !== "fill-down") {
-      setAxis(null);
-      const dentro = cellKey({ column: Math.min(address.column, nextColumns - 1), row: Math.min(address.row, nextRows - 1) });
-      setFaixa({ ancora: dentro, foco: dentro });
-      setAvulsas([]);
-    }
+    const dentro = cellKey({ column: Math.min(eixo === "column" ? at : address.column, nextColumns - 1), row: Math.min(eixo === "row" ? at : address.row, nextRows - 1) });
+    setActive(dentro); setAxis(null); setFaixa({ ancora: dentro, foco: dentro }); setAvulsas([]);
+  }
+
+  // Com um retângulo marcado, cada coluna (ou linha) dele é preenchida a partir da primeira —
+  // antes só a coluna do cursor recebia, e as vizinhas ficavam como estavam, sem aviso.
+  // Sem retângulo, o cursor vai até o fim da planilha.
+  function preencher(direcao: "baixo" | "direita") {
+    if (!current || readOnly) return;
+    const marcado = selected.length > 1 && faixa ? boundsOf(`${faixa.ancora}:${faixa.foco}`) : null;
+    const cursor = parseCellKey(active);
+    if (!cursor) return;
+    const area = marcado ?? (direcao === "baixo"
+      ? { top: cursor.row, bottom: current.rows - 1, left: cursor.column, right: cursor.column }
+      : { top: cursor.row, bottom: cursor.row, left: cursor.column, right: current.columns - 1 });
+    aplicar(direcao === "baixo" ? "Preencher para baixo" : "Preencher à direita", (sheet) => {
+      let cells = sheet.content.cells;
+      if (direcao === "baixo") {
+        for (let column = area.left; column <= area.right; column += 1) cells = fillDown(cells, cellKey({ column, row: area.top }), area.bottom);
+      } else {
+        for (let row = area.top; row <= area.bottom; row += 1) cells = fillRight(cells, cellKey({ column: area.left, row }), area.right);
+      }
+      return { ...sheet, content: { ...sheet.content, cells } };
+    });
   }
 
   function sort(direction: "asc" | "desc") {
@@ -705,6 +737,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         ...content, cells: result.cells,
         bold: Object.keys(remapRows(Object.fromEntries(content.bold.map((key) => [key, true])), result.destination)),
         styles: remapRows(content.styles ?? {}, result.destination),
+        notes: remapRows(content.notes ?? {}, result.destination),
+        hiddenRows: remapIndices(content.hiddenRows ?? [], result.destination),
         merges: (content.merges ?? []).map(moverMesclagem),
       }),
     );
@@ -773,6 +807,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     if (!range || !bounds || (bounds.top === bounds.bottom && bounds.left === bounds.right)) {
       toast.error("Marque um retângulo com duas ou mais células para mesclar."); return;
     }
+    if (boundsHaveHidden(bounds, current.content.hiddenRows ?? [], current.content.hiddenColumns ?? [])) {
+      toast.error("O intervalo tem linha ou coluna oculta. Reexiba antes de mesclar."); return;
+    }
     const ancora = cellKey({ column: bounds.left, row: bounds.top });
     // Como no Excel: só o conteúdo do canto superior esquerdo fica. Avisar antes, porque o
     // resto some da tela (e o desfazer é o único caminho de volta).
@@ -793,6 +830,220 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
   function desmesclar() {
     if (!mesclagemAtiva) return;
     updateContent(`Desfazer mesclagem ${mesclagemAtiva.range}`, content => ({ ...content, merges: unmergeAt(content.merges ?? [], active) }));
+  }
+
+
+  // ─── Área de transferência e menu do botão direito ───
+  // O recorte interno guarda fórmulas, estilos e notas; o texto em TSV vai para o sistema e
+  // serve para saber, na colagem, se o que está lá ainda é o que foi copiado aqui.
+  const recorteRef = useRef<{ recorte: Recorte; texto: string } | null>(null);
+  const [temRecorte, setTemRecorte] = useState(false);
+  const [alvoDoMenu, setAlvoDoMenu] = useState<AlvoDoMenu>({ tipo: "celula" });
+  const [notaEditando, setNotaEditando] = useState<{ key: string; texto: string } | null>(null);
+  const linhasOcultas = useMemo(() => new Set(current?.content.hiddenRows ?? []), [current?.content.hiddenRows]);
+  const colunasOcultas = useMemo(() => new Set(current?.content.hiddenColumns ?? []), [current?.content.hiddenColumns]);
+
+  /** O retângulo marcado; com células avulsas (Ctrl + clique), só a do cursor. */
+  function limitesMarcados(): Bounds | null {
+    const range = intervaloMarcado();
+    if (range) return boundsOf(range);
+    const a = parseCellKey(active);
+    return a ? { top: a.row, bottom: a.row, left: a.column, right: a.column } : null;
+  }
+
+  function copiarSelecao(): string {
+    if (!current) return "";
+    const texto = selectionToTsv(current.content.cells, chavesDoResumo);
+    const bounds = avulsas.length ? null : limitesMarcados();
+    if (bounds) { recorteRef.current = { recorte: copiarIntervalo(current.content, computed, bounds), texto }; setTemRecorte(true); }
+    return texto;
+  }
+
+  function recortarSelecao(): string | null {
+    if (!current || readOnly) return null;
+    const bounds = avulsas.length ? null : limitesMarcados();
+    if (!bounds) { toast.error("Para recortar, marque um retângulo de células."); return null; }
+    const texto = copiarSelecao();
+    aplicar(`Recortar ${rangeOf(bounds)}`, sheet => ({ ...sheet, content: { ...sheet.content, ...limparIntervalo(sheet.content, bounds, "tudo") } }));
+    return texto;
+  }
+
+  function colarInterno(modo: ModoDeColagem) {
+    const guardado = recorteRef.current;
+    const destino = limitesMarcados();
+    if (!current || readOnly || !guardado || !destino) return;
+    const nomes: Record<ModoDeColagem, string> = { tudo: "Colar", valores: "Colar somente valores", formatacao: "Colar somente formatação", transposto: "Colar transposto" };
+    try {
+      const resultado = colarRecorte(current.content, guardado.recorte, { row: destino.top, column: destino.left }, modo);
+      if (boundsHaveHidden(resultado.alvo, current.content.hiddenRows ?? [], current.content.hiddenColumns ?? [])) {
+        toast.error("A colagem cairia em linha ou coluna oculta. Reexiba antes de colar."); return;
+      }
+      aplicar(`${nomes[modo]} em ${rangeOf(resultado.alvo)}`, sheet => ({
+        ...sheet,
+        rows: Math.max(sheet.rows, resultado.alvo.bottom + 1), columns: Math.max(sheet.columns, resultado.alvo.right + 1),
+        content: { ...sheet.content, cells: resultado.cells, styles: resultado.styles, notes: resultado.notes, bold: resultado.bold },
+      }));
+      const ancora = cellKey({ row: resultado.alvo.top, column: resultado.alvo.left });
+      setActive(ancora); setAxis(null); setAvulsas([]);
+      setFaixa({ ancora, foco: cellKey({ row: resultado.alvo.bottom, column: resultado.alvo.right }) });
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível colar."); }
+  }
+
+  async function paraAreaDeTransferencia(texto: string | null) {
+    if (texto === null) return;
+    try { await navigator.clipboard.writeText(texto); }
+    catch { toast.info("Copiado para colar dentro da planilha. Para levar a outro programa, use Ctrl+C."); }
+  }
+
+  async function colarDoMenu() {
+    let texto: string | null = null;
+    try { texto = await navigator.clipboard.readText(); } catch { texto = null; }
+    if (texto && !(recorteRef.current && mesmoTexto(texto, recorteRef.current.texto))) { colar(texto); return; }
+    if (recorteRef.current) { colarInterno("tudo"); return; }
+    toast.info("O navegador não deixou o menu ler a área de transferência. Use Ctrl+V (⌘+V) para colar.");
+  }
+
+  function limparSelecao(oQue: "conteudo" | "formatacao" | "tudo") {
+    if (!current || readOnly) return;
+    const keys = chavesDoResumo.flatMap((key) => {
+      const bloco = mergeAt(mesclagens, key);
+      return bloco && bloco.anchor !== key ? [] : [key];
+    });
+    const rotulo = { conteudo: "Apagar conteúdo", formatacao: "Limpar formatação", tudo: "Limpar tudo" }[oQue];
+    updateContent(`${rotulo} (${keys.length} célula${keys.length === 1 ? "" : "s"})`, content => ({ ...content, ...limparChaves(content, keys, oQue) }));
+  }
+
+  function ocultar(eixo: "row" | "column") {
+    if (!current) return;
+    const bounds = limitesMarcados();
+    if (!bounds) return;
+    const [de, ate] = eixo === "row" ? [bounds.top, bounds.bottom] : [bounds.left, bounds.right];
+    const indices = Array.from({ length: ate - de + 1 }, (_, i) => de + i);
+    const cruzada = mergeCrosses(mesclagens, eixo, indices);
+    if (cruzada) { toast.error(`A mesclagem ${cruzada} ocupa ${eixo === "row" ? "essa linha" : "essa coluna"}. Desfaça-a antes de ocultar.`); return; }
+    const atuais = eixo === "row" ? current.content.hiddenRows ?? [] : current.content.hiddenColumns ?? [];
+    const proximas = [...new Set([...atuais, ...indices])].sort((a, b) => a - b);
+    if (proximas.length >= (eixo === "row" ? current.rows : current.columns)) { toast.error(`Pelo menos uma ${eixo === "row" ? "linha" : "coluna"} precisa ficar visível.`); return; }
+    const nome = eixo === "row"
+      ? (de === ate ? `linha ${de + 1}` : `linhas ${de + 1}–${ate + 1}`)
+      : (de === ate ? `coluna ${columnName(de)}` : `colunas ${columnName(de)}–${columnName(ate)}`);
+    updateContent(`Ocultar ${nome}`, content => eixo === "row" ? { ...content, hiddenRows: proximas } : { ...content, hiddenColumns: proximas });
+    // O cursor não pode ficar numa célula que sumiu da tela.
+    const limite = eixo === "row" ? current.rows : current.columns;
+    let livre = ate + 1;
+    while (livre < limite && proximas.includes(livre)) livre += 1;
+    if (livre >= limite) { livre = de - 1; while (livre > 0 && proximas.includes(livre)) livre -= 1; }
+    const cursor = parseCellKey(active)!;
+    const destino = cellKey(eixo === "row" ? { row: livre, column: cursor.column } : { row: cursor.row, column: livre });
+    setActive(destino); setAxis(null); setAvulsas([]); setFaixa({ ancora: destino, foco: destino });
+  }
+
+  function reexibir(eixo: "row" | "column") {
+    updateContent(eixo === "row" ? "Reexibir linhas" : "Reexibir colunas", content => eixo === "row" ? { ...content, hiddenRows: [] } : { ...content, hiddenColumns: [] });
+  }
+
+  function salvarNota(key: string, texto: string) {
+    const limpo = texto.trim().slice(0, 1000);
+    updateContent(limpo ? `Nota em ${key}` : `Excluir nota de ${key}`, content => {
+      const notes = { ...(content.notes ?? {}) };
+      if (limpo) notes[key] = limpo; else delete notes[key];
+      return { ...content, notes };
+    });
+  }
+
+  function abrirPainelAvancado() {
+    const painel = document.getElementById("planilha-avancado");
+    if (painel instanceof HTMLDetailsElement) { painel.open = true; painel.scrollIntoView({ block: "start", behavior: "smooth" }); }
+  }
+
+  const estadoDoMenu = (() => {
+    const bounds = limitesMarcados() ?? { top: 0, bottom: 0, left: 0, right: 0 };
+    const cursor = parseCellKey(active);
+    const multiplo = bounds.top !== bounds.bottom || bounds.left !== bounds.right;
+    return {
+      alvo: alvoDoMenu, readOnly,
+      linhas: bounds.bottom - bounds.top + 1, colunas: bounds.right - bounds.left + 1,
+      rotuloLinhas: bounds.top === bounds.bottom ? `linha ${bounds.top + 1}` : `linhas ${bounds.top + 1}–${bounds.bottom + 1}`,
+      rotuloColunas: bounds.left === bounds.right ? `coluna ${columnName(bounds.left)}` : `colunas ${columnName(bounds.left)}–${columnName(bounds.right)}`,
+      rotuloIntervalo: multiplo ? rangeOf(bounds) : active,
+      temRecorte, temNota: !!current?.content.notes?.[active],
+      mesclada: !!mesclagemAtiva, podeMesclar: multiplo && !avulsas.length,
+      fixas: current?.content.frozenColumns ?? 0,
+      colunaDoCursor: alvoDoMenu.tipo === "coluna" ? alvoDoMenu.index : cursor?.column ?? 0,
+      ocultas: { linhas: current?.content.hiddenRows?.length ?? 0, colunas: current?.content.hiddenColumns?.length ?? 0 },
+    };
+  })();
+
+  function acaoDoMenu(acao: AcaoDoMenu) {
+    if (!current) return;
+    const bounds = limitesMarcados();
+    if (!bounds) return;
+    const nLinhas = bounds.bottom - bounds.top + 1, nColunas = bounds.right - bounds.left + 1;
+    if (acao.startsWith("cor:")) { const cor = acao.slice(4); definirEstilo("color", (cor || undefined) as CellStyle["color"], cor ? `Cor do texto: ${colorLabels[cor]}` : "Cor do texto padrão"); return; }
+    if (acao.startsWith("fundo:")) { const cor = acao.slice(6); definirEstilo("fill", (cor || undefined) as CellStyle["fill"], cor ? `Preenchimento: ${colorLabels[cor]}` : "Sem preenchimento"); return; }
+    switch (acao) {
+      case "copiar": void paraAreaDeTransferencia(copiarSelecao()); return;
+      case "recortar": void paraAreaDeTransferencia(recortarSelecao()); return;
+      case "colar": void colarDoMenu(); return;
+      case "colar-valores": colarInterno("valores"); return;
+      case "colar-formatacao": colarInterno("formatacao"); return;
+      case "colar-transposto": colarInterno("transposto"); return;
+      case "inserir-linhas-acima": structural("insert-row", { at: bounds.top, count: nLinhas }); return;
+      case "inserir-linhas-abaixo": structural("insert-row", { at: bounds.bottom + 1, count: nLinhas }); return;
+      case "inserir-colunas-esquerda": structural("insert-column", { at: bounds.left, count: nColunas }); return;
+      case "inserir-colunas-direita": structural("insert-column", { at: bounds.right + 1, count: nColunas }); return;
+      case "excluir-linhas": structural("delete-row", { at: bounds.top, count: nLinhas }); return;
+      case "excluir-colunas": structural("delete-column", { at: bounds.left, count: nColunas }); return;
+      case "limpar-conteudo": limparSelecao("conteudo"); return;
+      case "limpar-formatacao": limparSelecao("formatacao"); return;
+      case "limpar-tudo": limparSelecao("tudo"); return;
+      case "ordenar-asc": sort("asc"); return;
+      case "ordenar-desc": sort("desc"); return;
+      case "filtrar-valor": {
+        const cursor = parseCellKey(active);
+        const texto = cursor ? formattedCell(computed[active], current.content.formats[columnName(cursor.column)]) : "";
+        if (!texto) { toast.info("A célula está vazia. Não há valor para filtrar."); return; }
+        setRowFilter(texto); return;
+      }
+      case "negrito": alternarNegrito(); return;
+      case "italico": alternarMarca("italic"); return;
+      case "sublinhado": alternarMarca("underline"); return;
+      case "tachado": alternarMarca("strike"); return;
+      case "quebra": alternarMarca("wrap"); return;
+      case "alinhar-esquerda": definirEstilo("align", "left", "Alinhar à esquerda"); return;
+      case "alinhar-centro": definirEstilo("align", "center", "Alinhar ao centro"); return;
+      case "alinhar-direita": definirEstilo("align", "right", "Alinhar à direita"); return;
+      case "mesclar": mesclar(); return;
+      case "desmesclar": desmesclar(); return;
+      case "nota": setNotaEditando({ key: active, texto: current.content.notes?.[active] ?? "" }); return;
+      case "excluir-nota": salvarNota(active, ""); return;
+      case "ocultar-linhas": ocultar("row"); return;
+      case "ocultar-colunas": ocultar("column"); return;
+      case "reexibir-linhas": reexibir("row"); return;
+      case "reexibir-colunas": reexibir("column"); return;
+      case "autoajustar":
+        updateContent(`Ajustar largura de ${nColunas === 1 ? `${columnName(bounds.left)}` : `${columnName(bounds.left)}–${columnName(bounds.right)}`}`, content => {
+          const widths = { ...content.widths };
+          for (let column = bounds.left; column <= bounds.right; column += 1) {
+            widths[columnName(column)] = larguraIdeal(computed, content.formats[columnName(column)], column, current.rows);
+          }
+          return { ...content, widths };
+        });
+        return;
+      case "fixar-ate-aqui": {
+        const coluna = estadoDoMenu.colunaDoCursor;
+        if (coluna > 1) { toast.error("Dá para fixar no máximo as colunas A e B."); return; }
+        updateContent(`Fixar até a coluna ${columnName(coluna)}`, content => ({ ...content, frozenColumns: coluna + 1 }));
+        return;
+      }
+      case "soltar-fixas": updateContent("Soltar colunas fixas", content => ({ ...content, frozenColumns: 0 })); return;
+      case "preencher-baixo": preencher("baixo"); return;
+      case "preencher-direita": preencher("direita"); return;
+      case "autosoma": insertFunction("SOMA"); return;
+      case "selecionar-linha": { const c = parseCellKey(active); if (c) selectAxis("row", c.row); return; }
+      case "selecionar-coluna": { const c = parseCellKey(active); if (c) selectAxis("column", c.column); return; }
+      case "validacao": case "formatacao-condicional": abrirPainelAvancado(); return;
+    }
   }
 
   function updateCell(key: string, value: string) {
@@ -991,7 +1242,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
    */
   function imprimir() {
     if (!current) return;
-    const { letras, linhas } = tabelaParaImpressao(computed, current.content.formats, current.content.bold, current.columns, current.rows, current.content.styles ?? {}, current.content.merges ?? []);
+    const { letras, linhas, numeros } = tabelaParaImpressao(computed, current.content.formats, current.content.bold, current.columns, current.rows, current.content.styles ?? {}, current.content.merges ?? [], { linhas: current.content.hiddenRows ?? [], colunas: current.content.hiddenColumns ?? [] });
     if (!linhas.length) { toast.info("A planilha está vazia. Não há o que imprimir."); return; }
     const frame = document.createElement("iframe");
     frame.setAttribute("aria-hidden", "true");
@@ -1012,7 +1263,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     const corpo = tabela.createTBody();
     linhas.forEach((linha, indice) => {
       const tr = corpo.insertRow();
-      const numero = doc.createElement("th"); numero.textContent = String(indice + 1); tr.append(numero);
+      const numero = doc.createElement("th"); numero.textContent = String(numeros[indice]); tr.append(numero);
       for (const celula of linha) {
         if (celula.coberta) continue;
         const td = tr.insertCell();
@@ -1178,13 +1429,23 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 <Button size="sm" variant="outline" onClick={imprimir}><Printer />Imprimir ou PDF</Button>
               </div>
               {rowFilter && <p className="text-xs text-hoikos-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
+              {estadoDoMenu.ocultas.linhas || estadoDoMenu.ocultas.colunas ? (
+                <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-hoikos-600">
+                  {[estadoDoMenu.ocultas.linhas ? `${estadoDoMenu.ocultas.linhas} linha(s) oculta(s)` : "", estadoDoMenu.ocultas.colunas ? `${estadoDoMenu.ocultas.colunas} coluna(s) oculta(s)` : ""].filter(Boolean).join(" · ")}
+                  , fora da tela e da impressão, mas dentro das contas.
+                  {readOnly ? null : <>
+                    {estadoDoMenu.ocultas.linhas ? <Button size="xs" variant="outline" onClick={() => reexibir("row")}>Reexibir linhas</Button> : null}
+                    {estadoDoMenu.ocultas.colunas ? <Button size="xs" variant="outline" onClick={() => reexibir("column")}>Reexibir colunas</Button> : null}
+                  </>}
+                </p>
+              ) : null}
               {!readOnly && <WorksheetToolsPanel key={current.id} cells={current.content.cells} keys={chavesDoResumo} recipes={current.content.recipes ?? []}
                 onCells={cells => updateContent(content => ({ ...content, cells }))} onTable={insertTable}
                 onRecipes={recipes => updateContent(content => ({ ...content, recipes }))} />}
-              <WorksheetAdvancedPanel key={`advanced-${current.id}`} computed={computed} settings={advanced} columns={current.columns} selectedRange={active} readOnly={readOnly}
+              <WorksheetAdvancedPanel key={`advanced-${current.id}`} computed={computed} settings={advanced} columns={current.columns} selectedRange={estadoDoMenu.rotuloIntervalo} readOnly={readOnly}
                 onChange={advanced => updateContent("Alterar regras e resumos", content => ({ ...content, advanced }))} onTable={insertTable} />
               <WorksheetXlsxPanel key={`xlsx-${current.id}`} id={current.id} name={current.name} revision={current.revision} dirty={dirty} readOnly={readOnly} onImport={imported => {
-                aplicar(`Importar XLSX: ${imported.name}`, sheet => ({ ...sheet, rows: imported.rows, columns: imported.columns, content: { ...sheet.content, cells: imported.cells, formats: {}, widths: {}, bold: imported.bold ?? [], styles: imported.styles ?? {}, merges: imported.merges ?? [], frozenColumns: 0, advanced: emptyAdvanced, analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }));
+                aplicar(`Importar XLSX: ${imported.name}`, sheet => ({ ...sheet, rows: imported.rows, columns: imported.columns, content: { ...sheet.content, cells: imported.cells, formats: {}, widths: {}, bold: imported.bold ?? [], styles: imported.styles ?? {}, merges: imported.merges ?? [], notes: imported.notes ?? {}, hiddenRows: imported.hiddenRows ?? [], hiddenColumns: imported.hiddenColumns ?? [], frozenColumns: 0, advanced: emptyAdvanced, analysis: { headerRow: 0, roles: {}, targetMarginPercent: 20, ignoreRows: [] } } }));
                 setActive("A1"); setAxis(null); setFaixa({ ancora: "A1", foco: "A1" }); setAvulsas([]); setRowFilter("");
               }} />
               {!readOnly && advanced.validations.filter(rule => rule.kind === "list").map((rule, index) => {
@@ -1221,7 +1482,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-column")}><Columns3 />Inserir coluna</Button>
                   <Button size="sm" variant="ghost" onClick={() => structural("delete-column")}>Remover coluna</Button>
                   <span className="mx-1 h-5 w-px bg-hoikos-200" />
-                  <Button size="sm" variant="ghost" onClick={() => structural("fill-down")}>Preencher para baixo</Button>
+                  <Button size="sm" variant="ghost" onClick={() => preencher("baixo")}>Preencher para baixo</Button>
                   <Button size="sm" variant="ghost" onClick={() => sort("asc")}><ArrowDownAZ />Ordenar ↑</Button>
                   <Button size="sm" variant="ghost" onClick={() => sort("desc")}><ArrowDownWideNarrow />Ordenar ↓</Button>
                 </div>
@@ -1270,10 +1531,14 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   <option value="0">Sem colunas fixas</option><option value="1">Fixar coluna A</option><option value="2">Fixar colunas A e B</option>
                 </NativeSelect>
               </div>}
+              <ContextMenu onOpenChange={(aberto) => { if (!aberto) setAlvoDoMenu({ tipo: "celula" }); }}>
+              <ContextMenuTrigger asChild><div>
               <Grid
+                notes={current.content.notes ?? {}} hiddenRows={linhasOcultas} hiddenColumns={colunasOcultas}
+                onContexto={setAlvoDoMenu} onLimpar={() => limparSelecao("conteudo")} onRecortar={recortarSelecao}
                 colors={colors} issues={issues}
                 formats={current.content.formats} bold={current.content.bold} widths={current.content.widths} filter={rowFilter} readOnly={readOnly}
-                onCopyCells={() => selectionToTsv(current.content.cells, chavesDoResumo)}
+                onCopyCells={copiarSelecao}
                 cells={current.content.cells} columns={current.columns} rows={current.rows}
                 computed={computed} active={active} selected={selectedSet} axis={axis}
                 onActive={selectCell} onEstender={estenderAte} onAxis={selectAxis} onChange={updateCell}
@@ -1282,6 +1547,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 styles={estilos} merges={mesclagens} onFormatar={formatarAtalho}
                 onWidth={(column, width) => updateContent(`Largura da coluna ${columnName(column)}`, (content) => ({ ...content, widths: { ...content.widths, [columnName(column)]: width } }))}
               />
+              </div></ContextMenuTrigger>
+              <WorksheetContextMenu estado={estadoDoMenu} onAcao={acaoDoMenu} />
+              </ContextMenu>
               {/*
                 A barra de resumo. Antes era uma frase de ajuda com uma soma grudada no
                 fim, que depois de qualquer clique dizia "Soma da seleção (1 células)":
@@ -1344,6 +1612,26 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         )}
       </CardContent>
     </Card>}
+
+    <Dialog open={!!notaEditando} onOpenChange={(aberto) => { if (!aberto) setNotaEditando(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nota em {notaEditando?.key}</DialogTitle>
+          <DialogDescription>Fica no canto da célula e aparece ao passar o mouse. Não entra nas contas.</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); if (notaEditando) { salvarNota(notaEditando.key, notaEditando.texto); setNotaEditando(null); } }}>
+          <label htmlFor="nota-da-celula" className="sr-only">Texto da nota</label>
+          <Textarea id="nota-da-celula" autoFocus maxLength={1000} value={notaEditando?.texto ?? ""}
+            onChange={(event) => setNotaEditando((atual) => atual ? { ...atual, texto: event.target.value } : atual)}
+            placeholder="Ex.: preço cotado com o fornecedor em 12/09" className="min-h-28" />
+          <p className="text-right text-xs text-hoikos-500">{notaEditando?.texto.length ?? 0}/1000</p>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNotaEditando(null)}>Cancelar</Button>
+            <Button type="submit">Salvar nota</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   </fieldset>;
 }
 

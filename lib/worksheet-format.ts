@@ -224,3 +224,34 @@ export function styleCss(style: CellStyle | undefined) {
     ...(style.wrap ? { whiteSpace: "pre-wrap" as const, overflowWrap: "anywhere" as const } : {}),
   };
 }
+
+/** Índices (linhas ou colunas ocultas) depois de inserir ou remover uma linha/coluna. */
+export function shiftIndices(list: number[], at: number, delta: number, limit: number): number[] {
+  const next = new Set<number>();
+  for (const index of list) {
+    if (delta < 0 && index === at) continue;
+    const moved = index < at ? index : index + delta;
+    if (moved >= 0 && moved < limit) next.add(moved);
+  }
+  return [...next].sort((a, b) => a - b);
+}
+
+export function remapIndices(list: number[], destination: Record<number, number>) {
+  return [...new Set(list.map((index) => destination[index] ?? index))].sort((a, b) => a - b);
+}
+
+/** Mesclagem que ocupa mais de uma posição no eixo e toca os índices: ocultar quebraria o bloco. */
+export function mergeCrosses(merges: string[], axis: "row" | "column", indices: number[]) {
+  return merges.find((range) => {
+    const bounds = boundsOf(range);
+    if (!bounds) return false;
+    const [start, end] = axis === "row" ? [bounds.top, bounds.bottom] : [bounds.left, bounds.right];
+    return end > start && indices.some((index) => index >= start && index <= end);
+  }) ?? null;
+}
+
+/** Algum índice oculto dentro do intervalo? Mesclar por cima de oculto desenharia errado. */
+export function boundsHaveHidden(bounds: Bounds, hiddenRows: number[], hiddenColumns: number[]) {
+  return hiddenRows.some((row) => row >= bounds.top && row <= bounds.bottom)
+    || hiddenColumns.some((column) => column >= bounds.left && column <= bounds.right);
+}

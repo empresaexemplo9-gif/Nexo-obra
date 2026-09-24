@@ -6,7 +6,10 @@ import { boundsOf, fillColors, MAX_MERGES, rangeOf, textColors, type CellStyle, 
 import { contentSchema } from "@/lib/worksheets";
 import type { z } from "zod";
 
-export type ImportedSheet = { name: string; cells: SheetCells; rows: number; columns: number; warnings: string[]; bold: string[]; styles: CellStyles; merges: string[] };
+export type ImportedSheet = {
+  name: string; cells: SheetCells; rows: number; columns: number; warnings: string[];
+  bold: string[]; styles: CellStyles; merges: string[]; notes: Record<string, string>; hiddenRows: number[]; hiddenColumns: number[];
+};
 const MAX_FILE = 4 * 1024 * 1024;
 
 export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
@@ -28,7 +31,7 @@ export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
   return workbook.worksheets.map(sheet => {
     if (sheet.rowCount > 500 || sheet.columnCount > 52) throw new Error(`A aba ${sheet.name} excede 500 linhas ou 52 colunas. Reduza o arquivo antes de importar.`);
     const cells: SheetCells = {}; let formulas = 0;
-    const bold: string[] = []; const styles: CellStyles = {};
+    const bold: string[] = []; const styles: CellStyles = {}; const notes: Record<string, string> = {};
     // Mesclagens do arquivo, dentro da grade e sem sobrepor. As que não cabem viram aviso.
     const merges: string[] = []; let ignoredMerges = 0;
     for (const range of (sheet.model as { merges?: string[] }).merges ?? []) {
@@ -51,6 +54,9 @@ export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
       if (horizontal === "center" || horizontal === "centerContinuous") style.align = "center";
       if (Object.keys(style).length) styles[key] = style;
       if (cell.font?.bold) bold.push(key);
+      const note = typeof cell.note === "string" ? cell.note
+        : cell.note && typeof cell.note === "object" && "texts" in cell.note ? (cell.note.texts ?? []).map((part) => part.text).join("") : "";
+      if (note.trim()) notes[key] = note.trim().slice(0, 1000);
       let value = cell.value;
       if (value && typeof value === "object" && ("formula" in value || "sharedFormula" in value)) {
         formulas++;
@@ -74,10 +80,12 @@ export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
       if (totalCells > 20_000) throw new Error("O arquivo excede 20.000 células preenchidas.");
     }));
     return {
-      name: sheet.name, cells, bold: bold.slice(0, 5000), styles, merges,
+      name: sheet.name, cells, bold: bold.slice(0, 5000), styles, merges, notes,
+      hiddenRows: Array.from({ length: Math.min(sheet.rowCount, 500) }, (_, i) => i).filter((i) => sheet.getRow(i + 1).hidden),
+      hiddenColumns: Array.from({ length: Math.min(sheet.columnCount, 52) }, (_, i) => i).filter((i) => sheet.getColumn(i + 1).hidden),
       rows: Math.max(1, sheet.rowCount), columns: Math.max(1, sheet.columnCount),
       warnings: [
-        "Vêm do arquivo: valores, negrito, itálico, sublinhado, tachado, alinhamento, quebra de texto e mesclagens. Cores, bordas, imagens, gráficos e regras não são transferidos.",
+        "Vêm do arquivo: valores, negrito, itálico, sublinhado, tachado, alinhamento, quebra de texto, mesclagens, notas e linhas/colunas ocultas. Cores, bordas, imagens, gráficos e regras não são transferidos.",
         ...(formulas ? [`${formulas} fórmula(s) serão importadas como resultados salvos, sem recalcular vínculos.`] : []),
         ...(ignoredMerges ? [`${ignoredMerges} mesclagem(ns) fora da grade ou além do limite de ${MAX_MERGES} foram ignoradas.`] : []),
       ],
@@ -117,6 +125,9 @@ export async function exportXlsx(name: string, content: z.infer<typeof contentSc
     if (style.fill && !colors[key]) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + fillColors[style.fill].slice(1).toUpperCase() } };
   }
   for (const range of content.merges) sheet.mergeCells(range);
+  for (const [key, note] of Object.entries(content.notes)) sheet.getCell(key).note = note;
+  for (const row of content.hiddenRows) sheet.getRow(row + 1).hidden = true;
+  for (const column of content.hiddenColumns) sheet.getColumn(column + 1).hidden = true;
   const formulas = Object.entries(content.cells).filter(([, raw]) => raw.startsWith("="));
   if (formulas.length) {
     const reference = workbook.addWorksheet(sheet.name.toLocaleLowerCase("pt-BR") === "fórmulas de referência" ? "Referência das fórmulas" : "Fórmulas de referência");

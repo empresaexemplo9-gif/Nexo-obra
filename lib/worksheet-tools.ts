@@ -149,9 +149,12 @@ export function aplicarSugestao(raw: string, parcial: string, funcao: string) {
  */
 export function tabelaParaImpressao(
   computed: SheetResult, formats: Record<string, string>, bold: string[], columns: number, rows: number,
-  styles: CellStyles = {}, merges: string[] = [],
+  styles: CellStyles = {}, merges: string[] = [], ocultas: { linhas: number[]; colunas: number[] } = { linhas: [], colunas: [] },
 ) {
   let ultimaLinha = -1, ultimaColuna = -1;
+  // Oculta na tela é oculta no papel, como no Excel. Mesclagem nunca cruza oculta (a tela
+  // recusa as duas coisas juntas), então pular a linha não quebra nenhum bloco.
+  const linhaOculta = new Set(ocultas.linhas), colunaOculta = new Set(ocultas.colunas);
   const layout = mergeLayout(merges);
   const alcancar = (row: number, column: number) => {
     if (row >= rows || column >= columns) return;
@@ -167,8 +170,11 @@ export function tabelaParaImpressao(
     if (bloco) alcancar(bloco.bottom, bloco.right);
   }
   const negrito = new Set(bold);
-  const letras = Array.from({ length: ultimaColuna + 1 }, (_, column) => columnName(column));
-  const linhas = Array.from({ length: ultimaLinha + 1 }, (_, row) => letras.map((letra, column) => {
+  const colunasVisiveis = Array.from({ length: ultimaColuna + 1 }, (_, column) => column).filter((column) => !colunaOculta.has(column));
+  const numeros = Array.from({ length: ultimaLinha + 1 }, (_, row) => row).filter((row) => !linhaOculta.has(row));
+  const letras = colunasVisiveis.map((column) => columnName(column));
+  const linhas = numeros.map((row) => colunasVisiveis.map((column) => {
+    const letra = columnName(column);
     const key = cellKey({ column, row });
     const result = computed[key];
     const bloco = layout.anchors.get(key);
@@ -184,5 +190,18 @@ export function tabelaParaImpressao(
       css: { ...styleCss(estilo), ...(estilo?.fill ? { backgroundColor: fillColors[estilo.fill] } : {}) },
     };
   }));
-  return { letras, linhas };
+  return { letras, linhas, numeros: numeros.map((row) => row + 1) };
+}
+
+/**
+ * Largura que cabe o maior texto exibido na coluna — o "AutoAjuste" do Excel. É uma
+ * estimativa por caractere, sem medir fonte: não há DOM aqui, e ela roda também em teste.
+ */
+export function larguraIdeal(computed: SheetResult, format: string | undefined, column: number, rows: number) {
+  let maior = 0;
+  for (let row = 0; row < rows; row += 1) {
+    const texto = formattedCell(computed[cellKey({ column, row })], format);
+    maior = Math.max(maior, ...texto.split("\n").map((linha) => linha.length));
+  }
+  return Math.max(60, Math.min(600, Math.round(maior * 7.5 + 24)));
 }

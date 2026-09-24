@@ -53,7 +53,7 @@ export function WorksheetAdvancedPanel({ computed, settings, columns, selectedRa
     onChange(result.data);
   }
   const numeric = (text: string) => text.trim() === "" ? undefined : Number(text.replace(",", "."));
-  return <details className="rounded-md border p-3 text-sm">
+  return <details id="planilha-avancado" className="rounded-md border p-3 text-sm">
     <summary className="cursor-pointer font-medium">Validação, cores, gráficos e tabelas dinâmicas</summary>
     <div className="mt-3 space-y-4">
       <p className="text-xs">As regras e os resumos acompanham as alterações dos dados. Salve para guardar a configuração. Datas aceitam DD/MM/AAAA.</p>

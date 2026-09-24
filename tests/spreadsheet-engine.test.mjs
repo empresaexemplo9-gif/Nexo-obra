@@ -209,3 +209,8 @@ test("texto entre aspas não é confundido com endereço ao reajustar", () => {
   const next = sheet.insertRow({ A5: '=SE(A1>0;"B2 aprovado";A2)' }, 1);
   assert.equal(next.A6, '=SE(A1>0;"B2 aprovado";A3)');
 });
+
+test("0.125 é decimal, não cento e vinte e cinco", () => {
+  assert.equal(sheet.parseNumber("0.125"), 0.125);
+  assert.equal(sheet.parseNumber("1.500"), 1500, "grupo de três com dígito inicial continua milhar");
+});

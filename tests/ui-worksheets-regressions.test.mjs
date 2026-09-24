@@ -19,7 +19,11 @@ const { WorksheetsWorkspace } = await vite.ssrLoadModule("/components/worksheets
 after(async () => { await vite.close(); dom.cleanup(); });
 
 let container; let reactRoot;
-beforeEach(() => {
+beforeEach(async () => {
+  // Desmontar a raiz anterior: removida do DOM ela continuava viva, com os ouvintes de
+  // `window` e `document` respondendo aos eventos do teste seguinte.
+  if (reactRoot) await act(async () => { reactRoot.unmount(); });
+  document.body.replaceChildren();
   container?.remove();
   container = document.createElement("div");
   document.body.append(container);
@@ -794,4 +798,126 @@ test("somente leitura não mostra a barra de formatação", async () => {
   await settle();
   assert.equal(barraDeFormatacao(), null);
   assert.equal(container.querySelector("#cell-A1").style.fontStyle, "italic", "mas a formatação aparece");
+});
+
+// ─── Menu do botão direito ───
+
+async function botaoDireito(elemento) {
+  await act(async () => {
+    elemento.dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10, button: 2 }));
+  });
+  await settle();
+  return document.querySelector('[role="menu"]');
+}
+async function escolherNoMenu(texto) {
+  const item = [...document.querySelectorAll('[role="menuitem"]')].find((node) => texto.test(node.textContent ?? ""));
+  assert.ok(item, `item ${texto} no menu`);
+  await act(async () => { item.click(); });
+  await settle();
+}
+
+test("botão direito numa célula abre o menu com as ações do Excel", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { A1: "Etapa" } } });
+  const menu = await botaoDireito(container.querySelector("#cell-B2"));
+  assert.ok(menu, "o menu abriu");
+  const texto = textOf(menu);
+  for (const acao of [/Recortar/, /Copiar/, /Colar/, /Inserir linha acima/, /Inserir coluna à esquerda/, /Excluir linha 2/, /Ordenar/, /Inserir nota/, /Ocultar linha 2/, /Preencher à direita/]) {
+    assert.match(texto, acao);
+  }
+  assert.equal(container.querySelector('[aria-label="Conteúdo da célula"]').closest("div").querySelector("span").textContent, "B2", "a célula clicada virou a ativa");
+});
+
+test("inserir 2 linhas abaixo de uma seleção de 2 linhas, pelo menu", async () => {
+  await openWorksheet({ rows: 5, content: { ...worksheet().content, cells: { A1: "um", A2: "dois", A3: "três" } } });
+  await clickCell("A1");
+  await clickCell("A2", { shiftKey: true });
+  await botaoDireito(container.querySelector("#cell-A2"));
+  await escolherNoMenu(/Inserir 2 linhas abaixo/);
+  assert.equal(container.querySelector("#cell-A2").textContent, "dois");
+  assert.equal(container.querySelector("#cell-A3").textContent, "");
+  assert.equal(container.querySelector("#cell-A4").textContent, "");
+  assert.equal(container.querySelector("#cell-A5").textContent, "três");
+});
+
+test("ocultar a linha pelo menu tira da grade e o aviso permite reexibir", async () => {
+  await openWorksheet({ rows: 4, content: { ...worksheet().content, cells: { A1: "1", A2: "2", A3: "=SOMA(A1:A2)" } } });
+  await botaoDireito(container.querySelector("#cell-A2"));
+  await escolherNoMenu(/Ocultar linha 2/);
+  assert.equal(container.querySelector("#cell-A2"), null, "a linha saiu da tela");
+  assert.equal(container.querySelector("#cell-A3").textContent, "3", "mas continua nas contas");
+  assert.match(textOf(container), /1 linha\(s\) oculta\(s\)/);
+  await act(async () => { findByText(container, /Reexibir linhas/, "button").click(); });
+  assert.ok(container.querySelector("#cell-A2"));
+});
+
+test("nota pelo menu: marca o canto, entra no nome acessível e sai ao excluir", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { A1: "Cimento" } } });
+  await botaoDireito(container.querySelector("#cell-A1"));
+  await escolherNoMenu(/Inserir nota/);
+  const campo = document.querySelector("#nota-da-celula");
+  assert.ok(campo, "o diálogo de nota abriu");
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+  await act(async () => { setter.call(campo, "Preço de 12/09"); campo.dispatchEvent(new window.Event("input", { bubbles: true })); });
+  await act(async () => { campo.form.requestSubmit(); });
+  await settle();
+  assert.match(container.querySelector("#cell-A1").getAttribute("aria-label"), /nota: Preço de 12\/09/);
+  assert.match(container.querySelector("#cell-A1").parentElement.title, /Nota: Preço de 12\/09/);
+  await botaoDireito(container.querySelector("#cell-A1"));
+  await escolherNoMenu(/Excluir nota/);
+  assert.doesNotMatch(container.querySelector("#cell-A1").getAttribute("aria-label"), /nota/);
+});
+
+test("copiar e colar somente valores pelo menu", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { A1: "4", B1: "=A1*10" }, styles: { B1: { italic: true } } } });
+  await botaoDireito(container.querySelector("#cell-B1"));
+  await escolherNoMenu(/^Copiar/);
+  await clickCell("C3");
+  await botaoDireito(container.querySelector("#cell-C3"));
+  const sub = [...document.querySelectorAll('[role="menuitem"]')].find((node) => /Colar especial/.test(node.textContent ?? ""));
+  await act(async () => { sub.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); });
+  await settle();
+  await escolherNoMenu(/Somente valores/);
+  assert.equal(container.querySelector("#cell-C3").textContent, "40");
+  assert.equal(container.querySelector("#cell-C3").style.fontStyle, "", "a formatação não veio");
+  await act(async () => { container.querySelector("#cell-C3").click(); });
+  assert.equal(container.querySelector('[aria-label="Conteúdo da célula"]').value, "40", "é valor, não fórmula");
+});
+
+test("Delete limpa todas as células marcadas, não só a do cursor", async () => {
+  await openWorksheet({ content: { ...worksheet().content, cells: { A1: "1", B1: "2", C1: "3" } } });
+  await clickCell("A1");
+  await clickCell("B1", { shiftKey: true });
+  await apertar(container.querySelector("#cell-B1"), "Delete");
+  assert.equal(container.querySelector("#cell-A1").textContent, "");
+  assert.equal(container.querySelector("#cell-B1").textContent, "");
+  assert.equal(container.querySelector("#cell-C1").textContent, "3");
+});
+
+test("somente leitura: o menu só oferece copiar, filtrar e selecionar", async () => {
+  const current = worksheet({ content: { ...worksheet().content, cells: { A1: "x" } } });
+  const summary = { ...current }; delete summary.content;
+  stubFetch({
+    "/api/worksheets/data": { sources: [] },
+    "/api/worksheets": { worksheets: [summary], canGovern: false },
+    "/api/worksheets/w1": { worksheet: current, access: { canView: true, canEdit: false, canGovern: false, level: "view" } },
+  });
+  await act(async () => { reactRoot.render(React.createElement(WorksheetsWorkspace, { query: "" })); });
+  await settle();
+  const menu = await botaoDireito(container.querySelector("#cell-A1"));
+  const texto = textOf(menu);
+  assert.match(texto, /Copiar/);
+  assert.match(texto, /Filtrar pelo valor/);
+  for (const proibido of [/Recortar/, /Colar/, /Excluir/, /Inserir/, /Ocultar/, /nota/]) assert.doesNotMatch(texto, proibido);
+});
+
+test("pressionar o botão direito dentro da seleção não a desfaz", async () => {
+  await openWorksheet({ rows: 4, content: { ...worksheet().content, cells: { A1: "um", A2: "dois" } } });
+  await clickCell("A1");
+  await clickCell("B2", { shiftKey: true });
+  await act(async () => {
+    container.querySelector("#cell-B2").dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, button: 2, pointerType: "mouse" }));
+  });
+  const menu = await botaoDireito(container.querySelector("#cell-B2"));
+  assert.match(textOf(menu), /A1:B2/, "o menu age sobre o intervalo marcado");
+  assert.match(textOf(menu), /Excluir linhas 1–2/);
 });
