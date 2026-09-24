@@ -24,6 +24,8 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 
 O GitHub (`origin`) é o repositório principal e **só existe a branch `main`**. Toda implementação e toda implantação são feitas direto na `main`: não crie branches nem pull requests. Antes de enviar, rode lint, tipagem, testes e build; a `main` publica em produção, então só vai para ela o que passou em tudo.
 
+A publicação é automática: o Vercel (plano Hobby) constrói cada envio à `main`, mas só quando o autor do commit é o dono da conta. Commit com outro autor não gera deploy e a produção fica no código antigo. Antes do primeiro commit da sessão, configure o autor com `git config user.name "empresaexemplo9-gif"` e `git config user.email "empresaexemplo9@gmail.com"`.
+
 O GitLab é espelho opcional. Só quando `GITLAB_REPO_URL` e `GITLAB_TOKEN` (escopo `write_repository`) estiverem nas variáveis do ambiente, envie também a `main` ao GitLab, montando a URL autenticada só na hora do envio e sem gravá-la em `.git/config`. Token nunca vai para código, commit ou chat.
 
 ## Regra de interface
