@@ -44,21 +44,60 @@ heap no tamanho inicial, o DXF saía corrompido. O servidor reserva folga de mem
 da primeira conversão, e toda saída é conferida — DXF com cabeçalho ou nomes de entidade
 ilegíveis é recusado com mensagem, nunca repassado.
 
-## Ferramentas
+## Trabalhar como no AutoCAD
 
-Seleção (clique, Shift, janela), linha, polilinha, retângulo, parede, cômodo, porta, janela,
-passagem, símbolos elétricos e de iluminação, mobília, imagem, texto, cota, traço livre,
-círculo, arco, espelhar, aparar e estender; comandos digitados (`L`, `PL`, `C`, `A`, `REC`,
-`EL`, `POL`, `DIM`, `T`, `M`, `CO`, `RO`, `SC`, `MI`, `O`, `AR`, `AP`, `E`, `J`, `TR`,
-`EX`) desenham na camada escolhida.
+O editor segue o jeito do AutoCAD: cada botão é um comando, e todo comando também se
+digita. A linha de comando fica embaixo do desenho, com o histórico em cima (F2 abre mais
+linhas), o prompt do passo atual com as opções entre colchetes e o padrão entre `< >`.
 
-- **Aparar**: clique no pedaço que deve sumir. Ele é cortado entre as duas linhas que o
-  cruzam mais perto do clique (ou até a ponta). Polilinha cortada no meio vira duas; círculo
-  cortado em dois pontos vira arco. Todo o desenho visível serve de limite.
-- **Estender**: clique perto da ponta; ela cresce até a primeira linha no caminho.
-- **Espelhar**: cópia refletida; texto continua legível.
-- **Encaixe**: extremo, interseção, perpendicular, meio, centro, quadrante, tangente e mais
-  próximo, consultados num índice espacial (o desenho não é varrido a cada movimento).
+- **Digitar em qualquer lugar** escreve na linha de comando. Enter ou Espaço confirmam;
+  Enter ou Espaço sem nada repetem o último comando; Esc cancela e limpa a seleção. Setas
+  para cima e para baixo trazem de volta o que foi digitado; Tab completa o nome.
+- **Clique direito** rápido é Enter: conclui o passo ou repete o último comando.
+- **Opções** do prompt (Fechar, Desfazer, Diâmetro, Cópia, Referência…) aceitam a letra, o
+  nome inteiro ou o clique no botão ao lado do prompt.
+- **Coordenadas** em mm: `x,y` absoluto, `@dx,dy` relativo ao último ponto, `d<a`
+  distância e ângulo a partir do ponto base, `#x,y` e `#d<a` absolutos, e só a distância
+  (`3000`) na direção do cursor. `END`, `MID`, `CEN`, `INT`, `PER`, `QUA`, `TAN` e `NEA`
+  forçam um encaixe só para o próximo ponto.
+- **Nomes em português e em inglês**: `LINHA` ou `L`/`LINE`, `APARAR` ou `TR`/`TRIM`, e
+  assim por diante. A lista completa está em "Comandos e atalhos", embaixo do prompt.
+- Uma linha inteira ainda vale como script (`L 0,0 3000,0`, `CO @100,100`, `RO 90 0,0`).
+
+### Comandos
+
+| Grupo | Comandos (atalho) |
+| --- | --- |
+| Desenho | LINHA (L), POLILINHA (PL), RETANGULO (REC), CIRCULO (C: centro e raio/diâmetro, 2P, 3P), ARCO (A: 3 pontos ou centro), POLIGONO (POL: inscrito, circunscrito, aresta), ELIPSE (EL), TEXTO (T/DT, várias linhas), COTA (DIM) |
+| Modificar | MOVER (M), COPIAR (CO, várias cópias), ROTACIONAR (RO, cópia e referência), ESCALA (SC, cópia e referência), ESPELHAR (MI, apaga ou não a origem), DESLOCAMENTO (O, distância ou através), APARAR (TR), ESTENDER (EX), CONCORDAR (F, raio), CHANFRAR (CHA), QUEBRAR (BR), UNIR (J), ESTICAR (S), MATRIZ (AR, retangular e polar), EXPLODIR (X), APAGAR (E), FECHAR, PINCEL (MA) |
+| Consulta e vista | DIST (DI), AREA (AA, por pontos ou objeto), ID, LISTAR (LI), ZOOM (Z: janela, extensão, anterior, `2x`), DESFAZER (U), REFAZER |
+| Arquitetura | PAREDE, COMODO, PORTA, JANELA, PASSAGEM, SIMBOLO, MOVEL, IMAGEM, TRACOLIVRE |
+
+Comando de edição usa a seleção feita antes dele; sem seleção, pede "Selecione objetos" e
+Enter conclui. Aparar funciona no modo rápido: clica-se no pedaço que deve sumir, todo o
+desenho visível é limite, e o que nada cruza é apagado. Esticar pede uma janela cruzada e
+move só os vértices dentro dela.
+
+### Seleção, alças e mouse
+
+- Clique acrescenta à seleção; Shift+clique tira.
+- Arrastar (ou clicar e clicar) no vazio abre uma janela. Da esquerda para a direita
+  (azul) pega só o que está inteiro dentro; da direita para a esquerda (verde, tracejada)
+  pega tudo que ela toca, pelo traço de verdade.
+- Os objetos selecionados mostram alças azuis. Clique numa alça (ela fica vermelha) e
+  clique no destino, ou arraste-a. Arrastar a seleção a move.
+- Roda aproxima e afasta no cursor; botão do meio desloca a vista; duplo clique nele
+  enquadra o desenho.
+- Cursor em cruz, com a caixinha de seleção quando o clique escolhe objetos. O encaixe
+  mostra o marcador do AutoCAD: quadrado no extremo, triângulo no meio, círculo no
+  centro, losango no quadrante, xis na interseção, esquadro na perpendicular.
+
+### Barra de status
+
+Grade (F7), Malha (F9, encaixe na malha), Orto (F8), Polar (F10, direções a cada 45°, com
+linha de rastreio), Encaixe (F3, liga e desliga o encaixe a objetos; os tipos ficam no
+painel da esquerda) e Dinâmica (F12, prompt, medida e texto digitado ao lado do cursor).
+Orto e Polar não andam juntos. Retângulo e janela de zoom ignoram a trava, como no AutoCAD.
 
 Camadas: filtro por nome, mostrar/esconder todas, só as filtradas, isolar, cor, tipo de
 linha, disciplina, renomear, selecionar tudo da camada e apagar camada vazia. Cada elemento
@@ -73,7 +112,8 @@ encaixe usa um índice por elemento (os segmentos de cada um só são calculados
 cursor passa perto) e olha no máximo os 48 segmentos mais próximos. Cada edição valida só
 o que mudou, e só o índice da versão atual fica na memória. Medido com uma planta de 26
 mil elementos: colocar na prancha em 0,7 s, 60 s de uso contínuo sem pausa acima de 80 ms
-e memória estável.
+e memória estável. A linha de comando, o cursor em cruz e os marcadores
+ficam no SVG leve por cima; a prévia de um comando de edição mostra até 300 objetos.
 
 ## Gravar
 

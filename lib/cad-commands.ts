@@ -54,7 +54,8 @@ function number(text: string | undefined): number {
   if (value === null || !Number.isFinite(value)) throw new Error("Informe uma medida válida.");
   return value;
 }
-function transformed(element: Elemento, matrix: Matrix, factor = 1, angle = 0): Elemento {
+/** Aplica uma matriz afim ao elemento; `factor` escala medidas e `angle` gira o que tem giro. */
+export function transformed(element: Elemento, matrix: Matrix, factor = 1, angle = 0): Elemento {
   const p = (value: Point) => transform(value, matrix);
   const rotationOf = (value: number) => ((value + angle) % 360 + 360) % 360;
   if (element.tipo === "parede") return { ...element, a: p(element.a), b: p(element.b), espessuraMm: element.espessuraMm * factor };
@@ -71,7 +72,7 @@ function transformed(element: Elemento, matrix: Matrix, factor = 1, angle = 0): 
 /** Camada onde o comando desenha: a escolhida na tela, se existir e estiver livre; senão a
  *  padrão do tipo de desenho; senão a primeira livre. Desenho vindo de DWG não tem as
  *  camadas "layout" e "anotacao", e o comando falhava sem dizer por quê. */
-function camadaDoComando(document: Documento, preferida: string | undefined, padrao: string) {
+export function camadaDoComando(document: Documento, preferida: string | undefined, padrao: string) {
   const livre = (id: string | undefined) => {
     const camada = id ? document.camadas.find((c) => c.id === id) : undefined;
     return camada && camada.visivel && !camada.bloqueada ? camada.id : null;

@@ -3,8 +3,9 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ArrowLeft, Blinds, BrickWall, ChevronsLeftRight, CircleDashed, DoorOpen, Download, Eye, EyeOff, Grid2x2, Image as ImageIcon, LandPlot, LoaderCircle,
-  Lock, LockOpen, Moon, MousePointer2, PencilLine, Plug, RectangleHorizontal, Redo2, Ruler, Save, Search, Slash, Sofa, SquareDashedMousePointer, Sun,
-  Copy, FlipHorizontal2, Grid3x3, Magnet, MoveHorizontal, Scissors, Spline, Waypoints,
+  Lock, LockOpen, Moon, MousePointer2, PencilLine, Plug, RectangleHorizontal, Redo2, Save, Search, Slash, Sofa, Sun,
+  Copy, CopySlash, CornerDownRight, Eraser, FlipHorizontal2, Grid3x3, Hexagon, Link2, Move, MoveDiagonal2, MoveHorizontal, RotateCw, RulerDimensionLine, Scaling, Scissors, Shrink,
+  Spline, SquareDashed, SquareSlash, StretchHorizontal, Unlink, Waypoints,
   Trash2, Type, Undo2, Upload, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,8 +17,9 @@ import { CABECALHO_ACEITA, corpoComprimido, JSON_GZIP, jsonDaResposta } from "@/
 import { uploadOrgFile } from "@/lib/org-files-client";
 import { nearestOnSegment } from "@/packages/cad-core";
 import { zoomNaVista, enquadrarElementos } from "@/lib/prancheta-viewport";
-import { executarNaSelecao, selecionarNaJanela } from "@/lib/cad-selection";
+import { executarNaSelecao, selecionarCruzando, selecionarNaJanela } from "@/lib/cad-selection";
 import { CAD_COMMANDS } from "@/lib/cad-commands";
+import { COMANDOS, Interprete, acharComando, sugerirComandos, textoDoPedido, type AcaoEditor, type Pedido } from "@/lib/cad-interativo";
 import { exportNative, mergeCadImport, type ImportReport } from "@/lib/cad-formats";
 import { conferir } from "@/lib/parametros";
 import { Button } from "@/components/ui/button";
@@ -27,8 +29,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Encaixe, TIPOS_ENCAIXE, TipoEncaixe, encaixeLabels, encaixePerto, moverVertice,
-  apararElemento, espelhar, estenderElemento, lerMedida, limitesDeCorte, matrizRetangular, ortogonal, paralelaDe,
-  resolverEntrada, verticesDe,
+  lerMedida, matrizRetangular, ortogonal, paralelaDe, verticesDe,
 } from "@/lib/prancheta-cad";
 import {
   Camada, DISCIPLINAS, Documento, Elemento, FAMILIAS_SIMBOLO, LIMITE_CAMADAS, LIMITE_ELEMENTOS, areaM2, camadaBloqueada, caminhoDosAneis,
@@ -39,9 +40,7 @@ import {
 
 type Ferramenta =
   | "selecionar" | "parede" | "comodo" | "porta" | "janela" | "passagem"
-  | "simbolo" | "mobilia" | "imagem" | "texto" | "cota" | "traco"
-  | "circulo" | "arco" | "espelhar" | "aparar" | "estender"
-  | "linha" | "polilinha" | "retangulo" | "janelaSelecao";
+  | "simbolo" | "mobilia" | "imagem" | "traco";
 
 type ItemBiblioteca = {
   id: string; nome: string; categoria: string; larguraMm: number | null;
@@ -54,62 +53,74 @@ export type Prancha = {
   documento: Documento; atualizadoEm: string; autor: string | null;
 };
 
-const ferramentas: { id: Ferramenta; rotulo: string; icone: typeof MousePointer2; atalho: string }[] = [
-  { id: "selecionar", rotulo: "Selecionar e mover", icone: MousePointer2, atalho: "V" },
-  { id: "janelaSelecao", rotulo: "Selecionar por janela", icone: SquareDashedMousePointer, atalho: "B" },
-  { id: "linha", rotulo: "Linha", icone: Slash, atalho: "F" },
-  { id: "polilinha", rotulo: "Polilinha", icone: Waypoints, atalho: "W" },
-  { id: "retangulo", rotulo: "Retângulo", icone: RectangleHorizontal, atalho: "Q" },
-  { id: "parede", rotulo: "Parede", icone: BrickWall, atalho: "P" },
-  { id: "comodo", rotulo: "Cômodo", icone: LandPlot, atalho: "C" },
-  { id: "porta", rotulo: "Porta", icone: DoorOpen, atalho: "D" },
-  { id: "janela", rotulo: "Janela", icone: Blinds, atalho: "J" },
-  { id: "passagem", rotulo: "Passagem", icone: ChevronsLeftRight, atalho: "G" },
-  { id: "simbolo", rotulo: "Ponto elétrico ou luminária", icone: Plug, atalho: "E" },
-  { id: "mobilia", rotulo: "Mobília", icone: Sofa, atalho: "M" },
-  { id: "imagem", rotulo: "Imagem da biblioteca", icone: ImageIcon, atalho: "I" },
-  { id: "texto", rotulo: "Texto", icone: Type, atalho: "T" },
-  { id: "cota", rotulo: "Cota", icone: Ruler, atalho: "K" },
-  { id: "traco", rotulo: "Traço livre", icone: PencilLine, atalho: "L" },
-  { id: "circulo", rotulo: "Círculo — centro e depois raio", icone: CircleDashed, atalho: "R" },
-  { id: "arco", rotulo: "Arco — centro, início e fim", icone: Spline, atalho: "A" },
-  { id: "espelhar", rotulo: "Espelhar a seleção — marque os dois pontos do eixo", icone: FlipHorizontal2, atalho: "H" },
-  { id: "aparar", rotulo: "Aparar — clique no pedaço que deve sumir", icone: Scissors, atalho: "X" },
-  { id: "estender", rotulo: "Estender — clique perto da ponta que deve crescer", icone: MoveHorizontal, atalho: "N" },
+type Botao = { id: string; rotulo: string; icone: typeof MousePointer2; atalho: string; ferramenta?: Ferramenta; comando?: string };
+
+// Cada botão é um comando, como na faixa de opções do AutoCAD: o atalho mostrado é o que
+// se digita na linha de comando. As ferramentas de arquitetura (parede, porta…) seguem
+// como modos de clique.
+const botoesDesenho: Botao[] = [
+  { id: "selecionar", rotulo: "Selecionar", icone: MousePointer2, atalho: "Esc", ferramenta: "selecionar" },
+  { id: "linha", rotulo: "Linha", icone: Slash, atalho: "L", comando: "LINHA" },
+  { id: "polilinha", rotulo: "Polilinha", icone: Waypoints, atalho: "PL", comando: "POLILINHA" },
+  { id: "retangulo", rotulo: "Retângulo", icone: RectangleHorizontal, atalho: "REC", comando: "RETANGULO" },
+  { id: "circulo", rotulo: "Círculo", icone: CircleDashed, atalho: "C", comando: "CIRCULO" },
+  { id: "arco", rotulo: "Arco", icone: Spline, atalho: "A", comando: "ARCO" },
+  { id: "poligono", rotulo: "Polígono", icone: Hexagon, atalho: "POL", comando: "POLIGONO" },
+  { id: "texto", rotulo: "Texto", icone: Type, atalho: "T", comando: "TEXTO" },
+  { id: "cota", rotulo: "Cota", icone: RulerDimensionLine, atalho: "DIM", comando: "COTA" },
+  { id: "parede", rotulo: "Parede", icone: BrickWall, atalho: "PAREDE", ferramenta: "parede" },
+  { id: "comodo", rotulo: "Cômodo", icone: LandPlot, atalho: "COMODO", ferramenta: "comodo" },
+  { id: "porta", rotulo: "Porta", icone: DoorOpen, atalho: "PORTA", ferramenta: "porta" },
+  { id: "janela", rotulo: "Janela", icone: Blinds, atalho: "JANELA", ferramenta: "janela" },
+  { id: "passagem", rotulo: "Passagem", icone: ChevronsLeftRight, atalho: "PASSAGEM", ferramenta: "passagem" },
+  { id: "simbolo", rotulo: "Ponto elétrico ou luminária", icone: Plug, atalho: "SIMBOLO", ferramenta: "simbolo" },
+  { id: "mobilia", rotulo: "Mobília", icone: Sofa, atalho: "MOVEL", ferramenta: "mobilia" },
+  { id: "imagem", rotulo: "Imagem da biblioteca", icone: ImageIcon, atalho: "IMAGEM", ferramenta: "imagem" },
+  { id: "traco", rotulo: "Traço livre", icone: PencilLine, atalho: "TRACOLIVRE", ferramenta: "traco" },
+];
+
+const botoesModificar: Botao[] = [
+  { id: "mover", rotulo: "Mover", icone: Move, atalho: "M", comando: "MOVER" },
+  { id: "copiar", rotulo: "Copiar", icone: Copy, atalho: "CO", comando: "COPIAR" },
+  { id: "girar", rotulo: "Girar", icone: RotateCw, atalho: "RO", comando: "ROTACIONAR" },
+  { id: "escala", rotulo: "Escala", icone: Scaling, atalho: "SC", comando: "ESCALA" },
+  { id: "espelhar", rotulo: "Espelhar", icone: FlipHorizontal2, atalho: "MI", comando: "ESPELHAR" },
+  { id: "deslocamento", rotulo: "Deslocamento (paralela)", icone: CopySlash, atalho: "O", comando: "DESLOCAMENTO" },
+  { id: "aparar", rotulo: "Aparar", icone: Scissors, atalho: "TR", comando: "APARAR" },
+  { id: "estender", rotulo: "Estender", icone: MoveHorizontal, atalho: "EX", comando: "ESTENDER" },
+  { id: "concordar", rotulo: "Concordar", icone: CornerDownRight, atalho: "F", comando: "CONCORDAR" },
+  { id: "chanfrar", rotulo: "Chanfrar", icone: SquareSlash, atalho: "CHA", comando: "CHANFRAR" },
+  { id: "quebrar", rotulo: "Quebrar", icone: Unlink, atalho: "BR", comando: "QUEBRAR" },
+  { id: "unir", rotulo: "Unir", icone: Link2, atalho: "J", comando: "UNIR" },
+  { id: "esticar", rotulo: "Esticar", icone: StretchHorizontal, atalho: "S", comando: "ESTICAR" },
+  { id: "matriz", rotulo: "Matriz", icone: Grid3x3, atalho: "AR", comando: "MATRIZ" },
+  { id: "explodir", rotulo: "Explodir", icone: Shrink, atalho: "X", comando: "EXPLODIR" },
+  { id: "apagar", rotulo: "Apagar", icone: Eraser, atalho: "E", comando: "APAGAR" },
+  { id: "dist", rotulo: "Medir distância", icone: MoveDiagonal2, atalho: "DI", comando: "DIST" },
+  { id: "area", rotulo: "Medir área", icone: SquareDashed, atalho: "AA", comando: "AREA" },
 ];
 
 const instrucoes: Record<Ferramenta, string> = {
-  selecionar: "Clique para selecionar; Shift+clique adiciona ou remove da seleção. Segure o botão esquerdo e arraste a seleção para mover. Arraste o espaço vazio para deslocar a vista.",
-  janelaSelecao: "Arraste uma janela envolvendo os elementos inteiros. Shift mantém a seleção anterior. Botão do meio ou direito desloca a vista.",
-  linha: "Clique no início e no fim da linha, ou digite uma medida após o primeiro ponto. Esc encerra.",
-  polilinha: "Clique nos vértices. Enter conclui aberta; Fechar polilinha une o último ponto ao primeiro. Esc cancela.",
-  retangulo: "Clique em dois cantos opostos, ou digite @largura,altura após o primeiro ponto.",
-  parede: "Clique no início e no fim da parede. Continue clicando para encadear paredes; Esc encerra.",
-  comodo: "Clique em cada canto do cômodo e use Fechar cômodo para concluir.",
+  selecionar: "Clique nos objetos para selecionar; Shift+clique tira da seleção. Arraste da esquerda para a direita para selecionar o que está inteiro dentro da janela, ou da direita para a esquerda para pegar tudo que ela cruza. Segure o botão esquerdo sobre a seleção e arraste para mover. Clique numa alça para esticar.",
+  parede: "Clique no início e no fim da parede. Continue clicando para encadear paredes; Enter ou Esc encerra.",
+  comodo: "Clique em cada canto do cômodo; Enter ou clique direito fecha.",
   porta: "Clique no ponto onde a porta deve ser colocada e ajuste suas medidas no painel Seleção.",
   janela: "Clique no ponto da janela e ajuste largura ou rotação no painel Seleção.",
   passagem: "Clique no ponto da passagem e ajuste suas medidas no painel Seleção.",
   simbolo: "Escolha o símbolo no painel e clique no desenho para colocá-lo.",
   mobilia: "Clique no desenho para inserir um móvel e ajuste suas dimensões no painel Seleção.",
   imagem: "Escolha uma imagem da biblioteca e clique no desenho para colocá-la.",
-  texto: "Clique onde a anotação deve aparecer; edite o texto no painel Seleção.",
-  cota: "Clique nos dois pontos que deseja medir. A distância aparece na prancha.",
   traco: "Segure o botão esquerdo e arraste para desenhar um traço livre; solte para concluir.",
-  circulo: "Clique no centro e depois no ponto que define o raio.",
-  arco: "Clique no centro, no início e no fim do arco.",
-  espelhar: "Selecione um elemento, marque dois pontos do eixo e crie sua cópia espelhada.",
-  aparar: "Clique no pedaço que deve sumir: parede, linha, polilinha, arco ou círculo é cortado entre as linhas que o cruzam. Um traço cortado no meio vira dois.",
-  estender: "Clique perto da ponta de uma parede ou linha: ela cresce até a primeira linha no caminho.",
 };
+
+const ajudaDoBotao = (botao: Botao) => botao.ferramenta ? instrucoes[botao.ferramenta] : acharComando(botao.comando ?? "")?.descricao ?? "";
 
 // A ferramenta decide em que camada o desenho cai. Obrigar a escolher a camada antes de
 // cada traço seria burocracia: quem coloca uma tomada está no elétrico por definição.
 const camadaDaFerramenta: Record<Ferramenta, string> = {
-  linha: "layout", polilinha: "layout", retangulo: "layout", janelaSelecao: "layout",
   selecionar: "layout", parede: "layout", comodo: "layout", porta: "layout",
   janela: "layout", passagem: "layout", simbolo: "eletrico", mobilia: "mobiliario",
-  imagem: "mobiliario", texto: "anotacao", cota: "anotacao", traco: "anotacao",
-  circulo: "layout", arco: "layout", espelhar: "layout", aparar: "layout", estender: "layout",
+  imagem: "mobiliario", traco: "anotacao",
 };
 
 type Importado = {
@@ -133,6 +144,8 @@ const LIMITE_SVG = 2000;
 const ESCALAS = [20, 25, 50, 75, 100, 200];
 const LIMITE_HISTORICO = 60;
 
+/** Medida na dica do cursor: vírgula decimal e sem separador de milhar, que confundiria com decimal. */
+const medidaMm = (valor: number) => Number(valor.toFixed(2)).toLocaleString("pt-BR", { useGrouping: false, maximumFractionDigits: 2 });
 const metros = (valor: number) => `${valor.toFixed(2).replace(".", ",")} m`;
 const metrosQuadrados = (valor: number) => `${valor.toFixed(2).replace(".", ",")} m²`;
 
@@ -149,13 +162,6 @@ function alturaPelaProporcao(url: string, larguraMm: number): Promise<number> {
     imagem.onerror = () => rejeitar(new Error("não abriu"));
     imagem.src = url;
   });
-}
-
-/** Ângulo do desenho técnico entre dois pontos: 0° à direita, crescendo no anti-horário.
- *  O Y da tela aponta para baixo, por isso ele entra negado. */
-function anguloDe(centro: { x: number; y: number }, ponto: { x: number; y: number }) {
-  const graus = Math.atan2(-(ponto.y - centro.y), ponto.x - centro.x) * 180 / Math.PI;
-  return ((graus % 360) + 360) % 360;
 }
 
 function novoId() {
@@ -319,6 +325,44 @@ function dentroDosAneis(aneis: { x: number; y: number }[][], x: number, y: numbe
   return dentro;
 }
 
+/** Contorno de um elemento provisório, para a prévia tracejada dos comandos. */
+function caminhoDaPrevia(elemento: Elemento): string {
+  const linha = (pontos: { x: number; y: number }[], fechar = false) => pontos.length ? `M ${pontos.map((p) => `${p.x} ${p.y}`).join(" L ")}${fechar ? " Z" : ""}` : "";
+  switch (elemento.tipo) {
+    case "traco": return linha(elemento.pontos);
+    case "arco": return linha(pontosDoArco(elemento));
+    case "parede": return linha([elemento.a, elemento.b]);
+    case "cota": {
+      const d = elemento.deslocamentoMm;
+      return `${linha([elemento.a, { x: elemento.a.x, y: elemento.a.y + d }, { x: elemento.b.x, y: elemento.b.y + d }, elemento.b])}`;
+    }
+    case "comodo": return linha(elemento.pontos, true);
+    case "hachura": return caminhoDosAneis(elemento.aneis);
+    default: {
+      const caixa = limitesEmCache(elemento);
+      return linha([{ x: caixa.x1, y: caixa.y1 }, { x: caixa.x2, y: caixa.y1 }, { x: caixa.x2, y: caixa.y2 }, { x: caixa.x1, y: caixa.y2 }], true);
+    }
+  }
+}
+
+/** Desenho do marcador de encaixe, igual ao do AutoCAD: quadrado no extremo, triângulo no
+ *  meio, círculo no centro, losango no quadrante, xis na interseção… */
+function marcadorDoEncaixe(tipo: TipoEncaixe, p: { x: number; y: number }, m: number): string {
+  const { x, y } = p;
+  const circulo = (r: number) => `M ${x - r} ${y} a ${r} ${r} 0 1 0 ${2 * r} 0 a ${r} ${r} 0 1 0 ${-2 * r} 0`;
+  switch (tipo) {
+    case "extremo": return `M ${x - m} ${y - m} h ${2 * m} v ${2 * m} h ${-2 * m} Z`;
+    case "meio": return `M ${x} ${y - m} L ${x + m} ${y + m} L ${x - m} ${y + m} Z`;
+    case "centro": return circulo(m);
+    case "quadrante": return `M ${x} ${y - m} L ${x + m} ${y} L ${x} ${y + m} L ${x - m} ${y} Z`;
+    case "interseccao": return `M ${x - m} ${y - m} L ${x + m} ${y + m} M ${x + m} ${y - m} L ${x - m} ${y + m}`;
+    case "perpendicular": return `M ${x - m} ${y - m} L ${x - m} ${y + m} L ${x + m} ${y + m} M ${x - m} ${y} L ${x} ${y} L ${x} ${y + m}`;
+    case "tangente": return `${circulo(m * 0.8)} M ${x - m} ${y - m} L ${x + m} ${y - m}`;
+    case "proximo": return `M ${x - m} ${y - m} L ${x + m} ${y - m} L ${x - m} ${y + m} L ${x + m} ${y + m} Z`;
+    default: return `M ${x - m} ${y} L ${x + m} ${y} M ${x} ${y - m} L ${x} ${y + m}`;
+  }
+}
+
 export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false, importarDaBiblioteca = null }: {
   prancha: Prancha; canEdit: boolean; onVoltar: () => void;
   onSalvo: (atualizada: Prancha) => void;
@@ -327,19 +371,30 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   importarDaBiblioteca?: { id: string; nome: string } | null;
 }) {
   const [documento, definirDocumento] = useState<Documento>(prancha.documento);
+  // Cópia síncrona do documento: um comando aplica várias alterações seguidas (LINHA
+  // grava trecho a trecho) antes de a tela redesenhar, e cada uma precisa partir da anterior.
+  const docRef = useRef(documento);
+  useEffect(() => { docRef.current = documento; }, [documento]);
   const [revisao, definirRevisao] = useState(prancha.revisao);
   const [nome, definirNome] = useState(prancha.nome);
   const [ferramenta, definirFerramenta] = useState<Ferramenta>("selecionar");
-  const [ajudaVisivel, definirAjudaVisivel] = useState<Ferramenta | null>(null);
+  const [ajudaVisivel, definirAjudaVisivel] = useState<string | null>(null);
   const temporizadorAjuda = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [familia, definirFamilia] = useState<string>("tomada-media");
   const [itemImagem, definirItemImagem] = useState<ItemBiblioteca | null>(null);
   const [biblioteca, definirBiblioteca] = useState<ItemBiblioteca[]>([]);
-  const [selecoes, definirSelecoes] = useState<string[]>([]);
+  const [selecoes, definirSelecoesEstado] = useState<string[]>([]);
+  const selRef = useRef<string[]>([]);
+  const definirSelecoes = useCallback((valor: string[] | ((atual: string[]) => string[])) => {
+    const proximo = typeof valor === "function" ? valor(selRef.current) : valor;
+    selRef.current = proximo;
+    definirSelecoesEstado(proximo);
+  }, []);
   const selecao = selecoes.length === 1 ? selecoes[0] : null;
-  const definirSelecao = useCallback((id: string | null) => definirSelecoes(id ? [id] : []), []);
-  const [janelaSelecao, definirJanelaSelecao] = useState<{ a: { x: number; y: number }; b: { x: number; y: number }; manter: boolean } | null>(null);
-  const janelaRef = useRef<typeof janelaSelecao>(null);
+  const definirSelecao = useCallback((id: string | null) => definirSelecoes(id ? [id] : []), [definirSelecoes]);
+  type JanelaEmCurso = { a: { x: number; y: number }; b: { x: number; y: number }; remover: boolean; aberta: boolean; tela: { x: number; y: number } };
+  const [janelaSelecao, definirJanelaSelecao] = useState<JanelaEmCurso | null>(null);
+  const janelaRef = useRef<JanelaEmCurso | null>(null);
   const [distanciaParalela, definirDistanciaParalela] = useState("100");
   const [transformacao, definirTransformacao] = useState({ dx: "1000", dy: "0", angulo: "90", fator: "2", x: "0", y: "0" });
   const [novaCamada, definirNovaCamada] = useState("");
@@ -349,17 +404,37 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const salvamentoEmCurso = useRef(false);
   const [pendentes, definirPendentes] = useState<{ x: number; y: number }[]>([]);
   const [cursor, definirCursor] = useState<{ x: number; y: number } | null>(null);
-  const [vista, definirVista] = useState({ x: -2000, y: -2000, largura: 24000 });
+  const [vista, definirVistaEstado] = useState({ x: -2000, y: -2000, largura: 24000 });
+  // Vistas anteriores para o ZOOM Anterior.
+  const vistasAnteriores = useRef<{ x: number; y: number; largura: number }[]>([]);
+  const definirVista = useCallback((valor: { x: number; y: number; largura: number } | ((anterior: { x: number; y: number; largura: number }) => { x: number; y: number; largura: number }), guardar = false) => {
+    definirVistaEstado((anterior) => {
+      if (guardar) vistasAnteriores.current = [...vistasAnteriores.current, anterior].slice(-20);
+      return typeof valor === "function" ? valor(anterior) : valor;
+    });
+  }, []);
   const [historico, definirHistorico] = useState<Documento[]>([]);
   const [refeitos, definirRefeitos] = useState<Documento[]>([]);
   const [sujo, definirSujo] = useState(false);
   const [salvando, definirSalvando] = useState(false);
   const [conflito, definirConflito] = useState(false);
-  const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>([...TIPOS_ENCAIXE]);
-  const [orto, definirOrto] = useState(false);
-  const [entrada, definirEntrada] = useState("");
+  const [ativosEncaixe, definirAtivosEncaixe] = useState<TipoEncaixe[]>(TIPOS_ENCAIXE.filter((tipo) => tipo !== "tangente" && tipo !== "proximo"));
+  // Barra de status do AutoCAD: cada chave com a sua tecla F.
+  const [orto, definirOrto] = useState(false);            // F8
+  const [osnap, definirOsnap] = useState(true);           // F3
+  const [polar, definirPolar] = useState(true);           // F10
+  const [grade, definirGrade] = useState(true);           // F7
+  const [snapGrade, definirSnapGrade] = useState(true);   // F9
+  const [dinamica, definirDinamica] = useState(true);     // F12
+  const [rastreio, definirRastreio] = useState<{ origem: { x: number; y: number }; angulo: number; distancia: number } | null>(null);
   const [comando, definirComando] = useState("");
-  const [mensagemComando, definirMensagemComando] = useState("Coordenadas em mm. Exemplo: L 0,0 3000,0");
+  const [linhasDigitadas, definirLinhasDigitadas] = useState<string[]>([]);
+  const indiceDigitado = useRef(-1);
+  const [registro, definirRegistro] = useState<string[]>(["Digite um comando (L, PL, C, M, CO, TR…) ou clique numa ferramenta. Enter repete o último."]);
+  const [registroAberto, definirRegistroAberto] = useState(false);
+  const [pedido, definirPedido] = useState<Pedido | null>(null);
+  const [nomeComando, definirNomeComando] = useState<string | null>(null);
+  const campoComando = useRef<HTMLInputElement | null>(null);
   const [matriz, definirMatriz] = useState({ colunas: 3, linhas: 1, passoXMm: 1000, passoYMm: 1000 });
   const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
@@ -385,8 +460,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const larguraTela = useRef(0);
   const [tamanhoTela, definirTamanhoTela] = useState({ largura: 0, altura: 0 });
   const arrastando = useRef<{ ids: string[]; de: { x: number; y: number }; documento: Documento; mudou: boolean } | null>(null);
-  const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number } } | null>(null);
-  const verticeArrastado = useRef<{ id: string; indice: number; documento: Documento; mudou: boolean } | null>(null);
+  const panorama = useRef<{ x: number; y: number; vista: { x: number; y: number }; botao: number; moveu: boolean } | null>(null);
+  // Alça: arrastada com o botão preso, ou "quente" (clicada) até o próximo clique, como no AutoCAD.
+  const verticeArrastado = useRef<{ id: string; indice: number; documento: Documento; mudou: boolean; quente: boolean; de: { x: number; y: number } } | null>(null);
+  const [alcaQuente, definirAlcaQuente] = useState<{ id: string; indice: number } | null>(null);
+  const ultimoMeio = useRef(0);
 
   function esconderAjuda() {
     if (temporizadorAjuda.current) clearTimeout(temporizadorAjuda.current);
@@ -394,7 +472,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     definirAjudaVisivel(null);
   }
 
-  function aguardarAjuda(id: Ferramenta) {
+  function aguardarAjuda(id: string) {
     esconderAjuda();
     temporizadorAjuda.current = setTimeout(() => definirAjudaVisivel(id), 700);
   }
@@ -413,14 +491,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   const aplicar = useCallback((proximo: Documento, jaValidado = false) => {
     if (!canEdit) return false;
+    const anterior = docRef.current;
     // Só o que mudou é validado: validar o desenho inteiro a cada gesto travava plantas grandes.
-    if (!jaValidado && !validarAlteracao(documento, proximo)) { toast.error("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
-    definirHistorico((anterior) => [...anterior, documento].slice(-LIMITE_HISTORICO));
+    if (!jaValidado && !validarAlteracao(anterior, proximo)) { toast.error("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
+    definirHistorico((lista) => [...lista, anterior].slice(-LIMITE_HISTORICO));
     definirRefeitos([]);
+    docRef.current = proximo;
     definirDocumento(proximo);
     definirSujo(true);
     return true;
-  }, [documento, canEdit]);
+  }, [canEdit]);
 
   const acrescentar = useCallback((elemento: Elemento) => {
     if (camadaBloqueada(documento, elemento.camada) || !documento.camadas.find(c => c.id === elemento.camada)?.visivel) {
@@ -447,19 +527,72 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   const desfazer = useCallback(() => {
     if (!canEdit || !historico.length) return;
+    const anterior = historico[historico.length - 1];
     definirRefeitos([...refeitos, documento].slice(-LIMITE_HISTORICO));
-    definirDocumento(historico[historico.length - 1]);
+    docRef.current = anterior;
+    definirDocumento(anterior);
     definirHistorico(historico.slice(0, -1));
     definirSujo(true); definirSelecao(null); definirPendentes([]);
   }, [canEdit, historico, refeitos, documento, definirSelecao]);
 
   const refazer = useCallback(() => {
     if (!canEdit || !refeitos.length) return;
+    const proximo = refeitos[refeitos.length - 1];
     definirHistorico([...historico, documento].slice(-LIMITE_HISTORICO));
-    definirDocumento(refeitos[refeitos.length - 1]);
+    docRef.current = proximo;
+    definirDocumento(proximo);
     definirRefeitos(refeitos.slice(0, -1));
     definirSujo(true); definirSelecao(null); definirPendentes([]);
   }, [canEdit, historico, refeitos, documento, definirSelecao]);
+
+  // ## Linha de comando
+  //
+  // O intérprete vive a sessão inteira do editor (guarda o último comando, o último ponto,
+  // o raio do último círculo…). Ele lê o documento e a seleção pelas cópias síncronas.
+  const registrar = useCallback((texto: string) => definirRegistro((linhas) => [...linhas, texto].slice(-200)), []);
+  const acaoRef = useRef<(acao: AcaoEditor) => void>(() => undefined);
+  const canEditRef = useRef(canEdit);
+  const camadaEscolhidaRef = useRef(camadaEscolhida);
+  useEffect(() => { canEditRef.current = canEdit; camadaEscolhidaRef.current = camadaEscolhida; }, [canEdit, camadaEscolhida]);
+  const interpreteRef = useRef<Interprete | null>(null);
+  useEffect(() => {
+    if (interpreteRef.current) return;
+    interpreteRef.current = new Interprete({
+    documento: () => docRef.current,
+    selecao: () => selRef.current,
+    selecionar: (ids) => { selRef.current = ids; definirSelecoesEstado(ids); },
+    aplicar: (proximo, novaSelecao) => {
+      if (!canEditRef.current) { registrar("Somente leitura: o desenho não pode ser alterado."); return false; }
+      const anterior = docRef.current;
+      if (!validarAlteracao(anterior, proximo)) { registrar("A alteração ultrapassa os limites de medida ou de elementos da prancha."); return false; }
+      definirHistorico((lista) => [...lista, anterior].slice(-LIMITE_HISTORICO));
+      definirRefeitos([]);
+      docRef.current = proximo;
+      definirDocumento(proximo);
+      definirSujo(true);
+      if (novaSelecao) { selRef.current = novaSelecao; definirSelecoesEstado(novaSelecao); }
+      return true;
+    },
+    registrar: (texto) => registrar(texto),
+    acao: (acao) => acaoRef.current(acao),
+    novoId,
+    camadaEscolhida: () => camadaEscolhidaRef.current || undefined,
+    });
+  }, [registrar]);
+  /** O intérprete só existe depois da montagem; os gestos e teclas chegam depois dela. */
+  const cmd = useCallback(() => interpreteRef.current ?? new Interprete({
+    documento: () => docRef.current, selecao: () => [], selecionar: () => undefined, aplicar: () => false,
+    registrar: () => undefined, acao: () => undefined, novoId, camadaEscolhida: () => undefined,
+  }), []);
+  const sincronizar = useCallback(() => {
+    const atual = cmd().pedido;
+    definirPedido(atual);
+    definirNomeComando(cmd().nome);
+    // Janela aberta com um clique não sobrevive ao fim da seleção que a pediu.
+    if (atual?.modo !== "selecao" && janelaRef.current) { janelaRef.current = null; definirJanelaSelecao(null); }
+    // Comando em curso tira do modo de parede, porta etc.: o clique passa a ser do comando.
+    if (atual) { definirFerramenta("selecionar"); definirPendentes([]); }
+  }, [cmd]);
 
   useEffect(() => {
     let vivo = true;
@@ -494,7 +627,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     const svg = svgRef.current;
     if (!svg) return;
     // Vários passos da roda no mesmo quadro viram um zoom só: cada zoom redesenha a prancha.
-    let acumulado = 1, ancoraPendente: { x: number; y: number } | null = null, quadro = 0;
+    let acumulado = 1, ancoraPendente: { x: number; y: number } | null = null, quadro = 0, ultimaRoda = 0;
     const roda = (evento: WheelEvent) => {
       const ancora = paraMilimetros(evento);
       if (!ancora) return;
@@ -507,12 +640,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         quadro = 0;
         const fator = acumulado, ponto = ancoraPendente!;
         acumulado = 1;
-        definirVista(anterior => zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, ponto));
+        // Cada rodada de roda vira uma vista só no ZOOM Anterior.
+        const agora = performance.now();
+        const guardar = agora - ultimaRoda > 600;
+        ultimaRoda = agora;
+        definirVista(anterior => zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, ponto), guardar);
       });
     };
     svg.addEventListener("wheel", roda, { passive: false });
     return () => { svg.removeEventListener("wheel", roda); if (quadro) cancelAnimationFrame(quadro); };
-  }, [paraMilimetros]);
+  }, [paraMilimetros, definirVista]);
 
   /** Raio de captura em milímetros de desenho, derivado do zoom. O que a mão sente é a
    *  distância na TELA: um raio fixo em milímetros seria impossível de acertar afastado
@@ -522,22 +659,47 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     return largura > 0 ? vista.largura / largura * 14 : vista.largura / 80;
   }, [vista.largura]);
 
-  const encaixarEm = useCallback((bruto: { x: number; y: number }, origem?: { x: number; y: number } | null) => {
+  /** Onde o clique cai: encaixe a objetos (F3), malha (F9), trava ortogonal (F8) e
+   *  rastreamento polar (F10), nessa ordem de prioridade, como no AutoCAD. */
+  const encaixarEm = useCallback((bruto: { x: number; y: number }, origemDoTraco?: { x: number; y: number } | null, livre = false): Encaixe & { polar?: { angulo: number; distancia: number } } => {
+    // Canto oposto de retângulo ou de janela: sem trava, mas ainda com encaixe a objetos.
+    const origem = livre ? null : origemDoTraco;
     const alvo = orto && origem ? ortogonal(origem, bruto) : bruto;
     // Durante o arrasto, o encaixe olha o desenho de antes do gesto (que não muda a cada
     // movimento, então o índice de encaixe é montado uma vez só) e ignora o que se move.
     const gesto = arrastando.current ?? verticeArrastado.current;
     const ignorar = gesto ? new Set("ids" in gesto ? gesto.ids : [gesto.id]) : undefined;
     const referencia = gesto?.documento ?? documento;
-    const encaixe = encaixePerto(referencia, alvo, { toleranciaMm: toleranciaMm(), origem, ativos: ativosEncaixe, ignorar });
+    const unico = cmd().encaixeUnico;
+    const ativos = unico ? [unico] : osnap ? ativosEncaixe : [];
+    const encaixe = encaixePerto(referencia, alvo, { toleranciaMm: toleranciaMm(), origem: origemDoTraco, ativos, ignorar, malha: snapGrade });
     // Com a trava ortogonal ligada, só vale o encaixe que não sai do eixo — senão a
     // trava seria desfeita pelo próprio encaixe, calada.
     if (orto && origem && encaixe.tipo !== "malha"
       && encaixe.ponto.x !== origem.x && encaixe.ponto.y !== origem.y) {
-      return { tipo: "malha" as const, ponto: ortogonal(origem, { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) }) };
+      const naMalha = snapGrade ? { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) } : alvo;
+      return { tipo: "malha" as const, ponto: ortogonal(origem, naMalha) };
     }
-    return orto && origem && encaixe.tipo === "malha" ? { ...encaixe, ponto: ortogonal(origem, encaixe.ponto) } : encaixe;
-  }, [ativosEncaixe, documento, orto, toleranciaMm]);
+    if (orto && origem && encaixe.tipo === "malha") return { ...encaixe, ponto: ortogonal(origem, encaixe.ponto) };
+    // Polar: perto de um múltiplo de 45°, o ponto corre sobre essa direção. Arrastar a
+    // seleção com o mouse não usa o polar, como o arrastar e soltar do AutoCAD.
+    if (polar && !orto && origem && encaixe.tipo === "malha" && !arrastando.current) {
+      const dx = bruto.x - origem.x, dy = bruto.y - origem.y, d = Math.hypot(dx, dy);
+      if (d > toleranciaMm()) {
+        const graus = ((Math.atan2(-dy, dx) * 180 / Math.PI) % 360 + 360) % 360;
+        const alvoPolar = Math.round(graus / 45) * 45 % 360;
+        const diferenca = Math.abs(((graus - alvoPolar + 540) % 360) - 180);
+        if (diferenca <= 4) {
+          const projetada = d * Math.cos(diferenca * Math.PI / 180);
+          const distancia = snapGrade && documento.malhaMm > 1 ? Math.max(documento.malhaMm, Math.round(projetada / documento.malhaMm) * documento.malhaMm) : projetada;
+          const rad = alvoPolar * Math.PI / 180;
+          const ponto = { x: origem.x + distancia * Math.cos(rad), y: origem.y - distancia * Math.sin(rad) };
+          return { tipo: "malha", ponto: { x: Math.abs(ponto.x) < 1e-9 ? 0 : Math.round(ponto.x * 1e6) / 1e6, y: Math.abs(ponto.y) < 1e-9 ? 0 : Math.round(ponto.y * 1e6) / 1e6 }, polar: { angulo: alvoPolar, distancia } };
+        }
+      }
+    }
+    return encaixe;
+  }, [ativosEncaixe, documento, orto, osnap, polar, snapGrade, toleranciaMm, cmd]);
 
   const fundosPossiveis = useMemo(
     () => biblioteca.filter((item) => item.categoria === "fundo" || item.categoria === "referencia"),
@@ -594,114 +756,104 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         rotacaoGraus: 0, chave: itemImagem.url, rotulo: itemImagem.nome.slice(0, 60) });
       return;
     }
-    if (ferramenta === "texto") {
-      acrescentar({ ...base, tipo: "texto", posicao: ponto, texto: "Anotação", alturaMm: 250, rotacaoGraus: 0 });
-    }
   }
+
+  function ampliar(fator: number) {
+    definirVista((anterior) => {
+      const centro = { x: anterior.x + anterior.largura / 2, y: anterior.y + anterior.largura * 0.62 / 2 };
+      return zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, centro);
+    }, true);
+  }
+
+  function enquadrar() {
+    definirVista(enquadrarElementos(visiveis), true);
+  }
+
+  function responderPonto(ponto: { x: number; y: number }) {
+    cmd().responder({ tipo: "ponto", ponto });
+    sincronizar();
+  }
+
+  function iniciarComando(nomeDoComando: string) {
+    esconderAjuda();
+    definirPendentes([]);
+    definirFerramenta("selecionar");
+    cmd().iniciar(nomeDoComando);
+    sincronizar();
+  }
+
+  function escolherBotao(botao: Botao) {
+    esconderAjuda();
+    if (botao.comando) { iniciarComando(botao.comando); return; }
+    cmd().cancelar(true);
+    sincronizar();
+    definirFerramenta(botao.ferramenta ?? "selecionar");
+    definirPendentes([]);
+  }
+
+  /** Objetos selecionados que mostram alças (até cem, como o GRIPOBJLIMIT do AutoCAD). */
+  const comAlcas = useMemo(() => {
+    if (!selecoes.length || selecoes.length > 100) return [];
+    const ids = new Set(selecoes);
+    return documento.elementos.filter((elemento) => ids.has(elemento.id) && !camadaBloqueada(documento, elemento.camada));
+  }, [documento, selecoes]);
 
   function aoApontar(evento: React.PointerEvent<SVGSVGElement>) {
     esconderAjuda();
     if (evento.button === 1 || evento.button === 2) {
-      panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y } };
+      // Duplo clique na roda enquadra o desenho, como o ZOOM Extensão do AutoCAD.
+      if (evento.button === 1) {
+        const agora = evento.timeStamp;
+        if (agora - ultimoMeio.current < 350) { ultimoMeio.current = 0; enquadrar(); return; }
+        ultimoMeio.current = agora;
+      }
+      panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y }, botao: evento.button, moveu: false };
       evento.currentTarget.setPointerCapture?.(evento.pointerId);
       return;
     }
     if (evento.button !== 0) return;
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
-    // Selecionar, aparar e estender apontam elementos pelo clique cru: encaixar ali só
-    // custaria tempo (em planta grande, montar o índice de encaixe).
-    const semEncaixe = ["selecionar", "janelaSelecao", "aparar", "estender"].includes(ferramenta);
-    const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0] : pendentes.at(-1) ?? null;
-    const encaixe = semEncaixe ? { tipo: "malha" as const, ponto: bruto } : encaixarEm(bruto, origem);
-    const ponto = encaixe.ponto;
-    definirEncaixeAtual(semEncaixe ? null : encaixe);
 
-    if (ferramenta === "janelaSelecao") {
-      janelaRef.current = { a: bruto, b: bruto, manter: evento.shiftKey };
-      definirJanelaSelecao(janelaRef.current);
-      evento.currentTarget.setPointerCapture?.(evento.pointerId);
+    // Janela aberta com um clique: o segundo clique a fecha.
+    if (janelaRef.current?.aberta) { concluirJanela({ ...janelaRef.current, b: bruto }); return; }
+
+    // Alça quente: o clique seguinte a solta onde o cursor está.
+    const alca = verticeArrastado.current;
+    if (alca?.quente) {
+      aplicarGesto(alca, encaixarEm(bruto, alca.de).ponto);
+      verticeArrastado.current = null;
+      definirAlcaQuente(null);
       return;
     }
-    if (ferramenta === "selecionar") {
-      if (evento.shiftKey) {
+
+    const atual = cmd().pedido;
+    if (atual) {
+      if (atual.modo === "ponto" || atual.modo === "valor") {
+        const encaixe = encaixarEm(bruto, atual.base ?? null, atual.livre);
+        definirEncaixeAtual(null); definirRastreio(null);
+        responderPonto(encaixe.ponto);
+        return;
+      }
+      if (atual.modo === "objeto") {
         const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
-        if (alvo) definirSelecoes(atual => atual.includes(alvo.id) ? atual.filter(id => id !== alvo.id) : [...atual, alvo.id]);
+        if (!alvo) { registrar("Nenhum objeto encontrado aqui."); return; }
+        cmd().responder({ tipo: "objeto", elemento: alvo, ponto: bruto });
+        sincronizar();
         return;
       }
-      // Vértice antes de elemento: quem clica em cima de uma alça quer a alça. Testar o
-      // elemento primeiro tornaria a alça inalcançável, já que ela fica dentro dele.
-      if (selecionado && canEdit && !camadaBloqueada(documento, selecionado.camada)) {
-        const raio = toleranciaMm();
-        const alca = verticesDe(selecionado).find((vertice) =>
-          Math.hypot(vertice.ponto.x - bruto.x, vertice.ponto.y - bruto.y) <= raio);
-        if (alca) {
-          verticeArrastado.current = { id: selecionado.id, indice: alca.indice, documento, mudou: false };
-          evento.currentTarget.setPointerCapture?.(evento.pointerId);
-          return;
-        }
-      }
-      const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
-      const ids = alvo ? (selecoes.includes(alvo.id) ? selecoes : [alvo.id]) : [];
-      definirSelecoes(ids);
-      if (alvo && canEdit) {
-        arrastando.current = { ids, de: bruto, documento, mudou: false };
-        evento.currentTarget.setPointerCapture?.(evento.pointerId);
-      } else if (!alvo) {
-        // Na seleção, arrastar o espaço vazio com o botão esquerdo desloca a vista.
-        panorama.current = { x: evento.clientX, y: evento.clientY, vista: { x: vista.x, y: vista.y } };
-        evento.currentTarget.setPointerCapture?.(evento.pointerId);
-      }
+      if (atual.modo === "selecao") selecionarComClique(evento, bruto, false);
       return;
     }
-    if (ferramenta === "espelhar") {
-      // Espelhar age sobre a SELEÇÃO, então quem manda é a camada dela, não a da ferramenta.
-      if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
-      if (!selecoes.length) { toast.error("Selecione o que deve ser espelhado antes de marcar o eixo."); return; }
-      if (documento.elementos.some(e => selecoes.includes(e.id) && camadaBloqueada(documento, e.camada))) {
-        toast.error("A camada do elemento selecionado está travada. Destrave-a no painel de camadas.");
-        return;
-      }
-      if (!pendentes.length) { definirPendentes([ponto]); return; }
-      const copias = documento.elementos.filter(e => selecoes.includes(e.id)).map(e => espelhar(e, pendentes[0], ponto));
-      definirPendentes([]);
-      if (copias.some(e => !e)) { toast.error("Marque dois pontos diferentes para o eixo."); return; }
-      const novas = copias.map(e => ({ ...e!, id: novoId() }));
-      if (aplicar({ ...documento, elementos: [...documento.elementos, ...novas] })) definirSelecoes(novas.map(e => e.id));
-      return;
-    }
-    if (ferramenta === "aparar" || ferramenta === "estender") {
-      // Como no AutoCAD: aponta-se direto o que deve mudar, e todo o resto do desenho
-      // visível serve de limite. Nada precisa estar selecionado antes.
-      if (!canEdit) { toast.error("Você não tem permissão para editar esta prancha."); return; }
-      const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
-      const aceita = ferramenta === "aparar" ? ["parede", "traco", "arco"] : ["parede", "traco"];
-      if (!alvo || !aceita.includes(alvo.tipo)) {
-        toast.error(ferramenta === "aparar" ? "Clique em cima de uma parede, linha, polilinha, arco ou círculo." : "Clique perto da ponta de uma parede ou linha.");
-        return;
-      }
-      const limites = limitesDeCorte(documento, alvo.id);
-      if (ferramenta === "estender") {
-        const esticado = estenderElemento(alvo, limites, bruto);
-        if (!esticado) { toast.error("Nada no caminho desta ponta. Estender precisa de uma linha além dela."); return; }
-        trocar(alvo.id, esticado as Partial<Elemento>);
-        return;
-      }
-      const pedacos = apararElemento(alvo, limites, bruto);
-      if (!pedacos) { toast.error("Nada cruza este trecho. Aparar precisa de uma linha que o atravesse."); return; }
-      const novos = pedacos.map((pedaco, i) => ({ ...pedaco, id: i === 0 ? alvo.id : novoId() }) as Elemento);
-      const indice = documento.elementos.findIndex((e) => e.id === alvo.id);
-      const elementos = [...documento.elementos.slice(0, indice), ...novos, ...documento.elementos.slice(indice + 1)];
-      if (aplicar({ ...documento, elementos })) definirSelecoes(novos.map((e) => e.id));
-      return;
-    }
+
+    if (ferramenta === "selecionar") { selecionarComClique(evento, bruto, true); return; }
     if (!podeDesenhar) {
       toast.error(bloqueada ? "A camada desta ferramenta está travada. Destrave-a no painel de camadas." : "Você não tem permissão para editar esta prancha.");
       return;
     }
-    if (["parede", "cota", "linha", "polilinha", "retangulo", "comodo", "circulo", "arco"].includes(ferramenta)) {
-      confirmarPonto(ponto); return;
-    }
+    const encaixe = encaixarEm(bruto, pendentes.at(-1) ?? null);
+    const ponto = encaixe.ponto;
+    if (ferramenta === "parede" || ferramenta === "comodo") { confirmarPonto(ponto); return; }
     if (ferramenta === "traco") {
       definirPendentes([ponto]);
       evento.currentTarget.setPointerCapture?.(evento.pointerId);
@@ -710,38 +862,88 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     colocar(ponto);
   }
 
-  function confirmarPonto(ponto: { x: number; y: number }) {
-    if (!["parede", "cota", "linha", "polilinha", "retangulo", "comodo", "circulo", "arco"].includes(ferramenta)) { toast.error("Escolha uma ferramenta de desenho para aplicar a medida."); return; }
-    if (!podeDesenhar) { toast.error("A camada está oculta ou travada, ou seu acesso é somente leitura."); return; }
-    if (!pendentes.length) { definirPendentes([ponto]); return; }
-    const inicio = pendentes[0];
-    const ultimo = pendentes[pendentes.length - 1];
-    if (Math.hypot(ultimo.x - ponto.x, ultimo.y - ponto.y) < 1e-9) { toast.error("Marque um ponto diferente."); return; }
-    if (ferramenta === "polilinha" || ferramenta === "comodo") {
-      if (pendentes.length >= (ferramenta === "comodo" ? 200 : 1999)) { toast.error("Limite de vértices atingido. Conclua o desenho."); return; }
-      definirPendentes([...pendentes, ponto]); return;
+  /** Seleção do AutoCAD: clique acrescenta, Shift+clique tira; no espaço vazio abre uma
+   *  janela — da esquerda para a direita pega o que está inteiro dentro, da direita para
+   *  a esquerda pega tudo que ela toca. Fora de comando, a seleção também se arrasta e
+   *  as alças esticam. */
+  function selecionarComClique(evento: React.PointerEvent<SVGSVGElement>, bruto: { x: number; y: number }, editar: boolean) {
+    if (editar && canEdit && !evento.shiftKey) {
+      const raio = toleranciaMm() * 0.7;
+      for (const elemento of comAlcas) {
+        const vertice = verticesDe(elemento).find((v) => Math.hypot(v.ponto.x - bruto.x, v.ponto.y - bruto.y) <= raio);
+        if (vertice) {
+          verticeArrastado.current = { id: elemento.id, indice: vertice.indice, documento, mudou: false, quente: false, de: vertice.ponto };
+          definirAlcaQuente({ id: elemento.id, indice: vertice.indice });
+          evento.currentTarget.setPointerCapture?.(evento.pointerId);
+          return;
+        }
+      }
     }
-    const base = { id: novoId(), camada: camadaAtiva };
-    let elemento: Elemento;
-    if (ferramenta === "circulo" || ferramenta === "arco") {
-      if (ferramenta === "arco" && pendentes.length === 1) { definirPendentes([...pendentes, ponto]); return; }
-      const raioPonto = ferramenta === "circulo" ? ponto : pendentes[1];
-      const raioMm = Math.hypot(raioPonto.x - inicio.x, raioPonto.y - inicio.y);
-      elemento = { ...base, tipo: "arco", centro: inicio, raioMm, inicioGraus: anguloDe(inicio, raioPonto),
-        varreduraGraus: ferramenta === "circulo" ? 360 : (anguloDe(inicio, ponto) - anguloDe(inicio, raioPonto) + 360) % 360 || 360, espessuraMm: 25 };
-    } else if (ferramenta === "retangulo") {
-      if (inicio.x === ponto.x || inicio.y === ponto.y) { toast.error("O retângulo precisa de largura e altura."); return; }
-      elemento = { ...base, tipo: "traco", pontos: [inicio, { x: ponto.x, y: inicio.y }, ponto, { x: inicio.x, y: ponto.y }, inicio], espessuraMm: 25 };
-    } else if (ferramenta === "linha") elemento = { ...base, tipo: "traco", pontos: [inicio, ponto], espessuraMm: 25 };
-    else if (ferramenta === "parede") elemento = { ...base, tipo: "parede", a: inicio, b: ponto, espessuraMm: 150 };
-    else elemento = { ...base, tipo: "cota", a: inicio, b: ponto, deslocamentoMm: 400 };
-    if (acrescentar(elemento)) definirPendentes(ferramenta === "parede" || ferramenta === "linha" ? [ponto] : []);
+    const alvo = elementoNoPonto(documento, bruto.x, bruto.y, toleranciaMm());
+    if (alvo) {
+      if (evento.shiftKey) { definirSelecoes((atual) => atual.includes(alvo.id) ? atual.filter((id) => id !== alvo.id) : [...atual, alvo.id]); return; }
+      const ids = selecoes.includes(alvo.id) ? selecoes : [...selecoes, alvo.id];
+      definirSelecoes(ids);
+      if (editar && canEdit) {
+        arrastando.current = { ids, de: bruto, documento, mudou: false };
+        evento.currentTarget.setPointerCapture?.(evento.pointerId);
+      }
+      return;
+    }
+    janelaRef.current = { a: bruto, b: bruto, remover: evento.shiftKey, aberta: false, tela: { x: evento.clientX, y: evento.clientY } };
+    definirJanelaSelecao(janelaRef.current);
+    evento.currentTarget.setPointerCapture?.(evento.pointerId);
   }
 
-  function concluirPolilinha(fechar = false) {
-    if (pendentes.length < (fechar ? 3 : 2)) { toast.error("Marque mais vértices para concluir a polilinha."); return; }
-    const pontos = fechar ? [...pendentes, pendentes[0]] : pendentes;
-    if (acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "traco", pontos, espessuraMm: 25 })) definirPendentes([]);
+  function concluirJanela(janela: JanelaEmCurso) {
+    janelaRef.current = null;
+    definirJanelaSelecao(null);
+    if (Math.abs(janela.b.x - janela.a.x) < 1e-9 && Math.abs(janela.b.y - janela.a.y) < 1e-9) return;
+    const cruzada = janela.b.x < janela.a.x;
+    const ids = cruzada ? selecionarCruzando(documento, janela.a, janela.b) : selecionarNaJanela(documento, janela.a, janela.b);
+    cmd().anotarJanela({ a: janela.a, b: janela.b });
+    const achados = new Set(ids);
+    definirSelecoes((atual) => janela.remover ? atual.filter((id) => !achados.has(id)) : [...new Set([...atual, ...ids])]);
+  }
+
+  /** Clique direito rápido é Enter, como no AutoCAD: conclui o passo, fecha o cômodo ou
+   *  repete o último comando. */
+  function cliqueDireito() {
+    if (cmd().ativo) { cmd().enter(); sincronizar(); return; }
+    if (ferramenta === "comodo" && pendentes.length >= 3) { fecharComodo(); return; }
+    if (pendentes.length) { definirPendentes([]); return; }
+    if (ferramenta !== "selecionar") { definirFerramenta("selecionar"); return; }
+    cmd().enter();
+    sincronizar();
+  }
+
+  /** Esc: solta a alça, fecha a janela, cancela o comando e limpa a seleção, nessa ordem. */
+  function escapar() {
+    const gesto = verticeArrastado.current;
+    if (gesto) {
+      if (gesto.mudou) { docRef.current = gesto.documento; definirDocumento(gesto.documento); definirHistorico((h) => h.slice(0, -1)); }
+      verticeArrastado.current = null; definirAlcaQuente(null);
+      return;
+    }
+    if (janelaRef.current) { janelaRef.current = null; definirJanelaSelecao(null); return; }
+    definirComando("");
+    if (cmd().ativo) { cmd().cancelar(); sincronizar(); definirSelecoes([]); definirRastreio(null); return; }
+    if (pendentes.length) { definirPendentes([]); return; }
+    definirSelecoes([]);
+    if (ferramenta !== "selecionar") definirFerramenta("selecionar");
+  }
+
+  function confirmarPonto(ponto: { x: number; y: number }) {
+    if (ferramenta !== "parede" && ferramenta !== "comodo") return;
+    if (!podeDesenhar) { toast.error("A camada está oculta ou travada, ou seu acesso é somente leitura."); return; }
+    if (!pendentes.length) { definirPendentes([ponto]); return; }
+    const ultimo = pendentes[pendentes.length - 1];
+    if (Math.hypot(ultimo.x - ponto.x, ultimo.y - ponto.y) < 1e-9) { toast.error("Marque um ponto diferente."); return; }
+    if (ferramenta === "comodo") {
+      if (pendentes.length >= 200) { toast.error("Limite de cantos atingido. Feche o cômodo."); return; }
+      definirPendentes([...pendentes, ponto]); return;
+    }
+    if (acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "parede", a: ultimo, b: ponto, espessuraMm: 150 })) definirPendentes([ponto]);
   }
 
   // Um processamento por quadro: o navegador dispara o movimento do ponteiro bem mais vezes
@@ -754,7 +956,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function aoMover(evento: React.PointerEvent<SVGSVGElement>) {
     const dados = { clientX: evento.clientX, clientY: evento.clientY, buttons: evento.buttons };
-    const agora = performance.now();
+    const agora = evento.timeStamp;
     if (!quadroMovimento.current && agora - ultimoMovimento.current >= 16) {
       ultimoMovimento.current = agora;
       processarMovimento(dados);
@@ -766,7 +968,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         quadroMovimento.current = 0;
         const pendente = movimentoPendente.current;
         movimentoPendente.current = null;
-        if (pendente) { ultimoMovimento.current = performance.now(); processarRef.current(pendente); }
+        if (pendente) { ultimoMovimento.current = agora + 16; processarRef.current(pendente); }
       });
     }
   }
@@ -779,61 +981,67 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (pendente) processarMovimento(pendente);
   }
 
+  type Gesto = NonNullable<typeof arrastando.current> | NonNullable<typeof verticeArrastado.current>;
+  /** Move a seleção arrastada ou a alça até o ponto, com uma entrada só no histórico. */
+  function aplicarGesto(gesto: Gesto, ponto: { x: number; y: number }) {
+    const ids = "indice" in gesto ? null : new Set(gesto.ids);
+    const movidos: Elemento[] = [];
+    const proximo = { ...gesto.documento, elementos: gesto.documento.elementos.map(item => {
+      if ("indice" in gesto) { if (item.id !== gesto.id) return item; const novo = moverVertice(item, gesto.indice, ponto); movidos.push(novo); return novo; }
+      if (!ids!.has(item.id)) return item;
+      const novo = moverElemento(item, ponto.x - gesto.de.x, ponto.y - gesto.de.y, 1);
+      movidos.push(novo);
+      return novo;
+    }) };
+    // Só o que se move é conferido: serializar e validar o desenho inteiro a cada
+    // movimento do mouse travava o arrasto em planta grande.
+    if (movidos.some((elemento) => !elementoSchema.safeParse(elemento).success)) return;
+    const mudou = "indice" in gesto
+      ? JSON.stringify(movidos[0]) !== JSON.stringify(gesto.documento.elementos.find((e) => e.id === gesto.id))
+      : ponto.x !== gesto.de.x || ponto.y !== gesto.de.y;
+    if (!gesto.mudou && mudou) {
+      definirHistorico(h => [...h, gesto.documento].slice(-LIMITE_HISTORICO)); definirRefeitos([]);
+    }
+    gesto.mudou ||= mudou;
+    docRef.current = proximo;
+    definirDocumento(proximo);
+    if (mudou) definirSujo(true);
+  }
+
   function processarMovimento(evento: { clientX: number; clientY: number; buttons: number }) {
-    if (panorama.current) {
+    const vistaArrastada = panorama.current;
+    if (vistaArrastada) {
+      if (!vistaArrastada.moveu && Math.hypot(evento.clientX - vistaArrastada.x, evento.clientY - vistaArrastada.y) > 3) vistaArrastada.moveu = true;
       const svg = svgRef.current;
       const escala = svg ? vista.largura / (larguraTela.current || svg.getBoundingClientRect().width) : 1;
-      definirVista((anterior) => ({
+      definirVistaEstado((anterior) => ({
         ...anterior,
-        x: panorama.current!.vista.x - (evento.clientX - panorama.current!.x) * escala,
-        y: panorama.current!.vista.y - (evento.clientY - panorama.current!.y) * escala,
+        x: vistaArrastada.vista.x - (evento.clientX - vistaArrastada.x) * escala,
+        y: vistaArrastada.vista.y - (evento.clientY - vistaArrastada.y) * escala,
       }));
       return;
     }
     const bruto = paraMilimetros(evento);
     if (!bruto) return;
     if (janelaRef.current) {
-      janelaRef.current = { ...janelaRef.current, b: bruto }; definirJanelaSelecao(janelaRef.current); return;
+      janelaRef.current = { ...janelaRef.current, b: bruto }; definirJanelaSelecao(janelaRef.current); definirCursor(bruto); return;
     }
     const gesto = verticeArrastado.current ?? arrastando.current;
+    const atual = cmd().pedido;
+    const pedePonto = atual ? atual.modo === "ponto" || atual.modo === "valor" : ferramenta !== "selecionar";
     // Selecionando sem arrastar, o encaixe não serve para nada — e custa, em planta grande.
-    if (!gesto && (ferramenta === "selecionar" || ferramenta === "janelaSelecao")) {
-      definirCursor(bruto); definirEncaixeAtual(null);
+    if (!gesto && !pedePonto) {
+      definirCursor(bruto); definirEncaixeAtual(null); definirRastreio(null);
       return;
     }
-    const origem = (ferramenta === "circulo" || ferramenta === "arco") && pendentes.length ? pendentes[0]
-      : pendentes.length ? pendentes[pendentes.length - 1] : arrastando.current?.de ?? null;
-    const encaixe = encaixarEm(bruto, origem);
-    const ponto = encaixe.ponto;
-    definirCursor(ponto);
+    const origem = gesto ? gesto.de : atual?.base ?? pendentes.at(-1) ?? null;
+    const encaixe = encaixarEm(bruto, origem, !gesto && atual?.livre);
+    definirCursor(encaixe.ponto);
     definirEncaixeAtual(encaixe);
-
-    if (gesto) {
-      const ids = "indice" in gesto ? null : new Set(gesto.ids);
-      const movidos: Elemento[] = [];
-      const proximo = { ...gesto.documento, elementos: gesto.documento.elementos.map(item => {
-        if ("indice" in gesto) { if (item.id !== gesto.id) return item; const novo = moverVertice(item, gesto.indice, ponto); movidos.push(novo); return novo; }
-        if (!ids!.has(item.id)) return item;
-        const novo = moverElemento(item, ponto.x - gesto.de.x, ponto.y - gesto.de.y, 1);
-        movidos.push(novo);
-        return novo;
-      }) };
-      // Só o que se move é conferido: serializar e validar o desenho inteiro a cada
-      // movimento do mouse travava o arrasto em planta grande.
-      if (movidos.some((elemento) => !elementoSchema.safeParse(elemento).success)) return;
-      const mudou = "indice" in gesto
-        ? JSON.stringify(movidos[0]) !== JSON.stringify(gesto.documento.elementos.find((e) => e.id === gesto.id))
-        : ponto.x !== gesto.de.x || ponto.y !== gesto.de.y;
-      if (!gesto.mudou && mudou) {
-        definirHistorico(h => [...h, gesto.documento].slice(-LIMITE_HISTORICO)); definirRefeitos([]);
-      }
-      gesto.mudou ||= mudou;
-      definirDocumento(proximo);
-      if (mudou) definirSujo(true);
-      return;
-    }
+    definirRastreio(encaixe.polar && origem ? { origem, ...encaixe.polar } : null);
+    if (gesto) { aplicarGesto(gesto, encaixe.ponto); return; }
     if (ferramenta === "traco" && pendentes.length && evento.buttons === 1) {
-      definirPendentes((anterior) => anterior.length < 2000 ? [...anterior, ponto] : anterior);
+      definirPendentes((anterior) => anterior.length < 2000 ? [...anterior, encaixe.ponto] : anterior);
     }
   }
 
@@ -842,14 +1050,26 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   function aoSoltar(evento?: React.PointerEvent<SVGSVGElement>) {
     esvaziarMovimento();
     if (evento?.currentTarget.hasPointerCapture?.(evento.pointerId)) evento.currentTarget.releasePointerCapture(evento.pointerId);
-    if (janelaRef.current) {
-      const janela = janelaRef.current;
-      const ids = selecionarNaJanela(documento, janela.a, janela.b);
-      definirSelecoes(janela.manter ? [...new Set([...selecoes, ...ids])] : ids);
-      janelaRef.current = null; definirJanelaSelecao(null); return;
+    const janela = janelaRef.current;
+    if (janela && !janela.aberta) {
+      // Arrastou: a janela fecha ao soltar. Só clicou: fica aberta até o próximo clique.
+      const moveu = !evento || Math.hypot(evento.clientX - janela.tela.x, evento.clientY - janela.tela.y) > 5;
+      if (moveu) concluirJanela(janela);
+      else { janelaRef.current = { ...janela, aberta: true }; definirJanelaSelecao(janelaRef.current); }
+      return;
     }
-    if (panorama.current) { panorama.current = null; return; }
-    if (verticeArrastado.current) { verticeArrastado.current = null; return; }
+    const vistaArrastada = panorama.current;
+    if (vistaArrastada) {
+      panorama.current = null;
+      if (vistaArrastada.botao === 2 && !vistaArrastada.moveu) cliqueDireito();
+      return;
+    }
+    const alca = verticeArrastado.current;
+    if (alca) {
+      if (alca.mudou && !alca.quente) { verticeArrastado.current = null; definirAlcaQuente(null); }
+      else alca.quente = true;
+      return;
+    }
     if (arrastando.current) { arrastando.current = null; return; }
     if (ferramenta === "traco" && pendentes.length > 1) {
       acrescentar({ id: novoId(), camada: camadaAtiva, tipo: "traco", pontos: pendentes, espessuraMm: 30 });
@@ -857,18 +1077,58 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     }
   }
 
-  /** Confirma o traço pelo que foi digitado, a partir do último ponto marcado. Ninguém
-   *  desenha parede de 3,15 m arrastando o mouse até acertar. */
-  function confirmarEntrada() {
-    const origem = (ferramenta === "circulo" || ferramenta === "arco") ? pendentes[0] : pendentes.at(-1);
-    if (!origem) { toast.error("Marque o ponto de partida na prancha antes de digitar a medida."); return; }
-    const resolvido = resolverEntrada(origem, entrada, cursor);
-    if (!resolvido) {
-      toast.error("Não entendi a medida. Use 3150, 3150<90, @3000,1500 ou 3,15m.");
+  /** Medida digitada para a parede ou o cômodo em curso, a partir do último ponto. */
+  function confirmarEntrada(texto: string) {
+    const origem = pendentes.at(-1);
+    if (!origem) { registrar("Marque o ponto de partida na prancha antes de digitar a medida."); return; }
+    const ponto = cmd().lerPonto(texto, origem, cursor);
+    if (!ponto) { registrar("Não entendi a medida. Use 3150, 3150<90, @3000,1500 ou x,y."); return; }
+    confirmarPonto(ponto);
+  }
+
+  /** O que foi digitado na linha de comando. */
+  function enviarComando(evento?: React.FormEvent) {
+    evento?.preventDefault();
+    const texto = comando;
+    definirComando("");
+    indiceDigitado.current = -1;
+    const t = texto.trim();
+    if (t) definirLinhasDigitadas((linhas) => [...linhas.filter((l) => l !== t), t].slice(-50));
+    if (cmd().ativo) {
+      const atual = cmd().pedido;
+      if (atual) registrar(`${textoDoPedido(atual)} ${t}`.trim());
+      // Várias respostas de uma vez ("0,0 1000,0"), exceto no texto, onde espaço é letra.
+      if (atual?.modo !== "texto" && /\s/.test(t)) {
+        for (const parte of t.split(/\s+/)) { if (!cmd().ativo) break; cmd().digitar(parte, cursor); }
+      } else cmd().digitar(texto, cursor);
+      sincronizar();
       return;
     }
-    confirmarPonto(resolvido.ponto);
-    definirEntrada("");
+    if (!t) { cmd().enter(); sincronizar(); return; }
+    if (pendentes.length && (ferramenta === "parede" || ferramenta === "comodo")) { confirmarEntrada(t); return; }
+    if (/\s/.test(t)) { executarLinhaUnica(t); return; }
+    cmd().digitar(t, cursor);
+    sincronizar();
+  }
+
+  /** Linha inteira de uma vez ("L 0,0 3000,0", "CO @100,100"): roda como script, sem diálogo. */
+  function executarLinhaUnica(texto: string) {
+    registrar(texto);
+    try {
+      const resultado = executarNaSelecao(documento, texto, selecoes, undefined, camadaEscolhida || undefined);
+      if (aplicar(resultado.document)) { definirSelecoes(resultado.selectedIds); registrar(resultado.message); }
+    } catch (erro) {
+      const [primeiro, ...resto] = texto.trim().split(/\s+/);
+      const mensagem = erro instanceof Error ? erro.message : "Comando inválido.";
+      // Comando só interativo (F 200, Z 2x…): as partes viram as respostas do diálogo.
+      if (/desconhecido|histórico/i.test(mensagem) && acharComando(primeiro)) {
+        cmd().iniciar(primeiro);
+        for (const parte of resto) { if (!cmd().ativo) break; cmd().digitar(parte, cursor); }
+        sincronizar();
+        return;
+      }
+      registrar(mensagem);
+    }
   }
 
   /** Paralela do elemento selecionado. A distância vem do campo de medida, porque é o
@@ -914,42 +1174,6 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     definirPendentes([]);
   }
 
-  useEffect(() => {
-    function tecla(evento: KeyboardEvent) {
-      // Ctrl+S grava de qualquer lugar, inclusive com o cursor num campo.
-      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") { evento.preventDefault(); if (canEdit && sujo) void salvar(); return; }
-      const alvo = evento.target as HTMLElement | null;
-      if (alvo && (["INPUT", "TEXTAREA", "SELECT"].includes(alvo.tagName) || alvo.isContentEditable)) return;
-      if (evento.ctrlKey || evento.metaKey) {
-        if (evento.key.toLowerCase() === "a") { evento.preventDefault(); definirSelecoes(visiveis.filter(e => !camadaBloqueada(documento, e.camada)).map(e => e.id)); return; }
-        if (evento.key.toLowerCase() === "y") { evento.preventDefault(); refazer(); return; }
-        if (evento.key.toLowerCase() !== "z") return;
-      }
-      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "z") {
-        evento.preventDefault();
-        if (evento.shiftKey) refazer(); else desfazer();
-        return;
-      }
-      if (evento.key === "Escape") { definirPendentes([]); definirSelecao(null); definirEntrada(""); return; }
-      if (evento.key.toLowerCase() === "o") { evento.preventDefault(); definirOrto((anterior) => !anterior); return; }
-      if (evento.key === "Enter" && ferramenta === "polilinha") { evento.preventDefault(); concluirPolilinha(); return; }
-      if (evento.key === "Enter" && ferramenta === "comodo") { evento.preventDefault(); fecharComodo(); return; }
-      if ((evento.key === "Delete" || evento.key === "Backspace") && selecoes.length && canEdit) {
-        evento.preventDefault(); operarSelecao("E"); return;
-      }
-      const escolhida = ferramentas.find((item) => item.atalho.toLowerCase() === evento.key.toLowerCase());
-      if (escolhida) { definirFerramenta(escolhida.id); definirPendentes([]); }
-    }
-    window.addEventListener("keydown", tecla);
-    return () => window.removeEventListener("keydown", tecla);
-  });
-
-  function ampliar(fator: number) {
-    definirVista((anterior) => {
-      const centro = { x: anterior.x + anterior.largura / 2, y: anterior.y + anterior.largura * 0.62 / 2 };
-      return zoomNaVista({ ...anterior, proporcao: 0.62 }, fator, centro);
-    });
-  }
 
   function trocarCamada(id: string, mudanca: Partial<Camada>) {
     if (!canEdit) return;
@@ -961,7 +1185,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (!canEdit) return;
     try {
       const result = executarNaSelecao(documento, input, selecoes, undefined, camadaEscolhida || undefined);
-      if (aplicar(result.document)) { definirSelecoes(result.selectedIds); definirMensagemComando(result.message); }
+      if (aplicar(result.document)) { definirSelecoes(result.selectedIds); registrar(result.message); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível editar a seleção."); }
   }
 
@@ -1030,26 +1254,6 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     } catch (error) { toast.error(error instanceof Error ? error.message : "Não foi possível importar."); }
   }
 
-  function executarComando() {
-    if (!canEdit) return;
-    try {
-      const normalized = comando.trim().toUpperCase();
-      if (normalized === "Z" || normalized === "ZOOM") { enquadrar(); definirMensagemComando("Desenho enquadrado."); }
-      else if (normalized === "U" || normalized === "UNDO") { desfazer(); definirMensagemComando("Desfazer concluído."); }
-      else if (normalized === "REDO") { refazer(); definirMensagemComando("Refazer concluído."); }
-      else {
-        const result = executarNaSelecao(documento, comando, selecoes, undefined, camadaEscolhida || undefined);
-        aplicar(result.document);
-        definirSelecoes(result.selectedIds);
-        definirMensagemComando(result.message);
-      }
-      definirComando("");
-    } catch (error) { definirMensagemComando(error instanceof Error ? error.message : "Comando inválido."); }
-  }
-
-  function enquadrar() {
-    definirVista(enquadrarElementos(visiveis));
-  }
 
   async function salvar() {
     if (!canEdit || salvamentoEmCurso.current) return;
@@ -1158,11 +1362,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     const canvas = canvasRef.current;
     if (!modoCanvas || !canvas) return;
     const quadro = requestAnimationFrame(() => desenharPrancha(canvas, {
-      documento, visiveis, camadasPorId, vista: { ...vista, proporcao: 0.62 }, fundoEscuro, realceCor, passoMalha,
+      documento, visiveis, camadasPorId, vista: { ...vista, proporcao: 0.62 }, fundoEscuro, realceCor, passoMalha: grade ? passoMalha : 0,
       tracejadoDe: tracejadoPara, aoCarregarImagem: () => definirImagensProntas((n) => n + 1),
     }));
     return () => cancelAnimationFrame(quadro);
-  }, [modoCanvas, documento, visiveis, camadasPorId, vista, fundoEscuro, realceCor, passoMalha, tamanhoTela, imagensProntas]);
+  }, [modoCanvas, documento, visiveis, camadasPorId, vista, fundoEscuro, realceCor, passoMalha, grade, tamanhoTela, imagensProntas]);
   const camadasFiltradas = useMemo(() => {
     const termo = filtroCamada.trim().toLowerCase();
     return termo ? documento.camadas.filter((camada) => camada.nome.toLowerCase().includes(termo)) : documento.camadas;
@@ -1186,6 +1390,98 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (!canEdit || contagemPorCamada.get(id) || documento.camadas.length <= 1) return;
     aplicar({ ...documento, camadas: documento.camadas.filter((camada) => camada.id !== id) });
     if (camadaEscolhida === id) definirCamadaEscolhida("");
+  }
+
+  /** Chaves da barra de status; cada uma avisa na linha de comando, como no AutoCAD. */
+  function alternarChave(tecla: string) {
+    const chaves: Record<string, [string, boolean, (v: boolean) => void]> = {
+      F3: ["Encaixe a objetos", osnap, definirOsnap], F7: ["Grade", grade, definirGrade], F8: ["Orto", orto, definirOrto],
+      F9: ["Encaixe na malha", snapGrade, definirSnapGrade], F10: ["Polar", polar, definirPolar], F12: ["Entrada dinâmica", dinamica, definirDinamica],
+    };
+    const chave = chaves[tecla];
+    if (!chave) return false;
+    const [rotulo, valor, definir] = chave;
+    definir(!valor);
+    // Orto e polar não andam juntos: ligar um desliga o outro.
+    if (tecla === "F8" && !valor) definirPolar(false);
+    if (tecla === "F10" && !valor) definirOrto(false);
+    registrar(`<${rotulo} ${valor ? "desligado" : "ligado"}>`);
+    return true;
+  }
+
+  useEffect(() => {
+    function tecla(evento: KeyboardEvent) {
+      // Ctrl+S grava de qualquer lugar, inclusive com o cursor num campo.
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") { evento.preventDefault(); if (canEdit && sujo) void salvar(); return; }
+      if (evento.key === "F2") { evento.preventDefault(); definirRegistroAberto((aberto) => !aberto); return; }
+      if (/^F(3|7|8|9|10|12)$/.test(evento.key)) { evento.preventDefault(); alternarChave(evento.key); return; }
+      const alvo = evento.target as HTMLElement | null;
+      if (alvo && (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(alvo.tagName) || alvo.isContentEditable)
+        && !(alvo.tagName === "BUTTON" && evento.key.length === 1 && evento.key !== " ")) return;
+      if (evento.ctrlKey || evento.metaKey) {
+        const letra = evento.key.toLowerCase();
+        if (letra === "a") { evento.preventDefault(); definirSelecoes(visiveis.filter(e => !camadaBloqueada(documento, e.camada)).map(e => e.id)); return; }
+        if (letra === "y") { evento.preventDefault(); refazer(); return; }
+        if (letra === "z") { evento.preventDefault(); if (evento.shiftKey) refazer(); else desfazer(); }
+        return;
+      }
+      if (evento.altKey) return;
+      if (evento.key === "Escape") { evento.preventDefault(); escapar(); return; }
+      if (evento.key === "Enter" || evento.key === " ") {
+        evento.preventDefault();
+        if (ferramenta === "comodo" && pendentes.length) { fecharComodo(); return; }
+        if (ferramenta === "parede" && pendentes.length) { definirPendentes([]); return; }
+        if (comando.trim()) { enviarComando(); return; }
+        cmd().enter(); sincronizar();
+        return;
+      }
+      if (evento.key === "Delete" && selecoes.length && canEdit && !cmd().ativo) { evento.preventDefault(); operarSelecao("E"); return; }
+      if (evento.key === "Backspace") { evento.preventDefault(); definirComando((texto) => texto.slice(0, -1)); return; }
+      // Digitar em qualquer lugar escreve na linha de comando, como no AutoCAD.
+      if (evento.key.length === 1 && canEdit) {
+        evento.preventDefault();
+        definirComando((texto) => texto + evento.key);
+        campoComando.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  });
+
+  useEffect(() => {
+    acaoRef.current = (acao: AcaoEditor) => {
+      if (acao.tipo === "zoom-extensao") enquadrar();
+      else if (acao.tipo === "zoom-anterior") {
+        const anterior = vistasAnteriores.current.pop();
+        if (anterior) definirVistaEstado(anterior); else registrar("Não há vista anterior.");
+      } else if (acao.tipo === "zoom-fator") ampliar(1 / acao.fator);
+      else if (acao.tipo === "zoom-janela") {
+        const x1 = Math.min(acao.a.x, acao.b.x), x2 = Math.max(acao.a.x, acao.b.x), y1 = Math.min(acao.a.y, acao.b.y), y2 = Math.max(acao.a.y, acao.b.y);
+        const largura = Math.max(x2 - x1, (y2 - y1) / 0.62) * 1.04;
+        definirVista({ x: (x1 + x2) / 2 - largura / 2, y: (y1 + y2) / 2 - largura * 0.31, largura }, true);
+      } else if (acao.tipo === "desfazer") desfazer();
+      else if (acao.tipo === "refazer") refazer();
+      else if (acao.tipo === "ferramenta") { definirFerramenta(acao.ferramenta as Ferramenta); definirPendentes([]); }
+    };
+  });
+
+  // Milímetros de desenho por pixel de tela: marcadores, alças e cursor ficam do mesmo
+  // tamanho na tela em qualquer zoom.
+  const px = vista.largura / Math.max(1, tamanhoTela.largura || 1000);
+  const previas = useMemo(() => (pedido?.previa && cursor ? pedido.previa(cursor) : []), [pedido, cursor]);
+  const sugestoes = useMemo(() => (!nomeComando && comando.trim() && !/\s/.test(comando.trim()) && !pendentes.length ? sugerirComandos(comando, 6) : []), [comando, nomeComando, pendentes.length]);
+  const listaRegistro = useRef<HTMLOListElement | null>(null);
+  useEffect(() => {
+    const lista = listaRegistro.current;
+    if (lista) lista.scrollTop = lista.scrollHeight;
+  }, [registro, registroAberto]);
+  /** Ponto do desenho na tela, em pixels a partir do canto do SVG (que centraliza a vista). */
+  function telaDe(ponto: { x: number; y: number }) {
+    const { largura, altura } = tamanhoTela;
+    if (!largura || !altura) return null;
+    const alturaVista = vista.largura * 0.62;
+    const escala = Math.min(largura / vista.largura, altura / alturaVista);
+    return { x: (largura - vista.largura * escala) / 2 + (ponto.x - vista.x) * escala, y: (altura - alturaVista * escala) / 2 + (ponto.y - vista.y) * escala };
   }
 
   return <div className={`prancheta space-y-4 ${fullPage ? "prancheta-ampla" : ""}`}>
@@ -1263,49 +1559,41 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       {importado.report && <p className="text-xs font-medium">Relatório {importado.report.format.toUpperCase()}: {importado.report.imported} elemento(s) convertido(s), {importado.report.discarded} descartado(s){importado.truncado ? "; arquivo truncado pelo limite de importação" : ""}.</p>}
     </section>}
 
-    <section aria-label="Linha de comando CAD" className="rounded-xl border border-hoikos-200 bg-hoikos-50 p-3 space-y-2">
-      <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); executarComando(); }}>
-        <Label htmlFor="cad-command">Comando CAD</Label>
-        <Input id="cad-command" list="cad-command-options" value={comando} onChange={(event) => definirComando(event.target.value)} disabled={!canEdit} autoComplete="off" placeholder="L 0,0 3000,0" className="min-w-0 flex-1 basis-48 font-mono" />
-        <datalist id="cad-command-options">{CAD_COMMANDS.map((item) => <option key={item.alias} value={item.syntax}>{item.description}</option>)}</datalist>
-        <Button type="submit" disabled={!canEdit || !comando.trim()}>Executar</Button>
-      </form>
-      <p role="status" aria-live="polite" className="text-xs">{mensagemComando}</p>
-      <details className="text-xs"><summary className="cursor-pointer">Comandos e exemplos</summary><div className="grid gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-3">{CAD_COMMANDS.map((item) => <button key={item.alias} type="button" className="rounded border p-2 text-left" onClick={() => definirComando(item.syntax)} disabled={!canEdit}><code>{item.syntax}</code><span className="block pt-1">{item.description}</span></button>)}</div></details>
-    </section>
     <div className="prancheta-area grid grid-cols-1 gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">
-        <div className="grid grid-cols-4 gap-1 xl:grid-cols-3">
-          {ferramentas.map((item) => <div key={item.id} className="relative">
-            <button type="button"
-              onClick={() => { esconderAjuda(); definirFerramenta(item.id); definirPendentes([]); }}
-              onPointerEnter={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
-              onPointerMove={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
-              onPointerLeave={esconderAjuda} onPointerDown={esconderAjuda}
-              aria-pressed={ferramenta === item.id} aria-label={`${item.rotulo} (${item.atalho})`}
-              aria-describedby={ajudaVisivel === item.id ? `ajuda-${item.id}` : undefined}
-              className="grid h-11 w-full place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
-              <item.icone className="size-4" />
-            </button>
-            {ajudaVisivel === item.id && <div id={`ajuda-${item.id}`} role="tooltip"
-              className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-hoikos-200 bg-white p-3 text-left shadow-lg">
-              <p className="text-sm font-semibold text-hoikos-900">{item.rotulo} · tecla {item.atalho}</p>
-              <p className="mt-1 text-xs leading-5 text-hoikos-700">{instrucoes[item.id]}</p>
-            </div>}
-          </div>)}
-        </div>
-        <p className="text-xs leading-5 text-hoikos-500">{ferramentas.find((item) => item.id === ferramenta)?.rotulo}</p>
+        {([["Desenho", botoesDesenho], ["Modificar", botoesModificar]] as const).map(([titulo, botoes]) => <div key={titulo} className="space-y-1">
+          <p className="eyebrow text-hoikos-600">{titulo}</p>
+          <div className="grid grid-cols-6 gap-1 sm:grid-cols-9 xl:grid-cols-4">
+            {botoes.map((item) => {
+              const ativo = item.comando ? nomeComando === item.comando : !nomeComando && ferramenta === item.ferramenta;
+              return <div key={item.id} className="relative">
+                <button type="button"
+                  onClick={() => escolherBotao(item)}
+                  onPointerEnter={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
+                  onPointerMove={(evento) => { if (evento.pointerType === "mouse") aguardarAjuda(item.id); }}
+                  onPointerLeave={esconderAjuda} onPointerDown={esconderAjuda}
+                  aria-pressed={ativo} aria-label={`${item.rotulo} (${item.atalho})`}
+                  aria-describedby={ajudaVisivel === item.id ? `ajuda-${item.id}` : undefined}
+                  disabled={!canEdit && !["selecionar", "dist", "area"].includes(item.id)}
+                  className="grid h-10 w-full place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 disabled:opacity-40 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+                  <item.icone className="size-4" />
+                </button>
+                {ajudaVisivel === item.id && <div id={`ajuda-${item.id}`} role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-hoikos-200 bg-white p-3 text-left shadow-lg">
+                  <p className="text-sm font-semibold text-hoikos-900">{item.rotulo} · {item.comando ? `comando ${item.atalho}` : item.atalho === "Esc" ? "tecla Esc" : `comando ${item.atalho}`}</p>
+                  <p className="mt-1 text-xs leading-5 text-hoikos-700">{ajudaDoBotao(item)}</p>
+                </div>}
+              </div>;
+            })}
+          </div>
+        </div>)}
 
         <Label htmlFor="camada-desenho">Camada de desenho</Label>
         <NativeSelect id="camada-desenho" value={camadaEscolhida} onChange={e => definirCamadaEscolhida(e.target.value)}>
           <option value="">Automática pela ferramenta</option>
           {documento.camadas.map(c => <option key={c.id} value={c.id} disabled={c.bloqueada || !c.visivel}>{c.nome}</option>)}
         </NativeSelect>
-        <p className="text-xs text-hoikos-500">{instrucoes[ferramenta]}</p>
-        {ferramenta === "polilinha" && pendentes.length > 0 && <div className="space-y-1">
-          <Button size="sm" onClick={() => concluirPolilinha()}>Concluir polilinha</Button>
-          <Button size="sm" variant="outline" onClick={() => concluirPolilinha(true)}>Fechar polilinha</Button>
-        </div>}
+        {!nomeComando && ferramenta !== "selecionar" && <p className="text-xs text-hoikos-500">{instrucoes[ferramenta]}</p>}
         {ferramenta === "simbolo" && <div className="space-y-2">
           {Object.entries(FAMILIAS_SIMBOLO).map(([disciplina, familias]) => <div key={disciplina}>
             <p className="eyebrow text-hoikos-600">{disciplinaLabels[disciplina as keyof typeof disciplinaLabels]}</p>
@@ -1367,7 +1655,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </Button>}
 
         <div className="space-y-2 border-t border-hoikos-200 pt-3">
-          <p className="eyebrow text-hoikos-600">Encaixe</p>
+          <p className="eyebrow text-hoikos-600">Encaixe a objetos (F3)</p>
           <div className="grid grid-cols-2 gap-1">
             {TIPOS_ENCAIXE.filter((tipo) => tipo !== "malha").map((tipo) => <button key={tipo} type="button"
               onClick={() => alternarEncaixe(tipo)} aria-pressed={ativosEncaixe.includes(tipo)}
@@ -1375,11 +1663,6 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               {encaixeLabels[tipo]}
             </button>)}
           </div>
-          <button type="button" onClick={() => definirOrto((anterior) => !anterior)} aria-pressed={orto}
-            title="Trava ortogonal — tecla O"
-            className="flex w-full items-center justify-center gap-2 rounded-md border border-hoikos-200 bg-white px-2 py-2 text-xs text-hoikos-700 aria-pressed:border-hoikos-gold aria-pressed:bg-hoikos-gold aria-pressed:text-white">
-            <Magnet className="size-3.5" />Trava ortogonal (O)
-          </button>
         </div>
 
         <div className="space-y-2 border-t border-hoikos-200 pt-3">
@@ -1408,89 +1691,144 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         <svg ref={svgRef} role="application" aria-label={`Prancha ${nome}`}
           viewBox={`${vista.x} ${vista.y} ${vista.largura} ${vista.largura * 0.62}`}
           className={fullPage ? "w-full touch-none" : "h-[min(70svh,640px)] w-full touch-none"}
-          style={{ ...(fullPage ? { height: "max(420px, calc(100svh - 16rem))" } : {}), background: modoCanvas ? "transparent" : fundoEscuro ? "#1f2227" : "#ffffff", position: "relative", ["--traco-min" as string]: `${vista.largura / 900}px` } as CSSProperties}
-          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={() => { const gesto = arrastando.current ?? verticeArrastado.current; if (gesto?.mudou) { definirDocumento(gesto.documento); definirHistorico(h => h.slice(0, -1)); } arrastando.current = null; verticeArrastado.current = null; panorama.current = null; janelaRef.current = null; definirJanelaSelecao(null); definirPendentes([]); }} onPointerLeave={() => definirCursor(null)}
+          style={{ ...(fullPage ? { height: "max(420px, calc(100svh - 18rem))" } : {}), background: modoCanvas ? "transparent" : fundoEscuro ? "#1f2227" : "#ffffff", position: "relative", cursor: cursor ? "none" : "default", ["--traco-min" as string]: `${vista.largura / 900}px` } as CSSProperties}
+          onPointerDown={aoApontar} onPointerMove={aoMover} onPointerUp={aoSoltar}
+          onPointerCancel={() => { const gesto = arrastando.current ?? verticeArrastado.current; if (gesto?.mudou) { docRef.current = gesto.documento; definirDocumento(gesto.documento); definirHistorico(h => h.slice(0, -1)); } arrastando.current = null; verticeArrastado.current = null; definirAlcaQuente(null); panorama.current = null; janelaRef.current = null; definirJanelaSelecao(null); definirPendentes([]); }}
+          onPointerLeave={() => { definirCursor(null); definirEncaixeAtual(null); definirRastreio(null); }}
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
             <pattern id="prancheta-malha-padrao" width={passoMalha} height={passoMalha} patternUnits="userSpaceOnUse">
               <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke={fundoEscuro ? "#4a4f57" : "#B5B19E"} strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
             </pattern>
           </defs>
-          {!modoCanvas && <rect x={vista.x} y={vista.y} width={vista.largura} height={vista.largura} fill="url(#prancheta-malha-padrao)" />}
+          {!modoCanvas && grade && <rect x={vista.x - vista.largura} y={vista.y - vista.largura} width={vista.largura * 3} height={vista.largura * 3} fill="url(#prancheta-malha-padrao)" />}
           {!modoCanvas && documento.fundo && <image href={documento.fundo.chave} x={0} y={0}
             width={documento.fundo.larguraMm} height={documento.fundo.alturaMm}
             opacity={documento.fundo.opacidade / 100} preserveAspectRatio="xMidYMid meet" />}
           <CamadaDesenho>{desenho}</CamadaDesenho>
-          {janelaSelecao && <rect x={Math.min(janelaSelecao.a.x, janelaSelecao.b.x)} y={Math.min(janelaSelecao.a.y, janelaSelecao.b.y)} width={Math.abs(janelaSelecao.b.x - janelaSelecao.a.x)} height={Math.abs(janelaSelecao.b.y - janelaSelecao.a.y)} fill="#846100" fillOpacity={0.1} stroke="#846100" strokeWidth={vista.largura / 800} />}
-          {ferramenta === "retangulo" && pendentes[0] && cursor && <rect x={Math.min(pendentes[0].x, cursor.x)} y={Math.min(pendentes[0].y, cursor.y)} width={Math.abs(pendentes[0].x - cursor.x)} height={Math.abs(pendentes[0].y - cursor.y)} fill="none" stroke="#846100" strokeWidth={vista.largura / 800} />}
-          {/* Prévia do traço. Para círculo e arco ela precisa ser a curva: uma linha até o
-              cursor não diria nada sobre o raio que está sendo marcado. */}
-          {pendentes.length > 0 && (ferramenta === "circulo" || ferramenta === "arco")
-            ? (() => {
-              const centro = pendentes[0];
-              const referencia = pendentes[1] ?? cursor;
-              if (!referencia) return null;
-              const raio = Math.hypot(referencia.x - centro.x, referencia.y - centro.y);
-              if (raio < 1) return null;
-              const varredura = ferramenta === "circulo" || pendentes.length < 2 || !cursor
-                ? 360
-                : Math.max(1, ((anguloDe(centro, cursor) - anguloDe(centro, pendentes[1])) % 360 + 360) % 360 || 360);
-              const previa = pontosDoArco({
-                id: "previa", camada: camadaAtiva, tipo: "arco", centro, raioMm: raio,
-                inicioGraus: anguloDe(centro, referencia), varreduraGraus: varredura, espessuraMm: 25,
-              });
-              return <g fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140">
-                <polyline points={previa.map((ponto) => `${ponto.x},${ponto.y}`).join(" ")} />
-                <line x1={centro.x} y1={centro.y} x2={referencia.x} y2={referencia.y} strokeWidth={30} />
-              </g>;
-            })()
-            : pendentes.length > 0 && <polyline
-              points={[...pendentes, ...(cursor ? [cursor] : [])].map((ponto) => `${ponto.x},${ponto.y}`).join(" ")}
-              fill="none" stroke="#846100" strokeWidth={60} strokeDasharray="200 140" />}
-          {/* Alças dos vértices do elemento selecionado: corrigir um canto sem refazer o
-              cômodo inteiro é o que faz alguém de fato corrigir o canto. */}
-          {canEdit && ferramenta === "selecionar" && selecionado && !camadaBloqueada(documento, selecionado.camada) && verticesDe(selecionado).map((vertice) => <rect key={vertice.indice}
-            x={vertice.ponto.x - vista.largura / 220} y={vertice.ponto.y - vista.largura / 220}
-            width={vista.largura / 110} height={vista.largura / 110}
-            fill="#F4F2E9" stroke="#846100" strokeWidth={vista.largura / 900} />)}
-          {/* A marca do encaixe diz em QUE ponto o traço vai cair, antes de o clique
-              acontecer. Sem ela o encaixe age por baixo e a pessoa não confia nele. */}
-          {encaixeAtual && encaixeAtual.tipo !== "malha" && <g stroke="#846100" fill="none" strokeWidth={vista.largura / 700}>
-            <rect x={encaixeAtual.ponto.x - vista.largura / 130} y={encaixeAtual.ponto.y - vista.largura / 130}
-              width={vista.largura / 65} height={vista.largura / 65} />
-            {encaixeAtual.tipo === "interseccao" && <>
-              <line x1={encaixeAtual.ponto.x - vista.largura / 130} y1={encaixeAtual.ponto.y - vista.largura / 130}
-                x2={encaixeAtual.ponto.x + vista.largura / 130} y2={encaixeAtual.ponto.y + vista.largura / 130} />
-              <line x1={encaixeAtual.ponto.x + vista.largura / 130} y1={encaixeAtual.ponto.y - vista.largura / 130}
-                x2={encaixeAtual.ponto.x - vista.largura / 130} y2={encaixeAtual.ponto.y + vista.largura / 130} />
-            </>}
+          {/* Janela da esquerda para a direita: azul, contorno cheio, pega o que está inteiro
+              dentro. Da direita para a esquerda: verde, tracejada, pega o que ela toca. */}
+          {janelaSelecao && (() => {
+            const cruzada = janelaSelecao.b.x < janelaSelecao.a.x;
+            return <rect x={Math.min(janelaSelecao.a.x, janelaSelecao.b.x)} y={Math.min(janelaSelecao.a.y, janelaSelecao.b.y)}
+              width={Math.abs(janelaSelecao.b.x - janelaSelecao.a.x)} height={Math.abs(janelaSelecao.b.y - janelaSelecao.a.y)}
+              fill={cruzada ? "#22c55e" : "#3b82f6"} fillOpacity={0.12} stroke={cruzada ? "#16a34a" : "#2563eb"}
+              strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray={cruzada ? "6 4" : undefined} />;
+          })()}
+          {previas.length > 0 && <path d={previas.map(caminhoDaPrevia).join(" ")} fill="none" stroke={realceCor} strokeWidth={1.5}
+            vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
+          {pedido?.base && cursor && !pedido.livre && (pedido.modo === "ponto" || pedido.modo === "valor") && <line x1={pedido.base.x} y1={pedido.base.y} x2={cursor.x} y2={cursor.y}
+            stroke={realceCor} strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="2 3" />}
+          {pendentes.length > 0 && <polyline
+            points={[...pendentes, ...(cursor ? [cursor] : [])].map((ponto) => `${ponto.x},${ponto.y}`).join(" ")}
+            fill="none" stroke={realceCor} strokeWidth={1.5} vectorEffect="non-scaling-stroke" strokeDasharray="6 4" />}
+          {/* Rastreamento polar: a linha pontilhada mostra a direção em que o ponto está preso. */}
+          {rastreio && <line x1={rastreio.origem.x} y1={rastreio.origem.y}
+            x2={rastreio.origem.x + Math.cos(rastreio.angulo * Math.PI / 180) * vista.largura * 3}
+            y2={rastreio.origem.y - Math.sin(rastreio.angulo * Math.PI / 180) * vista.largura * 3}
+            stroke="#16a34a" strokeWidth={1} vectorEffect="non-scaling-stroke" strokeDasharray="2 4" />}
+          {/* Alças dos objetos selecionados: quadrados azuis; a quente fica vermelha. */}
+          {canEdit && !pedido && comAlcas.flatMap((elemento) => verticesDe(elemento).map((vertice) => {
+            const quente = alcaQuente?.id === elemento.id && alcaQuente.indice === vertice.indice;
+            return <rect key={`${elemento.id}-${vertice.indice}`}
+              x={vertice.ponto.x - px * 5} y={vertice.ponto.y - px * 5} width={px * 10} height={px * 10}
+              fill={quente ? "#ef4444" : "#3b82f6"} stroke={fundoEscuro ? "#ffffff" : "#1e3a8a"} strokeWidth={1} vectorEffect="non-scaling-stroke" />;
+          }))}
+          {/* Marcador do encaixe: cada tipo tem o seu desenho, como no AutoCAD. */}
+          {encaixeAtual && encaixeAtual.tipo !== "malha" && cursor && <g>
+            <path d={marcadorDoEncaixe(encaixeAtual.tipo, encaixeAtual.ponto, px * 7)} fill="none" stroke={fundoEscuro ? "#facc15" : "#c2410c"} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+            <text x={encaixeAtual.ponto.x + px * 11} y={encaixeAtual.ponto.y - px * 10} fontSize={px * 11} fontFamily="Arial, Helvetica, sans-serif"
+              fill={fundoEscuro ? "#facc15" : "#7c2d12"} stroke={fundoEscuro ? "#1f2227" : "#ffffff"} strokeWidth={px * 3} style={{ paintOrder: "stroke" }}>{encaixeLabels[encaixeAtual.tipo]}</text>
           </g>}
-          {cursor && ferramenta !== "selecionar" && <circle cx={cursor.x} cy={cursor.y} r={vista.largura / 160} fill="#846100" />}
+          {/* Cursor em cruz; com a caixinha de seleção quando o clique escolhe objetos. */}
+          {cursor && <g stroke={fundoEscuro ? "#e8e8e8" : "#303030"} strokeWidth={1} vectorEffect="non-scaling-stroke" fill="none" pointerEvents="none">
+            <line x1={cursor.x - px * 40} y1={cursor.y} x2={cursor.x + px * 40} y2={cursor.y} vectorEffect="non-scaling-stroke" />
+            <line x1={cursor.x} y1={cursor.y - px * 40} x2={cursor.x} y2={cursor.y + px * 40} vectorEffect="non-scaling-stroke" />
+            {(!pedido || pedido.modo === "selecao" || pedido.modo === "objeto") && ferramenta === "selecionar" && !alcaQuente
+              && <rect x={cursor.x - px * 5} y={cursor.y - px * 5} width={px * 10} height={px * 10} vectorEffect="non-scaling-stroke" />}
+          </g>}
         </svg>
+        {/* Entrada dinâmica (F12): o prompt e o que se digita ao lado do cursor. */}
+        {dinamica && cursor && (pedido || comando || rastreio) && (() => {
+          const tela = telaDe(cursor);
+          if (!tela) return null;
+          const base = pedido?.base;
+          const medida = base ? `${medidaMm(Math.hypot(cursor.x - base.x, cursor.y - base.y))} mm · ${medidaMm(((Math.atan2(-(cursor.y - base.y), cursor.x - base.x) * 180 / Math.PI) % 360 + 360) % 360)}°` : null;
+          return <div aria-hidden="true" className="pointer-events-none absolute z-10 max-w-72 rounded border border-hoikos-300 bg-white/95 px-2 py-1 font-mono text-[11px] leading-4 text-hoikos-800 shadow"
+            style={{ left: Math.min(tela.x + 18, Math.max(0, tamanhoTela.largura - 200)), top: Math.min(tela.y + 22, Math.max(0, tamanhoTela.altura - 60)) }}>
+            {pedido && <p className="truncate">{textoDoPedido(pedido)}</p>}
+            {rastreio && <p className="text-green-700">Polar: {medidaMm(rastreio.distancia)} &lt; {rastreio.angulo}°</p>}
+            {medida && !rastreio && <p className="text-hoikos-600">{medida}</p>}
+            {comando && <p className="mt-0.5 rounded bg-hoikos-100 px-1">{comando}</p>}
+          </div>;
+        })()}
         </div>
-        <div className="flex flex-wrap items-center gap-3 border-t border-hoikos-200 px-3 py-2 text-xs text-hoikos-500">
-          <span className="flex items-center gap-1.5">
-            <Grid2x2 aria-hidden="true" className="size-3.5" />
-            {cursor ? `X ${Number(cursor.x.toFixed(3))} mm · Y ${Number((-cursor.y).toFixed(3))} mm` : "Mova o cursor sobre a prancha"}
+        {/* Barra de status: coordenadas e as chaves do AutoCAD. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hoikos-200 px-3 py-1.5 text-xs text-hoikos-500">
+          <span className="font-mono tabular-nums">
+            {cursor ? `${Number(cursor.x.toFixed(3))}, ${Number((-cursor.y).toFixed(3))}` : "Mova o cursor sobre a prancha"}
           </span>
-          {encaixeAtual && encaixeAtual.tipo !== "malha" && <span className="font-medium text-hoikos-gold">{encaixeLabels[encaixeAtual.tipo]}</span>}
-          {orto && <span className="font-medium text-hoikos-gold">Ortogonal</span>}
-          {pendentes.length > 0 && cursor && <span>
-            {ferramenta === "circulo" || ferramenta === "arco"
-              ? `raio ${metros(comprimentoM(pendentes[0], pendentes[1] ?? cursor))}`
-              : metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}
-          </span>}
-          {canEdit && <form className="ml-auto flex min-w-0 max-w-full flex-1 items-center justify-end gap-2"
-            onSubmit={(evento) => { evento.preventDefault(); confirmarEntrada(); }}>
-            <Label htmlFor="prancheta-medida" className="text-xs">Medida</Label>
-            <Input id="prancheta-medida" value={entrada} onChange={(evento) => definirEntrada(evento.target.value)}
-              placeholder="3150 · 3150<90 · @3000,1500" className="h-8 w-full min-w-0 max-w-56 text-xs"
-              disabled={!pendentes.length} />
-            <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!pendentes.length || !entrada.trim()}>
-              Aplicar
-            </Button>
-          </form>}
+          {pendentes.length > 0 && cursor && <span>{metros(comprimentoM(pendentes[pendentes.length - 1], cursor))}</span>}
+          <div className="ml-auto flex flex-wrap gap-1">
+            {([["F7", "Grade", grade], ["F9", "Malha", snapGrade], ["F8", "Orto", orto], ["F10", "Polar", polar], ["F3", "Encaixe", osnap], ["F12", "Dinâmica", dinamica]] as const).map(([tecla, rotulo, valor]) =>
+              <button key={tecla} type="button" aria-pressed={valor} title={`${rotulo} (${tecla})`} onClick={() => alternarChave(tecla)}
+                className="rounded border border-hoikos-200 px-1.5 py-0.5 font-medium text-hoikos-600 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+                {rotulo}
+              </button>)}
+          </div>
         </div>
+        {/* Linha de comando: histórico em cima, prompt e opções embaixo, como no AutoCAD. */}
+        <section aria-label="Linha de comando CAD" className="border-t border-hoikos-200 bg-hoikos-50 font-mono text-xs">
+          <ol ref={listaRegistro} aria-live="polite" className={`${registroAberto ? "max-h-64" : "max-h-[3.9rem]"} overflow-y-auto px-3 pt-1.5 leading-5 text-hoikos-600`}>
+            {registro.slice(registroAberto ? -200 : -3).map((linha, indice) => <li key={`${registro.length}-${indice}`} className="break-words">{linha}</li>)}
+          </ol>
+          <form className="flex flex-wrap items-center gap-1.5 px-3 py-1.5" onSubmit={enviarComando}>
+            <Label htmlFor="cad-command" className="max-w-full shrink-0 font-mono text-xs text-hoikos-900">{pedido ? textoDoPedido(pedido) : "Comando:"}</Label>
+            {pedido?.opcoes?.map((opcao) => <Button key={opcao.chave} type="button" size="sm" variant="outline" className="h-7 px-2 font-mono text-xs"
+              onClick={() => { registrar(`${textoDoPedido(pedido)} ${opcao.rotulo}`); cmd().responder({ tipo: "opcao", chave: opcao.chave }); sincronizar(); }}>{opcao.rotulo}</Button>)}
+            <Input id="cad-command" ref={campoComando} value={comando} disabled={!canEdit} autoComplete="off" spellCheck={false}
+              placeholder={pedido ? "" : "Digite um comando"} className="h-8 min-w-0 flex-1 basis-32 font-mono text-xs"
+              onChange={(evento) => { definirComando(evento.target.value); indiceDigitado.current = -1; }}
+              onKeyDown={(evento) => {
+                if (evento.key === "Escape") { evento.preventDefault(); evento.stopPropagation(); escapar(); return; }
+                // Espaço é Enter, menos quando o comando pede um texto.
+                if (evento.key === " " && pedido?.modo !== "texto") { evento.preventDefault(); evento.stopPropagation(); enviarComando(); return; }
+                if (evento.key === "Tab" && sugestoes.length) { evento.preventDefault(); definirComando(sugestoes[0].nome); return; }
+                if ((evento.key === "ArrowUp" || evento.key === "ArrowDown") && linhasDigitadas.length) {
+                  evento.preventDefault();
+                  const total = linhasDigitadas.length;
+                  const atual = indiceDigitado.current < 0 ? total : indiceDigitado.current;
+                  const proximo = Math.max(0, Math.min(total, atual + (evento.key === "ArrowUp" ? -1 : 1)));
+                  indiceDigitado.current = proximo;
+                  definirComando(proximo === total ? "" : linhasDigitadas[proximo]);
+                }
+              }} />
+            <Button type="submit" size="sm" variant="outline" className="h-8" disabled={!canEdit}>Enter</Button>
+            {nomeComando && <Button type="button" size="sm" variant="ghost" className="h-8" onClick={escapar}>Esc</Button>}
+            <Button type="button" size="sm" variant="ghost" className="h-8" aria-pressed={registroAberto} onClick={() => definirRegistroAberto((aberto) => !aberto)}
+              aria-label="Histórico de comandos (F2)" title="Histórico de comandos (F2)">F2</Button>
+          </form>
+          {sugestoes.length > 0 && <ul aria-label="Comandos sugeridos" className="flex flex-wrap gap-1 px-3 pb-1.5">
+            {sugestoes.map((sugestao) => <li key={sugestao.nome}><button type="button" className="rounded border border-hoikos-200 bg-white px-1.5 py-0.5"
+              onClick={() => { definirComando(""); iniciarComando(sugestao.nome); }}>
+              {sugestao.nome}<span className="text-hoikos-500"> {sugestao.atalhos[0] ?? ""}</span>
+            </button></li>)}
+          </ul>}
+          <details className="px-3 pb-2 font-sans">
+            <summary className="cursor-pointer">Comandos e atalhos</summary>
+            <div className="grid gap-1 pt-2 sm:grid-cols-2 lg:grid-cols-3">
+              {COMANDOS.map((item) => <button key={item.nome} type="button" className="rounded border border-hoikos-200 bg-white p-2 text-left" onClick={() => iniciarComando(item.nome)} disabled={!canEdit}>
+                <code>{item.nome}</code> <span className="text-hoikos-500">{item.atalhos.slice(0, 2).join(" · ")}</span>
+                <span className="block pt-0.5 text-hoikos-700">{item.descricao}</span>
+              </button>)}
+            </div>
+            <p className="pt-2 text-hoikos-600">
+              Coordenadas em mm: x,y absoluto · @dx,dy relativo · distância&lt;ângulo · só a distância segue o cursor. END, MID, CEN, INT, PER e QUA forçam um encaixe no próximo ponto.
+              Uma linha inteira também vale, como em script: {CAD_COMMANDS.slice(0, 4).map((item) => item.syntax).join(" · ")}.
+            </p>
+            <p className="pt-1 text-hoikos-600">Teclas: Enter ou Espaço confirmam e repetem o último comando · Esc cancela · F3 encaixe · F7 grade · F8 orto · F9 malha · F10 polar · F12 entrada dinâmica · botão do meio desloca, duplo clique nele enquadra.</p>
+          </details>
+        </section>
       </div>
 
       <aside className="prancheta-painel">

@@ -128,6 +128,8 @@ export type OpcoesEncaixe = {
   /** Ponto de onde o traço está saindo, quando há um. Só com ele existe perpendicular. */
   origem?: Ponto | null;
   ativos?: readonly TipoEncaixe[];
+  /** Falso desliga o encaixe na malha (F9 do AutoCAD): sem objeto perto, vale o ponto cru. */
+  malha?: boolean;
 };
 
 type ArcoDoc = Extract<Elemento, { tipo: "arco" }>;
@@ -280,7 +282,7 @@ function indiceDe(documento: Documento) {
 export function encaixePerto(documento: Documento, alvo: Ponto, opcoes: OpcoesEncaixe & { ignorar?: ReadonlySet<string> }): Encaixe {
   const ativos = opcoes.ativos ?? TIPOS_ENCAIXE;
   const tolerancia = Math.max(1, opcoes.toleranciaMm);
-  const naMalha: Encaixe = {
+  const naMalha: Encaixe = opcoes.malha === false ? { tipo: "malha", ponto: alvo } : {
     tipo: "malha",
     ponto: { x: encaixar(alvo.x, documento.malhaMm), y: encaixar(alvo.y, documento.malhaMm) },
   };
@@ -971,6 +973,59 @@ export function estenderElemento(elemento: Elemento, limites: Limite[], clique: 
   const destino = preciso({ x: vizinho.x + (ponta.x - vizinho.x) * melhor, y: vizinho.y + (ponta.y - vizinho.y) * melhor });
   const novos = noFim ? [...pontos.slice(0, -1), destino] : [destino, ...pontos.slice(1)];
   return comPontos(elemento, novos);
+}
+
+/**
+ * Quebra (BREAK do AutoCAD): tira o trecho entre dois pontos do elemento e devolve os
+ * pedaços que ficam — o primeiro com o identificador do original, os outros com "".
+ * Com os dois pontos iguais, divide ali sem tirar nada. No círculo e na polilinha
+ * fechada some o trecho que vai do primeiro ao segundo ponto no sentido do traçado
+ * (anti-horário no círculo), como no AutoCAD.
+ */
+export function quebrarElemento(elemento: Elemento, p1: Ponto, p2: Ponto): Elemento[] | null {
+  if (elemento.tipo === "arco") {
+    const limite = { inicio: elemento.inicioGraus, varredura: elemento.varreduraGraus };
+    const circulo = elemento.varreduraGraus >= 360;
+    const posicao = (p: Ponto) => {
+      const s = noArco(limite, grausDe(elemento.centro, p));
+      if (s >= 0) return s;
+      // Fora do arco: vale a ponta mais perto do clique.
+      const pontos = pontosDoArco(elemento);
+      return distancia(p, pontos[0]) <= distancia(p, pontos.at(-1)!) ? 0 : elemento.varreduraGraus;
+    };
+    const novo = (de: number, varredura: number, id: string): Elemento | null => varredura < 1e-6 ? null
+      : { ...elemento, id, inicioGraus: normalizarGraus(Math.round((elemento.inicioGraus + de) * 1e6) / 1e6) % 360, varreduraGraus: Math.min(360, Math.round(varredura * 1e6) / 1e6) };
+    const s1 = posicao(p1), s2 = posicao(p2);
+    if (circulo) {
+      if (Math.abs(s1 - s2) < 1e-6) return null;
+      const resto = novo(s2, ((s1 - s2) % 360 + 360) % 360, elemento.id);
+      return resto ? [resto] : null;
+    }
+    const de = Math.min(s1, s2), ate = Math.max(s1, s2);
+    const pedacos = [novo(0, de, elemento.id), novo(ate, elemento.varreduraGraus - ate, "")].filter((p): p is Elemento => !!p);
+    if (!pedacos.length || (pedacos.length === 1 && de < 1e-6 && ate > elemento.varreduraGraus - 1e-6)) return null;
+    return pedacos.map((pedaco, i) => ({ ...pedaco, id: i === 0 ? elemento.id : "" }) as Elemento);
+  }
+  const caminho = caminhoDe(elemento);
+  if (!caminho) return null;
+  const total = caminho.acumulado.at(-1)!;
+  const s1 = comprimentoNoClique(caminho, p1), s2 = comprimentoNoClique(caminho, p2);
+  if (caminho.fechado) {
+    if (Math.abs(s1 - s2) < 1e-6) return null;
+    const pontos = s1 < s2
+      ? [...trechoDoCaminho(caminho, s2, total), ...trechoDoCaminho(caminho, 0, s1).slice(1)]
+      : trechoDoCaminho(caminho, s2, s1);
+    const resto = comPontos(elemento, pontos);
+    return resto ? [resto] : null;
+  }
+  const de = Math.min(s1, s2), ate = Math.max(s1, s2);
+  const pedacos: Elemento[] = [];
+  if (de > 1e-3) { const p = comPontos(elemento, trechoDoCaminho(caminho, 0, de)); if (p) pedacos.push(p); }
+  if (ate < total - 1e-3) { const p = comPontos(elemento, trechoDoCaminho(caminho, ate, total)); if (p) pedacos.push(pedacos.length ? { ...p, id: "" } as Elemento : p); }
+  if (!pedacos.length) return null;
+  // Quebra no próprio ponto, numa ponta: nada muda.
+  if (pedacos.length === 1 && ate - de < 1e-6) return null;
+  return pedacos;
 }
 
 const comoLimite = (cortante: Segmento): Limite => ({ tipo: "segmento", a: cortante.a, b: cortante.b, elementoId: cortante.elementoId });

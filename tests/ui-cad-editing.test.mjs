@@ -33,13 +33,13 @@ async function editor(elementos = [], canEdit = true, save) {
   return { container, svg, click, pointer, point, input, command, saved, calls, async close(){ await act(async()=>reactRoot.unmount()); container.remove(); } };
 }
 
-test('retângulo e polilinha funcionam por cliques e medidas, com desfazer após gravar', async () => {
+test('retângulo e polilinha pela linha de comando, com cliques e medidas, e desfazer após gravar', async () => {
   const e = await editor();
   try {
-    await e.click('Retângulo (Q)'); await e.point(100.25,100.75);
-    await e.input('#prancheta-medida','@3000.5,2000.25');
-    await act(async()=>e.container.querySelector('#prancheta-medida').closest('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));
-    await e.click('Polilinha (W)'); await e.point(5000,0); await e.point(6000,0); await e.point(6000,1000); await e.click('Fechar polilinha');
+    await e.click('Retângulo (REC)'); await e.point(100.25,100.75);
+    assert.match(e.container.textContent,/Especifique o outro canto \[Dimensões\]:/);
+    await e.command('@3000.5,2000.25');
+    await e.click('Polilinha (PL)'); await e.point(5000,0); await e.point(6000,0); await e.point(6000,1000); await e.click('Fechar');
     await e.click('Gravar');
     const doc=e.saved(); assert.equal(doc.elementos.length,2);
     assert.deepEqual(doc.elementos[0].pontos[2], {x:3100.75,y:-1899.5});
@@ -62,10 +62,10 @@ test('Shift seleciona em grupo, arrasto conserva frações e desfaz em uma etapa
   } finally { await e.close(); }
 });
 
-test('janela e comandos em grupo copiam e excluem juntos', async()=>{
+test('janela da esquerda para a direita e comandos em grupo copiam e excluem juntos', async()=>{
   const e=await editor([line('a',1000),line('b',2000)]);
   try {
-    await e.click('Selecionar por janela (B)'); await e.pointer('pointerdown',0,0); await e.pointer('pointermove',4000,3000); await e.pointer('pointerup',4000,3000);
+    await e.pointer('pointerdown',0,0); await e.pointer('pointermove',4000,3000); await e.pointer('pointerup',4000,3000);
     assert.match(e.container.textContent,/2 elemento\(s\) selecionado/);
     await e.command('CO @100,100'); await e.click('Gravar'); assert.equal(e.saved().elementos.length,4);
     await e.command('E'); await e.click('Gravar'); assert.equal(e.saved().elementos.length,2);
@@ -103,4 +103,47 @@ test('somente leitura não modifica geometria nem executa comandos',async()=>{
     assert.equal(e.calls.filter(c=>c.method==='PUT').length,0);
     assert.equal(e.svg.querySelector('polyline').getAttribute('points'),'1000.25,1000 3000.75,1000');
   }finally{await e.close();}
+});
+
+test('linha de comando como no AutoCAD: digitar em qualquer lugar, prompts, Enter repete, Esc cancela e janela cruzada', async () => {
+  const e = await editor([line('a',1000), line('b',2000)]);
+  const tecla = async (key) => act(async () => { dom.window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })); });
+  const enviar = async () => act(async () => e.container.querySelector('#cad-command').closest('form').dispatchEvent(new dom.window.Event('submit',{bubbles:true,cancelable:true})));
+  try {
+    await tecla('l');
+    assert.equal(e.container.querySelector('#cad-command').value, 'l', 'a tecla vai para a linha de comando');
+    await enviar();
+    assert.match(e.container.textContent, /Comando: LINHA/);
+    assert.match(e.container.textContent, /Especifique o primeiro ponto:/);
+    await e.point(0,5000); await e.point(3000,5000);
+    assert.match(e.container.textContent, /Especifique o próximo ponto \[Desfazer\]:/);
+    await tecla('Enter');
+    assert.match(e.container.textContent, /Comando:(?! LINHA)/);
+    await tecla('Enter');
+    assert.equal(e.container.textContent.match(/Comando: LINHA/g).length, 2, 'Enter sem comando repete o último');
+    await tecla('Escape');
+    assert.match(e.container.textContent, /\*Cancelar\*/);
+    await e.pointer('pointerdown',2000,2500); await e.pointer('pointermove',1500,500); await e.pointer('pointerup',1500,500);
+    assert.match(e.container.textContent,/2 elemento\(s\) selecionado/, 'janela cruzada pega o que ela toca');
+    await tecla('Delete');
+    await tecla('F8');
+    assert.equal(e.container.querySelector('button[title="Orto (F8)"]').getAttribute('aria-pressed'), 'true');
+    await e.click('Gravar');
+    assert.equal(e.saved().elementos.length, 1);
+    assert.deepEqual(e.saved().elementos[0].pontos, [{ x: 0, y: 5000 }, { x: 3000, y: 5000 }]);
+  } finally { await e.close(); }
+});
+
+test('comando de edição usa a seleção feita antes e a opção clicada no prompt', async () => {
+  const e = await editor([line('a',1000)]);
+  try {
+    await e.point(2000,1000);
+    await e.click('Espelhar (MI)');
+    await e.point(0,0); await e.point(1000,0);
+    assert.match(e.container.textContent, /Apagar os objetos de origem \[Sim\/Não\] <Não>:/);
+    await e.click('Sim');
+    await e.click('Gravar');
+    assert.equal(e.saved().elementos.length, 1);
+    assert.deepEqual(e.saved().elementos[0].pontos.map((p) => p.y), [-1000, -1000]);
+  } finally { await e.close(); }
 });

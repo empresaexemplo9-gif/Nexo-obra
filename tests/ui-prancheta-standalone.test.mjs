@@ -27,8 +27,8 @@ function ponteiro(tipo, alvo) {
   alvo.dispatchEvent(evento);
 }
 
-function arrasto(tipo, alvo, x, y) {
-  const evento = new dom.window.MouseEvent(tipo, { bubbles: true, button: 0, buttons: tipo === "pointerup" ? 0 : 1,
+function arrasto(tipo, alvo, x, y, botao = 0) {
+  const evento = new dom.window.MouseEvent(tipo, { bubbles: true, button: botao, buttons: tipo === "pointerup" ? 0 : botao === 1 ? 4 : 1,
     clientX: x, clientY: y });
   Object.defineProperty(evento, "pointerId", { value: 1 });
   alvo.dispatchEvent(evento);
@@ -56,7 +56,7 @@ test("editor amplo mostra ajuda após quatro segundos parados e esconde ao mover
   await act(async () => { reactRoot.render(React.createElement(PranchetaStandalone, { drawingId: prancha.id })); });
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
   assert.ok(container.querySelector(".prancheta-autonoma .prancheta-ampla"));
-  const selecionar = container.querySelector('button[aria-label="Selecionar e mover (V)"]');
+  const selecionar = container.querySelector('button[aria-label="Selecionar (Esc)"]');
   assert.ok(selecionar);
   await act(async () => { ponteiro("pointerover", selecionar); });
   assert.equal(container.querySelector('[role="tooltip"]'), null);
@@ -67,7 +67,7 @@ test("editor amplo mostra ajuda após quatro segundos parados e esconde ao mover
   await act(async () => reactRoot.unmount()); container.remove();
 });
 
-test("seleção arrasta a vista pelo espaço vazio até soltar o botão esquerdo", async () => {
+test("o botão do meio arrasta a vista até ser solto, como no AutoCAD", async () => {
   const container = document.createElement("div"); document.body.append(container);
   const reactRoot = createRoot(container);
   stubFetch({ "/api/session": session, "/api/studio/prancha-1": { prancha },
@@ -80,10 +80,10 @@ test("seleção arrasta a vista pelo espaço vazio até soltar o botão esquerdo
   svg.getScreenCTM = () => ({ inverse: () => ({}) });
   svg.getBoundingClientRect = () => ({ width: 1000, height: 620 });
   const antes = svg.getAttribute("viewBox");
-  await act(async () => { arrasto("pointerdown", svg, 10, 10); arrasto("pointermove", svg, 30, 10); });
+  await act(async () => { arrasto("pointerdown", svg, 10, 10, 1); arrasto("pointermove", svg, 30, 10, 1); });
   const depois = svg.getAttribute("viewBox");
   assert.notEqual(depois, antes);
-  await act(async () => { arrasto("pointerup", svg, 30, 10); arrasto("pointermove", svg, 50, 10); });
+  await act(async () => { arrasto("pointerup", svg, 30, 10, 1); arrasto("pointermove", svg, 50, 10); });
   assert.equal(svg.getAttribute("viewBox"), depois, "soltar encerra a movimentação");
   await act(async () => reactRoot.unmount()); container.remove();
 });
