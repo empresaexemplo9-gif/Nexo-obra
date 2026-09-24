@@ -142,3 +142,55 @@ test("todo item do catálogo tem medida plausível e os modelos são válidos", 
   }
   for (const modelo of layout.MODELOS) assert.doesNotThrow(() => layout.layoutDoModelo(modelo.id), modelo.id);
 });
+
+test("acabamento só entre os que o item aceita, e o escolhido volta igual", async () => {
+  for (const entrada of CATALOGO) {
+    if (!entrada.materiais) { assert.equal(entrada.material, undefined, entrada.id); continue; }
+    assert.ok(entrada.materiais.length > 0 && entrada.materiais.includes(entrada.material), entrada.id);
+    assert.equal(layout.itemNovo(entrada.id, 0, 0).material, entrada.material, entrada.id);
+  }
+  const { body } = await create("owner", { name: "Acabamentos", modelo: "vazio" });
+  const base = layout.layoutVazio();
+  const mesa = { ...layout.itemNovo("mesa-6", 0, 0), material: "vidro" };
+  const balcao = { ...layout.itemNovo("balcao-alvenaria", 3000, 0), material: "marmore" };
+  const salvo = await save("owner", body.layout.id, { name: "Acabamentos", revision: 1, content: { ...base, itens: [mesa, balcao] } });
+  assert.equal(salvo.status, 200, JSON.stringify(salvo.body));
+  const reaberto = await open("owner", body.layout.id);
+  assert.deepEqual(reaberto.body.layout.content.itens.map((i) => i.material), ["vidro", "marmore"]);
+  for (const errado of [{ ...layout.itemNovo("sofa-3", 0, 0), material: "vidro" }, { ...layout.itemNovo("mesa-4", 0, 0), material: "concreto" }, { ...layout.itemNovo("mesa-4", 0, 0), material: "ouro" }]) {
+    const recusado = await save("owner", body.layout.id, { name: "Acabamentos", revision: 2, content: { ...base, itens: [errado] } });
+    assert.equal(recusado.status, 400, errado.catalogo);
+  }
+});
+
+test("todo item do catálogo desenha em planta e monta em 3D, em cada acabamento", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { createElement } = await import("react");
+  const { SimboloItem } = await h.load("/components/layout/simbolos-2d.tsx");
+  const { montarCena } = await h.load("/components/layout/cena-3d.ts");
+  const three = await import("three");
+  const { materialDoItem } = await h.load("/lib/layout-catalogo.ts");
+  const categorias = new Set(CATALOGO.map((c) => c.categoria));
+  assert.ok(categorias.has("balcoes") && categorias.has("alvenaria"));
+  const doc = layout.layoutVazio();
+  for (const entrada of CATALOGO) {
+    for (const material of entrada.materiais ?? [null]) {
+      const svg = renderToStaticMarkup(createElement("svg", null, createElement(SimboloItem, { forma: entrada.forma, variante: entrada.variante, w: entrada.largura, d: entrada.profundidade, cor: entrada.cor, material })));
+      assert.doesNotMatch(svg, /NaN|undefined/, `${entrada.id} ${material}`);
+      assert.equal(materialDoItem(entrada, material), material);
+      const novo = layout.itemNovo(entrada.id, 0, 0);
+      if (material) novo.material = material;
+      doc.itens.push(novo);
+    }
+  }
+  const cena = montarCena(three, layout.layoutConteudoSchema.parse(doc));
+  let malhas = 0;
+  cena.traverse((objeto) => {
+    if (!objeto.isMesh) return;
+    malhas += 1;
+    const posicao = objeto.geometry.getAttribute("position");
+    for (let i = 0; i < posicao.array.length; i += 1) assert.ok(Number.isFinite(posicao.array[i]), objeto.parent?.uuid);
+  });
+  assert.equal(cena.children.length, doc.itens.length);
+  assert.ok(malhas > doc.itens.length * 2);
+});

@@ -5,7 +5,7 @@ import { Minus, Plus, Scan } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SimboloItem, tom } from "@/components/layout/simbolos-2d";
-import { itemDoCatalogo } from "@/lib/layout-catalogo";
+import { itemDoCatalogo, materialDoItem } from "@/lib/layout-catalogo";
 import {
   abrirNoPonto, adicionarParedes, areaM2, centroide, comodoRetangular, comprimentoDaParede, corDoPiso, itemNovo, limitesDoLayout,
   novoId, pisoLabels, pontoNaParede, type LayoutConteudo, type Parede, type Ponto, type TipoAbertura,
@@ -317,7 +317,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
         const abaixo = ["tapete", "vaga", "piscina"].includes(base.forma);
         if (!abaixo) return null;
         return <g key={item.id} data-tipo="item" data-id={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotacao})`} style={{ cursor: somenteLeitura ? "default" : "move" }}>
-          <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} />
+          <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={materialDoItem(base, item.material)} />
           {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#c98a1b" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
         </g>;
       })}
@@ -357,7 +357,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
         if (!base || ["tapete", "vaga", "piscina"].includes(base.forma)) return null;
         const selecionado = selecao?.tipo === "item" && selecao.id === item.id;
         return <g key={item.id} data-tipo="item" data-id={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotacao})`} style={{ cursor: somenteLeitura ? "default" : "move" }}>
-          <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} />
+          <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={materialDoItem(base, item.material)} />
           {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#c98a1b" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
         </g>;
       })}

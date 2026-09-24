@@ -22,9 +22,29 @@ não duplicam na divisa. Arrastar a ponta de uma parede leva junto os cantos lig
 
 ## Catálogo
 
-Cinquenta itens em oito categorias, com a medida de mercado (cama queen 158 × 198 cm, sedã
-180 × 460 cm, vaga 2,5 × 5 m). Largura, profundidade, altura, rotação e cor são ajustáveis
-por item. Com rotação 0, a frente do item fica para baixo na planta.
+121 itens em treze categorias, com a medida de mercado (cama queen 158 × 198 cm, sedã
+180 × 460 cm, vaga 2,5 × 5 m, balcão americano a 1,10 m): sala e jantar, quarto, cozinha,
+balcões e bancadas (americano, de cozinha, de bar, ilha gourmet e de atendimento, com
+banquetas), alvenaria (balcão, bancada com cuba, bancada gourmet com churrasqueira, banco,
+sofá, cama, mureta, floreira, estante com nichos e lareira), banheiro, lavanderia,
+escritório, som e home cinema (caixas de teto, torre e parede, soundbar, subwoofer,
+receiver, projetor, tela e poltronas de cinema), ar-condicionado (split, cassete, piso-teto
+e condensadora), cortinas e persianas (tecido, blackout, voil, rolô, horizontal e vertical),
+garagem e veículos (hatch, sedã, SUV, picape, esportivo, elétrico, minivan, moto, scooter,
+bicicleta, carregador, bancada de ferramentas, estante de aço, vaga simples e dupla) e área
+externa. Largura, profundidade, altura, rotação e cor são ajustáveis por item. Com rotação
+0, a frente do item fica para baixo na planta.
+
+### Acabamentos
+
+Mesas, bancadas, balcões, marcenaria, lavatórios, tampos de alvenaria e persianas têm
+acabamento escolhido no painel do item, entre os que a peça aceita: madeira, vidro,
+mármore, granito, quartzo branco, laca, metal/inox e concreto. A planta mostra o veio, o
+pontilhado ou o reflexo do acabamento; a prévia 3D usa textura (mármore com veio, granito
+pontilhado, madeira tingida pela cor da peça) e vidro translúcido. Madeira e laca seguem a
+cor escolhida; pedra, vidro e metal têm cor própria. O servidor recusa acabamento que a
+peça não aceita — sofá de vidro, por exemplo. Itens de alvenaria usam a cor como cor do
+reboco ou do tijolo.
 
 ## Saídas
 

@@ -20,7 +20,7 @@ import { Previa3d, type Previa3dRef } from "@/components/layout/previa-3d";
 import { SimboloItem } from "@/components/layout/simbolos-2d";
 import { plantaPng, pranchaPdf } from "@/components/layout/exportar";
 import { pedir } from "@/lib/chat-client";
-import { CATALOGO, categoriaLabels, itemDoCatalogo, type Categoria } from "@/lib/layout-catalogo";
+import { CATALOGO, categoriaLabels, itemDoCatalogo, materialDoItem, materialLabels, type Categoria, type Material } from "@/lib/layout-catalogo";
 import {
   aberturaLabels, areaM2, comprimentoDaParede, itemNovo, MODELOS, novoId, PISOS, pisoLabels, type LayoutConteudo, type Piso,
 } from "@/lib/layout";
@@ -365,8 +365,8 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
           {CATALOGO.filter((item) => item.categoria === categoria).map((item) => {
             const lado = Math.max(item.largura, item.profundidade) * 1.3;
             return <li key={item.id}><button type="button" draggable onDragStart={(evento) => { evento.dataTransfer.setData("application/x-hoikos-item", item.id); evento.dataTransfer.effectAllowed = "copy"; }}
-              onClick={() => adicionarItem(item.id)} className="flex w-full flex-col items-center gap-1 rounded-md border border-transparent p-1.5 text-center text-[11px] leading-tight hover:border-hoikos-200 hover:bg-hoikos-50 focus-visible:outline-2" title={`${item.nome} · ${item.largura / 10} × ${item.profundidade / 10} cm`}>
-              <svg viewBox={`${-lado / 2} ${-lado / 2} ${lado} ${lado}`} className="size-14" aria-hidden><SimboloItem forma={item.forma} variante={item.variante} w={item.largura} d={item.profundidade} cor={item.cor} /></svg>
+              onClick={() => adicionarItem(item.id)} className="flex w-full flex-col items-center gap-1 rounded-md border border-transparent p-1.5 text-center text-[11px] leading-tight hover:border-hoikos-200 hover:bg-hoikos-50 focus-visible:outline-2" title={`${item.nome} · ${item.largura / 10} × ${item.profundidade / 10} cm${item.materiais ? ` · acabamentos: ${item.materiais.map((m) => materialLabels[m].toLowerCase()).join(", ")}` : ""}`}>
+              <svg viewBox={`${-lado / 2} ${-lado / 2} ${lado} ${lado}`} className="size-14" aria-hidden><SimboloItem forma={item.forma} variante={item.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={item.material} /></svg>
               <span>{item.nome}</span>
             </button></li>;
           })}
@@ -392,7 +392,12 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
               <Button size="sm" variant="outline" onClick={() => girar(15)} aria-label="Girar 15° à direita">+15°</Button>
               <Button size="sm" variant="outline" onClick={() => girar(90)} aria-label="Girar 90° à direita"><RotateCw />90°</Button>
             </div></div> : null}
-            <div className="flex items-center gap-2"><Label htmlFor="cor" className="text-xs">Cor</Label><input id="cor" type="color" value={itemSel.cor} disabled={somenteLeitura} onChange={(evento) => mudar("cor", evento.target.value)} className="h-8 w-14 cursor-pointer rounded border" />
+            {base.materiais?.length ? <div><Label htmlFor="material" className="text-xs">Acabamento</Label>
+              <NativeSelect id="material" className="mt-1 w-full" value={materialDoItem(base, itemSel.material) ?? ""} disabled={somenteLeitura || base.materiais.length < 2}
+                onChange={(evento) => atualizar((d) => { const alvo = d.itens.find((i) => i.id === itemSel.id); if (alvo) alvo.material = evento.target.value as Material; })}>
+                {base.materiais.map((m) => <option key={m} value={m}>{materialLabels[m]}</option>)}
+              </NativeSelect></div> : null}
+            <div className="flex items-center gap-2"><Label htmlFor="cor" className="text-xs">{base.alvenaria ? "Cor da alvenaria" : "Cor"}</Label><input id="cor" type="color" value={itemSel.cor} disabled={somenteLeitura} onChange={(evento) => mudar("cor", evento.target.value)} className="h-8 w-14 cursor-pointer rounded border" />
               {itemSel.cor !== base.cor && !somenteLeitura ? <Button size="sm" variant="ghost" onClick={() => mudar("cor", base.cor)}>Cor original</Button> : null}</div>
             {!somenteLeitura ? <div className="flex gap-2"><Button size="sm" variant="outline" onClick={duplicar}><Copy />Duplicar</Button><Button size="sm" variant="outline" onClick={apagarSelecao}><Trash2 />Excluir</Button></div> : null}
           </>;

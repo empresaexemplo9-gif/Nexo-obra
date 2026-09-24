@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { itemDoCatalogo } from "@/lib/layout-catalogo";
+import { itemDoCatalogo, materialLabels, MATERIAIS } from "@/lib/layout-catalogo";
 
 // Documento do criador de layout. Tudo em milímetro, com o Y da planta crescendo para baixo
 // (o mesmo da tela). Na prévia 3D, o X e o Y da planta viram X e Z do chão.
@@ -65,6 +65,8 @@ export const itemSchema = z.object({
   altura: z.number().min(1).max(20_000),
   cor,
   rotulo: z.string().trim().max(60).default(""),
+  /** Acabamento escolhido entre os que o item do catálogo aceita. */
+  material: z.enum(MATERIAIS).optional(),
 }).strict();
 
 export const layoutConteudoSchema = z.object({
@@ -86,7 +88,11 @@ export const layoutConteudoSchema = z.object({
     }
     if (abertura.peitoril + abertura.altura > parede.altura + 1) ctx.addIssue({ code: "custom", message: `${aberturaLabels[abertura.tipo]} mais alta que a parede.` });
   }
-  for (const item of doc.itens) if (!itemDoCatalogo(item.catalogo)) ctx.addIssue({ code: "custom", message: `Item de catálogo desconhecido: ${item.catalogo}.` });
+  for (const item of doc.itens) {
+    const base = itemDoCatalogo(item.catalogo);
+    if (!base) { ctx.addIssue({ code: "custom", message: `Item de catálogo desconhecido: ${item.catalogo}.` }); continue; }
+    if (item.material && !base.materiais?.includes(item.material)) ctx.addIssue({ code: "custom", message: `${base.nome} não tem acabamento em ${materialLabels[item.material].toLowerCase()}.` });
+  }
 });
 
 export type LayoutConteudo = z.infer<typeof layoutConteudoSchema>;
@@ -190,7 +196,7 @@ export function comodoRetangular(x1: number, y1: number, x2: number, y2: number,
 export function itemNovo(catalogoId: string, x: number, y: number): ItemLayout {
   const base = itemDoCatalogo(catalogoId);
   if (!base) throw new Error("Item de catálogo desconhecido.");
-  return { id: novoId("it"), catalogo: base.id, x, y, rotacao: 0, largura: base.largura, profundidade: base.profundidade, altura: base.altura, cor: base.cor, rotulo: "" };
+  return { id: novoId("it"), catalogo: base.id, x, y, rotacao: 0, largura: base.largura, profundidade: base.profundidade, altura: base.altura, cor: base.cor, rotulo: "", ...(base.material ? { material: base.material } : {}) };
 }
 
 /**
