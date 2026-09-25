@@ -14,8 +14,12 @@ da biblioteca e as imagens.
   próprio pedido; maior que isso passa pela biblioteca.
 
 O DWG é convertido em DXF no servidor (LibreDWG em WebAssembly) e lido pelo mesmo leitor
-do DXF. Antes de entrar, a importação mostra quantos elementos e camadas vieram, a unidade
-(que pode ser trocada e relida) e o que ficou de fora.
+do DXF. Numa prancha vazia (o caso de "Importar DWG ou DXF"), o arquivo entra direto e a
+prancha é gravada na hora; o aviso mostra quantos elementos e camadas vieram, a unidade (que
+pode ser trocada: o arquivo é relido e substitui o que entrou) e o que ficou de fora. Numa
+prancha que já tem desenho, a importação passa antes pela revisão ("Colocar na prancha").
+Enquanto lê, o editor mostra o aviso de leitura; se falhar, a mensagem fica na tela com
+"Tentar de novo". A prancha abre enquadrada no desenho, mesmo em coordenadas longe da origem.
 
 ### O que entra
 

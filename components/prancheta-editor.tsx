@@ -376,6 +376,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const docRef = useRef(documento);
   useEffect(() => { docRef.current = documento; }, [documento]);
   const [revisao, definirRevisao] = useState(prancha.revisao);
+  const revisaoRef = useRef(prancha.revisao);
   const [nome, definirNome] = useState(prancha.nome);
   const [ferramenta, definirFerramenta] = useState<Ferramenta>("selecionar");
   const [ajudaVisivel, definirAjudaVisivel] = useState<string | null>(null);
@@ -404,7 +405,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const salvamentoEmCurso = useRef(false);
   const [pendentes, definirPendentes] = useState<{ x: number; y: number }[]>([]);
   const [cursor, definirCursor] = useState<{ x: number; y: number } | null>(null);
-  const [vista, definirVistaEstado] = useState({ x: -2000, y: -2000, largura: 24000 });
+  // Abre enquadrado no desenho: DWG em coordenada real (UTM, obra) fica a quilômetros da
+  // origem, e abrir na origem mostrava uma prancha que parecia vazia.
+  const [vista, definirVistaEstado] = useState<{ x: number; y: number; largura: number }>(() => {
+    const iniciais = elementosVisiveis(prancha.documento);
+    if (!iniciais.length) return { x: -2000, y: -2000, largura: 24000 };
+    const { x, y, largura } = enquadrarElementos(iniciais);
+    return { x, y, largura };
+  });
   // Vistas anteriores para o ZOOM Anterior.
   const vistasAnteriores = useRef<{ x: number; y: number; largura: number }[]>([]);
   const definirVista = useCallback((valor: { x: number; y: number; largura: number } | ((anterior: { x: number; y: number; largura: number }) => { x: number; y: number; largura: number }), guardar = false) => {
@@ -439,6 +447,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   const [encaixeAtual, definirEncaixeAtual] = useState<Encaixe | null>(null);
   const [importado, definirImportado] = useState<Importado | null>(null);
   const [importando, definirImportando] = useState(false);
+  const [erroImportacao, definirErroImportacao] = useState<string | null>(null);
+  const [lendo, definirLendo] = useState("");
+  const [importadoAplicado, definirImportadoAplicado] = useState<Importado | null>(null);
   const [unidadeImportacao, definirUnidadeImportacao] = useState("");
   // Fundo escuro como o espaço do modelo do AutoCAD: as cores do DWG foram escolhidas
   // para ele. É preferência de quem olha, então fica no navegador.
@@ -584,7 +595,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     documento: () => docRef.current, selecao: () => [], selecionar: () => undefined, aplicar: () => false,
     registrar: () => undefined, acao: () => undefined, novoId, camadaEscolhida: () => undefined,
   }), []);
-  const sincronizar = useCallback(() => {
+  function sincronizar() {
     const atual = cmd().pedido;
     definirPedido(atual);
     definirNomeComando(cmd().nome);
@@ -592,7 +603,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     if (atual?.modo !== "selecao" && janelaRef.current) { janelaRef.current = null; definirJanelaSelecao(null); }
     // Comando em curso tira do modo de parede, porta etc.: o clique passa a ser do comando.
     if (atual) { definirFerramenta("selecionar"); definirPendentes([]); }
-  }, [cmd]);
+  }
 
   useEffect(() => {
     let vivo = true;
@@ -1192,8 +1203,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   /** Lê o arquivo no servidor. Até 3,5 MB vai no próprio pedido; maior que isso vai
    *  antes para a biblioteca da Prancheta, em partes, e é lido de lá — o corpo de uma
    *  função não comporta um DWG inteiro. A resposta volta comprimida. */
-  async function importar(arquivo: File | null, unidade: string) {
+  async function importar(arquivo: File | null, unidade: string, aplicarDireto = false) {
     definirImportando(true);
+    definirErroImportacao(null);
+    definirLendo(arquivo?.name ?? arquivoDaBiblioteca.current?.nome ?? "arquivo");
     try {
       let resposta: Response;
       if (arquivo && arquivo.size <= 3.5 * 1024 * 1024) {
@@ -1216,23 +1229,52 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       }
       const corpo = await jsonDaResposta<Importado & { error?: string }>(resposta).catch(() => ({}) as Importado & { error?: string });
       if (!resposta.ok) throw new Error(corpo.error ?? "Não foi possível ler o arquivo.");
-      definirImportado(corpo);
       definirUnidadeImportacao(corpo.unidade);
+      if (aplicarDireto) { await colocarEGravar(corpo); return; }
+      definirImportado(corpo);
     } catch (causa) {
       definirImportado(null);
-      toast.error(causa instanceof Error ? causa.message : "Não foi possível ler o arquivo.");
+      const mensagem = causa instanceof Error ? causa.message : "Não foi possível ler o arquivo.";
+      definirErroImportacao(mensagem);
+      toast.error(mensagem);
     } finally {
       definirImportando(false);
     }
   }
 
-  // Aberto a partir da biblioteca ("Editar no Editor CAD"): importa na chegada.
+  /** Arquivo aberto numa prancha vazia entra direto e fica gravado: a prancha foi criada
+   *  para ele, e esperar um segundo clique deixava a prancha vazia quando a aba fechava.
+   *  Trocar a unidade relê o arquivo e substitui o que entrou. */
+  async function colocarEGravar(lido: Importado) {
+    if (!baseDaImportacao.current) baseDaImportacao.current = docRef.current;
+    const proximo = mergeCadImport(baseDaImportacao.current, lido);
+    if (!aplicar(proximo, true)) throw new Error("O desenho importado passa dos limites da prancha.");
+    definirVista(enquadrarElementos(elementosVisiveis(proximo)), true);
+    definirImportadoAplicado(lido);
+    // A abertura pelo endereço já foi atendida: recarregar a página não importa de novo.
+    if (window.location.search.includes("importar=")) window.history.replaceState(null, "", window.location.pathname);
+    await salvar();
+  }
+
+  /** Relê o arquivo (outra unidade ou nova tentativa). */
+  function lerDeNovo(unidade: string, aplicarDireto: boolean) {
+    if (arquivoDaBiblioteca.current) void importar(null, unidade, aplicarDireto);
+    else if (dxfEscolhido.current) void importar(dxfEscolhido.current, unidade, aplicarDireto);
+    else toast.error("Escolha o arquivo de novo em Importar CAD.");
+  }
+
+  // Aberto a partir da biblioteca ("Importar DWG ou DXF", "Editar no Editor CAD"): importa
+  // na chegada. A marca de feito só é posta quando a leitura começa de verdade.
   const importouNaAbertura = useRef(false);
+  const baseDaImportacao = useRef<Documento | null>(null);
   useEffect(() => {
     if (!importarDaBiblioteca || importouNaAbertura.current || !canEdit) return;
-    importouNaAbertura.current = true;
-    arquivoDaBiblioteca.current = importarDaBiblioteca;
-    const relogio = window.setTimeout(() => { void importar(null, ""); }, 0);
+    const relogio = window.setTimeout(() => {
+      if (importouNaAbertura.current) return;
+      importouNaAbertura.current = true;
+      arquivoDaBiblioteca.current = importarDaBiblioteca;
+      void importar(null, "", docRef.current.elementos.length === 0);
+    }, 0);
     return () => window.clearTimeout(relogio);
     // importar lê o estado corrente; a importação da abertura acontece uma vez só.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1261,9 +1303,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     definirSalvando(true); definirConflito(false);
     try {
       // Comprimido: uma planta vinda de DWG passa do teto de 4,5 MB por pedido.
-      const corpoJson = JSON.stringify({ documento, revisao, nome });
+      // O documento vem da cópia síncrona: gravar logo depois de uma importação não pode
+      // mandar a versão de antes dela.
+      const enviado = docRef.current;
+      const corpoJson = JSON.stringify({ documento: enviado, revisao: revisaoRef.current, nome });
       const { body, headers } = corpoJson.length > 1_000_000
-        ? await corpoComprimido({ documento, revisao, nome })
+        ? await corpoComprimido({ documento: enviado, revisao: revisaoRef.current, nome })
         : { body: corpoJson, headers: { "Content-Type": "application/json" } };
       const resposta = await fetch(`/api/studio/${prancha.id}`, { method: "PUT", headers, body });
       const corpo = await jsonDaResposta<{ prancha?: Prancha; error?: string; code?: string }>(resposta).catch(() => ({}) as { prancha?: Prancha; error?: string; code?: string });
@@ -1271,8 +1316,9 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         if (corpo.code === "revision_conflict") definirConflito(true);
         throw new Error(corpo.error ?? "Não foi possível gravar a prancha.");
       }
+      revisaoRef.current = corpo.prancha!.revisao;
       definirRevisao(corpo.prancha!.revisao);
-      definirSujo(estadoAtual.current.documento !== documento || estadoAtual.current.nome !== nome);
+      definirSujo(docRef.current !== enviado || estadoAtual.current.nome !== nome);
       onSalvo(corpo.prancha!);
       toast.success(`Prancha gravada — revisão ${corpo.prancha!.revisao}.`);
     } catch (causa) {
@@ -1501,7 +1547,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               evento.target.value = "";
               dxfEscolhido.current = arquivo;
               arquivoDaBiblioteca.current = null;
-              if (arquivo) void importar(arquivo, "");
+              baseDaImportacao.current = null;
+              definirImportadoAplicado(null);
+              // Prancha vazia recebe o arquivo direto; com desenho, ele passa pela revisão.
+              if (arquivo) void importar(arquivo, "", docRef.current.elementos.length === 0);
             }} />
           <Button variant="outline" size="sm" onClick={() => arquivoDxf.current?.click()} disabled={importando}>
             {importando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar CAD
@@ -1521,6 +1570,44 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     {conflito && <p role="alert" className="rounded-md border border-hoikos-gold bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">
       Esta prancha foi alterada em outro lugar depois que você abriu. Exporte o seu desenho antes de recarregar, para não perder o que fez aqui.
     </p>}
+
+    {importando && !importado && <section role="status" aria-label="Leitura do arquivo"
+      className="flex items-center gap-2 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">
+      <LoaderCircle className="size-4 shrink-0 animate-spin" />
+      <span>Lendo <strong>{lendo}</strong>… Um DWG grande pode levar até um minuto.</span>
+    </section>}
+
+    {erroImportacao && !importando && <section role="alert" aria-label="Falha na importação"
+      className="flex flex-wrap items-center gap-2 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+      <span className="min-w-0 flex-1">Não foi possível ler <strong>{lendo}</strong>: {erroImportacao}</span>
+      <Button size="sm" variant="outline" onClick={() => lerDeNovo(unidadeImportacao, docRef.current.elementos.length === 0 || !!baseDaImportacao.current)}>Tentar de novo</Button>
+      <Button size="sm" variant="ghost" onClick={() => definirErroImportacao(null)}>Fechar</Button>
+    </section>}
+
+    {importadoAplicado && !importando && <section aria-label="Arquivo importado"
+      className="space-y-2 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3">
+      <p className="text-sm text-hoikos-800">
+        <strong>{importadoAplicado.nomeArquivo}</strong> entrou na prancha: {importadoAplicado.elementos.length.toLocaleString("pt-BR")} elemento(s) em {importadoAplicado.camadas.length} camada(s).
+      </p>
+      {importadoAplicado.report?.format !== "nexo" && <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="importacao-unidade-aplicada" className="text-xs">Unidade do desenho no arquivo</Label>
+          <NativeSelect id="importacao-unidade-aplicada" value={unidadeImportacao} className="h-10 w-44"
+            onChange={(evento) => { definirUnidadeImportacao(evento.target.value); lerDeNovo(evento.target.value, true); }}>
+            {Object.entries(UNIDADES_ROTULO).map(([valor, rotulo]) => <option key={valor} value={valor}>{rotulo}</option>)}
+          </NativeSelect>
+        </div>
+        <Button variant="outline" size="sm" onClick={() => definirImportadoAplicado(null)}>Fechar aviso</Button>
+      </div>}
+      <p className="text-xs leading-5 text-hoikos-600">
+        {importadoAplicado.unidadeDeclarada
+          ? `O arquivo declara ${UNIDADES_ROTULO[importadoAplicado.unidade]?.toLowerCase() ?? importadoAplicado.unidade}. Trocar a unidade relê o arquivo e substitui o que entrou.`
+          : "O arquivo não declara a unidade. Confira com uma cota: se estiver cem vezes maior ou menor, troque a unidade acima."}
+      </p>
+      {importadoAplicado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-hoikos-700">
+        {importadoAplicado.avisos.map((aviso) => <li key={aviso}>· {aviso}</li>)}
+      </ul>}
+    </section>}
 
     {importado && <section aria-label="Revisão da importação"
       className="space-y-3 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3">

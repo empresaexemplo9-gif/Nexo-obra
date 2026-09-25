@@ -147,3 +147,44 @@ test('comando de edição usa a seleção feita antes e a opção clicada no pro
     assert.deepEqual(e.saved().elementos[0].pontos.map((p) => p.y), [-1000, -1000]);
   } finally { await e.close(); }
 });
+
+async function abrirComArquivo(importar) {
+  const container = document.createElement('div'); document.body.append(container);
+  const reactRoot = createRoot(container);
+  const prancha = { id: 'p', nome: 'Importada', especie: 'planta', revisao: 1, projectId: null, projectName: null, atualizadoEm: '2026-09-25', autor: null, documento: { ...documentoVazio(), malhaMm: 1, elementos: [] } };
+  const calls = stubFetch({ '/api/studio/assets': { itens: [] }, '/api/studio/importar': importar,
+    '/api/studio/p': ({ body }) => ({ prancha: { ...prancha, ...body, revisao: body.revisao + 1 } }) });
+  await act(async () => reactRoot.render(React.createElement(PranchetaEditor, { prancha, canEdit: true, onVoltar() {}, onSalvo() {}, importarDaBiblioteca: { id: 'arq-1', nome: 'planta.dwg' } })));
+  await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+  return { container, calls, async close() { await act(async () => reactRoot.unmount()); container.remove(); } };
+}
+
+test('arquivo aberto numa prancha vazia entra direto e fica gravado, sem esperar confirmação', async () => {
+  const lido = { nomeArquivo: 'planta.dwg', unidade: 'mm', unidadeDeclarada: true, truncado: false, avisos: [],
+    camadas: [{ id: 'dwg-paredes', nome: 'PAREDES', disciplina: 'layout', visivel: true, bloqueada: false }],
+    elementos: [{ id: 'd1', camada: 'dwg-paredes', tipo: 'traco', pontos: [{ x: 500000, y: 7400000 }, { x: 503000, y: 7400000 }], espessuraMm: 1 }] };
+  const e = await abrirComArquivo(lido);
+  try {
+    const importacao = e.calls.find((c) => c.path === '/api/studio/importar');
+    assert.equal(importacao.body.fileId, 'arq-1');
+    const gravacao = e.calls.filter((c) => c.method === 'PUT').at(-1);
+    assert.ok(gravacao, 'grava sozinho depois de importar');
+    assert.equal(gravacao.body.documento.elementos.length, 1);
+    assert.ok(gravacao.body.documento.camadas.some((c) => c.nome === 'PAREDES'));
+    assert.match(e.container.textContent, /planta\.dwg entrou na prancha: 1 elemento/);
+    assert.equal(e.container.querySelector('section[aria-label="Revisão da importação"]'), null);
+    const [x] = e.container.querySelector('svg[role="application"]').getAttribute('viewBox').split(' ').map(Number);
+    assert.ok(x > 400000, 'a vista vai até o desenho, mesmo longe da origem');
+  } finally { await e.close(); }
+});
+
+test('falha ao ler o arquivo aparece na tela com opção de tentar de novo', async () => {
+  let tentativas = 0;
+  const e = await abrirComArquivo(() => { tentativas += 1; return { __status: 422, error: 'O DWG está corrompido.' }; });
+  try {
+    assert.match(e.container.querySelector('[role="alert"][aria-label="Falha na importação"]').textContent, /O DWG está corrompido/);
+    await act(async () => { findByText(e.container, 'Tentar de novo', 'button').click(); await new Promise((r) => setTimeout(r, 20)); });
+    assert.equal(tentativas, 2);
+    assert.equal(e.calls.filter((c) => c.method === 'PUT').length, 0, 'nada é gravado quando a leitura falha');
+  } finally { await e.close(); }
+});
