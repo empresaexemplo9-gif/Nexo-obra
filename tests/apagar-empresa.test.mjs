@@ -237,3 +237,27 @@ test("o superadministrador não apaga a própria conta", async () => {
   const semComentarios = rota.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   assert.doesNotMatch(semComentarios, /DELETE FROM tasks|DELETE FROM site_diary_entries|DELETE FROM projects/);
 });
+
+test("as duas telas contam as mesmas empresas", async () => {
+  /**
+   * "Empresas cadastradas" esconde o Ambiente de manutenção: ele é uma organização no
+   * banco, mas não é empresa de cliente. A coluna "Empresas" das contas contava ele —
+   * e a tela passava a se contradizer, dizendo "1 empresa" com a lista vazia, sem como
+   * descobrir qual era.
+   *
+   * Uma coluna que existe para decidir se apagar alguém é seguro precisa contar as
+   * MESMAS empresas que a tela mostra ao lado.
+   */
+  const contas = await readFile(`${root}/app/api/superadmin/accounts/route.ts`, "utf8");
+  const overview = await readFile(`${root}/app/api/superadmin/overview/route.ts`, "utf8");
+  for (const [nome, src] of [["contas", contas], ["overview", overview]]) {
+    assert.match(src, /MAINTENANCE_ORGANIZATION_ID/, `${nome} precisa excluir o ambiente de manutenção`);
+  }
+  // E o filtro está nas DUAS metades da união. Com ele em só uma, a conta continuaria
+  // sendo contada pela tabela de vínculo que escapou, e o número voltaria a mentir.
+  assert.equal(
+    (contas.match(/organization_id <> \?1/g) ?? []).length,
+    2,
+    "as duas tabelas de vínculo precisam do mesmo filtro",
+  );
+});
