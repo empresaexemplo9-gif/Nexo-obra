@@ -46,7 +46,10 @@ export async function DELETE(request: Request, route: RouteContext) {
       "SELECT external_company_id FROM integration_connections WHERE organization_id = ?1 AND provider = 'drap' LIMIT 1",
     ).bind(organizationId).first<{ external_company_id: string }>();
 
-    let empresaRemotaApagada = false;
+    /** O que aconteceu do outro lado. `ja-inexistente` não é o mesmo que `mantida`:
+     *  uma diz que não havia o que apagar, a outra que se escolheu deixar lá. */
+    let destinoNaDrap: "apagada" | "ja-inexistente" | "mantida" | "nao-conectada" =
+      conexao?.external_company_id ? "mantida" : "nao-conectada";
     if (conexao?.external_company_id && !manterNaDrap) {
       if (!isDrapPartnerConfigured()) {
         throw new ApiError(
@@ -57,16 +60,32 @@ export async function DELETE(request: Request, route: RouteContext) {
       }
       try {
         await apagarEmpresaNaDrap(conexao.external_company_id);
-        empresaRemotaApagada = true;
+        destinoNaDrap = "apagada";
       } catch (causa) {
-        // O motivo vem da Drap e muda a decisão de quem está apagando — "tem gente
-        // acessando" pede conversa, não uma segunda tentativa.
-        const detalhe = causa instanceof DrapPartnerError ? causa.detalhe : "A Drap não respondeu.";
-        throw new ApiError(
-          409,
-          "drap_recusou_exclusao",
-          `${detalhe} Para apagar apenas na H.OIKOS, confirme que a empresa continuará existindo na Drap.`,
-        );
+        /**
+         * `404` é "essa empresa não existe mais lá", e isso é exatamente o que se queria.
+         *
+         * É o caso da segunda tentativa: a exclusão anterior apagou na Drap e falhou ao
+         * gravar aqui. Tratar isso como recusa travaria a limpeza justamente em quem já
+         * está com o estado partido — e a única saída seria a confirmação de "apagar só
+         * aqui", que diz que a empresa continua na Drap. Ela não continua. A pessoa
+         * decidiria com base numa frase falsa.
+         *
+         * Segue em frente, e o registro da exclusão diz que já não havia o que apagar.
+         */
+        const jaNaoExiste = causa instanceof DrapPartnerError && causa.status === 404;
+        if (jaNaoExiste) {
+          destinoNaDrap = "ja-inexistente";
+        } else {
+          // O motivo vem da Drap e muda a decisão de quem está apagando — "tem gente
+          // acessando" pede conversa, não uma segunda tentativa.
+          const detalhe = causa instanceof DrapPartnerError ? causa.detalhe : "A Drap não respondeu.";
+          throw new ApiError(
+            409,
+            "drap_recusou_exclusao",
+            `${detalhe} Para apagar apenas na H.OIKOS, confirme que a empresa continuará existindo na Drap.`,
+          );
+        }
       }
     }
 
@@ -86,15 +105,13 @@ export async function DELETE(request: Request, route: RouteContext) {
         detalhes: {
           slug: empresa.slug,
           contasApagadas: orfas.length,
-          empresaNaDrap: conexao?.external_company_id
-            ? (empresaRemotaApagada ? "apagada" : "mantida")
-            : "nao-conectada",
+          empresaNaDrap: destinoNaDrap,
         },
       }),
     ]);
 
     return Response.json(
-      { apagada: true, contasApagadas: orfas.length, empresaRemotaApagada },
+      { apagada: true, contasApagadas: orfas.length, empresaNaDrap: destinoNaDrap },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   });

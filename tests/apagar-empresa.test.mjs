@@ -199,7 +199,27 @@ test("a exclusão da empresa fala com a Drap antes de apagar daqui", async () =>
   assert.match(rota, /drap_recusou_exclusao/);
   // E existe a saída explícita, que fica escrita no registro.
   assert.match(rota, /manterNaDrap/);
-  assert.match(rota, /empresaRemotaApagada \? "apagada" : "mantida"/);
+  assert.match(rota, /destinoNaDrap = "apagada"/);
+});
+
+test("empresa que já não existe na Drap não trava a limpeza daqui", async () => {
+  /**
+   * É o caso da segunda tentativa: a exclusão anterior apagou lá e falhou ao gravar
+   * aqui. A linha de vínculo some junto com a empresa, então a Drap responde 404.
+   *
+   * Tratar isso como recusa travaria a limpeza justamente em quem está com o estado
+   * partido — e a única saída seria a confirmação de "apagar só aqui", que afirma que a
+   * empresa continua na Drap. Ela não continua: a pessoa decidiria por uma frase falsa.
+   */
+  const rota = await readFile(`${root}/app/api/superadmin/organizations/[organizationId]/route.ts`, "utf8");
+  assert.match(rota, /const jaNaoExiste = causa instanceof DrapPartnerError && causa\.status === 404/);
+  assert.match(rota, /destinoNaDrap = "ja-inexistente"/);
+
+  // E "já não existia" não é registrado como "escolhi deixar lá" — são decisões
+  // diferentes, e o registro da exclusão é onde alguém vai procurar o que houve.
+  const semComentarios = rota.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  assert.doesNotMatch(semComentarios, /empresaRemotaApagada \? "apagada" : "mantida"/);
+  assert.match(rota, /empresaNaDrap: destinoNaDrap/);
 });
 
 test("convite que ainda abre não some da lista", async () => {
