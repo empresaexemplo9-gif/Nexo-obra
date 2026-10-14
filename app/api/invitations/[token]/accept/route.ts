@@ -36,6 +36,7 @@ type InvitationRow = {
 const acceptanceSchema = z.object({
   acceptTerms: z.literal(true),
   password: z.string().min(1).max(200).optional(),
+  name: z.string().trim().min(2).max(120).optional(),
 }).strict();
 
 // A identidade já existente, se houver: sessão própria, borda confiável ou acesso
@@ -86,7 +87,8 @@ export async function POST(request: Request, route: RouteContext) {
     const identity = existing ?? {
       id: crypto.randomUUID(),
       email: invitation.email,
-      displayName: invitation.email.split("@")[0],
+      // Nome informado no primeiro acesso; sem ele, a equipe via só o começo do e-mail.
+      displayName: parsed.data.name ?? invitation.email.split("@")[0],
     };
     await assertPlatformAccess(invitation.organization_id, identity.email, identity.id, false);
 

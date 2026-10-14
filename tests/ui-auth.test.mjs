@@ -137,12 +137,14 @@ test("o convite de quem ainda não tem conta cria a senha no próprio aceite", a
   assert.equal(botao().disabled, true, "confirmação diferente não passa");
 
   await digitar("#invitation-password-confirmation", "senha-do-convidado-2026");
+  assert.equal(botao().disabled, true, "sem nome, a equipe veria só o começo do e-mail");
+  await digitar("#invitation-name", "Marina Costa");
   assert.equal(botao().disabled, false);
   await clicar(botao());
 
   const aceite = calls.find((call) => call.path.endsWith("/accept") && call.method === "POST");
   assert.ok(aceite, "o aceite precisa chegar ao servidor");
-  assert.deepEqual(aceite.body, { acceptTerms: true, password: "senha-do-convidado-2026" });
+  assert.deepEqual(aceite.body, { acceptTerms: true, password: "senha-do-convidado-2026", name: "Marina Costa" });
   assert.match(textOf(container), /Acesso criado/);
 });
 

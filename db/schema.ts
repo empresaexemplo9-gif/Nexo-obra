@@ -662,6 +662,25 @@ export const userCredentials = sqliteTable("user_credentials", {
   createdAt: integer("created_at").notNull(),
 }, (t) => [uniqueIndex("uidx_user_credentials_email").on(t.email)]);
 
+// Link de uso único para criar uma nova senha. Sem serviço de e-mail, quem esquece a senha
+// recebe o link de um administrador da empresa (ou do superadministrador), como no convite.
+// Só o hash do token fica aqui; o link vale 24 horas e um novo cancela o anterior.
+export const passwordResets = sqliteTable("password_resets", {
+  id: text("id").primaryKey(),
+  tokenHash: text("token_hash").notNull(),
+  userId: text("user_id").notNull(),
+  email: text("email").notNull(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  createdBy: text("created_by").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  usedAt: integer("used_at"),
+  revokedAt: integer("revoked_at"),
+  createdAt: integer("created_at").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_password_resets_token").on(t.tokenHash),
+  index("idx_password_resets_user").on(t.userId),
+]);
+
 // Fonte própria da SINAPI: competência baixada da Caixa, conferida e só então publicada.
 //
 // A SINAPI é a referência oficial de custo da construção civil, publicada mensalmente pela

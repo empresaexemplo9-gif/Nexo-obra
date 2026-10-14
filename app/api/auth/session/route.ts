@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { ApiError, apiRoute, jsonBody, validationError } from "@/lib/server/backend";
-import { clearSessionCookie, createSessionCookie, readSessionUser, signIn } from "@/lib/server/auth";
+import { clearSessionCookie, createSessionCookie, readSessionUser, sessionPredatesPassword, signIn } from "@/lib/server/auth";
 import { clearSuperAdminFailures, isSuperAdminEmail, rejectCrossSiteMutation, signInSuperAdmin } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,9 @@ const credentialsSchema = z.object({
 
 export async function GET(request: Request) {
   return apiRoute(async () => {
-    const user = await readSessionUser(request);
+    const session = await readSessionUser(request);
+    const user = session && !await sessionPredatesPassword(session)
+      ? { id: session.id, email: session.email, displayName: session.displayName } : null;
     return Response.json(
       user ? { authenticated: true, user } : { authenticated: false },
       { headers: { "Cache-Control": "private, no-store" } },

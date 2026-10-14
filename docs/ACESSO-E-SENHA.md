@@ -13,6 +13,26 @@ sessão aberta — sem isso, a pessoa criaria a senha e continuaria de fora.
 
 Depois disso, a volta é por `/entrar`: e-mail e senha.
 
+## Senha esquecida e troca de senha
+
+A plataforma não envia e-mail. Quem esqueceu a senha pede a um administrador da empresa,
+que abre **Equipe → Link de nova senha** e entrega o link como entrega o convite. O link
+leva a `/redefinir-senha/<token>`, vale 24 horas, serve uma única vez, e gerar outro
+cancela o anterior. Só o hash do token fica em `password_resets`.
+
+A senha é a mesma em todas as empresas da pessoa, por isso:
+
+- o administrador só gera link para quem pertence **apenas** à empresa dele e está dentro do
+  nível de acesso dele;
+- para o contratante e para quem também está em outra empresa (equipe ou portal), só o
+  superadministrador gera o link;
+- ninguém gera link para si mesmo: a própria senha se troca em **Trocar senha**, no menu da
+  conta, conferindo a senha atual.
+
+Trocar a senha, por qualquer caminho, encerra as sessões abertas antes da troca: o cookie
+carrega a hora de emissão e é recusado se for anterior a `password_updated_at`. Emissão e
+uso do link ficam na auditoria da empresa.
+
 ## O que o servidor guarda
 
 - `user_credentials`: e-mail, nome, e a senha só como hash

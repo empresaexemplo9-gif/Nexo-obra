@@ -156,7 +156,7 @@
 /* ## Ambiente de cada aba
  *
  * Cada módulo abre com uma fotografia própria. Ela entra por uma variável só,
- * `--ambiente`, declarada no `<main data-module="…">`; tudo o que desenha imagem daqui
+ * `--ambiente`, declarada no `.nexo-canvas[data-module="…"]`; tudo o que desenha imagem daqui
  * para baixo lê essa variável. Trocar a foto de um módulo é uma linha.
  *
  * A foto aparece em dois lugares, e em nenhum deles por baixo de dado:

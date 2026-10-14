@@ -38,7 +38,7 @@ function accessCount(permissions: PermissionSet) {
   return permissionModules.filter((module) => permissions[module].view).length;
 }
 
-export function TeamAccessManager({ members, canManage, currentMemberId }: { members: TeamMember[]; canManage: boolean; currentMemberId?: string }) {
+export function TeamAccessManager({ members, canManage, currentMemberId, canResetOwner = false }: { members: TeamMember[]; canManage: boolean; currentMemberId?: string; canResetOwner?: boolean }) {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -99,6 +99,19 @@ export function TeamAccessManager({ members, canManage, currentMemberId }: { mem
   }
 
   const [revogando, setRevogando] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null);
+  async function passwordReset(member: TeamMember) {
+    setResetting(member.id);
+    try {
+      const result = await requestJson<{ resetPath: string; email: string }>(`/api/members/${member.id}/password-reset`, { method: "POST" });
+      setResetLink({ email: result.email, link: `${window.location.origin}${result.resetPath}` });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o link de nova senha.");
+    } finally {
+      setResetting(null);
+    }
+  }
   async function revoke(id: string, email: string) {
     if (revogando || !window.confirm(`Revogar o convite de ${email}? O link deixa de funcionar.`)) return;
     setRevogando(id);
@@ -126,7 +139,9 @@ export function TeamAccessManager({ members, canManage, currentMemberId }: { mem
       </CardHeader>
     </Card>
 
-    <div className="grid gap-3 md:grid-cols-2">{(managedMembers ?? members).map((member) => <Card key={member.id} className="p-5"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-md bg-hoikos-300 font-semibold text-hoikos-950 shadow-none">{member.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{member.name}</p><p className="truncate text-xs text-hoikos-500">{member.email}</p><p className="mt-1 text-xs text-hoikos-500">{accessCount(member.permissions)} de {permissionModules.length} áreas visíveis</p></div><Badge variant="outline" className="max-w-28 whitespace-normal">{accessProfileLabels[member.role] ?? member.role}</Badge></div>{member.active === false && <p className="mt-2 text-sm">Acesso desativado</p>}{canManage && member.id !== currentMemberId && member.role !== "owner" && member.updatedAt && <Button className="mt-3" variant="outline" onClick={() => editMember(member)}>Gerenciar acesso</Button>}</Card>)}</div>
+    <div className="grid gap-3 md:grid-cols-2">{(managedMembers ?? members).map((member) => <Card key={member.id} className="p-5"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-md bg-hoikos-300 font-semibold text-hoikos-950 shadow-none">{member.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{member.name}</p><p className="truncate text-xs text-hoikos-500">{member.email}</p><p className="mt-1 text-xs text-hoikos-500">{accessCount(member.permissions)} de {permissionModules.length} áreas visíveis</p></div><Badge variant="outline" className="max-w-28 whitespace-normal">{accessProfileLabels[member.role] ?? member.role}</Badge></div>{member.active === false && <p className="mt-2 text-sm">Acesso desativado</p>}{canManage && member.id !== currentMemberId ? <div className="mt-3 flex flex-wrap gap-2">{member.role !== "owner" && member.updatedAt ? <Button variant="outline" onClick={() => editMember(member)}>Gerenciar acesso</Button> : null}{member.active !== false && (member.role !== "owner" || canResetOwner) ? <Button variant="outline" disabled={resetting === member.id} onClick={() => void passwordReset(member)}>{resetting === member.id ? <LoaderCircle className="animate-spin" /> : <KeyRound />}Link de nova senha</Button> : null}</div> : null}</Card>)}</div>
+
+    <Dialog open={Boolean(resetLink)} onOpenChange={(value) => { if (!value) setResetLink(null); }}><DialogContent><DialogHeader><DialogTitle>Link de nova senha</DialogTitle><DialogDescription>Envie para {resetLink?.email}. Vale por 24 horas e só pode ser usado uma vez; gerar outro cancela este.</DialogDescription></DialogHeader><div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="break-all text-sm text-hoikos-800">{resetLink?.link}</p></div><Button className="w-full" onClick={() => { if (resetLink) { void navigator.clipboard.writeText(resetLink.link); toast.success("Link copiado"); } }}><Clipboard />Copiar link</Button></DialogContent></Dialog>
 
     {canManage && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><KeyRound className="size-4 text-hoikos-600" />Convites</CardTitle></CardHeader><CardContent className="space-y-2">{loading ? <LoaderCircle className="mx-auto my-8 animate-spin text-hoikos-600" /> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-col gap-3 rounded-md border border-hoikos-100 p-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="mt-1 text-xs text-hoikos-500">{accessProfileLabels[invitation.role] ?? invitation.role} · {accessCount(invitation.permissions)} áreas</p></div><Badge variant="outline">{statusLabels[invitation.status]}</Badge>{canManage && invitation.status === "pending" ? <Button variant="ghost" size="icon" aria-label={`Revogar convite de ${invitation.email}`} disabled={revogando === invitation.id} onClick={() => void revoke(invitation.id, invitation.email)}><Trash2 className="size-4 text-hoikos-500" /></Button> : null}</div>) : <p className="py-8 text-center text-sm text-hoikos-500">Nenhum convite criado ainda.</p>}</CardContent></Card>}
 

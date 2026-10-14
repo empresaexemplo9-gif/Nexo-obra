@@ -119,7 +119,7 @@ test("aceitar o convite cria a senha, abre a sessão e o acesso já funciona", a
   assert.equal(fraca.status, 400);
   assert.equal((await fraca.json()).code, "weak_password");
 
-  const aceite = await aceitar(token, { acceptTerms: true, password: SENHA });
+  const aceite = await aceitar(token, { acceptTerms: true, password: SENHA, name: "  Marina Costa " });
   assert.equal(aceite.status, 200, await aceite.clone().text());
   const cookies = cookiesDe(aceite);
   assert.match(cookies, /__Host-nexo-session=/, "aceitar já entra: senão a pessoa criaria a senha e ficaria de fora");
@@ -130,6 +130,7 @@ test("aceitar o convite cria a senha, abre a sessão e o acesso já funciona", a
   assert.match(guardado.password_hash, /^pbkdf2-sha256:100000:/, "senha só existe como hash");
   assert.equal(guardado.active, 1);
   assert.equal(db.sqlite.prepare("SELECT role FROM members WHERE email = ?").get(EMAIL).role, "owner");
+  assert.equal(db.sqlite.prepare("SELECT name FROM members WHERE email = ?").get(EMAIL).name, "Marina Costa", "a equipe vê o nome, não o começo do e-mail");
 
   // A sessão emitida no aceite já vale nas rotas de negócio.
   const lista = await clients.GET(new Request("https://platform.test/api/clients", { headers: { cookie: cookies } }));

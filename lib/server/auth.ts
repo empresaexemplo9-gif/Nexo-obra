@@ -20,6 +20,8 @@ const MAX_ATTEMPTS = 5;
 const encoder = new TextEncoder();
 
 export type SessionUser = { id: string; email: string; displayName: string };
+/** Sessão lida do cookie: `issuedAt` (ms) permite recusar sessões anteriores à última troca de senha. */
+export type SessionRead = SessionUser & { issuedAt: number };
 
 function sessionSecret() {
   const env = runtimeEnv();
@@ -77,9 +79,10 @@ export function assertPasswordStrength(password: string) {
 // ---------------------------------------------------------------------------
 
 export async function createSessionCookie(user: SessionUser) {
-  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS;
+  const issuedAt = Date.now();
+  const expiresAt = Math.floor(issuedAt / 1000) + SESSION_DURATION_SECONDS;
   const payload = toBase64Url(encoder.encode(JSON.stringify({
-    sub: user.id, email: user.email, name: user.displayName, exp: expiresAt,
+    sub: user.id, email: user.email, name: user.displayName, exp: expiresAt, iat: issuedAt,
   })));
   const signature = await sign(payload, sessionSecret());
   return {
@@ -93,7 +96,7 @@ export function clearSessionCookie() {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
 }
 
-export async function readSessionUser(request: Request): Promise<SessionUser | null> {
+export async function readSessionUser(request: Request): Promise<SessionRead | null> {
   let secret: string;
   try { secret = sessionSecret(); } catch { return null; }
   const token = readCookie(request, SESSION_COOKIE);
@@ -103,7 +106,7 @@ export async function readSessionUser(request: Request): Promise<SessionUser | n
   if (!await verifySignature(payload, signature, secret)) return null;
   try {
     const parsed = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as {
-      sub?: unknown; email?: unknown; name?: unknown; exp?: unknown;
+      sub?: unknown; email?: unknown; name?: unknown; exp?: unknown; iat?: unknown;
     };
     if (typeof parsed.sub !== "string" || typeof parsed.email !== "string") return null;
     if (typeof parsed.exp !== "number" || parsed.exp <= Math.floor(Date.now() / 1000)) return null;
@@ -111,6 +114,10 @@ export async function readSessionUser(request: Request): Promise<SessionUser | n
       id: parsed.sub,
       email: parsed.email,
       displayName: typeof parsed.name === "string" && parsed.name ? parsed.name : parsed.email,
+      // Cookies emitidos antes deste campo: a emissão é o fim da validade menos a duração,
+      // arredondada para baixo ao segundo. Somar o resto do segundo evita derrubar a sessão
+      // aberta no próprio aceite do convite, gravado milissegundos antes do cookie.
+      issuedAt: typeof parsed.iat === "number" ? parsed.iat : (parsed.exp - SESSION_DURATION_SECONDS) * 1000 + 999,
     };
   } catch {
     return null;
@@ -176,6 +183,27 @@ export function saveCredentialStatement(
      VALUES (?1, ?2, ?3, ?4, 1, ?5, ?5)
      ON CONFLICT(email) DO NOTHING`,
   ).bind(user.id, user.email.trim().toLowerCase(), passwordHash, user.displayName, now);
+}
+
+/** A senha foi trocada depois que esta sessão foi aberta? Então a sessão não vale mais. */
+export async function sessionPredatesPassword(session: SessionRead) {
+  const row = await getDatabase().prepare("SELECT password_updated_at FROM user_credentials WHERE user_id = ?1")
+    .bind(session.id).first<{ password_updated_at: number }>();
+  return Boolean(row && row.password_updated_at > session.issuedAt);
+}
+
+/** Troca da própria senha, conferindo a atual. Devolve a pessoa para emitir uma sessão nova. */
+export async function changeOwnPassword(session: SessionUser, currentPassword: string, newPassword: string) {
+  assertPasswordStrength(newPassword);
+  if (currentPassword === newPassword) throw new ApiError(400, "same_password", "A nova senha precisa ser diferente da atual.");
+  const db = getDatabase();
+  const credential = await db.prepare("SELECT password_hash FROM user_credentials WHERE user_id = ?1 AND active = 1")
+    .bind(session.id).first<{ password_hash: string }>();
+  if (!credential || !await passwordMatches(currentPassword, credential.password_hash)) {
+    throw new ApiError(401, "invalid_current_password", "A senha atual não confere.");
+  }
+  await db.prepare("UPDATE user_credentials SET password_hash = ?1, password_updated_at = ?2 WHERE user_id = ?3")
+    .bind(await hashPassword(newPassword), Date.now(), session.id).run();
 }
 
 export async function credentialExists(email: string) {

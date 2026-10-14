@@ -12,7 +12,7 @@ import {
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMaintenanceIdentity } from "@/lib/server/maintenance";
 import { readSuperAdminIdentity, rejectCrossSiteMutation, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
-import { readSessionUser } from "@/lib/server/auth";
+import { readSessionUser, sessionPredatesPassword } from "@/lib/server/auth";
 import { runtimeEnv } from "@/lib/server/runtime";
 
 export { ApiError };
@@ -90,7 +90,11 @@ export async function authenticatedIdentity(request: Request): Promise<Authentic
 
   // Sessão própria da plataforma: cookie assinado, emitido só depois de conferir a senha.
   const session = await readSessionUser(request);
-  if (session) return { id: session.id, email: session.email, displayName: session.displayName };
+  if (session) {
+    // Trocar a senha encerra as sessões abertas antes, inclusive a de quem a descobriu.
+    if (await sessionPredatesPassword(session)) throw new ApiError(401, "session_revoked", "Sua senha foi alterada. Entre novamente.");
+    return { id: session.id, email: session.email, displayName: session.displayName };
+  }
 
   if (identityHeadersTrusted()) {
     const userId = request.headers.get("oai-authenticated-user-id")?.trim();
