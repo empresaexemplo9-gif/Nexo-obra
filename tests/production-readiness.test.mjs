@@ -151,6 +151,18 @@ test("cópia de orçamento preserva original e relatório escapa texto fornecido
   assert.equal((await budgetReport.GET(new Request("https://platform.test/api/budgets/report"), ctx)).status, 401);
 });
 
+test("proposta identifica o cliente do projeto, escapa o nome e traz o bloco de aceite", async () => {
+  const projectId = createProject("REV-PROP");
+  db.sqlite.prepare("UPDATE clients SET name=? WHERE id=?").run('Ana <b>Souza</b>', clientId);
+  const budget = (await json(await budgets.POST(request("/api/budgets", "POST", { projectId, code: "REV-PROP" })))).budget;
+  const ctx = { params: Promise.resolve({ budgetId: budget.id }) };
+  await json(await budgetItems.POST(request("/api/budgets/items", "POST", { items: [{ description: "Pintura", unit: "m²", quantity: 1.2345, unitCostCents: 1000 }] }), ctx));
+  const html = await (await budgetReport.GET(request("/api/budgets/report"), ctx)).text();
+  assert.match(html, /Ana &lt;b&gt;Souza&lt;\/b&gt;/); assert.doesNotMatch(html, /<b>Souza/);
+  assert.match(html, /cliente@example\.test/); assert.match(html, /Aceite do cliente/); assert.match(html, /1,2345/);
+  db.sqlite.prepare("UPDATE clients SET name='Cliente Real' WHERE id=?").run(clientId);
+});
+
 test("cópia mantém hierarquia fora da ordem de exibição e isola outra empresa", async () => {
   const original = (await json(await budgets.POST(request("/api/budgets", "POST", { projectId: createProject(), code: "REV-HIER" })))).budget;
   const ctx = { params: Promise.resolve({ budgetId: original.id }) };
