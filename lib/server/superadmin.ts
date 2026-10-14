@@ -5,7 +5,7 @@ import { getDatabase } from "@/db";
 import { ensureLoginAttemptsTable } from "@/lib/server/migrations";
 
 type SuperAdminRuntimeEnv = {
-  ACESSO_ABERTO?: string;
+  LINK_ACESSO_CHAVE?: string;
   SUPERADMIN_EMAIL?: string;
   SUPERADMIN_PASSWORD_HASH?: string;
   SUPERADMIN_SESSION_SECRET?: string;
@@ -29,21 +29,65 @@ function runtimeEnv() {
   return platformEnv() as unknown as SuperAdminRuntimeEnv;
 }
 
-const OPEN_ACCESS_EMAIL = "acesso-aberto@hoikos.app";
+// ---------------------------------------------------------------------------
+// Link de acesso
+// ---------------------------------------------------------------------------
+//
+// Temporário: `LINK_ACESSO_CHAVE` guarda uma chave longa e aleatória. Quem abre
+// /acesso/<chave> recebe uma sessão de superadministrador, sem senha; o endereço comum
+// continua pedindo login. A sessão é assinada com a própria chave, então trocar a chave
+// derruba o link antigo e todas as sessões abertas por ele. Sem a variável, não há link.
 
-/**
- * Acesso aberto, temporário: com `ACESSO_ABERTO=true`, quem abre o link entra direto como
- * superadministrador, sem login. Desligar é remover a variável — volta a exigir senha.
- */
-export function openAccessEnabled() {
-  return runtimeEnv().ACESSO_ABERTO?.trim().toLowerCase() === "true";
+const LINK_SESSION_COOKIE = "__Host-nexo-link";
+const LINK_ACCESS_EMAIL = "link-de-acesso@hoikos.app";
+const LINK_KEY_MIN_LENGTH = 32;
+
+function linkAccessKey() {
+  const key = runtimeEnv().LINK_ACESSO_CHAVE?.trim();
+  return key && key.length >= LINK_KEY_MIN_LENGTH ? key : null;
 }
 
-function openAccessSession() {
-  return {
-    email: runtimeEnv().SUPERADMIN_EMAIL?.trim() || OPEN_ACCESS_EMAIL,
-    expiresAt: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS,
-  };
+function linkAccessEmail() {
+  return runtimeEnv().SUPERADMIN_EMAIL?.trim() || LINK_ACCESS_EMAIL;
+}
+
+/** A chave do link confere? Comparação em tempo constante; sem chave configurada, nunca. */
+export async function linkAccessKeyMatches(candidate: string) {
+  const key = linkAccessKey();
+  if (!key) return false;
+  const [actual, expected] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(candidate)),
+    crypto.subtle.digest("SHA-256", encoder.encode(key)),
+  ]);
+  return constantTimeEqual(new Uint8Array(actual), new Uint8Array(expected));
+}
+
+export async function createLinkAccessCookie() {
+  const key = linkAccessKey();
+  if (!key) throw new ApiError(404, "link_access_disabled", "Link de acesso indisponível.");
+  const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS;
+  const payload = toBase64Url(encoder.encode(JSON.stringify({ scope: "link", exp: expiresAt })));
+  const signature = await sign(payload, `link-acesso:${key}`);
+  return `${LINK_SESSION_COOKIE}=${payload}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${SESSION_DURATION_SECONDS}`;
+}
+
+export function clearLinkAccessCookie() {
+  return `${LINK_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`;
+}
+
+async function readLinkAccessSession(request: Request) {
+  const key = linkAccessKey();
+  const token = key ? readCookie(request, LINK_SESSION_COOKIE) : null;
+  if (!key || !token) return null;
+  const [payload, signature, ...extra] = token.split(".");
+  if (!payload || !signature || extra.length || !await verifySignature(payload, signature, `link-acesso:${key}`)) return null;
+  try {
+    const parsed = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as { scope?: unknown; exp?: unknown };
+    if (parsed.scope !== "link" || typeof parsed.exp !== "number" || parsed.exp <= Math.floor(Date.now() / 1000)) return null;
+    return { email: linkAccessEmail(), expiresAt: parsed.exp };
+  } catch {
+    return null;
+  }
 }
 
 function requiredConfig() {
@@ -153,7 +197,8 @@ async function readSession(request: Request, config: { email: string; sessionSec
 }
 
 export async function requireSuperAdmin(request: Request) {
-  if (openAccessEnabled()) return openAccessSession();
+  const linkSession = await readLinkAccessSession(request);
+  if (linkSession) return linkSession;
   const config = requiredConfig();
   if (!readCookie(request, SESSION_COOKIE)) {
     throw new ApiError(401, "superadmin_sign_in_required", "Entre como superadministrador.");
@@ -166,9 +211,9 @@ export async function requireSuperAdmin(request: Request) {
 // Leitura silenciosa usada pela resolução de identidade: sem sessão válida, o pedido
 // segue como um acesso comum da empresa.
 export async function readSuperAdminIdentity(request: Request) {
-  if (openAccessEnabled()) {
-    const session = openAccessSession();
-    return { id: SUPERADMIN_USER_ID, displayName: SUPERADMIN_DISPLAY_NAME, scope: "superadmin" as const, ...session };
+  const linkSession = await readLinkAccessSession(request);
+  if (linkSession) {
+    return { id: SUPERADMIN_USER_ID, displayName: SUPERADMIN_DISPLAY_NAME, scope: "superadmin" as const, ...linkSession };
   }
   let config;
   try { config = requiredConfig(); } catch { return null; }

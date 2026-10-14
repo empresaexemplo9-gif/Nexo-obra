@@ -92,8 +92,10 @@ SUPERADMIN_SESSION_SECRET=segredo_longo_e_aleatorio
 Sem essas três variáveis, `/superadmin` responde `superadmin_not_configured` e nenhuma
 sessão administrativa é emitida.
 
-## Acesso aberto temporário
+## Link de acesso temporário
 
-Com `ACESSO_ABERTO=true` nas variáveis do ambiente, a plataforma deixa de pedir login: toda visita é tratada como o superadministrador, `/entrar` redireciona para `/` e `/superadmin` abre direto. As escritas continuam registradas na auditoria de cada empresa, em nome do superadministrador (`SUPERADMIN_EMAIL`, ou `acesso-aberto@hoikos.app` quando não configurado).
+Com `LINK_ACESSO_CHAVE` nas variáveis do ambiente (uma chave aleatória de pelo menos 32 caracteres), quem abre `https://<domínio>/acesso/<chave>` recebe uma sessão de superadministrador por 8 horas, sem senha. Depois disso, basta abrir o link de novo. O endereço comum continua pedindo login, e uma chave errada responde 404.
 
-Qualquer pessoa com o endereço opera todas as empresas, inclusive ações financeiras reais na Drap. Para fechar, remova a variável (ou use `false`) e publique de novo; o login volta a ser exigido.
+Gere a chave com `node -e "console.log(crypto.randomBytes(32).toString('base64url'))"`. A sessão é assinada com a própria chave: trocar a chave invalida o link antigo e todas as sessões abertas por ele. Remover a variável desliga o link.
+
+As escritas ficam na auditoria de cada empresa em nome do superadministrador (`SUPERADMIN_EMAIL`, ou `link-de-acesso@hoikos.app` quando não configurado), sem distinguir quem usou o link. Quem tem o link opera todas as empresas, inclusive ações financeiras reais na Drap.

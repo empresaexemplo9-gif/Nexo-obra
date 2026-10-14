@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import {
+  clearLinkAccessCookie,
   clearSuperAdminSessionCookie,
   rejectCrossSiteMutation,
   requireSuperAdmin,
@@ -38,9 +39,10 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
-    return Response.json(
-      { authenticated: false },
-      { headers: { "Set-Cookie": clearSuperAdminSessionCookie() } },
-    );
+    // Sair encerra também a sessão aberta pelo link de acesso.
+    const headers = new Headers();
+    headers.append("Set-Cookie", clearSuperAdminSessionCookie());
+    headers.append("Set-Cookie", clearLinkAccessCookie());
+    return Response.json({ authenticated: false }, { headers });
   });
 }
