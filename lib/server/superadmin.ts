@@ -5,6 +5,7 @@ import { getDatabase } from "@/db";
 import { ensureLoginAttemptsTable } from "@/lib/server/migrations";
 
 type SuperAdminRuntimeEnv = {
+  ACESSO_ABERTO?: string;
   SUPERADMIN_EMAIL?: string;
   SUPERADMIN_PASSWORD_HASH?: string;
   SUPERADMIN_SESSION_SECRET?: string;
@@ -26,6 +27,23 @@ const encoder = new TextEncoder();
 
 function runtimeEnv() {
   return platformEnv() as unknown as SuperAdminRuntimeEnv;
+}
+
+const OPEN_ACCESS_EMAIL = "acesso-aberto@hoikos.app";
+
+/**
+ * Acesso aberto, temporário: com `ACESSO_ABERTO=true`, quem abre o link entra direto como
+ * superadministrador, sem login. Desligar é remover a variável — volta a exigir senha.
+ */
+export function openAccessEnabled() {
+  return runtimeEnv().ACESSO_ABERTO?.trim().toLowerCase() === "true";
+}
+
+function openAccessSession() {
+  return {
+    email: runtimeEnv().SUPERADMIN_EMAIL?.trim() || OPEN_ACCESS_EMAIL,
+    expiresAt: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS,
+  };
 }
 
 function requiredConfig() {
@@ -135,6 +153,7 @@ async function readSession(request: Request, config: { email: string; sessionSec
 }
 
 export async function requireSuperAdmin(request: Request) {
+  if (openAccessEnabled()) return openAccessSession();
   const config = requiredConfig();
   if (!readCookie(request, SESSION_COOKIE)) {
     throw new ApiError(401, "superadmin_sign_in_required", "Entre como superadministrador.");
@@ -147,6 +166,10 @@ export async function requireSuperAdmin(request: Request) {
 // Leitura silenciosa usada pela resolução de identidade: sem sessão válida, o pedido
 // segue como um acesso comum da empresa.
 export async function readSuperAdminIdentity(request: Request) {
+  if (openAccessEnabled()) {
+    const session = openAccessSession();
+    return { id: SUPERADMIN_USER_ID, displayName: SUPERADMIN_DISPLAY_NAME, scope: "superadmin" as const, ...session };
+  }
   let config;
   try { config = requiredConfig(); } catch { return null; }
   const session = await readSession(request, config);

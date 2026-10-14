@@ -56,6 +56,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 - Interface conectada somente a dados reais da empresa ativa, com estados vazios explícitos.
 - Esquema relacional multiempresa em `db/schema.ts`.
 - Backend multiempresa para sessão, onboarding, membros e CRUD de clientes, projetos e tarefas.
+- **Acesso aberto temporário:** com `ACESSO_ABERTO=true` no ambiente, não há login — quem abre o link entra como superadministrador, com todas as empresas e ferramentas. Remover a variável volta a exigir senha. Consulte [Superadministrador](docs/SUPERADMIN.md#acesso-aberto-temporário).
 - Um só formulário de entrada para todos: o servidor reconhece pelas credenciais se é conta de empresa ou o superadministrador (protegido por hash, sessão assinada e bloqueio de tentativas repetidas) e leva cada um ao seu painel. `/superadmin` sem sessão manda para esse mesmo formulário.
 - Cliente convidado ao portal cria a própria senha pelo link do convite. Convite de equipe ou de portal nunca troca a senha de um e-mail que já tem conta: a pessoa entra com a dela e aceita.
 - Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).

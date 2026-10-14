@@ -91,3 +91,9 @@ SUPERADMIN_SESSION_SECRET=segredo_longo_e_aleatorio
 
 Sem essas três variáveis, `/superadmin` responde `superadmin_not_configured` e nenhuma
 sessão administrativa é emitida.
+
+## Acesso aberto temporário
+
+Com `ACESSO_ABERTO=true` nas variáveis do ambiente, a plataforma deixa de pedir login: toda visita é tratada como o superadministrador, `/entrar` redireciona para `/` e `/superadmin` abre direto. As escritas continuam registradas na auditoria de cada empresa, em nome do superadministrador (`SUPERADMIN_EMAIL`, ou `acesso-aberto@hoikos.app` quando não configurado).
+
+Qualquer pessoa com o endereço opera todas as empresas, inclusive ações financeiras reais na Drap. Para fechar, remova a variável (ou use `false`) e publique de novo; o login volta a ser exigido.
