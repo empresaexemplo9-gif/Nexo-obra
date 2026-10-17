@@ -52,11 +52,11 @@ uma em positivo (`-light`, Abismo `#0D151F`) e negativo (`-dark`, branco):
 
 | Arquivo | Aplicação | Proporção |
 | --- | --- | --- |
-| `drap-symbol-*` | Só símbolo: menu recolhido, favicon, avatar | 360 × 320 |
+| `drap-symbol-*` | Só símbolo: menu recolhido, favicon, avatar | 320 × 330 |
 | `drap-wordmark-*` | Lettering DRAP | 503 × 140 |
 | `drap-signature-*` | DRAP + “BACKOFFICE PARA ARQUITETOS” | 815 × 216 |
 | `drap-stacked-*` | Símbolo sobre a assinatura: telas de entrada | 815 × 540 |
-| `drap-lockup-*` | Símbolo à esquerda de DRAP + “BACKOFFICE”: menu e cabeçalhos | 823 × 225 |
+| `drap-lockup-*` | Símbolo à esquerda de DRAP + “BACKOFFICE”: menu e cabeçalhos | 788 × 225 |
 
 O lockup usa o nome curto porque a assinatura inteira ficaria ilegível nos 140 px do menu.
 Versões PNG transparentes (1024 px de largura) ficam em `public/brand/png/`; o favicon existe em

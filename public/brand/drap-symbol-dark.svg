@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360.00 320.00" fill="#FFFFFF" role="img" aria-label="DRAP Backoffice para Arquitetos">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320.00 330.00" fill="#FFFFFF" role="img" aria-label="DRAP Backoffice para Arquitetos">
   <title>DRAP Backoffice para Arquitetos</title>
-  <g transform="translate(0.00 0.00) scale(1.0000)"><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="360" height="320"><rect width="360" height="320" fill="#fff"/><path d="M249 -10L146 236" stroke="#000" stroke-width="9" stroke-linecap="round"/></mask><path d="M0 0H240C310 0 360 50 360 125V195C360 270 310 320 240 320H0Z" mask="url(#m)"/></g>
+  <g transform="translate(0.00 0.00) scale(1.0000)"><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="320" height="330"><rect width="320" height="330" fill="#fff"/><path d="M236 -4L252 -4L103 334L97 334Z" fill="#000"/></mask><path d="M0 0H232C284 0 320 46 320 100V230C320 292 284 330 236 330H0Z" mask="url(#m)"/></g>
 </svg>

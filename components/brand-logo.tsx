@@ -13,11 +13,11 @@ export type BrandVariant = "symbol" | "wordmark" | "signature" | "stacked" | "lo
 const artwork: Record<BrandVariant, { width: number; height: number; minWidth: number }> = {
   // Largura mínima de 150 px para o lettering com a assinatura em uso digital; o lockup
   // usa o nome curto ("Backoffice") e continua legível com menos.
-  symbol: { width: 360, height: 320, minWidth: 24 },
+  symbol: { width: 320, height: 330, minWidth: 24 },
   wordmark: { width: 503, height: 140, minWidth: 150 },
   signature: { width: 815, height: 216, minWidth: 150 },
   stacked: { width: 815, height: 540, minWidth: 150 },
-  lockup: { width: 823, height: 225, minWidth: 120 },
+  lockup: { width: 788, height: 225, minWidth: 120 },
 };
 
 export function BrandLogo({
