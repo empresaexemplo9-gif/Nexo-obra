@@ -10,7 +10,7 @@ export type DrapCatalogItem = {
 };
 
 // Catálogo público conferido em 2026-09-16 em https://empresa.drap.app.br/precos.
-// Ele serve para apresentação dentro da H.OIKOS. O preço cobrado continua sendo confirmado
+// Ele serve para apresentação dentro do DRAP Backoffice. O preço cobrado continua sendo confirmado
 // pela DRAP no servidor no momento da contratação; o navegador nunca escolhe preço.
 export const DRAP_CATALOG_SOURCE = "https://empresa.drap.app.br/precos";
 export const DRAP_CATALOG_CHECKED_AT = "2026-09-16";

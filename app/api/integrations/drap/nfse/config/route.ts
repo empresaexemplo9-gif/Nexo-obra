@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * O certificado A1 e a senha dele. É a chave privada de assinatura fiscal da empresa:
  * quem a tem assina documento em nome dela.
  *
- * A H.OIKOS NÃO guarda nenhum dos dois. Eles entram no corpo, seguem para o serviço
+ * O DRAP Backoffice NÃO guarda nenhum dos dois. Eles entram no corpo, seguem para o serviço
  * fiscal e acabam ali. Não há coluna, não há cache, não há log — nem o nome do arquivo.
  * O que volta na leitura é o cadastro sem segredo nenhum.
  *

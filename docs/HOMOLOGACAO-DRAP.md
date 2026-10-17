@@ -2,7 +2,7 @@
 
 Atualizado em 2026-09-17.
 
-Roteiro pra provar, com uma chave real, que a H.OIKOS consegue operar o
+Roteiro pra provar, com uma chave real, que o DRAP Backoffice consegue operar o
 financeiro de uma empresa na DRAP sem pedir um segundo login ao usuário e sem
 enxergar dado de outra empresa.
 
@@ -12,7 +12,7 @@ de teste.
 ## O que já está provado e o que falta
 
 A chave da DRAP resolve o tenant **no servidor dela**, a partir do hash da
-própria chave. A H.OIKOS nunca envia `organization_id`, `company_id` ou
+própria chave. O DRAP Backoffice nunca envia `organization_id`, `company_id` ou
 qualquer identificador de empresa — não há o que forjar pelo navegador. É isso
 que sustenta "acesso restrito ao tenant correto".
 
@@ -28,7 +28,7 @@ que ainda não existe.
 2. **Módulo Integrações ativo** nesse tenant. Sem ele a DRAP recusa criar
    chave (`403 module-required`).
 3. **Chave emitida** em `Configurações → Integrações`, com o preset
-   **Leitura e escrita**. Não use *Acesso total*: a H.OIKOS não apaga
+   **Leitura e escrita**. Não use *Acesso total*: o DRAP Backoffice não apaga
    lançamento nem parceiro, e o roteiro confere isso.
 
 A chave aparece em texto puro uma única vez. Guarde no gerenciador de segredos
@@ -48,7 +48,7 @@ Aceita `DRAP_API_URL` (default `https://empresa.drap.app.br`) e
 `DRAP_API_KEY_HEADER`, os mesmos nomes que o adaptador lê em produção. A chave
 nunca é impressa, nem em erro.
 
-Sai `0` quando tudo que é obrigatório passou, `1` quando algo que a H.OIKOS
+Sai `0` quando tudo que é obrigatório passou, `1` quando algo que o DRAP Backoffice
 depende está quebrado. Aviso não derruba a homologação — é trabalho conhecido
 de outra fatia.
 
@@ -59,12 +59,12 @@ de outra fatia.
 | Autenticação | Chave inválida, revogada ou vencida. Reemita. |
 | Rota fechada sem chave | **Pare.** A API da DRAP está aceitando chamada anônima. |
 | Envelope `{ items, total }` | O contrato mudou. O adaptador desempacota esses nomes. |
-| Campos do lançamento | Falta campo que a H.OIKOS lê. Ajuste `lib/integrations/drap.ts`. |
+| Campos do lançamento | Falta campo que o DRAP Backoffice lê. Ajuste `lib/integrations/drap.ts`. |
 | Parceiros / Categorias | A chave não cobre o recurso, ou o endpoint mudou. |
 
 Um aviso é esperado enquanto o filtro não estiver publicado na DRAP:
 
-- **Filtro `?centro_custo`** — se a DRAP ignorar o parâmetro, a H.OIKOS pagina
+- **Filtro `?centro_custo`** — se a DRAP ignorar o parâmetro, o DRAP Backoffice pagina
   a empresa e recorta na memória. O número na tela continua certo (o adaptador
   reaplica o filtro), mas trunca em 500 lançamentos. Some quando a DRAP
   publicar o filtro.
@@ -77,7 +77,7 @@ Um aviso **não** esperado:
 ## Vínculo da obra
 
 A obra é amarrada ao financeiro pelo campo `centro_custo` do lançamento —
-texto livre na DRAP, não um ID. A H.OIKOS guarda o mesmo texto em
+texto livre na DRAP, não um ID. O DRAP Backoffice guarda o mesmo texto em
 `projects.external_financial_cost_center_id` e usa a convenção
 `hoikos:<id da obra>`, mas qualquer texto serve desde que seja **o mesmo dos
 dois lados**.
@@ -89,7 +89,7 @@ dois.
 
 ## Cobrança
 
-A cobrança sai na conta Asaas **da própria empresa**, não da H.OIKOS. Três
+A cobrança sai na conta Asaas **da própria empresa**, não do DRAP Backoffice. Três
 pré-requisitos, todos do lado da Drap: módulo Cobranças ativo, conta Asaas
 conectada e o parceiro cobrado com CNPJ ou CPF preenchido. Faltando qualquer
 um, a Drap responde com o código dizendo qual — a tela precisa mostrar isso,
@@ -108,14 +108,14 @@ Assinatura de webhook por API e provisionamento de empresa sem login humano.
 
 O resumo financeiro já é somado pela Drap em `/api/v1/resumo`. Enquanto o
 endpoint não estiver no ar naquele ambiente, o roteiro acusa aviso e a
-H.OIKOS soma pelos lançamentos — marcando o total como parcial, nunca como
+DRAP Backoffice soma pelos lançamentos — marcando o total como parcial, nunca como
 completo. Estado e contrato pretendido em
 [`DRAP-ACTIVATION.md`](./DRAP-ACTIVATION.md) e [`DRAP-INTEGRATION.md`](./DRAP-INTEGRATION.md).
 
 ## Descobrir a superfície real da API
 
 A `/api-docs` publica três recursos — lançamentos, parceiros, categorias. Mas `/resumo`,
-que a H.OIKOS já consome em produção, não está listado lá. A documentação é incompleta, e
+que o DRAP Backoffice já consome em produção, não está listado lá. A documentação é incompleta, e
 discutir o que a API faz a partir dela erra nos dois sentidos: nega o que existe e promete
 o que não existe.
 

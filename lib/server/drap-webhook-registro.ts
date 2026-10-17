@@ -2,7 +2,7 @@ import { runtimeEnv } from "@/lib/server/runtime";
 
 // Registro automático do webhook desta empresa na Drap, no momento de conectar.
 //
-// Sem isto, a H.OIKOS só sabia de mudança perguntando: cada tela refazia
+// Sem isto, o DRAP Backoffice só sabia de mudança perguntando: cada tela refazia
 // `GET /api/v1/lancamentos` para descobrir, na maioria das vezes, que nada mudou. E o
 // caminho para deixar de perguntar era um humano abrir o painel da Drap, empresa por
 // empresa, colar uma URL e copiar um segredo — o mesmo "segundo login adiado" que o
@@ -72,10 +72,12 @@ export const ESCOPOS_DA_PLATAFORMA = [
   "nfse:write",
 ] as const;
 
-const NOME_DA_ASSINATURA = "H.OIKOS";
+const NOME_DA_ASSINATURA = "DRAP Backoffice";
 const CAMINHO_DO_RECEPTOR = "/api/integrations/drap/webhook";
 
-type DrapEnv = { DRAP_API_URL?: string; HOIKOS_PUBLIC_URL?: string; VERCEL_PROJECT_PRODUCTION_URL?: string };
+// HOIKOS_PUBLIC_URL é o nome anterior ao rebranding; continua aceito para não derrubar
+// instalações já configuradas.
+type DrapEnv = { DRAP_API_URL?: string; APP_PUBLIC_URL?: string; HOIKOS_PUBLIC_URL?: string; VERCEL_PROJECT_PRODUCTION_URL?: string };
 
 function env() {
   return runtimeEnv() as DrapEnv;
@@ -91,7 +93,7 @@ function env() {
  */
 export function urlDoReceptor(): string | null {
   const config = env();
-  const explicita = config.HOIKOS_PUBLIC_URL?.trim();
+  const explicita = (config.APP_PUBLIC_URL || config.HOIKOS_PUBLIC_URL)?.trim();
   const daVercel = config.VERCEL_PROJECT_PRODUCTION_URL?.trim();
 
   const base = explicita || (daVercel ? `https://${daVercel.replace(/^https?:\/\//, "")}` : "");
@@ -147,7 +149,7 @@ export async function registrarWebhookNaDrap(token: string): Promise<RegistroRes
     return {
       ok: false,
       codigo: "url-publica-ausente",
-      motivo: "Configure HOIKOS_PUBLIC_URL com o endereço HTTPS público desta instalação para a Drap saber para onde enviar os eventos.",
+      motivo: "Configure APP_PUBLIC_URL com o endereço HTTPS público desta instalação para a Drap saber para onde enviar os eventos.",
     };
   }
 
@@ -227,7 +229,7 @@ export async function registrarWebhookNaDrap(token: string): Promise<RegistroRes
  *
  * Só apaga a que aponta para o receptor desta instalação. Uma empresa pode ter assinaturas
  * próprias, criadas pelo dono dela no painel da Drap para outros sistemas; desconectar da
- * H.OIKOS não é motivo para derrubá-las.
+ * DRAP Backoffice não é motivo para derrubá-las.
  *
  * Não lança, pela mesma razão do registro: quem chama está desfazendo a conexão a pedido
  * do usuário, e uma Drap fora do ar não pode prender ninguém a um vínculo que ele mandou

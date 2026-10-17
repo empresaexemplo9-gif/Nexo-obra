@@ -109,16 +109,16 @@ test("visão geral prioriza tarefas vencidas e mostra projetos persistidos", asy
     ] },
   });
   assert.match(textOf(container), /Prazos que precisam de atenção/);
-  const rows = [...container.querySelectorAll(".hoikos-task-row")];
+  const rows = [...container.querySelectorAll(".drap-task-row")];
   assert.equal(rows.length, 2);
   assert.match(textOf(rows[0]), /Entrega vencida/);
   assert.ok(container.querySelector('a[href="/projetos/p1"]'));
-  assert.equal(container.querySelector(".hoikos-start"), null);
+  assert.equal(container.querySelector(".drap-start"), null);
 });
 
 test("primeiros passos respeitam acesso somente leitura", async () => {
   await abrir(sessionFor("partner"));
-  const overview = container.querySelector(".hoikos-overview");
+  const overview = container.querySelector(".drap-overview");
   assert.ok(overview);
   assert.equal(findByText(overview, /Novo projeto|Criar projeto|Cadastrar cliente/, "button"), null);
   assert.ok(findByText(overview, "Ver lembretes", "button"));

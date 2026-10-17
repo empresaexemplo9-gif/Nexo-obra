@@ -46,7 +46,7 @@ export function SinapiImportControl({ onUpdated }: { onUpdated?: () => Promise<u
     } catch(e) { setError(e instanceof Error ? e.message : "Falha na importação; o progresso foi salvo."); } finally {setBusy(false);}
   }
   const done = current && current.completed.length === current.profiles.length;
-  return <section className="space-y-4 rounded-xl border border-hoikos-200 bg-hoikos-50/40 p-4" aria-label="Atualizar base SINAPI">
+  return <section className="space-y-4 rounded-xl border border-drap-200 bg-drap-50/40 p-4" aria-label="Atualizar base SINAPI">
     <div><h3 className="font-semibold">Atualizar relatórios completos do SINAPI</h3><p className="mt-1 text-sm">Busque diretamente na CAIXA o pacote oficial da competência selecionada, com preços, composições analíticas, coeficientes e encargos. Confira a amostra e ative as 27 UFs nos dois regimes. Os valores dos orçamentos já salvos são preservados.</p></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="text-sm">Origem<NativeSelect value={mode} onChange={(e)=>{setMode(e.target.value);setFiles([]);}} disabled={busy}><option value="url">URL oficial da CAIXA</option><option value="file">Arquivo ZIP, XLSX ou CSV</option><option value="folder">Pasta com XLSX ou CSV</option></NativeSelect></label>

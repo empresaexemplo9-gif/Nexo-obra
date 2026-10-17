@@ -64,7 +64,7 @@ test("fala o vocabulário da Drap e converte centavos em reais", async () => {
   assert.equal(charge.shareUrl, "https://www.asaas.com/i/abc");
 });
 
-test("o que é da H.OIKOS não vaza pro corpo da Drap", () => {
+test("o que é do DRAP Backoffice não vaza pro corpo da Drap", () => {
   // Centro de custo e política de lembrete não existem na cobrança da Drap.
   const corpo = drap.corpoDaCobranca(PEDIDO);
   for (const campo of ["cost_center_id", "centro_custo", "reminder_policy", "amount_cents", "customer_id"]) {

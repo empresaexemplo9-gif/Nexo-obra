@@ -138,7 +138,7 @@ function Biblioteca({ canEdit }: { canEdit: boolean }) {
           <Button type="submit" disabled={enviando}>
             {enviando ? <LoaderCircle className="animate-spin" /> : <Upload />}Enviar para a biblioteca
           </Button>
-          <p className="mt-2 text-xs leading-5 text-hoikos-500">
+          <p className="mt-2 text-xs leading-5 text-drap-500">
             Imagem (PNG, JPEG, WebP, AVIF) entra na prancha como mobiliário, textura ou fundo de traçado. Para editar um DWG ou DXF,
             use Importar DWG ou DXF: ele entra como desenho, com todas as camadas. A medida real é o que faz o móvel ocupar na planta
             o espaço que ocupa na sala.
@@ -155,19 +155,19 @@ function Biblioteca({ canEdit }: { canEdit: boolean }) {
       </NativeSelect>
     </div>
 
-    {carregando ? <Card><Empty className="min-h-52 border-0"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando a biblioteca…</p></Empty></Card>
+    {carregando ? <Card><Empty className="min-h-52 border-0"><LoaderCircle className="size-6 animate-spin text-drap-600" /><p className="text-sm text-drap-500">Carregando a biblioteca…</p></Empty></Card>
       : erro ? <Card><Empty className="min-h-52 border-0"><EmptyHeader><EmptyMedia variant="icon"><CircleAlert /></EmptyMedia><EmptyTitle>Não foi possível carregar</EmptyTitle><EmptyDescription>{erro}</EmptyDescription></EmptyHeader><EmptyContent><Button onClick={() => void recarregar()}>Tentar novamente</Button></EmptyContent></Empty></Card>
       : !itens.length ? <Card><Empty className="min-h-52 border-0"><EmptyHeader><EmptyMedia variant="icon"><Icone /></EmptyMedia><EmptyTitle>Biblioteca vazia</EmptyTitle><EmptyDescription>Envie mobiliário recortado, texturas, fotos de referência e as plantas que servirão de fundo de traçado.</EmptyDescription></EmptyHeader></Empty></Card>
       : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {itens.map((item) => <Card key={item.id}><CardContent className="space-y-2 p-3">
-          <div className="grid aspect-square place-items-center overflow-hidden rounded-md bg-hoikos-50">
+          <div className="grid aspect-square place-items-center overflow-hidden rounded-md bg-drap-50">
             {item.desenhavel
               // eslint-disable-next-line @next/next/no-img-element
               ? <img src={item.url} alt={item.nome} className="size-full object-cover" />
-              : <div className="p-4 text-center"><Files aria-hidden="true" className="mx-auto size-7 text-hoikos-600" /><p className="mt-2 text-xs text-hoikos-500">Anexo — não entra na prancha</p></div>}
+              : <div className="p-4 text-center"><Files aria-hidden="true" className="mx-auto size-7 text-drap-600" /><p className="mt-2 text-xs text-drap-500">Anexo — não entra na prancha</p></div>}
           </div>
-          <p className="truncate text-sm font-medium text-hoikos-800" title={item.nome}>{item.nome}</p>
-          <p className="text-xs text-hoikos-500">
+          <p className="truncate text-sm font-medium text-drap-800" title={item.nome}>{item.nome}</p>
+          <p className="text-xs text-drap-500">
             {categoriaLabels[item.categoria] ?? item.categoria} · {tamanho(item.sizeBytes)}
             {item.larguraMm && item.alturaMm ? ` · ${item.larguraMm}×${item.alturaMm} mm` : ""}
           </p>
@@ -287,7 +287,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
     </div>
 
     <TabsContent value="pranchas" className="space-y-4">
-      {carregando ? <Card><Empty className="min-h-60 border-0"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /><p className="text-sm text-hoikos-500">Carregando as pranchas…</p></Empty></Card>
+      {carregando ? <Card><Empty className="min-h-60 border-0"><LoaderCircle className="size-6 animate-spin text-drap-600" /><p className="text-sm text-drap-500">Carregando as pranchas…</p></Empty></Card>
         : erro ? <Card><Empty className="min-h-60 border-0"><EmptyHeader><EmptyMedia variant="icon"><CircleAlert /></EmptyMedia><EmptyTitle>Não foi possível carregar</EmptyTitle><EmptyDescription>{erro}</EmptyDescription></EmptyHeader><EmptyContent><Button onClick={() => void recarregar()}>Tentar novamente</Button></EmptyContent></Empty></Card>
         : !visiveis.length ? <Card><Empty className="min-h-60 border-0"><EmptyHeader><EmptyMedia variant="icon"><DraftingCompass /></EmptyMedia>
             <EmptyTitle>{pranchas.length ? "Nenhuma prancha encontrada" : "Nenhuma prancha nesta empresa"}</EmptyTitle>
@@ -300,14 +300,14 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
           {visiveis.map((prancha) => <Card key={prancha.id}><CardContent className="space-y-3 p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="truncate text-base font-medium text-hoikos-900" title={prancha.nome}>{prancha.nome}</p>
-                <p className="mt-1 truncate text-xs text-hoikos-500">
+                <p className="truncate text-base font-medium text-drap-900" title={prancha.nome}>{prancha.nome}</p>
+                <p className="mt-1 truncate text-xs text-drap-500">
                   {prancha.projectName ? `${prancha.projectCode} · ${prancha.projectName}` : "Sem projeto vinculado"}
                 </p>
               </div>
-              <Badge className="shrink-0 border-hoikos-200 bg-hoikos-50 text-hoikos-800">{especieLabels[prancha.especie] ?? prancha.especie}</Badge>
+              <Badge className="shrink-0 border-drap-200 bg-drap-50 text-drap-800">{especieLabels[prancha.especie] ?? prancha.especie}</Badge>
             </div>
-            <p className="text-xs text-hoikos-500">
+            <p className="text-xs text-drap-500">
               Revisão {prancha.revisao} · {dataCurta(prancha.atualizadoEm)}{prancha.autor ? ` · ${prancha.autor}` : ""}
             </p>
             <div className="flex flex-wrap gap-2">

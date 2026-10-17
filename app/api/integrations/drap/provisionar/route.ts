@@ -9,7 +9,7 @@ import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
 
-// Liga esta empresa à Drap sem ninguém sair da H.OIKOS.
+// Liga esta empresa à Drap sem ninguém sair do DRAP Backoffice.
 //
 // Dois caminhos, e a diferença entre eles é quem consente:
 //

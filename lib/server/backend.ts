@@ -58,7 +58,7 @@ export async function requireOrganizationContext(
   if (identity.scope === "superadmin") return superAdminContext(db, identity, request);
   const memberships = await findMemberships(db, identity);
   if (memberships.length === 0) {
-    throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa na H.OIKOS.");
+    throw new ApiError(403, "membership_required", "Sua conta ainda não pertence a uma empresa no DRAP Backoffice.");
   }
   const requestedOrganizationId = selectedOrganizationId(request);
   if (requestedOrganizationId && !memberships.some((item) => item.organization_id === requestedOrganizationId)) {
@@ -348,7 +348,7 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     // caía no genérico.
     const message = cadeiaDeErros(error).join(" | ").toLowerCase();
     if (message.includes("no such table") || message.includes("no such column")) {
-      console.error("H.OIKOS banco desatualizado", error);
+      console.error("DRAP Backoffice banco desatualizado", error);
       return Response.json({
         error: "O banco de dados está desatualizado: falta aplicar as migrações. Entre em /superadmin e use “Atualizar banco de dados”.",
         code: "database_not_migrated",
@@ -359,13 +359,13 @@ export async function apiRoute(operation: () => Promise<Response>): Promise<Resp
     // concluir a operação": o usuário não tinha como saber que o problema era a conexão,
     // muito menos qual das duas variáveis conferir.
     if (/unauthorized|url_invalid|url_scheme|hrana|websocket|fetch failed|econnrefused|enotfound|certificate|timed out/i.test(message)) {
-      console.error("H.OIKOS banco inalcançável", error);
+      console.error("DRAP Backoffice banco inalcançável", error);
       return Response.json({
         error: "O banco de dados não respondeu. Confira a URL e o token do banco na configuração da publicação.",
         code: "database_unreachable",
       }, { status: 503 });
     }
-    console.error("H.OIKOS API failure", error);
+    console.error("DRAP Backoffice API failure", error);
     // O nome da classe da exceção vai junto. Só o nome: a mensagem do driver pode conter
     // endereço ou token, o nome nunca contém. Sem isso, "não foi possível concluir a
     // operação" é um beco sem saída para quem não tem acesso ao log do servidor — foi

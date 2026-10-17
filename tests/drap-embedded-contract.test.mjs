@@ -23,7 +23,7 @@ test("contrato antigo de 150% existe somente como compatibilidade histórica", a
   assert.match(activation, /Mantido apenas para validar confirmações de ativações antigas/);
 });
 
-test("catálogo H.OIKOS reproduz os preços públicos DRAP sem preço vindo do navegador", async () => {
+test("catálogo DRAP Backoffice reproduz os preços públicos DRAP sem preço vindo do navegador", async () => {
   const catalog = await source("lib/integrations/drap-catalog.ts");
   for (const [id, cents] of [
     ["dashboards-pro", 5900],
@@ -49,13 +49,13 @@ test("catálogo H.OIKOS reproduz os preços públicos DRAP sem preço vindo do n
   assert.match(catalog, /annualCents: 990000/);
 });
 
-test("catálogo é servido dentro da H.OIKOS e só manda criar conta quem ainda não tem", async () => {
+test("catálogo é servido dentro do DRAP Backoffice e só manda criar conta quem ainda não tem", async () => {
   const route = await source("app/api/integrations/drap/catalog/route.ts");
   assert.match(route, /requireOrganizationContext/);
   assert.match(route, /requireModulePermission\(context, "finance", "view"\)/);
   assert.match(route, /pricing: "company_offer"/);
   // Enquanto a Drap não expõe rota de provisionamento, quem ainda não tem tenant é
-  // levado ao cadastro oficial. Quem já tem opera dentro da H.OIKOS, sem sair.
+  // levado ao cadastro oficial. Quem já tem opera dentro do DRAP Backoffice, sem sair.
   // O sinal precisa vir do estado do tenant: fixá-lo em `false` anunciava operação
   // embutida a quem ainda não tem conta, e fixá-lo em `true` mandaria para fora quem
   // já está ligado.

@@ -18,9 +18,9 @@ export function DrapReadinessPanel() {
   return <Card><CardHeader><CardTitle className="text-base">Preparação da integração Drap</CardTitle></CardHeader><CardContent className="space-y-4">
     <p className="text-sm">Acompanhe o que está configurado e o que ainda depende da vinculação. A verificação da API apenas consulta recursos; não cria cobranças.</p>
     {error && <p role="alert" className="text-sm">{error}</p>}
-    {data && <><ul className="grid gap-3 sm:grid-cols-2">{data.checks.map(check => <li key={check.id} className="rounded-md border p-3 text-sm"><p className="font-medium">{check.label}</p><p className="mt-1">{check.ready ? "Configurado / registrado" : "Pendente"}</p>{!check.ready && <p className="mt-1 text-hoikos-600">{check.next}</p>}</li>)}</ul>
+    {data && <><ul className="grid gap-3 sm:grid-cols-2">{data.checks.map(check => <li key={check.id} className="rounded-md border p-3 text-sm"><p className="font-medium">{check.label}</p><p className="mt-1">{check.ready ? "Configurado / registrado" : "Pendente"}</p>{!check.ready && <p className="mt-1 text-drap-600">{check.next}</p>}</li>)}</ul>
     {data.resources && <details open><summary className="cursor-pointer text-sm font-medium">Resultado da consulta à API</summary><ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">{Object.entries(data.resources).map(([name, resource]) => <li key={name}>{name}: {labels[resource.status] ?? "Não verificado"}</li>)}</ul></details>}
-    <p className="text-sm">Eventos recebidos nesta empresa: {data.events.length ? data.events.map(event => `${event.status}: ${event.count}`).join(" · ") : "nenhum evento registrado"}.</p><p className="text-sm text-hoikos-600">{data.notice}</p></>}
+    <p className="text-sm">Eventos recebidos nesta empresa: {data.events.length ? data.events.map(event => `${event.status}: ${event.count}`).join(" · ") : "nenhum evento registrado"}.</p><p className="text-sm text-drap-600">{data.notice}</p></>}
     <div className="flex flex-wrap gap-2"><Button variant="outline" disabled={busy} onClick={() => void load()}>Atualizar configuração</Button><Button disabled={busy || !data?.canVerifyApi} onClick={() => void load(true)}>{busy ? "Verificando…" : "Consultar API Drap"}</Button></div>
   </CardContent></Card>;
 }

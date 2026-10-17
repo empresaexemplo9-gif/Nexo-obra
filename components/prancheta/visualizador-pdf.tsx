@@ -134,15 +134,15 @@ export default function VisualizadorPdf({ blob, nome, onControle }: PropsVisuali
   const aoVer = useCallback((numero: number) => { atualRef.current = numero; setAtual(numero); }, []);
 
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="icon" variant="outline" onClick={() => mudarZoom(1 / 1.25)} aria-label="Diminuir zoom" disabled={!documento}><Minus /></Button>
       <span className="w-14 text-center text-sm tabular-nums" aria-live="polite">{Math.round(zoom * 100)}%</span>
       <Button size="icon" variant="outline" onClick={() => mudarZoom(1.25)} aria-label="Aumentar zoom" disabled={!documento}><Plus /></Button>
-      {documento ? <p className="text-sm text-hoikos-600">Página {atual} de {documento.numPages}</p> : null}
+      {documento ? <p className="text-sm text-drap-600">Página {atual} de {documento.numPages}</p> : null}
     </div>
-    <div ref={area} className="min-h-[360px] flex-1 overflow-auto bg-hoikos-100 p-4">
-      {erro ? <p className="p-6 text-center text-sm text-hoikos-700" role="alert">{erro}</p>
-        : !documento ? <p className="flex items-center justify-center gap-2 p-6 text-sm text-hoikos-600" role="status"><LoaderCircle className="animate-spin" />Abrindo o PDF…</p>
+    <div ref={area} className="min-h-[360px] flex-1 overflow-auto bg-drap-100 p-4">
+      {erro ? <p className="p-6 text-center text-sm text-drap-700" role="alert">{erro}</p>
+        : !documento ? <p className="flex items-center justify-center gap-2 p-6 text-sm text-drap-600" role="status"><LoaderCircle className="animate-spin" />Abrindo o PDF…</p>
           : <div className="flex flex-col gap-4">{Array.from({ length: documento.numPages }, (_, i) => <Pagina key={i + 1} documento={documento} numero={i + 1} zoom={zoom} onVisivel={aoVer} />)}</div>}
     </div>
   </div>;

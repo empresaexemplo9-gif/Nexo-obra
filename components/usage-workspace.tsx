@@ -132,10 +132,10 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
   }, [report]);
 
   if (loading && !report) {
-    return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></CardContent></Card>;
+    return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-drap-600" /></CardContent></Card>;
   }
   if (error && !report) {
-    return <Card className="border-hoikos-200"><CardContent className="flex flex-col items-start gap-3 p-6"><CircleAlert className="size-6 text-hoikos-600" /><p className="text-sm text-hoikos-800">{error}</p><Button onClick={() => void load()}><RefreshCw />Tentar novamente</Button></CardContent></Card>;
+    return <Card className="border-drap-200"><CardContent className="flex flex-col items-start gap-3 p-6"><CircleAlert className="size-6 text-drap-600" /><p className="text-sm text-drap-800">{error}</p><Button onClick={() => void load()}><RefreshCw />Tentar novamente</Button></CardContent></Card>;
   }
   if (!report) return null;
 
@@ -148,10 +148,10 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
     <Card className="workspace-card">
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <CardTitle className="flex items-center gap-2 text-base"><Clock className="size-4 text-hoikos-600" />Tempo online</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base"><Clock className="size-4 text-drap-600" />Tempo online</CardTitle>
           <Badge variant="outline">{scopeLabel}</Badge>
         </div>
-        <p className="text-sm leading-6 text-hoikos-500">
+        <p className="text-sm leading-6 text-drap-500">
           O tempo é medido no servidor, somando apenas os intervalos entre sinais recebidos enquanto a aba está visível,
           com no máximo {Math.round(report.gapLimitMs / 1000)} s por intervalo. Fechar a aba, perder a rede ou desligar o
           computador interrompe a contagem no último sinal: o total nunca é inflado, e o erro possível é de até
@@ -162,20 +162,20 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
         <label className="text-sm">De<Input type="date" value={from} max={to || undefined} onChange={(event) => setFrom(event.target.value)} className="mt-1 h-10" /></label>
         <label className="text-sm">Até<Input type="date" value={to} min={from || undefined} onChange={(event) => setTo(event.target.value)} className="mt-1 h-10" /></label>
         <Button variant="outline" disabled={loading || !from || !to} onClick={() => void load({ from, to })}>{loading ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}Atualizar período</Button>
-        <p className="text-sm text-hoikos-600 sm:ml-auto">Total no período: <strong className="tabular-nums">{formatDuration(totalMs)}</strong></p>
+        <p className="text-sm text-drap-600 sm:ml-auto">Total no período: <strong className="tabular-nums">{formatDuration(totalMs)}</strong></p>
       </CardContent>
     </Card>
 
-    {error ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">{error}</p> : null}
+    {error ? <p role="alert" className="rounded-md border border-drap-200 bg-drap-50 px-4 py-3 text-sm text-drap-800">{error}</p> : null}
 
     {people.length === 0 ? (
-      <Card><CardContent className="grid min-h-56 place-items-center p-6 text-center"><div><Clock className="mx-auto size-7 text-hoikos-500" /><p className="mt-3 font-medium text-hoikos-900">Nenhum tempo registrado no período</p><p className="mt-1 text-sm text-hoikos-500">A contagem começa no próximo acesso dentro do período escolhido.</p></div></CardContent></Card>
+      <Card><CardContent className="grid min-h-56 place-items-center p-6 text-center"><div><Clock className="mx-auto size-7 text-drap-500" /><p className="mt-3 font-medium text-drap-900">Nenhum tempo registrado no período</p><p className="mt-1 text-sm text-drap-500">A contagem começa no próximo acesso dentro do período escolhido.</p></div></CardContent></Card>
     ) : <>
       <Card className="overflow-hidden">
         <CardHeader className="border-b"><CardTitle className="text-base">Por acesso</CardTitle></CardHeader>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="bg-hoikos-50">
+            <TableHeader><TableRow className="bg-drap-50">
               <TableHead className="pl-5">Acesso</TableHead>
               {report.scope === "platform" ? <TableHead>Empresa</TableHead> : null}
               <TableHead>Perfil</TableHead><TableHead className="text-right">Hoje</TableHead>
@@ -183,7 +183,7 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
               <TableHead className="text-right">Sessões</TableHead><TableHead className="pr-5 text-right">Ações</TableHead>
             </TableRow></TableHeader>
             <TableBody>{people.map((entry) => <TableRow key={entry.key}>
-              <TableCell className="pl-5"><p className="font-medium text-hoikos-900">{entry.displayName}</p><p className="text-xs text-hoikos-500">{entry.email}</p></TableCell>
+              <TableCell className="pl-5"><p className="font-medium text-drap-900">{entry.displayName}</p><p className="text-xs text-drap-500">{entry.email}</p></TableCell>
               {report.scope === "platform" ? <TableCell className="text-sm">{entry.organizationName}</TableCell> : null}
               <TableCell><Badge variant="outline">{accessProfileLabels[entry.role] ?? kindLabels[entry.subjectKind] ?? entry.role}</Badge></TableCell>
               <TableCell className="text-right tabular-nums">{formatDuration(entry.today)}</TableCell>
@@ -200,7 +200,7 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
         <CardHeader className="border-b"><CardTitle className="text-base">Dia a dia</CardTitle></CardHeader>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Dia</TableHead><TableHead className="text-right">Acessos com registro</TableHead><TableHead className="pr-5 text-right">Tempo somado</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-5">Dia</TableHead><TableHead className="text-right">Acessos com registro</TableHead><TableHead className="pr-5 text-right">Tempo somado</TableHead></TableRow></TableHeader>
             <TableBody>{byDay.map((entry) => <TableRow key={entry.day}>
               <TableCell className="pl-5 font-medium">{dayLabel(entry.day)}{entry.day === report.today ? <Badge variant="outline" className="ml-2">Hoje</Badge> : null}</TableCell>
               <TableCell className="text-right tabular-nums">{entry.people}</TableCell>
@@ -214,7 +214,7 @@ export function UsageWorkspace({ query = "" }: { query?: string }) {
         <CardHeader className="border-b"><CardTitle className="text-base">Suas sessões por dia</CardTitle></CardHeader>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Dia</TableHead><TableHead>Primeiro sinal</TableHead><TableHead>Último sinal</TableHead><TableHead className="pr-5 text-right">Tempo</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-5">Dia</TableHead><TableHead>Primeiro sinal</TableHead><TableHead>Último sinal</TableHead><TableHead className="pr-5 text-right">Tempo</TableHead></TableRow></TableHeader>
             <TableBody>{report.days.map((day) => <TableRow key={`${day.subjectId}-${day.day}`}>
               <TableCell className="pl-5 font-medium">{dayLabel(day.day)}</TableCell>
               <TableCell className="tabular-nums">{clock(day.firstSeenAt)}</TableCell>

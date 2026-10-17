@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Conectar esta empresa à Drap sem sair da H.OIKOS.
+// Conectar esta empresa à Drap sem sair do DRAP Backoffice.
 //
 // Dois caminhos, e a diferença é quem consente:
 //
@@ -105,19 +105,19 @@ export function DrapConectar({ onConectado }: { onConectado: () => void }) {
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium">CNPJ ou CPF da empresa</span>
           <Input name="documento" inputMode="numeric" placeholder="00000000000000" required />
-          <span className="mt-1.5 block text-xs text-hoikos-500">É o documento que impede empresa duplicada na Drap.</span>
+          <span className="mt-1.5 block text-xs text-drap-500">É o documento que impede empresa duplicada na Drap.</span>
         </label>
       ) : (
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium">Código de vínculo</span>
           <Input name="codigo" autoCapitalize="characters" placeholder="K7M2P9QR" required />
-          <span className="mt-1.5 block text-xs text-hoikos-500">
+          <span className="mt-1.5 block text-xs text-drap-500">
             O administrador da empresa gera em Configurações → Integrações, na Drap. Vale uma vez, por 15 minutos.
           </span>
         </label>
       )}
 
-      {erro ? <p role="alert" className="text-sm text-hoikos-700">{erro}</p> : null}
+      {erro ? <p role="alert" className="text-sm text-drap-700">{erro}</p> : null}
 
       <Button type="submit" disabled={enviando} className="w-full">
         {enviando ? <LoaderCircle className="animate-spin" /> : null}
@@ -128,7 +128,7 @@ export function DrapConectar({ onConectado }: { onConectado: () => void }) {
         <button
           type="button"
           onClick={() => { setModo("vincular"); setErro(""); }}
-          className="block w-full text-center text-xs text-hoikos-500 underline underline-offset-2 hover:text-hoikos-700"
+          className="block w-full text-center text-xs text-drap-500 underline underline-offset-2 hover:text-drap-700"
         >
           Já tenho uma conta para vincular
         </button>

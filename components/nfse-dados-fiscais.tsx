@@ -150,7 +150,7 @@ export function NfseDadosFiscais({ onSalvo }: Props) {
     } finally { setSalvando(false); }
   }
 
-  if (carregando) return <div className="grid min-h-32 place-items-center"><LoaderCircle className="size-5 animate-spin text-hoikos-600" /></div>;
+  if (carregando) return <div className="grid min-h-32 place-items-center"><LoaderCircle className="size-5 animate-spin text-drap-600" /></div>;
 
   return <form onSubmit={salvar} className="space-y-4">
     <Accordion type="single" collapsible defaultValue="identificacao" className="w-full">
@@ -215,9 +215,9 @@ export function NfseDadosFiscais({ onSalvo }: Props) {
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">Descrição padrão do serviço</span>
             <Textarea name="discriminacao_padrao" rows={3} defaultValue={atual("discriminacao_padrao")} />
-            <span className="mt-1.5 block text-xs text-hoikos-500">Entra na nota quando você não escrever outra.</span>
+            <span className="mt-1.5 block text-xs text-drap-500">Entra na nota quando você não escrever outra.</span>
           </label>
-          <p className="text-xs text-hoikos-500">
+          <p className="text-xs text-drap-500">
             Estes quatro campos variam por município e por atividade. Se não souber, pergunte ao
             contador — errar aqui faz a prefeitura recusar a nota.
           </p>
@@ -230,7 +230,7 @@ export function NfseDadosFiscais({ onSalvo }: Props) {
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">Certificado A1 (.pfx ou .p12)</span>
             <Input name="certificado" type="file" accept=".pfx,.p12,application/x-pkcs12" required={!jaCadastrado} />
-            <span className="mt-1.5 block text-xs text-hoikos-500">
+            <span className="mt-1.5 block text-xs text-drap-500">
               {jaCadastrado
                 ? "Só envie de novo se o certificado foi renovado."
                 : "É a assinatura da sua empresa. Ele não fica guardado aqui: segue direto para o serviço fiscal."}
@@ -238,22 +238,22 @@ export function NfseDadosFiscais({ onSalvo }: Props) {
           </label>
           <Campo name="certificado_senha" label="Senha do certificado" type="password" required={!jaCadastrado} />
 
-          <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-3">
+          <div className="rounded-md border border-drap-200 bg-drap-50 p-3">
             <label className="flex items-start gap-3 text-sm">
               <Checkbox checked={producao} onCheckedChange={(v) => { setProducao(v === true); if (v !== true) setAceite(false); }} />
               <span>
                 <span className="font-medium">Emitir notas com valor fiscal real</span>
-                <span className="mt-1 block text-xs text-hoikos-500">
+                <span className="mt-1 block text-xs text-drap-500">
                   Desligado, as notas são de teste e não valem nada perante a prefeitura — é assim
                   que se confere o cadastro antes de valer.
                 </span>
               </span>
             </label>
 
-            {producao ? <div className="mt-3 space-y-3 border-t border-hoikos-200 pt-3">
+            {producao ? <div className="mt-3 space-y-3 border-t border-drap-200 pt-3">
               <label className="flex items-start gap-3 text-sm">
                 <Checkbox checked={aceite} onCheckedChange={(v) => setAceite(v === true)} />
-                <span className="text-xs text-hoikos-700">
+                <span className="text-xs text-drap-700">
                   Declaro que li os termos e que as notas emitidas a partir daqui têm valor fiscal,
                   entram na apuração do ISS do município e só se desfazem por cancelamento, com prazo.
                 </span>
@@ -267,7 +267,7 @@ export function NfseDadosFiscais({ onSalvo }: Props) {
       </AccordionItem>
     </Accordion>
 
-    {erro ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">{erro}</p> : null}
+    {erro ? <p role="alert" className="rounded-md border border-drap-200 bg-drap-50 px-3 py-2 text-sm text-drap-800">{erro}</p> : null}
 
     <Button type="submit" disabled={salvando || (producao && !aceite)} className="w-full">
       {salvando ? <LoaderCircle className="animate-spin" /> : <ShieldCheck />}
@@ -282,6 +282,6 @@ function Campo({ name, label, ajuda, ...resto }: {
   return <label className="block text-sm">
     <span className="mb-1.5 block font-medium">{label}</span>
     <Input name={name} {...resto} />
-    {ajuda ? <span className="mt-1.5 block text-xs text-hoikos-500">{ajuda}</span> : null}
+    {ajuda ? <span className="mt-1.5 block text-xs text-drap-500">{ajuda}</span> : null}
   </label>;
 }

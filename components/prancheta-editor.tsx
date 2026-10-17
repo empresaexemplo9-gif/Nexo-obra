@@ -238,7 +238,7 @@ const DesenhoElemento = memo(function DesenhoElemento({ elemento, selecionado, c
       x: soma.x + ponto.x / elemento.pontos.length, y: soma.y + ponto.y / elemento.pontos.length,
     }), { x: 0, y: 0 });
     return <g>
-      <polygon points={pontos} fill="#B5B19E" fillOpacity={selecionado ? 0.34 : 0.18} stroke={realceCor} strokeWidth={selecionado ? 50 : 20} />
+      <polygon points={pontos} fill="#99A1A6" fillOpacity={selecionado ? 0.34 : 0.18} stroke={realceCor} strokeWidth={selecionado ? 50 : 20} />
       {elemento.nome && <>
         <text x={centro.x} y={centro.y} fontSize={220} textAnchor="middle" fill={cor}>{elemento.nome}</text>
         <text x={centro.x} y={centro.y + 260} fontSize={170} textAnchor="middle" fill={realceCor}>{metrosQuadrados(areaM2(elemento.pontos))}</text>
@@ -267,8 +267,8 @@ const DesenhoElemento = memo(function DesenhoElemento({ elemento, selecionado, c
     return <g transform={giro}>
       <rect x={elemento.posicao.x - elemento.larguraMm / 2} y={elemento.posicao.y - elemento.alturaMm / 2}
         width={elemento.larguraMm} height={elemento.alturaMm} rx={40}
-        fill="#F4F2E9" fillOpacity={0.9} stroke={selecionado ? realceCor : cor} strokeWidth={selecionado ? 60 : 25} />
-      <text x={elemento.posicao.x} y={elemento.posicao.y + 60} fontSize={150} textAnchor="middle" fill="#38301B">{elemento.rotulo}</text>
+        fill="#FFFFFF" fillOpacity={0.9} stroke={selecionado ? realceCor : cor} strokeWidth={selecionado ? 60 : 25} />
+      <text x={elemento.posicao.x} y={elemento.posicao.y + 60} fontSize={150} textAnchor="middle" fill="#24323B">{elemento.rotulo}</text>
     </g>;
   }
   if (elemento.tipo === "imagem") {
@@ -454,7 +454,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   // Fundo escuro como o espaço do modelo do AutoCAD: as cores do DWG foram escolhidas
   // para ele. É preferência de quem olha, então fica no navegador.
   const [fundoEscuro, definirFundoEscuro] = useState(() => {
-    try { return typeof window !== "undefined" && window.localStorage.getItem("hoikos-cad-fundo") === "escuro"; } catch { return false; }
+    try { return typeof window !== "undefined" && window.localStorage.getItem("drap-cad-fundo") === "escuro"; } catch { return false; }
   });
   const [filtroCamada, definirFiltroCamada] = useState("");
   // Arquivo grande importado pela biblioteca: trocar a unidade relê pelo identificador.
@@ -1372,7 +1372,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   }
 
   const faltas = conferencia.achados.filter((achado) => achado.severidade === "falta").length;
-  const realceCor = fundoEscuro ? "#e0b23a" : "#846100";
+  const realceCor = fundoEscuro ? "#99a1a6" : "#27557B";
   const camadasPorId = useMemo(() => new Map(documento.camadas.map((camada) => [camada.id, camada])), [documento.camadas]);
   const selecionadosSet = useMemo(() => new Set(selecoes), [selecoes]);
   const contagemPorCamada = useMemo(() => {
@@ -1420,7 +1420,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   function alternarFundo() {
     definirFundoEscuro((atual) => {
-      try { window.localStorage.setItem("hoikos-cad-fundo", atual ? "claro" : "escuro"); } catch { /* preferência só desta visita */ }
+      try { window.localStorage.setItem("drap-cad-fundo", atual ? "claro" : "escuro"); } catch { /* preferência só desta visita */ }
       return !atual;
     });
   }
@@ -1535,7 +1535,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       <Button variant="ghost" size="sm" onClick={onVoltar}><ArrowLeft />Pranchas</Button>
       <Input value={nome} onChange={(evento) => { definirNome(evento.target.value); definirSujo(true); }}
         disabled={!canEdit} aria-label="Nome da prancha" className="h-10 w-full max-w-72" />
-      <span className="text-xs text-hoikos-500">Revisão {revisao}{sujo ? " · alterações não gravadas" : ""}</span>
+      <span className="text-xs text-drap-500">Revisão {revisao}{sujo ? " · alterações não gravadas" : ""}</span>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={desfazer} disabled={!canEdit || !historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
         <Button variant="outline" size="sm" onClick={refazer} disabled={!canEdit || !refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
@@ -1567,12 +1567,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       </div>
     </header>
 
-    {conflito && <p role="alert" className="rounded-md border border-hoikos-gold bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">
+    {conflito && <p role="alert" className="rounded-md border border-drap-accent bg-drap-50 px-4 py-3 text-sm text-drap-800">
       Esta prancha foi alterada em outro lugar depois que você abriu. Exporte o seu desenho antes de recarregar, para não perder o que fez aqui.
     </p>}
 
     {importando && !importado && <section role="status" aria-label="Leitura do arquivo"
-      className="flex items-center gap-2 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3 text-sm text-hoikos-800">
+      className="flex items-center gap-2 rounded-md border border-drap-300 bg-drap-50 px-4 py-3 text-sm text-drap-800">
       <LoaderCircle className="size-4 shrink-0 animate-spin" />
       <span>Lendo <strong>{lendo}</strong>… Um DWG grande pode levar até um minuto.</span>
     </section>}
@@ -1585,8 +1585,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     </section>}
 
     {importadoAplicado && !importando && <section aria-label="Arquivo importado"
-      className="space-y-2 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3">
-      <p className="text-sm text-hoikos-800">
+      className="space-y-2 rounded-md border border-drap-300 bg-drap-50 px-4 py-3">
+      <p className="text-sm text-drap-800">
         <strong>{importadoAplicado.nomeArquivo}</strong> entrou na prancha: {importadoAplicado.elementos.length.toLocaleString("pt-BR")} elemento(s) em {importadoAplicado.camadas.length} camada(s).
       </p>
       {importadoAplicado.report?.format !== "nexo" && <div className="flex flex-wrap items-end gap-3">
@@ -1599,21 +1599,21 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </div>
         <Button variant="outline" size="sm" onClick={() => definirImportadoAplicado(null)}>Fechar aviso</Button>
       </div>}
-      <p className="text-xs leading-5 text-hoikos-600">
+      <p className="text-xs leading-5 text-drap-600">
         {importadoAplicado.unidadeDeclarada
           ? `O arquivo declara ${UNIDADES_ROTULO[importadoAplicado.unidade]?.toLowerCase() ?? importadoAplicado.unidade}. Trocar a unidade relê o arquivo e substitui o que entrou.`
           : "O arquivo não declara a unidade. Confira com uma cota: se estiver cem vezes maior ou menor, troque a unidade acima."}
       </p>
-      {importadoAplicado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-hoikos-700">
+      {importadoAplicado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-drap-700">
         {importadoAplicado.avisos.map((aviso) => <li key={aviso}>· {aviso}</li>)}
       </ul>}
     </section>}
 
     {importado && <section aria-label="Revisão da importação"
-      className="space-y-3 rounded-md border border-hoikos-300 bg-hoikos-50 px-4 py-3">
+      className="space-y-3 rounded-md border border-drap-300 bg-drap-50 px-4 py-3">
       <div>
-        <p className="eyebrow text-hoikos-600">Importação pronta para revisão</p>
-        <p className="mt-1 text-sm text-hoikos-800">
+        <p className="eyebrow text-drap-600">Importação pronta para revisão</p>
+        <p className="mt-1 text-sm text-drap-800">
           <strong>{importado.nomeArquivo}</strong> — {importado.elementos.length} elemento(s) em {importado.camadas.length} camada(s).
         </p>
       </div>
@@ -1635,12 +1635,12 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </Button>
         <Button variant="outline" size="sm" onClick={() => { definirImportado(null); dxfEscolhido.current = null; arquivoDaBiblioteca.current = null; }}>Descartar</Button>
       </div>
-      <p className="text-xs leading-5 text-hoikos-600">
+      <p className="text-xs leading-5 text-drap-600">
         {importado.report?.format === "nexo" ? "Documento Nexo: coordenadas em milímetros, sem conversão de unidade." : importado.unidadeDeclarada
           ? `O arquivo declara ${UNIDADES_ROTULO[importado.unidade]?.toLowerCase() ?? importado.unidade}. Trocar aqui recalcula tudo.`
           : "O arquivo não declara a unidade. Confira a escolha antes de colocar na prancha: em metro quando era centímetro, o desenho entra cem vezes maior."}
       </p>
-      {importado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-hoikos-700">
+      {importado.avisos.length > 0 && <ul className="space-y-1 text-xs leading-5 text-drap-700">
         {importado.avisos.map((aviso) => <li key={aviso}>· {aviso}</li>)}
       </ul>}
       {importado.report && <p className="text-xs font-medium">Relatório {importado.report.format.toUpperCase()}: {importado.report.imported} elemento(s) convertido(s), {importado.report.discarded} descartado(s){importado.truncado ? "; arquivo truncado pelo limite de importação" : ""}.</p>}
@@ -1649,7 +1649,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
     <div className="prancheta-area grid grid-cols-1 gap-4 xl:grid-cols-[13rem_minmax(0,1fr)_20rem]">
       <aside className="prancheta-ferramentas space-y-3">
         {([["Desenho", botoesDesenho], ["Modificar", botoesModificar]] as const).map(([titulo, botoes]) => <div key={titulo} className="space-y-1">
-          <p className="eyebrow text-hoikos-600">{titulo}</p>
+          <p className="eyebrow text-drap-600">{titulo}</p>
           <div className="grid grid-cols-6 gap-1 sm:grid-cols-9 xl:grid-cols-4">
             {botoes.map((item) => {
               const ativo = item.comando ? nomeComando === item.comando : !nomeComando && ferramenta === item.ferramenta;
@@ -1662,13 +1662,13 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   aria-pressed={ativo} aria-label={`${item.rotulo} (${item.atalho})`}
                   aria-describedby={ajudaVisivel === item.id ? `ajuda-${item.id}` : undefined}
                   disabled={!canEdit && !["selecionar", "dist", "area"].includes(item.id)}
-                  className="grid h-10 w-full place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 disabled:opacity-40 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+                  className="grid h-10 w-full place-items-center rounded-md border border-drap-200 bg-white text-drap-700 disabled:opacity-40 aria-pressed:border-drap-800 aria-pressed:bg-drap-800 aria-pressed:text-white">
                   <item.icone className="size-4" />
                 </button>
                 {ajudaVisivel === item.id && <div id={`ajuda-${item.id}`} role="tooltip"
-                  className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-hoikos-200 bg-white p-3 text-left shadow-lg">
-                  <p className="text-sm font-semibold text-hoikos-900">{item.rotulo} · {item.comando ? `comando ${item.atalho}` : item.atalho === "Esc" ? "tecla Esc" : `comando ${item.atalho}`}</p>
-                  <p className="mt-1 text-xs leading-5 text-hoikos-700">{ajudaDoBotao(item)}</p>
+                  className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-64 rounded-md border border-drap-200 bg-white p-3 text-left shadow-lg">
+                  <p className="text-sm font-semibold text-drap-900">{item.rotulo} · {item.comando ? `comando ${item.atalho}` : item.atalho === "Esc" ? "tecla Esc" : `comando ${item.atalho}`}</p>
+                  <p className="mt-1 text-xs leading-5 text-drap-700">{ajudaDoBotao(item)}</p>
                 </div>}
               </div>;
             })}
@@ -1680,14 +1680,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           <option value="">Automática pela ferramenta</option>
           {documento.camadas.map(c => <option key={c.id} value={c.id} disabled={c.bloqueada || !c.visivel}>{c.nome}</option>)}
         </NativeSelect>
-        {!nomeComando && ferramenta !== "selecionar" && <p className="text-xs text-hoikos-500">{instrucoes[ferramenta]}</p>}
+        {!nomeComando && ferramenta !== "selecionar" && <p className="text-xs text-drap-500">{instrucoes[ferramenta]}</p>}
         {ferramenta === "simbolo" && <div className="space-y-2">
           {Object.entries(FAMILIAS_SIMBOLO).map(([disciplina, familias]) => <div key={disciplina}>
-            <p className="eyebrow text-hoikos-600">{disciplinaLabels[disciplina as keyof typeof disciplinaLabels]}</p>
+            <p className="eyebrow text-drap-600">{disciplinaLabels[disciplina as keyof typeof disciplinaLabels]}</p>
             <div className="mt-1 grid grid-cols-4 gap-1 xl:grid-cols-3">
               {familias.map((item) => <button key={item} type="button" onClick={() => definirFamilia(item)}
                 aria-pressed={familia === item} aria-label={simboloLabels[item]} title={simboloLabels[item]}
-                className="grid h-10 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700 aria-pressed:border-hoikos-gold aria-pressed:text-hoikos-gold">
+                className="grid h-10 place-items-center rounded-md border border-drap-200 bg-white text-drap-700 aria-pressed:border-drap-accent aria-pressed:text-drap-band">
                 <Glifo familia={item} />
               </button>)}
             </div>
@@ -1695,33 +1695,33 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </div>}
 
         {ferramenta === "imagem" && <div className="space-y-2">
-          <p className="eyebrow text-hoikos-600">Biblioteca</p>
+          <p className="eyebrow text-drap-600">Biblioteca</p>
           {biblioteca.length ? <div className="grid max-h-64 grid-cols-3 gap-1 overflow-y-auto xl:grid-cols-2">
             {biblioteca.map((item) => <button key={item.id} type="button" onClick={() => definirItemImagem(item)}
               aria-pressed={itemImagem?.id === item.id} title={item.nome}
-              className="overflow-hidden rounded-md border border-hoikos-200 aria-pressed:border-hoikos-gold">
+              className="overflow-hidden rounded-md border border-drap-200 aria-pressed:border-drap-accent">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={item.url} alt={item.nome} className="aspect-square w-full object-cover" />
             </button>)}
-          </div> : <p className="text-xs text-hoikos-500">Nenhuma imagem na biblioteca. Envie mobiliário, texturas ou referências na aba Biblioteca.</p>}
+          </div> : <p className="text-xs text-drap-500">Nenhuma imagem na biblioteca. Envie mobiliário, texturas ou referências na aba Biblioteca.</p>}
         </div>}
 
-        <div className="space-y-2 border-t border-hoikos-200 pt-3">
-          <p className="eyebrow text-hoikos-600">Fundo de traçado</p>
+        <div className="space-y-2 border-t border-drap-200 pt-3">
+          <p className="eyebrow text-drap-600">Fundo de traçado</p>
           {documento.fundo ? <>
-            <p className="truncate text-xs text-hoikos-700" title={documento.fundo.nome}>{documento.fundo.nome}</p>
+            <p className="truncate text-xs text-drap-700" title={documento.fundo.nome}>{documento.fundo.nome}</p>
             <Label htmlFor="fundo-largura" className="text-xs">Largura real do fundo (mm)</Label>
             <Input id="fundo-largura" type="number" inputMode="numeric" min={100} value={documento.fundo.larguraMm} disabled={!canEdit}
               onChange={(evento) => { void redimensionarFundo(Number(evento.target.value)); }} />
             <Label htmlFor="fundo-opacidade" className="text-xs">Opacidade: {documento.fundo.opacidade}%</Label>
             <input id="fundo-opacidade" type="range" min={5} max={100} value={documento.fundo.opacidade} disabled={!canEdit}
-              className="w-full accent-hoikos-700"
+              className="w-full accent-drap-700"
               onChange={(evento) => {
                 const opacidade = Number(evento.target.value);
                 definirDocumento((anterior) => anterior.fundo ? { ...anterior, fundo: { ...anterior.fundo, opacidade } } : anterior);
                 definirSujo(true);
               }} />
-            <p className="text-xs leading-5 text-hoikos-500">Meça algo conhecido com a ferramenta de cota e ajuste a largura até fechar. É assim que o traçado sai na escala certa.</p>
+            <p className="text-xs leading-5 text-drap-500">Meça algo conhecido com a ferramenta de cota e ajuste a largura até fechar. É assim que o traçado sai na escala certa.</p>
             {canEdit && <Button variant="outline" size="sm" className="w-full" onClick={() => {
               aplicar({ ...documento, fundo: null });
             }}><Trash2 />Tirar o fundo</Button>}
@@ -1732,8 +1732,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <option value="">Escolha uma imagem da biblioteca…</option>
                 {fundosPossiveis.map((item) => <option key={item.id} value={item.id}>{item.nome}</option>)}
               </NativeSelect>
-              <p className="text-xs leading-5 text-hoikos-500">A planta existente entra por baixo do desenho para ser traçada. PDF e DWG ficam como anexo: converta em imagem para usar como fundo.</p>
-            </> : <p className="text-xs leading-5 text-hoikos-500">Envie a planta existente como imagem na aba Biblioteca para traçar por cima dela.</p>}
+              <p className="text-xs leading-5 text-drap-500">A planta existente entra por baixo do desenho para ser traçada. PDF e DWG ficam como anexo: converta em imagem para usar como fundo.</p>
+            </> : <p className="text-xs leading-5 text-drap-500">Envie a planta existente como imagem na aba Biblioteca para traçar por cima dela.</p>}
           </>}
         </div>
 
@@ -1741,18 +1741,18 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           Fechar cômodo ({pendentes.length} cantos)
         </Button>}
 
-        <div className="space-y-2 border-t border-hoikos-200 pt-3">
-          <p className="eyebrow text-hoikos-600">Encaixe a objetos (F3)</p>
+        <div className="space-y-2 border-t border-drap-200 pt-3">
+          <p className="eyebrow text-drap-600">Encaixe a objetos (F3)</p>
           <div className="grid grid-cols-2 gap-1">
             {TIPOS_ENCAIXE.filter((tipo) => tipo !== "malha").map((tipo) => <button key={tipo} type="button"
               onClick={() => alternarEncaixe(tipo)} aria-pressed={ativosEncaixe.includes(tipo)}
-              className="rounded-md border border-hoikos-200 bg-white px-2 py-1.5 text-xs text-hoikos-700 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+              className="rounded-md border border-drap-200 bg-white px-2 py-1.5 text-xs text-drap-700 aria-pressed:border-drap-800 aria-pressed:bg-drap-800 aria-pressed:text-white">
               {encaixeLabels[tipo]}
             </button>)}
           </div>
         </div>
 
-        <div className="space-y-2 border-t border-hoikos-200 pt-3">
+        <div className="space-y-2 border-t border-drap-200 pt-3">
           <Label htmlFor="prancheta-malha" className="text-xs">Malha de encaixe</Label>
           <NativeSelect id="prancheta-malha" value={String(documento.malhaMm)} disabled={!canEdit}
             onChange={(evento) => aplicar({ ...documento, malhaMm: Number(evento.target.value) })}>
@@ -1772,7 +1772,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         </div>
       </aside>
 
-      <div className="prancheta-mesa self-start overflow-hidden rounded-md border border-hoikos-200 bg-white">
+      <div className="prancheta-mesa self-start overflow-hidden rounded-md border border-drap-200 bg-white">
         <div className="relative">
         {modoCanvas && <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />}
         <svg ref={svgRef} role="application" aria-label={`Prancha ${nome}`}
@@ -1785,7 +1785,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           onContextMenu={(evento) => evento.preventDefault()}>
           <defs>
             <pattern id="prancheta-malha-padrao" width={passoMalha} height={passoMalha} patternUnits="userSpaceOnUse">
-              <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke={fundoEscuro ? "#4a4f57" : "#B5B19E"} strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
+              <path d={`M ${passoMalha} 0 L 0 0 0 ${passoMalha}`} fill="none" stroke={fundoEscuro ? "#4a4f57" : "#99A1A6"} strokeOpacity={0.5} strokeWidth={passoMalha / 60} />
             </pattern>
           </defs>
           {!modoCanvas && grade && <rect x={vista.x - vista.largura} y={vista.y - vista.largura} width={vista.largura * 3} height={vista.largura * 3} fill="url(#prancheta-malha-padrao)" />}
@@ -1841,17 +1841,17 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           if (!tela) return null;
           const base = pedido?.base;
           const medida = base ? `${medidaMm(Math.hypot(cursor.x - base.x, cursor.y - base.y))} mm · ${medidaMm(((Math.atan2(-(cursor.y - base.y), cursor.x - base.x) * 180 / Math.PI) % 360 + 360) % 360)}°` : null;
-          return <div aria-hidden="true" className="pointer-events-none absolute z-10 max-w-72 rounded border border-hoikos-300 bg-white/95 px-2 py-1 font-mono text-[11px] leading-4 text-hoikos-800 shadow"
+          return <div aria-hidden="true" className="pointer-events-none absolute z-10 max-w-72 rounded border border-drap-300 bg-white/95 px-2 py-1 font-mono text-[11px] leading-4 text-drap-800 shadow"
             style={{ left: Math.min(tela.x + 18, Math.max(0, tamanhoTela.largura - 200)), top: Math.min(tela.y + 22, Math.max(0, tamanhoTela.altura - 60)) }}>
             {pedido && <p className="truncate">{textoDoPedido(pedido)}</p>}
             {rastreio && <p className="text-green-700">Polar: {medidaMm(rastreio.distancia)} &lt; {rastreio.angulo}°</p>}
-            {medida && !rastreio && <p className="text-hoikos-600">{medida}</p>}
-            {comando && <p className="mt-0.5 rounded bg-hoikos-100 px-1">{comando}</p>}
+            {medida && !rastreio && <p className="text-drap-600">{medida}</p>}
+            {comando && <p className="mt-0.5 rounded bg-drap-100 px-1">{comando}</p>}
           </div>;
         })()}
         </div>
         {/* Barra de status: coordenadas e as chaves do AutoCAD. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hoikos-200 px-3 py-1.5 text-xs text-hoikos-500">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-drap-200 px-3 py-1.5 text-xs text-drap-500">
           <span className="font-mono tabular-nums">
             {cursor ? `${Number(cursor.x.toFixed(3))}, ${Number((-cursor.y).toFixed(3))}` : "Mova o cursor sobre a prancha"}
           </span>
@@ -1859,18 +1859,18 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
           <div className="ml-auto flex flex-wrap gap-1">
             {([["F7", "Grade", grade], ["F9", "Malha", snapGrade], ["F8", "Orto", orto], ["F10", "Polar", polar], ["F3", "Encaixe", osnap], ["F12", "Dinâmica", dinamica]] as const).map(([tecla, rotulo, valor]) =>
               <button key={tecla} type="button" aria-pressed={valor} title={`${rotulo} (${tecla})`} onClick={() => alternarChave(tecla)}
-                className="rounded border border-hoikos-200 px-1.5 py-0.5 font-medium text-hoikos-600 aria-pressed:border-hoikos-800 aria-pressed:bg-hoikos-800 aria-pressed:text-white">
+                className="rounded border border-drap-200 px-1.5 py-0.5 font-medium text-drap-600 aria-pressed:border-drap-800 aria-pressed:bg-drap-800 aria-pressed:text-white">
                 {rotulo}
               </button>)}
           </div>
         </div>
         {/* Linha de comando: histórico em cima, prompt e opções embaixo, como no AutoCAD. */}
-        <section aria-label="Linha de comando CAD" className="border-t border-hoikos-200 bg-hoikos-50 font-mono text-xs">
-          <ol ref={listaRegistro} aria-live="polite" className={`${registroAberto ? "max-h-64" : "max-h-[3.9rem]"} overflow-y-auto px-3 pt-1.5 leading-5 text-hoikos-600`}>
+        <section aria-label="Linha de comando CAD" className="border-t border-drap-200 bg-drap-50 font-mono text-xs">
+          <ol ref={listaRegistro} aria-live="polite" className={`${registroAberto ? "max-h-64" : "max-h-[3.9rem]"} overflow-y-auto px-3 pt-1.5 leading-5 text-drap-600`}>
             {registro.slice(registroAberto ? -200 : -3).map((linha, indice) => <li key={`${registro.length}-${indice}`} className="break-words">{linha}</li>)}
           </ol>
           <form className="flex flex-wrap items-center gap-1.5 px-3 py-1.5" onSubmit={enviarComando}>
-            <Label htmlFor="cad-command" className="max-w-full shrink-0 font-mono text-xs text-hoikos-900">{pedido ? textoDoPedido(pedido) : "Comando:"}</Label>
+            <Label htmlFor="cad-command" className="max-w-full shrink-0 font-mono text-xs text-drap-900">{pedido ? textoDoPedido(pedido) : "Comando:"}</Label>
             {pedido?.opcoes?.map((opcao) => <Button key={opcao.chave} type="button" size="sm" variant="outline" className="h-7 px-2 font-mono text-xs"
               onClick={() => { registrar(`${textoDoPedido(pedido)} ${opcao.rotulo}`); cmd().responder({ tipo: "opcao", chave: opcao.chave }); sincronizar(); }}>{opcao.rotulo}</Button>)}
             <Input id="cad-command" ref={campoComando} value={comando} disabled={!canEdit} autoComplete="off" spellCheck={false}
@@ -1896,24 +1896,24 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               aria-label="Histórico de comandos (F2)" title="Histórico de comandos (F2)">F2</Button>
           </form>
           {sugestoes.length > 0 && <ul aria-label="Comandos sugeridos" className="flex flex-wrap gap-1 px-3 pb-1.5">
-            {sugestoes.map((sugestao) => <li key={sugestao.nome}><button type="button" className="rounded border border-hoikos-200 bg-white px-1.5 py-0.5"
+            {sugestoes.map((sugestao) => <li key={sugestao.nome}><button type="button" className="rounded border border-drap-200 bg-white px-1.5 py-0.5"
               onClick={() => { definirComando(""); iniciarComando(sugestao.nome); }}>
-              {sugestao.nome}<span className="text-hoikos-500"> {sugestao.atalhos[0] ?? ""}</span>
+              {sugestao.nome}<span className="text-drap-500"> {sugestao.atalhos[0] ?? ""}</span>
             </button></li>)}
           </ul>}
           <details className="px-3 pb-2 font-sans">
             <summary className="cursor-pointer">Comandos e atalhos</summary>
             <div className="grid gap-1 pt-2 sm:grid-cols-2 lg:grid-cols-3">
-              {COMANDOS.map((item) => <button key={item.nome} type="button" className="rounded border border-hoikos-200 bg-white p-2 text-left" onClick={() => iniciarComando(item.nome)} disabled={!canEdit}>
-                <code>{item.nome}</code> <span className="text-hoikos-500">{item.atalhos.slice(0, 2).join(" · ")}</span>
-                <span className="block pt-0.5 text-hoikos-700">{item.descricao}</span>
+              {COMANDOS.map((item) => <button key={item.nome} type="button" className="rounded border border-drap-200 bg-white p-2 text-left" onClick={() => iniciarComando(item.nome)} disabled={!canEdit}>
+                <code>{item.nome}</code> <span className="text-drap-500">{item.atalhos.slice(0, 2).join(" · ")}</span>
+                <span className="block pt-0.5 text-drap-700">{item.descricao}</span>
               </button>)}
             </div>
-            <p className="pt-2 text-hoikos-600">
+            <p className="pt-2 text-drap-600">
               Coordenadas em mm: x,y absoluto · @dx,dy relativo · distância&lt;ângulo · só a distância segue o cursor. END, MID, CEN, INT, PER e QUA forçam um encaixe no próximo ponto.
               Uma linha inteira também vale, como em script: {CAD_COMMANDS.slice(0, 4).map((item) => item.syntax).join(" · ")}.
             </p>
-            <p className="pt-1 text-hoikos-600">Teclas: Enter ou Espaço confirmam e repetem o último comando · Esc cancela · F3 encaixe · F7 grade · F8 orto · F9 malha · F10 polar · F12 entrada dinâmica · botão do meio desloca, duplo clique nele enquadra.</p>
+            <p className="pt-1 text-drap-600">Teclas: Enter ou Espaço confirmam e repetem o último comando · Esc cancela · F3 encaixe · F7 grade · F8 orto · F9 malha · F10 polar · F12 entrada dinâmica · botão do meio desloca, duplo clique nele enquadra.</p>
           </details>
         </section>
       </div>
@@ -1936,7 +1936,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <div className="grid grid-cols-2 gap-2">
                   {([ ["dx", "Deslocamento X (mm)"], ["dy", "Deslocamento Y (mm)"], ["x", "Pivô X (mm)"], ["y", "Pivô Y (mm)"], ["angulo", "Ângulo (graus)"], ["fator", "Fator de escala"] ] as const).map(([key, label]) => <label key={key} className="text-xs">{label}<Input aria-label={label} value={transformacao[key]} onChange={e => definirTransformacao(v => ({ ...v, [key]: e.target.value }))} /></label>)}
                 </div>
-                <p className="text-xs text-hoikos-500">Y positivo sobe. Giro positivo é anti-horário. Pivô em coordenadas do desenho.</p>
+                <p className="text-xs text-drap-500">Y positivo sobe. Giro positivo é anti-horário. Pivô em coordenadas do desenho.</p>
                 <div className="flex flex-wrap gap-1">
                   <Button size="sm" variant="outline" onClick={() => operarSelecao(`M @${transformacao.dx},${transformacao.dy}`)}>Mover seleção</Button>
                   <Button size="sm" variant="outline" onClick={() => operarSelecao(`CO @${transformacao.dx},${transformacao.dy}`)}>Copiar seleção</Button>
@@ -1954,8 +1954,8 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
               <Button size="sm" variant="outline" onClick={() => definirSelecoes([])}>Limpar seleção</Button>
             </section>}
 
-            {!selecionado ? <p className="text-sm text-hoikos-500">{selecoes.length > 1 ? "Seleção múltipla ativa. Para editar propriedades individuais, selecione um único elemento." : "Nada selecionado."} Use a ferramenta de seleção e clique sobre um elemento do desenho.</p> : <>
-              <p className="eyebrow text-hoikos-600">{rotuloDoTipo[selecionado.tipo]} · {camadasPorId.get(selecionado.camada)?.nome ?? "sem camada"}</p>
+            {!selecionado ? <p className="text-sm text-drap-500">{selecoes.length > 1 ? "Seleção múltipla ativa. Para editar propriedades individuais, selecione um único elemento." : "Nada selecionado."} Use a ferramenta de seleção e clique sobre um elemento do desenho.</p> : <>
+              <p className="eyebrow text-drap-600">{rotuloDoTipo[selecionado.tipo]} · {camadasPorId.get(selecionado.camada)?.nome ?? "sem camada"}</p>
               {"rotulo" in selecionado && <div className="space-y-1">
                 <Label htmlFor="prop-rotulo" className="text-xs">Rótulo</Label>
                 <Input id="prop-rotulo" value={selecionado.rotulo ?? ""} disabled={!canEdit}
@@ -1965,7 +1965,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 <Label htmlFor="prop-nome" className="text-xs">Nome do cômodo</Label>
                 <Input id="prop-nome" value={selecionado.nome} disabled={!canEdit}
                   onChange={(evento) => trocar(selecionado.id, { nome: evento.target.value.slice(0, 60) } as Partial<Elemento>)} />
-                <p className="text-xs text-hoikos-500">Área {metrosQuadrados(areaM2(selecionado.pontos))} — calculada do desenho, não digitada.</p>
+                <p className="text-xs text-drap-500">Área {metrosQuadrados(areaM2(selecionado.pontos))} — calculada do desenho, não digitada.</p>
               </div>}
               {selecionado.tipo === "texto" && <div className="space-y-1">
                 <Label htmlFor="prop-texto" className="text-xs">Texto</Label>
@@ -2026,14 +2026,14 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                       if (Number.isFinite(valor) && valor >= 1 && valor <= 360) trocar(selecionado.id, { varreduraGraus: valor } as Partial<Elemento>);
                     }} />
                 </div>
-                <p className="text-xs text-hoikos-500">
+                <p className="text-xs text-drap-500">
                   {selecionado.varreduraGraus >= 360 ? "Círculo completo." : `Arco de ${selecionado.varreduraGraus}° a partir de ${selecionado.inicioGraus}°.`}
                 </p>
               </>}
-              {["traco", "arco", "parede", "texto", "hachura"].includes(selecionado.tipo) && <div className="grid grid-cols-[auto_1fr] items-center gap-2 border-t border-hoikos-200 pt-3">
+              {["traco", "arco", "parede", "texto", "hachura"].includes(selecionado.tipo) && <div className="grid grid-cols-[auto_1fr] items-center gap-2 border-t border-drap-200 pt-3">
                 <Label htmlFor="prop-cor" className="text-xs">Cor</Label>
                 <div className="flex items-center gap-2">
-                  <input id="prop-cor" type="color" value={selecionado.cor ?? camadasPorId.get(selecionado.camada)?.cor ?? "#1c190f"} disabled={!canEdit}
+                  <input id="prop-cor" type="color" value={selecionado.cor ?? camadasPorId.get(selecionado.camada)?.cor ?? "#0D151F"} disabled={!canEdit}
                     onChange={(evento) => trocar(selecionado.id, { cor: evento.target.value } as Partial<Elemento>)} className="h-8 w-12 cursor-pointer rounded border" />
                   {selecionado.cor && canEdit && <Button size="sm" variant="ghost" onClick={() => trocar(selecionado.id, { cor: undefined } as Partial<Elemento>)}>Da camada</Button>}
                 </div>
@@ -2046,11 +2046,11 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   </NativeSelect>
                 </>}
               </div>}
-              {selecionado.tipo === "hachura" && <p className="text-xs text-hoikos-500">{selecionado.solida ? "Preenchimento sólido" : `Hachura${selecionado.padrao ? ` ${selecionado.padrao}` : ""}`} · {selecionado.aneis.length} contorno(s) · {metrosQuadrados(Math.abs(selecionado.aneis.reduce((soma, anel, i) => soma + (i === 0 ? 1 : -1) * areaM2(anel), 0)))}</p>}
+              {selecionado.tipo === "hachura" && <p className="text-xs text-drap-500">{selecionado.solida ? "Preenchimento sólido" : `Hachura${selecionado.padrao ? ` ${selecionado.padrao}` : ""}`} · {selecionado.aneis.length} contorno(s) · {metrosQuadrados(Math.abs(selecionado.aneis.reduce((soma, anel, i) => soma + (i === 0 ? 1 : -1) * areaM2(anel), 0)))}</p>}
               {selecionado.tipo === "cota" && <label className="text-xs">Afastamento da cota (mm)<Input type="number" step="any" value={selecionado.deslocamentoMm} disabled={!canEdit} onChange={e => { const v = Number(e.target.value); if (Number.isFinite(v)) trocar(selecionado.id, { deslocamentoMm: v }); }} /></label>}
-              {selecionado.tipo === "parede" && <p className="text-xs text-hoikos-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
-              {canEdit && <div className="space-y-2 border-t border-hoikos-200 pt-3">
-                <p className="eyebrow text-hoikos-600">Repetir em matriz</p>
+              {selecionado.tipo === "parede" && <p className="text-xs text-drap-500">Comprimento {metros(comprimentoM(selecionado.a, selecionado.b))}.</p>}
+              {canEdit && <div className="space-y-2 border-t border-drap-200 pt-3">
+                <p className="eyebrow text-drap-600">Repetir em matriz</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label htmlFor="matriz-colunas" className="text-xs">Colunas</Label>
@@ -2077,7 +2077,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                   <Grid3x3 />Repetir {Math.max(0, matriz.colunas * matriz.linhas - 1)} vez(es)
                 </Button>
               </div>}
-              {canEdit && paralelaDe(selecionado, 1) && <div className="space-y-1 border-t border-hoikos-200 pt-3">
+              {canEdit && paralelaDe(selecionado, 1) && <div className="space-y-1 border-t border-drap-200 pt-3">
                 <Label htmlFor="distancia-paralela">Distância da paralela (mm)</Label>
                 <Input id="distancia-paralela" value={distanciaParalela} onChange={e => definirDistanciaParalela(e.target.value)} placeholder="100 ou 0,15m" />
                 <div className="flex gap-2">
@@ -2097,10 +2097,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             }}><Input aria-label="Nome da nova camada" maxLength={255} value={novaCamada} onChange={e => definirNovaCamada(e.target.value)} placeholder="Nova camada" /><Button type="submit" disabled={!novaCamada.trim() || documento.camadas.length >= LIMITE_CAMADAS}>Criar</Button></form>}
 
             <div className="relative">
-              <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-hoikos-500" />
+              <Search aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-drap-500" />
               <Input aria-label="Filtrar camadas pelo nome" value={filtroCamada} onChange={(e) => definirFiltroCamada(e.target.value)} placeholder={`Filtrar ${documento.camadas.length} camadas`} className="pl-8" />
             </div>
-            <p className="text-xs text-hoikos-500">{documento.camadas.filter((c) => c.visivel).length} de {documento.camadas.length} visíveis{filtroCamada ? ` · ${camadasFiltradas.length} no filtro` : ""}</p>
+            <p className="text-xs text-drap-500">{documento.camadas.filter((c) => c.visivel).length} de {documento.camadas.length} visíveis{filtroCamada ? ` · ${camadasFiltradas.length} no filtro` : ""}</p>
             {canEdit && <div className="flex flex-wrap gap-1">
               <Button size="sm" variant="outline" onClick={() => visibilidadeEmLote(() => true)}><Eye />Mostrar todas</Button>
               <Button size="sm" variant="outline" onClick={() => visibilidadeEmLote(() => false)}><EyeOff />Esconder todas</Button>
@@ -2110,34 +2110,34 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
             <ul className="max-h-[60svh] space-y-1 overflow-y-auto pr-1">
               {camadasFiltradas.map((camada) => {
                 const quantos = contagemPorCamada.get(camada.id) ?? 0;
-                return <li key={camada.id} className="rounded-md border border-hoikos-200 bg-white px-2 py-1.5">
+                return <li key={camada.id} className="rounded-md border border-drap-200 bg-white px-2 py-1.5">
                   <div className="flex items-center gap-1.5">
                     <label className="relative grid size-6 shrink-0 place-items-center" title="Cor da camada">
-                      <span className="size-4 rounded-sm border border-hoikos-300" style={{ background: camada.cor ?? (fundoEscuro ? "#f2f0e8" : "#1C190F") }} />
-                      <input type="color" aria-label={`Cor da camada ${camada.nome}`} value={camada.cor ?? "#1c190f"} disabled={!canEdit}
+                      <span className="size-4 rounded-sm border border-drap-300" style={{ background: camada.cor ?? (fundoEscuro ? "#ffffff" : "#0D151F") }} />
+                      <input type="color" aria-label={`Cor da camada ${camada.nome}`} value={camada.cor ?? "#0D151F"} disabled={!canEdit}
                         onChange={(e) => trocarCamada(camada.id, { cor: e.target.value })} className="absolute inset-0 cursor-pointer opacity-0" />
                     </label>
                     <div className="min-w-0 flex-1">
                       {canEdit ? <input aria-label={`Nome da camada ${camada.nome}`} defaultValue={camada.nome} maxLength={255}
                         onBlur={(e) => { const nome = e.target.value.trim(); if (nome && nome !== camada.nome) trocarCamada(camada.id, { nome }); else e.target.value = camada.nome; }}
                         onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
-                        className="w-full truncate rounded bg-transparent px-1 text-sm font-medium text-hoikos-800 focus:bg-hoikos-50 focus:outline-1" />
-                        : <p className="truncate text-sm font-medium text-hoikos-800" title={camada.nome}>{camada.nome}</p>}
-                      <p className="px-1 text-xs text-hoikos-500">{quantos.toLocaleString("pt-BR")} elemento{quantos === 1 ? "" : "s"}</p>
+                        className="w-full truncate rounded bg-transparent px-1 text-sm font-medium text-drap-800 focus:bg-drap-50 focus:outline-1" />
+                        : <p className="truncate text-sm font-medium text-drap-800" title={camada.nome}>{camada.nome}</p>}
+                      <p className="px-1 text-xs text-drap-500">{quantos.toLocaleString("pt-BR")} elemento{quantos === 1 ? "" : "s"}</p>
                     </div>
                     <button type="button" onClick={() => trocarCamada(camada.id, { visivel: !camada.visivel })}
                       aria-label={`${camada.visivel ? "Esconder" : "Mostrar"} ${camada.nome}`} aria-pressed={camada.visivel}
-                      className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
+                      className="grid size-8 place-items-center rounded-md text-drap-600 hover:bg-drap-50">
                       {camada.visivel ? <Eye className="size-4" /> : <EyeOff className="size-4" />}
                     </button>
                     <button type="button" onClick={() => trocarCamada(camada.id, { bloqueada: !camada.bloqueada })}
                       aria-label={`${camada.bloqueada ? "Destravar" : "Travar"} ${camada.nome}`} aria-pressed={camada.bloqueada}
-                      className="grid size-8 place-items-center rounded-md text-hoikos-600 hover:bg-hoikos-50">
+                      className="grid size-8 place-items-center rounded-md text-drap-600 hover:bg-drap-50">
                       {camada.bloqueada ? <Lock className="size-4" /> : <LockOpen className="size-4" />}
                     </button>
                   </div>
                   <details className="mt-1 text-xs">
-                    <summary className="cursor-pointer px-1 text-hoikos-600">Mais opções</summary>
+                    <summary className="cursor-pointer px-1 text-drap-600">Mais opções</summary>
                     <div className="mt-2 grid gap-2">
                       <Label htmlFor={`linha-${camada.id}`} className="text-xs">Tipo de linha</Label>
                       <NativeSelect id={`linha-${camada.id}`} value={camada.tipoLinha ?? "continua"} disabled={!canEdit}
@@ -2161,75 +2161,75 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
                 </li>;
               })}
             </ul>
-            <p className="text-xs leading-5 text-hoikos-500">
+            <p className="text-xs leading-5 text-drap-500">
               Esconder é visualização, não exclusão: a camada escondida sai da tela e do arquivo exportado, e continua contando no quantitativo.
               Camadas vindas do DWG trazem cor, tipo de linha e o estado que tinham no arquivo.
             </p>
           </TabsContent>
 
           <TabsContent value="quantitativo" className="space-y-3 pt-3">
-            <div className="rounded-md border border-hoikos-200 bg-white px-3 py-2">
-              <p className="eyebrow text-hoikos-600">Área construída desenhada</p>
-              <p className="metric-number text-2xl text-hoikos-950">{metrosQuadrados(resumo.areaTotalM2)}</p>
-              <p className="text-xs text-hoikos-500">{metros(resumo.paredesM)} de parede</p>
+            <div className="rounded-md border border-drap-200 bg-white px-3 py-2">
+              <p className="eyebrow text-drap-600">Área construída desenhada</p>
+              <p className="metric-number text-2xl text-drap-950">{metrosQuadrados(resumo.areaTotalM2)}</p>
+              <p className="text-xs text-drap-500">{metros(resumo.paredesM)} de parede</p>
             </div>
             {resumo.comodos.length > 0 && <div>
-              <p className="eyebrow text-hoikos-600">Cômodos</p>
+              <p className="eyebrow text-drap-600">Cômodos</p>
               <ul className="mt-1 space-y-1 text-sm">
-                {resumo.comodos.map((comodo, indice) => <li key={`${comodo.nome}-${indice}`} className="flex justify-between gap-2 border-b border-hoikos-100 py-1">
-                  <span className="truncate text-hoikos-700">{comodo.nome}</span>
-                  <span className="shrink-0 text-hoikos-500">{metrosQuadrados(comodo.areaM2)}</span>
+                {resumo.comodos.map((comodo, indice) => <li key={`${comodo.nome}-${indice}`} className="flex justify-between gap-2 border-b border-drap-100 py-1">
+                  <span className="truncate text-drap-700">{comodo.nome}</span>
+                  <span className="shrink-0 text-drap-500">{metrosQuadrados(comodo.areaM2)}</span>
                 </li>)}
               </ul>
             </div>}
             {resumo.porDisciplina.map((linha) => <div key={linha.disciplina}>
-              <p className="eyebrow text-hoikos-600">{disciplinaLabels[linha.disciplina]}</p>
+              <p className="eyebrow text-drap-600">{disciplinaLabels[linha.disciplina]}</p>
               <ul className="mt-1 space-y-1 text-sm">
-                {Object.entries(linha.simbolos).map(([nomeFamilia, contagem]) => <li key={nomeFamilia} className="flex justify-between gap-2 border-b border-hoikos-100 py-1">
-                  <span className="truncate text-hoikos-700">{simboloLabels[nomeFamilia] ?? nomeFamilia}</span>
-                  <span className="shrink-0 text-hoikos-500">{contagem}</span>
+                {Object.entries(linha.simbolos).map(([nomeFamilia, contagem]) => <li key={nomeFamilia} className="flex justify-between gap-2 border-b border-drap-100 py-1">
+                  <span className="truncate text-drap-700">{simboloLabels[nomeFamilia] ?? nomeFamilia}</span>
+                  <span className="shrink-0 text-drap-500">{contagem}</span>
                 </li>)}
               </ul>
             </div>)}
             {!resumo.comodos.length && !resumo.porDisciplina.length && !resumo.paredesM &&
-              <p className="text-sm text-hoikos-500">O quantitativo sai do desenho. Comece pelas paredes e pelos cômodos.</p>}
+              <p className="text-sm text-drap-500">O quantitativo sai do desenho. Comece pelas paredes e pelos cômodos.</p>}
           </TabsContent>
 
           <TabsContent value="conferencia" className="space-y-3 pt-3">
-            <p className="text-xs leading-5 text-hoikos-500">
+            <p className="text-xs leading-5 text-drap-500">
               Conferência contra a NBR 5410 (pontos de tomada e iluminação) e a NBR 9050 (vão de porta),
               derivada da área e do perímetro que você desenhou. A ferramenta aponta; quem decide é você —
               norma tem exceção, e nada aqui altera o desenho.
             </p>
 
             {conferencia.achados.length === 0 && conferencia.comodos.length > 0
-              ? <p className="rounded-md border border-hoikos-200 bg-white px-3 py-2 text-sm text-hoikos-700">
+              ? <p className="rounded-md border border-drap-200 bg-white px-3 py-2 text-sm text-drap-700">
                 Nenhuma não conformidade nos itens conferidos.
               </p>
               : <ul className="space-y-2">
                 {conferencia.achados.map((achado, indice) => <li key={`${achado.parametroId}-${indice}`}
                   className={`rounded-md border px-3 py-2 ${achado.severidade === "falta"
-                    ? "border-hoikos-gold bg-hoikos-50" : "border-hoikos-200 bg-white"}`}>
-                  <p className="text-xs font-medium text-hoikos-800">
+                    ? "border-drap-accent bg-drap-50" : "border-drap-200 bg-white"}`}>
+                  <p className="text-xs font-medium text-drap-800">
                     {achado.comodo ? `${achado.comodo} · ` : ""}{achado.severidade === "falta" ? "Falta" : achado.severidade === "atencao" ? "Atenção" : "Nota"}
-                    <span className="ml-1 font-normal text-hoikos-500">item {achado.item}</span>
+                    <span className="ml-1 font-normal text-drap-500">item {achado.item}</span>
                   </p>
-                  <p className="mt-1 text-xs leading-5 text-hoikos-600">{achado.mensagem}</p>
+                  <p className="mt-1 text-xs leading-5 text-drap-600">{achado.mensagem}</p>
                 </li>)}
               </ul>}
 
             {conferencia.comodos.length > 0 && <div>
-              <p className="eyebrow text-hoikos-600">Exigido por cômodo</p>
+              <p className="eyebrow text-drap-600">Exigido por cômodo</p>
               <ul className="mt-1 space-y-1 text-xs">
                 {conferencia.comodos.map((linha, indice) => <li key={`${linha.nome}-${indice}`}
-                  className="flex items-baseline justify-between gap-2 border-b border-hoikos-100 py-1">
-                  <span className="truncate text-hoikos-700">{linha.nome}</span>
-                  <span className="shrink-0 text-hoikos-500">
+                  className="flex items-baseline justify-between gap-2 border-b border-drap-100 py-1">
+                  <span className="truncate text-drap-700">{linha.nome}</span>
+                  <span className="shrink-0 text-drap-500">
                     {linha.tomadasDesenhadas}/{linha.tomadasMinimas} tomadas · {linha.pontosDeLuzDesenhados}/{linha.pontosDeLuzMinimos} luz
                   </span>
                 </li>)}
               </ul>
-              <p className="mt-2 text-xs text-hoikos-500">
+              <p className="mt-2 text-xs text-drap-500">
                 Carga prevista somada: {conferencia.cargaTotalVa.toLocaleString("pt-BR")} VA.
                 É o mínimo da norma, não o dimensionamento do quadro.
               </p>

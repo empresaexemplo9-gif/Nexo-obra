@@ -1,4 +1,4 @@
-# Backend da H.OIKOS
+# Backend do DRAP Backoffice
 
 O backend roda no mesmo domínio da aplicação: `https://nexo-obra-jet.vercel.app`. A interface deve chamar somente caminhos relativos, como `/api/projects`.
 

@@ -89,7 +89,7 @@ Ao ampliar a superfície DRAP:
 
 Em produção, fallback demonstrativo é proibido. Um fallback só é aceitável quando deriva exclusivamente de outra fonte real do mesmo domínio — por exemplo, calcular o resumo a partir de lançamentos reais da DRAP quando `/api/v1/resumo` não existe naquele ambiente — e precisa declarar truncamento ou indisponibilidade quando não houver base suficiente.
 
-Operações externas de alto impacto, como emissão de NFS-e, cancelamento fiscal e cobrança, só podem ser apresentadas ao usuário como concluídas depois da confirmação real do backend remoto. A H.OIKOS nunca deve fabricar ID, status, link ou pagamento.
+Operações externas de alto impacto, como emissão de NFS-e, cancelamento fiscal e cobrança, só podem ser apresentadas ao usuário como concluídas depois da confirmação real do backend remoto. O DRAP Backoffice nunca deve fabricar ID, status, link ou pagamento.
 
 ## Definição de pronto para uma funcionalidade
 

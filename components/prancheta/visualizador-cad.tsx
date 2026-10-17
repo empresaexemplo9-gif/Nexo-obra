@@ -245,26 +245,26 @@ export default function VisualizadorCad({ blob, nome, onControle }: PropsVisuali
   }
 
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="sm" variant="outline" onClick={enquadrarTudo} disabled={fase !== "pronto"}><Maximize />Enquadrar</Button>
       <Button size="sm" variant={painelCamadas ? "default" : "outline"} onClick={() => setPainelCamadas((v) => !v)} disabled={fase !== "pronto"} aria-pressed={painelCamadas}><Layers />Camadas{camadas.length ? ` (${camadas.filter((c) => c.visivel).length}/${camadas.length})` : ""}</Button>
       <Button size="sm" variant={medindo ? "default" : "outline"} onClick={alternarMedicao} disabled={fase !== "pronto"} aria-pressed={medindo}><Ruler />Medir</Button>
       <Button size="sm" variant="outline" onClick={alternarFundo} disabled={fase !== "pronto"} aria-label={escuro ? "Fundo claro" : "Fundo escuro"}>{escuro ? <Sun /> : <Moon />}<span className="hidden sm:inline">{escuro ? "Fundo claro" : "Fundo escuro"}</span></Button>
-      {medida ? <p className="text-sm font-medium text-hoikos-800" role="status">{/^\d|^-/.test(medida) ? `Distância: ${medida}${unidade ? ` ${unidade}` : " (unidade do desenho)"}` : medida}</p> : null}
+      {medida ? <p className="text-sm font-medium text-drap-800" role="status">{/^\d|^-/.test(medida) ? `Distância: ${medida}${unidade ? ` ${unidade}` : " (unidade do desenho)"}` : medida}</p> : null}
     </div>
     <div className="relative flex min-h-0 flex-1">
       <div ref={host} className={`min-h-[360px] flex-1 ${medindo ? "cursor-crosshair" : ""}`} aria-label={`Desenho ${nome}`} role="img" />
-      {painelCamadas ? <aside className="absolute inset-y-0 right-0 z-10 flex w-[min(20rem,100%)] flex-col border-l border-hoikos-200 bg-white shadow-lg" aria-label="Camadas do desenho">
+      {painelCamadas ? <aside className="absolute inset-y-0 right-0 z-10 flex w-[min(20rem,100%)] flex-col border-l border-drap-200 bg-white shadow-lg" aria-label="Camadas do desenho">
         <div className="flex items-center justify-between gap-2 border-b p-2"><p className="text-sm font-semibold">Camadas</p><div className="flex gap-1"><Button size="sm" variant="ghost" onClick={() => todasCamadas(true)}>Todas</Button><Button size="sm" variant="ghost" onClick={() => todasCamadas(false)}>Nenhuma</Button></div></div>
-        <ul className="min-h-0 flex-1 overflow-y-auto p-1">{camadas.map((camada) => <li key={camada.nome}><button type="button" onClick={() => alternarCamada(camada.nome)} aria-pressed={camada.visivel} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-hoikos-50 focus-visible:outline-2">
-          {camada.visivel ? <Eye className="size-4 shrink-0" /> : <EyeOff className="size-4 shrink-0 text-hoikos-400" />}
+        <ul className="min-h-0 flex-1 overflow-y-auto p-1">{camadas.map((camada) => <li key={camada.nome}><button type="button" onClick={() => alternarCamada(camada.nome)} aria-pressed={camada.visivel} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm hover:bg-drap-50 focus-visible:outline-2">
+          {camada.visivel ? <Eye className="size-4 shrink-0" /> : <EyeOff className="size-4 shrink-0 text-drap-400" />}
           <span className="size-3 shrink-0 rounded-sm border" style={{ background: `#${camada.cor.toString(16).padStart(6, "0")}` }} />
-          <span className={`truncate ${camada.visivel ? "" : "text-hoikos-400 line-through"}`}>{camada.rotulo}</span>
+          <span className={`truncate ${camada.visivel ? "" : "text-drap-400 line-through"}`}>{camada.rotulo}</span>
         </button></li>)}</ul>
-        <p className="border-t p-2 text-xs text-hoikos-500">A exportação leva só as camadas ligadas.</p>
+        <p className="border-t p-2 text-xs text-drap-500">A exportação leva só as camadas ligadas.</p>
       </aside> : null}
-      {fase === "carregando" ? <div className="absolute inset-0 grid place-items-center bg-hoikos-950/60 text-sm text-white" role="status"><p className="flex items-center gap-2"><LoaderCircle className="animate-spin" />{progresso}</p></div> : null}
-      {fase === "erro" ? <div className="absolute inset-0 grid place-items-center bg-white p-6 text-center" role="alert"><div><p className="font-medium text-hoikos-900">Não foi possível exibir o desenho</p><p className="mt-2 max-w-md text-sm text-hoikos-500">{erro}</p></div></div> : null}
+      {fase === "carregando" ? <div className="absolute inset-0 grid place-items-center bg-drap-950/60 text-sm text-white" role="status"><p className="flex items-center gap-2"><LoaderCircle className="animate-spin" />{progresso}</p></div> : null}
+      {fase === "erro" ? <div className="absolute inset-0 grid place-items-center bg-white p-6 text-center" role="alert"><div><p className="font-medium text-drap-900">Não foi possível exibir o desenho</p><p className="mt-2 max-w-md text-sm text-drap-500">{erro}</p></div></div> : null}
     </div>
   </div>;
 }

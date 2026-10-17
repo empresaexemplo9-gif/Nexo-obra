@@ -338,7 +338,7 @@ test("exportação não leva o que está em camada escondida", () => {
   documento.camadas = documento.camadas.map((camada) => camada.id === "luminotecnico" ? { ...camada, visivel: false } : camada);
   const svg = exportarSvg(documento);
   assert.ok(svg.includes("<line"));
-  assert.ok(!svg.includes("#846100\" stroke-width=\"35\""), "o símbolo da camada escondida foi parar no arquivo");
+  assert.ok(!svg.includes("#27557B\" stroke-width=\"35\""), "o símbolo da camada escondida foi parar no arquivo");
 });
 
 test("exportação escapa texto do usuário em vez de montar XML quebrado", () => {

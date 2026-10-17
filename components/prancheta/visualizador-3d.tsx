@@ -165,14 +165,14 @@ export default function Visualizador3d({ blob, nome, extensao }: PropsVisualizad
   }, [blob, extensao]);
 
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="sm" variant="outline" onClick={() => enquadrarRef.current()} disabled={estado !== "pronto"}><Maximize />Enquadrar</Button>
-      <p className="text-sm text-hoikos-600">{detalhe || "Arraste para girar, role para aproximar, botão direito para mover."}</p>
+      <p className="text-sm text-drap-600">{detalhe || "Arraste para girar, role para aproximar, botão direito para mover."}</p>
     </div>
     <div className="relative min-h-[360px] flex-1">
       <div ref={host} className="absolute inset-0" role="img" aria-label={`Modelo 3D ${nome}`} />
-      {estado === "carregando" ? <div className="absolute inset-0 grid place-items-center bg-hoikos-950/50 text-sm text-white" role="status"><p className="flex items-center gap-2"><LoaderCircle className="animate-spin" />{progresso}</p></div> : null}
-      {estado === "erro" ? <div className="absolute inset-0 grid place-items-center bg-white p-6 text-center" role="alert"><div><p className="font-medium">Não foi possível exibir o modelo</p><p className="mt-2 max-w-md text-sm text-hoikos-500">{erro}</p></div></div> : null}
+      {estado === "carregando" ? <div className="absolute inset-0 grid place-items-center bg-drap-950/50 text-sm text-white" role="status"><p className="flex items-center gap-2"><LoaderCircle className="animate-spin" />{progresso}</p></div> : null}
+      {estado === "erro" ? <div className="absolute inset-0 grid place-items-center bg-white p-6 text-center" role="alert"><div><p className="font-medium">Não foi possível exibir o modelo</p><p className="mt-2 max-w-md text-sm text-drap-500">{erro}</p></div></div> : null}
     </div>
   </div>;
 }

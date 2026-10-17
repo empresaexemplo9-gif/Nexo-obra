@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "../vendor/shadcn-tailwind-4.13.0.css";
 
-/* H.OIKOS — tipografia da marca.
+/* DRAP Backoffice — tipografia da marca.
    O manual define Barium (sans geométrica) e Ador Hairline (serifada de traço fino).
 
    A Ador Hairline chegou licenciada e é a que serve os títulos agora. Vieram cinco
@@ -14,7 +14,7 @@
    A Cormorant permanece como reserva, para o caso de um arquivo não carregar e para os
    pesos que não vieram. A Barium continua sem licença; a Jost segue no lugar dela. */
 @font-face {
-  font-family: "Hoikos Sans";
+  font-family: "Drap Sans";
   font-style: normal;
   font-weight: 300 700;
   font-display: swap;
@@ -22,7 +22,7 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Hoikos Sans";
+  font-family: "Drap Sans";
   font-style: normal;
   font-weight: 300 700;
   font-display: swap;
@@ -30,35 +30,35 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 @font-face {
-  font-family: "Hoikos Display";
+  font-family: "Drap Display";
   font-style: normal;
   font-weight: 300;
   font-display: swap;
   src: url("/fonts/ador-hairline-light.ttf") format("truetype");
 }
 @font-face {
-  font-family: "Hoikos Display";
+  font-family: "Drap Display";
   font-style: italic;
   font-weight: 300;
   font-display: swap;
   src: url("/fonts/ador-hairline-light-italic.ttf") format("truetype");
 }
 @font-face {
-  font-family: "Hoikos Display";
+  font-family: "Drap Display";
   font-style: italic;
   font-weight: 400;
   font-display: swap;
   src: url("/fonts/ador-hairline-italic.ttf") format("truetype");
 }
 @font-face {
-  font-family: "Hoikos Display";
+  font-family: "Drap Display";
   font-style: italic;
   font-weight: 800;
   font-display: swap;
   src: url("/fonts/ador-hairline-extrabold-italic.ttf") format("truetype");
 }
 @font-face {
-  font-family: "Hoikos Display";
+  font-family: "Drap Display";
   font-style: normal;
   font-weight: 900;
   font-display: swap;
@@ -66,7 +66,7 @@
 }
 /* Reserva: cobre os pesos que não vieram e o caso de um arquivo falhar. */
 @font-face {
-  font-family: "Hoikos Display Reserva";
+  font-family: "Drap Display Reserva";
   font-style: normal;
   font-weight: 300 600;
   font-display: swap;
@@ -74,7 +74,7 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: "Hoikos Display Reserva";
+  font-family: "Drap Display Reserva";
   font-style: normal;
   font-weight: 300 600;
   font-display: swap;
@@ -89,70 +89,62 @@
 }
 @utility scrollbar-gutter-stable { scrollbar-gutter: stable; }
 
-/* H.OIKOS: master colors from page 15 of the supplied identity guide.
-   Interface tints mix only these colors; no decorative gradients. */
+/* DRAP Backoffice — paleta da plataforma de referência (docs/DRAP-IDENTITY.md).
+   Só as cores vieram de lá: tipografia, espaçamentos e componentes continuam os mesmos.
+   Todo tom da interface é uma destas cores ou uma mistura entre elas; sem gradiente decorativo. */
 :root {
-  /* Paleta do guia oficial (GUIA DA IDENTIDADE VISUAL - H.OIKOS).
-     As quatro primeiras já eram usadas; as três seguintes estavam no guia e não tinham
-     token, o que deixava a interface presa a um marrom só. */
-  --hoikos-black: #000000;
-  --hoikos-white: #FFFFFF;
-  --hoikos-earth: #38301B;
-  --hoikos-stone: #B5B19E;
-  --hoikos-paper: #F7F7F0;
-  /* Marrom quase preto: profundidade sem recorrer ao preto puro, que o guia reserva
-     para contraste extremo. */
-  --hoikos-soil: #1C190F;
-  /* Off-white quente: separa superfície de fundo sem introduzir cinza, que não é da marca. */
-  --hoikos-linen: #F4F2E9;
-  /* Dourado: a única cor com matiz diferente em todo o guia. Por isso é acento —
-     destaque pontual e estado que precisa de atenção — nunca superfície ou texto corrido.
-     Usá-la em área grande brigaria com a sobriedade do resto da identidade. */
-  --hoikos-gold: #846100;
-  /* Três camadas, não uma.
-     Antes fundo, cartão e popover eram a MESMA cor, então nada se destacava de nada e a
-     tela inteira lia como uma folha chapada. Agora o fundo recua para o off-white quente
-     e a superfície avança para o mais claro: o cartão passa a existir por luz, não por
-     borda. É o que dá profundidade sem sombra pesada, gradiente ou cor de fora da marca. */
-  --background: var(--hoikos-white);
-  --foreground: var(--hoikos-black);
-  --card: var(--hoikos-white);
-  --card-foreground: var(--hoikos-earth);
-  --popover: var(--hoikos-white);
-  --popover-foreground: var(--hoikos-earth);
-  --primary: var(--hoikos-earth);
-  --primary-foreground: var(--hoikos-paper);
-  --secondary: color-mix(in srgb, var(--hoikos-stone) 25%, var(--hoikos-paper));
-  --secondary-foreground: var(--hoikos-earth);
+  --drap-deep: #0D151F;     /* Abismo Nanquim: menu lateral, selos escuros, linhas grossas */
+  --drap-band: #204362;     /* Azul Cianótipo: faixa de destaque e texto pequeno em destaque */
+  --drap-accent: #27557B;   /* Azul Prancheta: ação, ícones e topo de cards. Texto pequeno não: 3,5:1 */
+  --drap-support: #24323B;  /* Aço Escuro: bordas, divisórias, item escuro selecionado */
+  --drap-graphite: #6F7678; /* Cinza Grafite: cards escuros, numeração decorativa */
+  --drap-mist: #99A1A6;     /* Cinza Névoa: cards secundários, selos, rótulos sobre fundo escuro */
+  --drap-fog: #839099;      /* Cinza Neblina: hover, estados vazios */
+  --drap-stone: #B0ADA8;    /* Pedra Clara: fundo da página */
+  --drap-paper: #B5B4B1;    /* Papel Cinza: cards, barra superior, campos */
+  --drap-ink: #090C12;      /* Tinta: texto sobre fundo claro */
+  --drap-white: #FFFFFF;    /* texto sobre Abismo, Cianótipo, Prancheta e Grafite */
+  /* Status: a referência não tem; usados só em chip ou ponto, sempre com texto ao lado. */
+  --drap-success: #2E7D52;
+  --drap-warning: #D9A441;
+  --drap-danger: #A83232;
+  --drap-info: var(--drap-accent);
+  /* Três camadas: fundo em Pedra Clara, cartão e popover em Papel Cinza. */
+  --background: var(--drap-stone);
+  --foreground: var(--drap-ink);
+  --card: var(--drap-paper);
+  --card-foreground: var(--drap-ink);
+  --popover: var(--drap-paper);
+  --popover-foreground: var(--drap-ink);
+  --primary: var(--drap-accent);
+  --primary-foreground: var(--drap-white);
+  --secondary: color-mix(in srgb, var(--drap-mist) 30%, var(--drap-paper));
+  --secondary-foreground: var(--drap-ink);
   --muted: var(--secondary);
-  --muted-foreground: color-mix(in srgb, var(--hoikos-earth) 75%, var(--hoikos-paper));
-  --accent: color-mix(in srgb, var(--hoikos-stone) 35%, var(--hoikos-paper));
-  --accent-foreground: var(--hoikos-earth);
-  --destructive: var(--hoikos-black);
-  /* Borda mais leve: com o fundo agora separado por luz, a linha não precisa fazer o
-     trabalho sozinha. Traço duro em toda caixa é o que dava aspecto de formulário. */
-  --border: color-mix(in srgb, var(--hoikos-stone) 45%, var(--hoikos-paper));
-  --input: var(--hoikos-stone);
-  --ring: var(--hoikos-earth);
-  /* Séries distinguíveis entre si, todas da marca: marrom, dourado, acinzentado. */
-  --chart-1: var(--hoikos-earth);
-  --chart-2: var(--hoikos-gold);
-  --chart-3: var(--hoikos-stone);
-  --chart-4: var(--muted-foreground);
-  --chart-5: var(--secondary);
+  /* Metadado sobre fundo claro precisa de leitura: Aço Escuro quase puro, não cinza médio. */
+  --muted-foreground: color-mix(in srgb, var(--drap-support) 90%, var(--drap-paper));
+  --accent: color-mix(in srgb, var(--drap-fog) 35%, var(--drap-paper));
+  --accent-foreground: var(--drap-ink);
+  --destructive: var(--drap-danger);
+  /* Linhas finas em Aço Escuro com pouca presença; o traço grosso fica com o Abismo. */
+  --border: color-mix(in srgb, var(--drap-support) 30%, var(--drap-paper));
+  --input: color-mix(in srgb, var(--drap-support) 45%, var(--drap-paper));
+  --ring: var(--drap-accent);
+  --chart-1: var(--drap-accent);
+  --chart-2: var(--drap-deep);
+  --chart-3: var(--drap-graphite);
+  --chart-4: var(--drap-mist);
+  --chart-5: var(--drap-fog);
   --radius: 0.25rem;
-  /* O menu é a maior área de cor da tela e era um marrom chapado do topo à base.
-     Descer para o marrom quase preto dá o assentamento que faz o conteúdo à direita
-     parecer iluminado — e o item ativo, agora no marrom da marca, se destaca contra ele
-     em vez de brigar por saturação. */
-  --sidebar: var(--hoikos-soil);
-  --sidebar-foreground: color-mix(in srgb, var(--hoikos-paper) 88%, var(--hoikos-stone));
-  --sidebar-primary: var(--hoikos-earth);
-  --sidebar-primary-foreground: var(--hoikos-paper);
-  --sidebar-accent: color-mix(in srgb, var(--hoikos-earth) 70%, var(--hoikos-soil));
-  --sidebar-accent-foreground: var(--hoikos-paper);
-  --sidebar-border: color-mix(in srgb, var(--hoikos-stone) 22%, var(--hoikos-soil));
-  --sidebar-ring: var(--hoikos-paper);
+  /* Menu em Abismo Nanquim; item ativo claro (branco com texto Abismo) e item escuro em Aço. */
+  --sidebar: var(--drap-deep);
+  --sidebar-foreground: color-mix(in srgb, var(--drap-white) 88%, var(--drap-mist));
+  --sidebar-primary: var(--drap-white);
+  --sidebar-primary-foreground: var(--drap-deep);
+  --sidebar-accent: var(--drap-support);
+  --sidebar-accent-foreground: var(--drap-white);
+  --sidebar-border: color-mix(in srgb, var(--drap-mist) 22%, var(--drap-deep));
+  --sidebar-ring: var(--drap-white);
 }
 
 @theme inline {
@@ -187,28 +179,36 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --color-white: var(--hoikos-white);
-  --color-black: var(--hoikos-black);
-  --color-hoikos-50: var(--hoikos-paper);
-  --color-hoikos-100: var(--secondary);
-  --color-hoikos-200: var(--border);
-  --color-hoikos-300: var(--hoikos-stone);
-  --color-hoikos-400: var(--hoikos-stone);
-  --color-hoikos-500: var(--muted-foreground);
-  --color-hoikos-600: var(--hoikos-earth);
-  --color-hoikos-700: var(--hoikos-earth);
-  --color-hoikos-800: var(--hoikos-earth);
-  --color-hoikos-900: var(--hoikos-earth);
-  --color-hoikos-950: var(--hoikos-black);
-  --color-hoikos-soil: var(--hoikos-soil);
-  --color-hoikos-linen: var(--hoikos-linen);
-  --color-hoikos-gold: var(--hoikos-gold);
+  --color-white: var(--drap-white);
+  --color-black: var(--drap-ink);
+  --color-drap-50: var(--drap-paper);
+  --color-drap-100: var(--secondary);
+  --color-drap-200: var(--border);
+  --color-drap-300: var(--drap-mist);
+  --color-drap-400: var(--drap-mist);
+  --color-drap-500: var(--muted-foreground);
+  --color-drap-600: var(--drap-support);
+  --color-drap-700: var(--drap-support);
+  --color-drap-800: var(--drap-support);
+  --color-drap-900: var(--drap-deep);
+  --color-drap-950: var(--drap-ink);
+  --color-drap-deep: var(--drap-deep);
+  --color-drap-band: var(--drap-band);
+  --color-drap-accent: var(--drap-accent);
+  --color-drap-graphite: var(--drap-graphite);
+  --color-drap-mist: var(--drap-mist);
+  --color-drap-fog: var(--drap-fog);
+  --color-drap-stone: var(--drap-stone);
+  --color-drap-paper: var(--drap-paper);
+  --color-drap-success: var(--drap-success);
+  --color-drap-warning: var(--drap-warning);
+  --color-drap-danger: var(--drap-danger);
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-xl: calc(var(--radius) + 4px);
-  --font-sans: "Hoikos Sans", "Barium", "Segoe UI", Arial, sans-serif;
-  --font-display: "Hoikos Display", "Hoikos Display Reserva", "Ador Hairline", Georgia, "Times New Roman", serif;
+  --font-sans: "Drap Sans", "Barium", "Segoe UI", Arial, sans-serif;
+  --font-display: "Drap Display", "Drap Display Reserva", "Ador Hairline", Georgia, "Times New Roman", serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -223,7 +223,7 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
-::selection { background: var(--hoikos-stone); color: var(--hoikos-earth); }
+::selection { background: var(--drap-accent); color: var(--drap-white); }
 button, a, input, select, textarea { font: inherit; }
 
 /* Escala tipográfica da marca.
@@ -249,49 +249,49 @@ h1, h2, h3, h4 { letter-spacing: -0.01em; }
 label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
 .metric-number { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-/* A área de trabalho recua para o off-white quente: é ela que faz o cartão claro
+/* A área de trabalho fica na Pedra Clara: é ela que faz o cartão em Papel Cinza
    parecer levantado. Com as duas na mesma cor, a tela inteira lia como uma folha só. */
-.nexo-shell, .nexo-canvas { background: var(--hoikos-linen); }
+.nexo-shell, .nexo-canvas { background: var(--drap-stone); }
 /* A largura reservada pelo menu lateral não pode encolher quando um módulo contém
    conteúdo largo (como a grade da planilha). O conteúdo principal, por sua vez,
    precisa aceitar min-width: 0 para que a rolagem aconteça dentro do módulo. */
 .nexo-shell [data-slot="sidebar-gap"] { flex-shrink: 0; }
 .nexo-shell [data-slot="sidebar-inset"] { min-width: 0; }
-.nexo-sidebar [data-sidebar="sidebar"] { background: var(--hoikos-earth); box-shadow: none; }
+.nexo-sidebar [data-sidebar="sidebar"] { background: var(--drap-deep); box-shadow: none; }
 .nexo-sidebar [data-sidebar="group-label"] {
-  color: var(--hoikos-stone);
+  color: var(--drap-mist);
   font-size: 0.6875rem;
   text-transform: uppercase;
   letter-spacing: 0.2em;
 }
 /* O cabeçalho fica na cor da superfície, não na do fundo: ele acompanha o conteúdo. */
-.nexo-header { background: var(--hoikos-paper); border-color: var(--border); box-shadow: none; }
+.nexo-header { background: var(--drap-paper); border-color: color-mix(in srgb, var(--drap-support) 35%, transparent); box-shadow: none; }
 
 /* O cartão existe por luz e por um assentamento mínimo, não por traço grosso. A sombra é
-   do próprio marrom em baixa opacidade — nada de cinza, que não pertence à marca. */
+   do próprio Abismo Nanquim em baixa opacidade. */
 .workspace-card {
   border-color: var(--border);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--drap-deep) 6%, transparent);
   transition: box-shadow 140ms ease, border-color 140ms ease;
 }
 .workspace-card:hover {
-  border-color: color-mix(in srgb, var(--hoikos-stone) 75%, var(--hoikos-paper));
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--hoikos-soil) 9%, transparent);
+  border-color: color-mix(in srgb, var(--drap-support) 50%, var(--drap-paper));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--drap-deep) 9%, transparent);
 }
 
 /* Foco visível e da marca: acessibilidade por teclado não pode depender de cor herdada
    do navegador, que não tem nada a ver com a identidade. */
 :where(a, button, [role="button"], input, select, textarea):focus-visible {
-  outline: 2px solid var(--hoikos-gold);
+  outline: 2px solid var(--drap-accent);
   outline-offset: 2px;
 }
 
 /* O manual proíbe achatar ou esticar a marca; a proporção fica travada aqui. */
-.hoikos-brand { object-fit: contain; }
+.drap-brand { object-fit: contain; }
 /* Dark entry surfaces retain readable metadata and keyboard focus. */
-.bg-primary, .nexo-sidebar, main.bg-hoikos-950 {
-  --muted-foreground: var(--hoikos-stone);
-  --ring: var(--hoikos-paper);
+.bg-primary, .bg-drap-deep, .bg-drap-band, .nexo-sidebar, main.bg-drap-950 {
+  --muted-foreground: var(--drap-mist);
+  --ring: var(--drap-white);
 }
 
 @media (prefers-reduced-motion: reduce) {

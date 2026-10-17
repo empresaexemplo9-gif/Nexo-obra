@@ -27,9 +27,9 @@ export async function GET(request: Request) {
     try { const url = new URL(env.DRAP_ACTIVATION_URL ?? ""); activationUrlValid = url.protocol === "https:" && url.hostname === "empresa.drap.app.br" && !url.username && !url.password; } catch { /* diagnostic only */ }
     const checks = [
       { id: "api", label: "Endereço HTTPS da API Drap", ready: apiUrlValid, next: "A operadora deve configurar o endereço oficial fornecido pela Drap." },
-      { id: "partner", label: "Provisionamento por parceiro", ready: isDrapPartnerConfigured(), next: "Aguardar a configuração de parceria pela Drap e pela operadora H.OIKOS." },
+      { id: "partner", label: "Provisionamento por parceiro", ready: isDrapPartnerConfigured(), next: "Aguardar a configuração de parceria pela Drap e pela operadora do DRAP Backoffice." },
       { id: "encryption", label: "Proteção das credenciais", ready: guardaDeSegredosConfigurada(), next: "A operadora deve configurar a chave de criptografia no servidor." },
-      { id: "callback", label: "Endereço de recebimento de eventos", ready: Boolean(urlDoReceptor()), next: "Configurar o domínio público HTTPS definitivo da H.OIKOS." },
+      { id: "callback", label: "Endereço de recebimento de eventos", ready: Boolean(urlDoReceptor()), next: "Configurar o domínio público HTTPS definitivo do DRAP Backoffice." },
       { id: "tenant", label: "Empresa vinculada com credencial", ready: Boolean(connection?.status === "active" && credential), next: "Criar ou vincular a conta desta empresa e validar a credencial." },
       { id: "webhook", label: "Credencial de webhook desta empresa", ready: webhook, next: "Registrar o webhook em Conexão Drap e confirmar uma entrega válida." },
       { id: "checkout", label: "Configuração da contratação integrada", ready: activationConfigured() && activationUrlValid, next: "Aguardar o contrato de contratação e a configuração final da Drap." },

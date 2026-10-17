@@ -31,8 +31,8 @@ export function PranchetaStandalone({ drawingId, importar = null }: { drawingId:
       try {
         const sessaoResposta = await fetch("/api/session", { cache: "no-store" });
         const sessao = await sessaoResposta.json() as Session;
-        if (!sessaoResposta.ok || !sessao.authenticated) throw new Error("Entre na H.OIKOS para abrir esta prancha.");
-        if (sessao.terms && !sessao.terms.accepted) throw new Error("Aceite os termos na H.OIKOS antes de abrir a prancha.");
+        if (!sessaoResposta.ok || !sessao.authenticated) throw new Error("Entre no DRAP Backoffice para abrir esta prancha.");
+        if (sessao.terms && !sessao.terms.accepted) throw new Error("Aceite os termos no DRAP Backoffice antes de abrir a prancha.");
         if (!sessao.member?.permissions?.studio?.view) throw new Error("Seu acesso não permite ver esta prancha.");
         const resposta = await fetch(`/api/studio/${drawingId}`, { cache: "no-store", headers: { [CABECALHO_ACEITA]: JSON_GZIP } });
         const corpo = await jsonDaResposta<{ prancha?: Prancha; error?: string }>(resposta);
@@ -57,9 +57,9 @@ export function PranchetaStandalone({ drawingId, importar = null }: { drawingId:
   }
 
   if (carregando) return <main className="grid min-h-svh place-items-center" aria-label="Carregando prancha"><LoaderCircle className="size-7 animate-spin" /></main>;
-  if (erro || !prancha) return <main className="grid min-h-svh place-items-center p-6"><div className="max-w-md space-y-4 text-center"><CircleAlert className="mx-auto size-8 text-hoikos-700" /><p role="alert">{erro}</p><Button asChild variant="outline"><Link href="/"><ArrowLeft />Voltar à H.OIKOS</Link></Button></div></main>;
+  if (erro || !prancha) return <main className="grid min-h-svh place-items-center p-6"><div className="max-w-md space-y-4 text-center"><CircleAlert className="mx-auto size-8 text-drap-700" /><p role="alert">{erro}</p><Button asChild variant="outline"><Link href="/"><ArrowLeft />Voltar ao DRAP Backoffice</Link></Button></div></main>;
 
-  return <main className="prancheta-autonoma min-h-svh bg-hoikos-50 p-3 sm:p-4">
+  return <main className="prancheta-autonoma min-h-svh bg-drap-50 p-3 sm:p-4">
     <PranchetaEditor prancha={prancha} canEdit={canEdit} onVoltar={voltar}
       onSalvo={(atualizada) => definirPrancha(atualizada)} fullPage importarDaBiblioteca={importar} />
   </main>;

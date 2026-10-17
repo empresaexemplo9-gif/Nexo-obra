@@ -62,12 +62,12 @@ export function VisualizadorArquivo({ file, onControle }: { file: OrgFileInfo; o
 
   if (tipo === "nenhum") {
     return <div className="grid min-h-72 flex-1 place-items-center p-6 text-center"><div>
-      <FileQuestion className="mx-auto size-8 text-hoikos-500" />
-      <p className="mt-3 font-medium text-hoikos-900">Sem pré-visualização para .{file.extension || "arquivo"}</p>
-      <p className="mt-2 max-w-md text-sm text-hoikos-500">{motivoSemVisualizacao(file.extension)} O arquivo está guardado no formato original e pode ser baixado e enviado pela Comunicação.</p>
+      <FileQuestion className="mx-auto size-8 text-drap-500" />
+      <p className="mt-3 font-medium text-drap-900">Sem pré-visualização para .{file.extension || "arquivo"}</p>
+      <p className="mt-2 max-w-md text-sm text-drap-500">{motivoSemVisualizacao(file.extension)} O arquivo está guardado no formato original e pode ser baixado e enviado pela Comunicação.</p>
     </div></div>;
   }
-  if (erro) return <div className="grid min-h-72 flex-1 place-items-center p-6 text-center" role="alert"><div><p className="font-medium text-hoikos-900">Não foi possível abrir</p><p className="mt-2 max-w-md text-sm text-hoikos-500">{erro}</p></div></div>;
+  if (erro) return <div className="grid min-h-72 flex-1 place-items-center p-6 text-center" role="alert"><div><p className="font-medium text-drap-900">Não foi possível abrir</p><p className="mt-2 max-w-md text-sm text-drap-500">{erro}</p></div></div>;
   if (!blob) return <p className="flex min-h-72 flex-1 items-center justify-center gap-2 p-6 text-sm" role="status"><LoaderCircle className="animate-spin" />{etapa}</p>;
   const Componente = componentes[tipo];
   // O DWG é exibido pelo DXF convertido; o nome continua o do original.

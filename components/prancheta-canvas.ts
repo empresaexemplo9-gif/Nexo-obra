@@ -194,9 +194,9 @@ export function desenharPrancha(canvas: HTMLCanvasElement, opcoes: OpcoesCanvas)
         girado(elemento.posicao, elemento.rotacaoGraus, () => {
           const x = elemento.posicao.x - elemento.larguraMm / 2, y = elemento.posicao.y - elemento.alturaMm / 2;
           ctx.beginPath(); ctx.roundRect(x, y, elemento.larguraMm, elemento.alturaMm, 40);
-          ctx.globalAlpha = 0.9; ctx.fillStyle = "#F4F2E9"; ctx.fill(); ctx.globalAlpha = 1;
+          ctx.globalAlpha = 0.9; ctx.fillStyle = "#FFFFFF"; ctx.fill(); ctx.globalAlpha = 1;
           ctx.strokeStyle = cor; ctx.lineWidth = Math.max(25, px); ctx.stroke();
-          texto(elemento.rotulo, elemento.posicao.x, elemento.posicao.y + 60, 150, "#38301B");
+          texto(elemento.rotulo, elemento.posicao.x, elemento.posicao.y + 60, 150, "#24323B");
         });
         break;
       case "imagem":

@@ -593,7 +593,7 @@ export type ModulosDaEmpresa =
  * Quais módulos esta empresa tem ativos na Drap.
  *
  * Devolve SÓ os identificadores, de propósito. A Drap é o motor do financeiro e para
- * quem usa a H.OIKOS ela é invisível: o plano e o valor são da H.OIKOS. Trazer o
+ * quem usa o DRAP Backoffice ela é invisível: o plano e o valor são do DRAP Backoffice. Trazer o
  * catálogo de preços da Drap para cá criaria uma segunda tabela de preços dentro do
  * produto, pronta para divergir da real e para vazar na tela.
  *

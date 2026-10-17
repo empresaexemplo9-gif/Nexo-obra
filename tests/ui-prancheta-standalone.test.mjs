@@ -103,7 +103,7 @@ test("seleção move um elemento enquanto o botão esquerdo está pressionado", 
   const svg = container.querySelector('svg[role="application"]');
   svg.getScreenCTM = () => ({ inverse: () => ({}) });
   svg.getBoundingClientRect = () => ({ width: 1000, height: 620 });
-  const linha = () => svg.querySelector('line[stroke="#1C190F"]');
+  const linha = () => svg.querySelector('line[stroke="#0D151F"]');
   assert.equal(linha()?.getAttribute("x1"), "1000");
   await act(async () => { arrasto("pointerdown", svg, 2000, 1000); arrasto("pointermove", svg, 2500, 1300); });
   assert.notEqual(linha()?.getAttribute("x1"), "1000");

@@ -471,28 +471,28 @@ function elementoParaSvg(elemento: Elemento, estilo: Estilo): string {
       const centro = elemento.pontos.reduce((soma, p) => ({ x: soma.x + p.x / elemento.pontos.length, y: soma.y + p.y / elemento.pontos.length }), { x: 0, y: 0 });
       const area = areaM2(elemento.pontos).toFixed(2).replace(".", ",");
       const rotulo = elemento.nome
-        ? `<text x="${numero(centro.x)}" y="${numero(centro.y)}" font-size="220" text-anchor="middle" fill="#38301B">${escaparXml(elemento.nome)}</text>`
-        + `<text x="${numero(centro.x)}" y="${numero(centro.y + 260)}" font-size="170" text-anchor="middle" fill="#846100">${area} m²</text>`
+        ? `<text x="${numero(centro.x)}" y="${numero(centro.y)}" font-size="220" text-anchor="middle" fill="#24323B">${escaparXml(elemento.nome)}</text>`
+        + `<text x="${numero(centro.x)}" y="${numero(centro.y + 260)}" font-size="170" text-anchor="middle" fill="#27557B">${area} m²</text>`
         : "";
-      return `<polygon points="${pontos}" fill="#B5B19E" fill-opacity="0.18" stroke="#846100" stroke-width="20"/>${rotulo}`;
+      return `<polygon points="${pontos}" fill="#99A1A6" fill-opacity="0.18" stroke="#27557B" stroke-width="20"/>${rotulo}`;
     }
     case "abertura": {
       const meia = elemento.larguraMm / 2;
       const desenho = elemento.especie === "janela"
-        ? `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#38301B" stroke-width="60"/>`
+        ? `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#24323B" stroke-width="60"/>`
         : elemento.especie === "porta"
-        ? `<path d="M ${numero(elemento.posicao.x - meia)} ${numero(elemento.posicao.y)} l ${elemento.larguraMm} 0 m ${-elemento.larguraMm} 0 a ${elemento.larguraMm} ${elemento.larguraMm} 0 0 1 ${elemento.larguraMm} ${elemento.larguraMm}" fill="none" stroke="#38301B" stroke-width="40"/>`
-        : `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#38301B" stroke-width="40" stroke-dasharray="180 120"/>`;
+        ? `<path d="M ${numero(elemento.posicao.x - meia)} ${numero(elemento.posicao.y)} l ${elemento.larguraMm} 0 m ${-elemento.larguraMm} 0 a ${elemento.larguraMm} ${elemento.larguraMm} 0 0 1 ${elemento.larguraMm} ${elemento.larguraMm}" fill="none" stroke="#24323B" stroke-width="40"/>`
+        : `<line x1="${numero(elemento.posicao.x - meia)}" y1="${numero(elemento.posicao.y)}" x2="${numero(elemento.posicao.x + meia)}" y2="${numero(elemento.posicao.y)}" stroke="#24323B" stroke-width="40" stroke-dasharray="180 120"/>`;
       return `<g${giro}>${desenho}</g>`;
     }
     case "simbolo": {
       const glifo = glifoDoSimbolo(elemento.familia);
       return `<g${giro}><g transform="translate(${numero(elemento.posicao.x)} ${numero(elemento.posicao.y)})">`
-        + `<path d="${glifo.d}" fill="${glifo.preenchido ? "#846100" : "none"}" stroke="#846100" stroke-width="35"/></g></g>`;
+        + `<path d="${glifo.d}" fill="${glifo.preenchido ? "#27557B" : "none"}" stroke="#27557B" stroke-width="35"/></g></g>`;
     }
     case "mobilia":
-      return `<g${giro}><rect x="${numero(elemento.posicao.x - elemento.larguraMm / 2)}" y="${numero(elemento.posicao.y - elemento.alturaMm / 2)}" width="${elemento.larguraMm}" height="${elemento.alturaMm}" fill="#F4F2E9" stroke="#38301B" stroke-width="25" rx="40"/>`
-        + `<text x="${numero(elemento.posicao.x)}" y="${numero(elemento.posicao.y + 60)}" font-size="150" text-anchor="middle" fill="#38301B">${escaparXml(elemento.rotulo)}</text></g>`;
+      return `<g${giro}><rect x="${numero(elemento.posicao.x - elemento.larguraMm / 2)}" y="${numero(elemento.posicao.y - elemento.alturaMm / 2)}" width="${elemento.larguraMm}" height="${elemento.alturaMm}" fill="#FFFFFF" stroke="#24323B" stroke-width="25" rx="40"/>`
+        + `<text x="${numero(elemento.posicao.x)}" y="${numero(elemento.posicao.y + 60)}" font-size="150" text-anchor="middle" fill="#24323B">${escaparXml(elemento.rotulo)}</text></g>`;
     case "imagem":
       return `<g${giro}><image href="${escaparXml(elemento.chave)}" x="${numero(elemento.posicao.x - elemento.larguraMm / 2)}" y="${numero(elemento.posicao.y - elemento.alturaMm / 2)}" width="${elemento.larguraMm}" height="${elemento.alturaMm}" preserveAspectRatio="xMidYMid slice"/></g>`;
     case "texto":
@@ -500,11 +500,11 @@ function elementoParaSvg(elemento: Elemento, estilo: Estilo): string {
     case "cota": {
       const medida = comprimentoM(elemento.a, elemento.b);
       const meio = { x: (elemento.a.x + elemento.b.x) / 2, y: (elemento.a.y + elemento.b.y) / 2 + elemento.deslocamentoMm };
-      return `<g stroke="#846100" stroke-width="18" fill="none">`
+      return `<g stroke="#27557B" stroke-width="18" fill="none">`
         + `<line x1="${numero(elemento.a.x)}" y1="${numero(elemento.a.y + elemento.deslocamentoMm)}" x2="${numero(elemento.b.x)}" y2="${numero(elemento.b.y + elemento.deslocamentoMm)}"/>`
         + `<line x1="${numero(elemento.a.x)}" y1="${numero(elemento.a.y)}" x2="${numero(elemento.a.x)}" y2="${numero(elemento.a.y + elemento.deslocamentoMm)}"/>`
         + `<line x1="${numero(elemento.b.x)}" y1="${numero(elemento.b.y)}" x2="${numero(elemento.b.x)}" y2="${numero(elemento.b.y + elemento.deslocamentoMm)}"/></g>`
-        + `<text x="${numero(meio.x)}" y="${numero(meio.y - 80)}" font-size="180" text-anchor="middle" fill="#846100">${medida.toFixed(2).replace(".", ",")} m</text>`;
+        + `<text x="${numero(meio.x)}" y="${numero(meio.y - 80)}" font-size="180" text-anchor="middle" fill="#27557B">${medida.toFixed(2).replace(".", ",")} m</text>`;
     }
     case "traco":
       return `<polyline points="${elemento.pontos.map((p) => `${numero(p.x)},${numero(p.y)}`).join(" ")}" fill="none" stroke="${estilo.cor}" stroke-width="${numero(elemento.espessuraMm)}" stroke-linecap="round" stroke-linejoin="round"${traco}/>`;

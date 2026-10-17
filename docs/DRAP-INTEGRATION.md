@@ -1,6 +1,6 @@
 # Integração remota com a Drap
 
-Este documento registra o contrato técnico usado pela H.OIKOS/Nexo Obra para operar a DRAP com dados reais. A DRAP continua sendo a fonte oficial dos dados financeiros; a H.OIKOS guarda vínculos operacionais, estado de sincronização, solicitações idempotentes e eventos recebidos, sem criar uma segunda verdade financeira.
+Este documento registra o contrato técnico usado pelo DRAP Backoffice/Nexo Obra para operar a DRAP com dados reais. A DRAP continua sendo a fonte oficial dos dados financeiros; o DRAP Backoffice guarda vínculos operacionais, estado de sincronização, solicitações idempotentes e eventos recebidos, sem criar uma segunda verdade financeira.
 
 ## Princípio de produção
 
@@ -20,7 +20,7 @@ A autenticação usa Bearer token:
 Authorization: Bearer drap_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-Cada API key pertence a um único tenant. A própria Drap aplica RLS e filtro explícito no backend, portanto a H.OIKOS **não envia `company_id`** para escolher empresa. O tenant é determinado pela key usada naquela conexão.
+Cada API key pertence a um único tenant. A própria Drap aplica RLS e filtro explícito no backend, portanto o DRAP Backoffice **não envia `company_id`** para escolher empresa. O tenant é determinado pela key usada naquela conexão.
 
 O limite informado é de **60 requisições por minuto por API key**. Em excesso a API responde `429` com `Retry-After`.
 
@@ -92,7 +92,7 @@ Exemplo de body:
 }
 ```
 
-A escrita operacional da H.OIKOS exige `Idempotency-Key` válida e encaminha a mesma chave à DRAP. A interface só deve disparar uma escrita quando existir uma regra de domínio explícita para aquela ação; ausência de automação de tela não transforma a integração em simulação.
+A escrita operacional do DRAP Backoffice exige `Idempotency-Key` válida e encaminha a mesma chave à DRAP. A interface só deve disparar uma escrita quando existir uma regra de domínio explícita para aquela ação; ausência de automação de tela não transforma a integração em simulação.
 
 ## Resumo financeiro
 
@@ -102,11 +102,11 @@ O caminho preferido é o resumo oficial:
 GET /api/v1/resumo
 ```
 
-Quando esse endpoint responde corretamente, os totais vêm da própria DRAP. Somente quando o resumo não existe naquele ambiente (`404` ou corpo incompatível com o contrato esperado) a H.OIKOS calcula o resumo a partir de **lançamentos reais retornados pela DRAP**. Esse fallback nunca usa dados fictícios e sinaliza truncamento quando a leitura não cobriu o universo completo.
+Quando esse endpoint responde corretamente, os totais vêm da própria DRAP. Somente quando o resumo não existe naquele ambiente (`404` ou corpo incompatível com o contrato esperado) o DRAP Backoffice calcula o resumo a partir de **lançamentos reais retornados pela DRAP**. Esse fallback nunca usa dados fictícios e sinaliza truncamento quando a leitura não cobriu o universo completo.
 
 ## Cobranças
 
-A rota da H.OIKOS é:
+A rota do DRAP Backoffice é:
 
 ```text
 POST /api/integrations/drap/charges
@@ -163,7 +163,7 @@ Filtros de parceiros: `tipo`, `ativo`, `limit`, `offset`.
 
 ## Webhooks
 
-Endpoint receptor da H.OIKOS:
+Endpoint receptor do DRAP Backoffice:
 
 ```text
 POST /api/integrations/drap/webhook
@@ -214,13 +214,13 @@ const esperado = "sha256=" + createHmac("sha256", secret)
   .digest("hex");
 ```
 
-A H.OIKOS rejeita timestamps com diferença superior a **300 segundos**. O `rawBody` é validado antes de parsear JSON.
+O DRAP Backoffice rejeita timestamps com diferença superior a **300 segundos**. O `rawBody` é validado antes de parsear JSON.
 
-Como o contrato não fornece `event_id`, a H.OIKOS gera um identificador idempotente SHA-256 a partir de `timestamp.rawBody`. Uma repetição byte a byte do mesmo webhook é registrada apenas uma vez.
+Como o contrato não fornece `event_id`, o DRAP Backoffice gera um identificador idempotente SHA-256 a partir de `timestamp.rawBody`. Uma repetição byte a byte do mesmo webhook é registrada apenas uma vez.
 
 ### Roteamento multiempresa
 
-O payload oficial não contém `company_id`. Para não misturar tenants, a H.OIKOS identifica a empresa pelo **secret que validou a assinatura** e pelo `external_company_id` correspondente em `DRAP_TENANTS_JSON`.
+O payload oficial não contém `company_id`. Para não misturar tenants, o DRAP Backoffice identifica a empresa pelo **secret que validou a assinatura** e pelo `external_company_id` correspondente em `DRAP_TENANTS_JSON`.
 
 A configuração legada com um único `DRAP_WEBHOOK_SECRET` só é aceita quando existe no máximo uma conexão Drap ativa. Se houver mais de uma, o receptor falha fechado com conflito em vez de encaminhar o evento à empresa errada.
 

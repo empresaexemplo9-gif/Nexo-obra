@@ -89,7 +89,7 @@ export function buildPdf(pages: PdfPage[], info: { title?: string } = {}): Uint8
   push(new Uint8Array([0x25, 0xe2, 0xe3, 0xcf, 0xd3, 0x0a])); // marca binária: o arquivo não é texto puro
   object(1, "<< /Type /Catalog /Pages 2 0 R >>");
   object(2, `<< /Type /Pages /Kids [${plan.map((item) => `${item.pageId} 0 R`).join(" ")}] /Count ${plan.length} >>`);
-  object(3, `<< /Producer ${pdfText("H.OIKOS Prancheta")}${info.title ? ` /Title ${pdfText(info.title)}` : ""} >>`);
+  object(3, `<< /Producer ${pdfText("DRAP Backoffice Prancheta")}${info.title ? ` /Title ${pdfText(info.title)}` : ""} >>`);
   for (const { page, pageId, contentId, imageIds } of plan) {
     const xobjects = imageIds.length
       ? ` /XObject << ${(page.images ?? []).map((image, index) => `/${image.name} ${imageIds[index]} 0 R`).join(" ")} >>`

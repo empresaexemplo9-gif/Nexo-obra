@@ -57,15 +57,15 @@ export function VisualizadorImagem({ blob, nome, extensao, onControle }: PropsVi
 
   const mudar = (fator: number) => setZoom((z) => Math.min(8, Math.max(0.05, (z ?? 1) * fator)));
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="sm" variant={zoom === null ? "default" : "outline"} onClick={() => setZoom(null)}>Ajustar</Button>
       <Button size="sm" variant={zoom === 1 ? "default" : "outline"} onClick={() => setZoom(1)}>100%</Button>
       <Button size="icon" variant="outline" onClick={() => mudar(1 / 1.25)} aria-label="Diminuir zoom"><Minus /></Button>
       <Button size="icon" variant="outline" onClick={() => mudar(1.25)} aria-label="Aumentar zoom"><Plus /></Button>
-      {tamanho ? <p className="text-sm text-hoikos-600">{tamanho.w} × {tamanho.h} px</p> : null}
+      {tamanho ? <p className="text-sm text-drap-600">{tamanho.w} × {tamanho.h} px</p> : null}
     </div>
     <div className="grid min-h-[360px] flex-1 place-items-center overflow-auto bg-[repeating-conic-gradient(#f1efe8_0%_25%,#fff_0%_50%)] bg-[length:20px_20px] p-4">
-      {erro ? <p className="text-sm text-hoikos-700" role="alert">O navegador não conseguiu exibir esta imagem. Baixe o arquivo para abrir.</p>
+      {erro ? <p className="text-sm text-drap-700" role="alert">O navegador não conseguiu exibir esta imagem. Baixe o arquivo para abrir.</p>
         // eslint-disable-next-line @next/next/no-img-element -- blob local, sem otimização de servidor possível
         : <img src={url} alt={nome} onError={() => setErro(true)} onLoad={(event) => setTamanho({ w: event.currentTarget.naturalWidth, h: event.currentTarget.naturalHeight })}
           style={zoom === null ? { maxWidth: "100%", maxHeight: "100%", objectFit: "contain" } : { width: (tamanho?.w ?? 0) * zoom, maxWidth: "none" }} />}
@@ -105,11 +105,11 @@ export function VisualizadorTexto({ blob }: PropsVisualizador) {
     return () => { vivo = false; };
   }, [blob]);
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="sm" variant={quebrar ? "default" : "outline"} onClick={() => setQuebrar((v) => !v)} aria-pressed={quebrar}><WrapText />Quebrar linhas</Button>
-      {blob.size > LIMITE_TEXTO ? <p className="text-sm text-hoikos-600">Mostrando os primeiros 2 MB. Baixe para ver o arquivo inteiro.</p> : null}
+      {blob.size > LIMITE_TEXTO ? <p className="text-sm text-drap-600">Mostrando os primeiros 2 MB. Baixe para ver o arquivo inteiro.</p> : null}
     </div>
     {texto === null ? <p className="flex items-center gap-2 p-6 text-sm" role="status"><LoaderCircle className="animate-spin" />Lendo…</p>
-      : <pre className={`min-h-[360px] flex-1 overflow-auto bg-white p-4 font-mono text-xs leading-5 text-hoikos-900 ${quebrar ? "whitespace-pre-wrap break-words" : "whitespace-pre"}`}>{texto}</pre>}
+      : <pre className={`min-h-[360px] flex-1 overflow-auto bg-white p-4 font-mono text-xs leading-5 text-drap-900 ${quebrar ? "whitespace-pre-wrap break-words" : "whitespace-pre"}`}>{texto}</pre>}
   </div>;
 }

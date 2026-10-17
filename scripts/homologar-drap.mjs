@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Homologa uma credencial DRAP real contra o contrato que a H.OIKOS consome.
+// Homologa uma credencial DRAP real contra o contrato que o DRAP Backoffice consome.
 //
 // Roda à mão, nunca no CI: precisa de rede e de uma chave de verdade. Use o
 // tenant de teste da DRAP, não a empresa do cliente — a fase de escrita grava
@@ -9,7 +9,7 @@
 //   DRAP_API_TOKEN=drap_live_... node scripts/homologar-drap.mjs --escrita
 //
 // A chave nunca é impressa, nem em erro. Sai 0 quando tudo que é obrigatório
-// passou; 1 quando algo que a H.OIKOS depende está quebrado.
+// passou; 1 quando algo que o DRAP Backoffice depende está quebrado.
 
 const ESCRITA = process.argv.includes("--escrita");
 const BASE = (process.env.DRAP_API_URL ?? "https://empresa.drap.app.br").replace(/\/+$/, "");
@@ -90,7 +90,7 @@ registrar(
   temItems ? `${envelope.items.length} item(ns), total ${envelope.total}` : "sem array `items`",
 );
 
-// ─────────────── 4. Os campos que a H.OIKOS lê de cada lançamento ───────────────
+// ─────────────── 4. Os campos que o DRAP Backoffice lê de cada lançamento ───────────────
 
 const amostra = temItems ? envelope.items[0] : null;
 if (!amostra) {
@@ -114,7 +114,7 @@ if (!amostra) {
     "Vínculo de obra (centro de custo)",
     "centro_custo" in amostra ? "ok" : "falha",
     "centro_custo" in amostra
-      ? "a DRAP devolve `centro_custo`, que é o campo que a H.OIKOS usa como chave da obra"
+      ? "a DRAP devolve `centro_custo`, que é o campo que o DRAP Backoffice usa como chave da obra"
       : "sem `centro_custo` na resposta — o recorte por obra não tem como funcionar",
   );
 }
@@ -124,7 +124,7 @@ if (!amostra) {
 // Filtro ignorado responde 200 com a lista inteira — parece que funcionou. A
 // única forma de distinguir é comparar o `total` com o da consulta sem filtro,
 // usando um centro de custo que não existe: se o total não cai, o servidor
-// ignorou o parâmetro e a H.OIKOS vai paginar a empresa toda pra filtrar na mão.
+// ignorou o parâmetro e o DRAP Backoffice vai paginar a empresa toda pra filtrar na mão.
 const inexistente = `hoikos:nao-existe-${Date.now()}`;
 const filtrado = await chamar(`/lancamentos?limit=1&centro_custo=${encodeURIComponent(inexistente)}`);
 const totalGeral = envelope.total;
@@ -142,11 +142,11 @@ if (filtrado.status !== 200) {
   registrar(
     "Filtro ?centro_custo",
     "aviso",
-    `ignorado (${totalFiltrado} de ${totalGeral} com centro de custo inexistente) — a H.OIKOS recorta na memória até a DRAP publicar o filtro`,
+    `ignorado (${totalFiltrado} de ${totalGeral} com centro de custo inexistente) — o DRAP Backoffice recorta na memória até a DRAP publicar o filtro`,
   );
 }
 
-// ─────────────── 6. Os outros recursos que a H.OIKOS usa ───────────────
+// ─────────────── 6. Os outros recursos que o DRAP Backoffice usa ───────────────
 
 for (const [nome, caminho] of [["Parceiros", "/parceiros?limit=1"], ["Categorias", "/categorias"]]) {
   const r = await chamar(caminho);
@@ -160,12 +160,12 @@ if (resumo.status === 404) {
   registrar(
     "Resumo financeiro",
     "aviso",
-    "endpoint ainda não publicado — a H.OIKOS soma pelos lançamentos e trunca em 500",
+    "endpoint ainda não publicado — o DRAP Backoffice soma pelos lançamentos e trunca em 500",
   );
 } else if (resumo.status !== 200) {
   registrar("Resumo financeiro", "falha", `GET /resumo → ${resumo.status}`);
 } else if (!resumo.corpo?.realizado) {
-  registrar("Resumo financeiro", "falha", "200 sem o campo `realizado` — a H.OIKOS trata como ausente");
+  registrar("Resumo financeiro", "falha", "200 sem o campo `realizado` — o DRAP Backoffice trata como ausente");
 } else {
   const campos = ["realizado", "em_aberto", "vencido", "proximos_30_dias"];
   const faltando = campos.filter((campo) => !(campo in resumo.corpo));
@@ -227,7 +227,7 @@ if (!ESCRITA) {
     method: "POST",
     body: JSON.stringify({
       data: new Date().toISOString().slice(0, 10),
-      descricao: "Homologação H.OIKOS — pode apagar",
+      descricao: "Homologação DRAP Backoffice — pode apagar",
       tipo: "receita",
       valor: 0.01,
       status: "em_aberto",
@@ -249,7 +249,7 @@ if (!ESCRITA) {
     if (item?.id) {
       const editado = await chamar(`/lancamentos/${item.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ descricao: "Homologação H.OIKOS — editado" }),
+        body: JSON.stringify({ descricao: "Homologação DRAP Backoffice — editado" }),
       });
       registrar("Escrita: editar lançamento", editado.status === 200 ? "ok" : "falha", `PATCH → ${editado.status}`);
 
@@ -266,7 +266,7 @@ if (!ESCRITA) {
 // ─────────────── Superfície real da API ───────────────
 //
 // A /api-docs publica três recursos — lançamentos, parceiros, categorias — mas o
-// endpoint /resumo, que a H.OIKOS já usa em produção, não está listado nela. Ou seja:
+// endpoint /resumo, que o DRAP Backoffice já usa em produção, não está listado nela. Ou seja:
 // a documentação é incompleta, e discutir o que a API faz a partir dela leva a
 // conclusão errada nos dois sentidos.
 //
@@ -334,7 +334,7 @@ function encerrar() {
     `\n${resultados.length} verificações · ${falhas.length} falha(s) · ${avisos.length} aviso(s)`,
   );
   if (falhas.length > 0) {
-    console.log("\nO que quebra a H.OIKOS se não for resolvido:");
+    console.log("\nO que quebra o DRAP Backoffice se não for resolvido:");
     for (const f of falhas) console.log(`  · ${f.nome} — ${f.detalhe ?? ""}`);
   }
   console.log(`\nBase homologada: ${BASE}/api/v1`);

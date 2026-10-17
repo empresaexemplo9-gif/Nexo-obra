@@ -10,17 +10,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-xs hover:-translate-y-px hover:bg-hoikos-soil hover:shadow-sm active:translate-y-0 active:shadow-xs",
+          "bg-primary text-primary-foreground shadow-xs hover:-translate-y-px hover:bg-drap-deep hover:shadow-sm active:translate-y-0 active:shadow-xs",
         destructive:
           "bg-destructive text-primary-foreground shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20",
         outline:
-          "border border-hoikos-300/70 bg-card text-hoikos-800 shadow-xs hover:border-hoikos-gold hover:bg-accent hover:text-hoikos-950",
+          "border border-drap-300/70 bg-card text-drap-800 shadow-xs hover:border-drap-accent hover:bg-accent hover:text-drap-950",
         secondary:
-          "bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-hoikos-950",
+          "bg-secondary text-secondary-foreground shadow-xs hover:bg-accent hover:text-drap-950",
         ghost:
-          "text-hoikos-800 hover:bg-accent hover:text-hoikos-950",
+          "text-drap-800 hover:bg-accent hover:text-drap-950",
         link:
-          "text-hoikos-800 underline-offset-4 decoration-hoikos-gold/70 hover:text-hoikos-soil hover:underline",
+          "text-drap-800 underline-offset-4 decoration-drap-band/70 hover:text-drap-deep hover:underline",
       },
       size: {
         default: "h-9 px-4 py-2 has-[>svg]:px-3",

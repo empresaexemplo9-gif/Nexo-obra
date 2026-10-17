@@ -130,28 +130,28 @@ export function DrapSolutionsWorkspace() {
     <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow text-hoikos-600">H.OIKOS · Financeiro</p>
-          <h1 className="display-heading mt-2 text-4xl text-hoikos-950">Soluções DRAP</h1>
-          <p className="mt-2 max-w-3xl text-sm text-hoikos-500">Conecte a conta da sua empresa, escolha os módulos e acompanhe a assinatura dentro da H.OIKOS. Os pagamentos são feitos diretamente à Drap. A ativação depende da confirmação da contratação pela Drap.</p>
+          <p className="eyebrow text-drap-600">DRAP Backoffice · Financeiro</p>
+          <h1 className="display-heading mt-2 text-4xl text-drap-950">Soluções DRAP</h1>
+          <p className="mt-2 max-w-3xl text-sm text-drap-500">Conecte a conta da sua empresa, escolha os módulos e acompanhe a assinatura dentro do DRAP Backoffice. Os pagamentos são feitos diretamente à Drap. A ativação depende da confirmação da contratação pela Drap.</p>
         </div>
-        <Button variant="outline" onClick={() => { window.location.href = "/"; }}><ArrowLeft />Voltar à H.OIKOS</Button>
+        <Button variant="outline" onClick={() => { window.location.href = "/"; }}><ArrowLeft />Voltar ao DRAP Backoffice</Button>
       </div>
 
       <Card>
         <CardContent className="grid gap-4 p-5 md:grid-cols-3">
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Preço</p><p className="mt-2 font-medium">Oferta para sua empresa</p></div>
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Uso</p><p className="mt-2 font-medium">Dentro da H.OIKOS</p></div>
-          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-hoikos-500">Conta DRAP</p><p className="mt-2 font-medium">{data.tenantProvisioned ? (data.connectionStatus === "active" ? "Conectada" : "Vínculo pendente") : "Ainda não criada/vinculada"}</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-drap-500">Preço</p><p className="mt-2 font-medium">Oferta para sua empresa</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-drap-500">Uso</p><p className="mt-2 font-medium">Dentro do DRAP Backoffice</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-drap-500">Conta DRAP</p><p className="mt-2 font-medium">{data.tenantProvisioned ? (data.connectionStatus === "active" ? "Conectada" : "Vínculo pendente") : "Ainda não criada/vinculada"}</p></div>
         </CardContent>
       </Card>
 
       {!data.tenantProvisioned && data.canManage && data.provisioningAvailable ? <DrapConectar onConectado={() => setReload(value => value + 1)} /> : !data.tenantProvisioned ? (
-        <Card className="border-hoikos-200 bg-hoikos-50">
+        <Card className="border-drap-200 bg-drap-50">
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center">
-            <span className="grid size-11 shrink-0 place-items-center rounded-md border border-hoikos-200 bg-white text-hoikos-700"><UserPlus className="size-5" /></span>
+            <span className="grid size-11 shrink-0 place-items-center rounded-md border border-drap-200 bg-white text-drap-700"><UserPlus className="size-5" /></span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-hoikos-950">Crie sua conta DRAP para liberar as soluções financeiras na H.OIKOS</p>
-              <p className="mt-1 text-sm leading-6 text-hoikos-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte à H.OIKOS e conclua a Conexão DRAP no Financeiro. A liberação acontece quando a conexão técnica for validada pela API.</p>
+              <p className="font-semibold text-drap-950">Crie sua conta DRAP para liberar as soluções financeiras no DRAP Backoffice</p>
+              <p className="mt-1 text-sm leading-6 text-drap-600">Você será direcionado apenas para o cadastro oficial da DRAP. Depois, volte ao DRAP Backoffice e conclua a Conexão DRAP no Financeiro. A liberação acontece quando a conexão técnica for validada pela API.</p>
             </div>
             <Button onClick={() => void startSignup()} disabled={!data.canManage || redirecting !== null}>
               {redirecting === "account" ? <LoaderCircle className="animate-spin" /> : <ExternalLink />}
@@ -160,23 +160,23 @@ export function DrapSolutionsWorkspace() {
           </CardContent>
         </Card>
       ) : data.connectionStatus !== "active" ? (
-        <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
+        <div className="rounded-md border border-drap-200 bg-drap-50 p-4 text-sm text-drap-900">
           <p className="font-medium">Conta DRAP vinculada; falta validar a conexão técnica.</p>
-          <p className="mt-1 text-hoikos-600">Assim que a credencial da empresa for validada pela API DRAP, os recursos ficam ativos dentro da H.OIKOS.</p>
+          <p className="mt-1 text-drap-600">Assim que a credencial da empresa for validada pela API DRAP, os recursos ficam ativos dentro do DRAP Backoffice.</p>
         </div>
       ) : (
-        <div className="flex items-start gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
-          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-hoikos-700" />
-          <div><p className="font-medium">DRAP conectada à H.OIKOS.</p><p className="mt-1 text-hoikos-600">Os recursos financeiros DRAP já podem ser usados diretamente no ecossistema H.OIKOS.</p></div>
+        <div className="flex items-start gap-3 rounded-md border border-drap-200 bg-drap-50 p-4 text-sm text-drap-900">
+          <ShieldCheck className="mt-0.5 size-5 shrink-0 text-drap-700" />
+          <div><p className="font-medium">DRAP conectada ao DRAP Backoffice.</p><p className="mt-1 text-drap-600">Os recursos financeiros DRAP já podem ser usados diretamente aqui.</p></div>
         </div>
       )}
 
-      {actionError ? <p role="alert" className="rounded-md border border-hoikos-200 bg-hoikos-50 p-3 text-sm text-hoikos-800">{actionError}</p> : null}
+      {actionError ? <p role="alert" className="rounded-md border border-drap-200 bg-drap-50 p-3 text-sm text-drap-800">{actionError}</p> : null}
       {data.canManage && <DrapReadinessPanel key={reload} />}
 
-      <div className="rounded-md border border-hoikos-200 bg-hoikos-50 p-4 text-sm text-hoikos-900">
+      <div className="rounded-md border border-drap-200 bg-drap-50 p-4 text-sm text-drap-900">
         <p className="font-medium">Escolha os serviços para sua empresa</p>
-        <p className="mt-1 text-hoikos-600">Selecione módulos ou um pacote e salve suas preferências. A contratação e a cobrança só acontecem após confirmação na Drap. O checkout integrado ainda depende de homologação; salvar a seleção não ativa serviços pagos.</p>
+        <p className="mt-1 text-drap-600">Selecione módulos ou um pacote e salve suas preferências. A contratação e a cobrança só acontecem após confirmação na Drap. O checkout integrado ainda depende de homologação; salvar a seleção não ativa serviços pagos.</p>
       </div>
 
       {data.subscription ? (
@@ -185,14 +185,14 @@ export function DrapSolutionsWorkspace() {
 
       {groups.map((group) => group.items.length ? (
         <section key={group.title} className="space-y-3">
-          <h2 className="text-lg font-semibold text-hoikos-950">{group.title}</h2>
+          <h2 className="text-lg font-semibold text-drap-950">{group.title}</h2>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {group.items.map((item) => (
               <Card key={item.id} className="flex h-full flex-col">
                 <CardHeader className="pb-3"><div className="flex items-start justify-between gap-3"><CardTitle className="text-base">{item.name}</CardTitle>{item.trialDays ? <Badge variant="secondary">{item.trialDays} dias</Badge> : null}</div></CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-4">
-                  <div><p className="text-2xl font-semibold tabular-nums text-hoikos-950">{price(item)}</p>{item.annualCents ? <p className="mt-1 text-xs text-hoikos-500">ou {currency.format(item.annualCents / 100)}/ano</p> : null}</div>
-                  <p className="flex-1 text-sm text-hoikos-600">{item.description}</p>
+                  <div><p className="text-2xl font-semibold tabular-nums text-drap-950">{price(item)}</p>{item.annualCents ? <p className="mt-1 text-xs text-drap-500">ou {currency.format(item.annualCents / 100)}/ano</p> : null}</div>
+                  <p className="flex-1 text-sm text-drap-600">{item.description}</p>
                   {item.kind === "free" ? (
                     <Button disabled><Check />Incluído</Button>
                   ) : (
@@ -207,9 +207,9 @@ export function DrapSolutionsWorkspace() {
         </section>
       ) : null)}
 
-      <Card><CardContent className="space-y-3 p-5"><p className="font-medium">Sua seleção: {selected.length} serviço(s)</p><p className="text-sm">{data.catalog.filter(item => selected.includes(item.id)).map(item => `${item.name}: ${price(item)}`).join(" · ") || "Nenhum serviço selecionado."}</p><p className="text-sm text-hoikos-600">Pacotes podem incluir módulos avulsos. Revise a composição para evitar sobreposição; os valores finais e a disponibilidade são confirmados pela Drap.</p><Button disabled={!data.canManage || saving} onClick={() => void saveSelection()}>{saving ? "Salvando…" : "Salvar seleção"}</Button>{saved && <p role="status" className="text-sm">{saved}</p>}{!data.canManage && <p className="text-sm">Somente administradores autorizados da empresa podem conectar contas e escolher serviços.</p>}</CardContent></Card>
+      <Card><CardContent className="space-y-3 p-5"><p className="font-medium">Sua seleção: {selected.length} serviço(s)</p><p className="text-sm">{data.catalog.filter(item => selected.includes(item.id)).map(item => `${item.name}: ${price(item)}`).join(" · ") || "Nenhum serviço selecionado."}</p><p className="text-sm text-drap-600">Pacotes podem incluir módulos avulsos. Revise a composição para evitar sobreposição; os valores finais e a disponibilidade são confirmados pela Drap.</p><Button disabled={!data.canManage || saving} onClick={() => void saveSelection()}>{saving ? "Salvando…" : "Salvar seleção"}</Button>{saved && <p role="status" className="text-sm">{saved}</p>}{!data.canManage && <p className="text-sm">Somente administradores autorizados da empresa podem conectar contas e escolher serviços.</p>}</CardContent></Card>
 
-      <p className="pb-4 text-xs text-hoikos-500">Catálogo público DRAP conferido em {new Date(`${data.checkedAt}T12:00:00`).toLocaleDateString("pt-BR")}. O valor final de qualquer cobrança deve ser confirmado no servidor da DRAP; a H.OIKOS não aceita preço informado pelo navegador.</p>
+      <p className="pb-4 text-xs text-drap-500">Catálogo público DRAP conferido em {new Date(`${data.checkedAt}T12:00:00`).toLocaleDateString("pt-BR")}. O valor final de qualquer cobrança deve ser confirmado no servidor da DRAP; o DRAP Backoffice não aceita preço informado pelo navegador.</p>
     </main>
   );
 }

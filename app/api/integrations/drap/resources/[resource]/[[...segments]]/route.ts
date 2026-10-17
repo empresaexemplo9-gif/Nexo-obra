@@ -30,10 +30,10 @@ async function forward(request: Request, { params }: RouteContext, method: Metho
     const { connection } = await operationalDrapContext(request, method === "GET" ? "view" : "edit");
     const route = await params;
     if (!isDrapResource(route.resource)) {
-      throw new ApiError(404, "drap_resource_not_allowed", "Este recurso não faz parte da superfície DRAP permitida pela H.OIKOS.");
+      throw new ApiError(404, "drap_resource_not_allowed", "Este recurso não faz parte da superfície DRAP permitida pelo DRAP Backoffice.");
     }
     if (method !== "GET" && !isDrapResourceWritable(route.resource)) {
-      throw new ApiError(405, "drap_resource_read_only", "Este recurso DRAP é somente leitura pela H.OIKOS.");
+      throw new ApiError(405, "drap_resource_read_only", "Este recurso DRAP é somente leitura pelo DRAP Backoffice.");
     }
 
     const basePath = await requireDrapResourcePath(connection.external_company_id, route.resource);

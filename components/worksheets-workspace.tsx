@@ -181,7 +181,7 @@ function Grid({
   // mais estreita que o previsto fazia a coluna A cobrir o começo da B.
   // A sombra de 1 px cobre a borda: com `border-collapse`, a borda não acompanha a célula
   // fixa e o texto que rola por baixo aparecia pela fresta.
-  const guia: CSSProperties = { width: LARGURA_GUIA, minWidth: LARGURA_GUIA, maxWidth: LARGURA_GUIA, boxShadow: "-1px 0 0 0 var(--color-hoikos-200), 2px 0 0 0 var(--color-hoikos-200)" };
+  const guia: CSSProperties = { width: LARGURA_GUIA, minWidth: LARGURA_GUIA, maxWidth: LARGURA_GUIA, boxShadow: "-1px 0 0 0 var(--color-drap-200), 2px 0 0 0 var(--color-drap-200)" };
   // Coluna fixa larga numa tela estreita tomaria a grade inteira e travaria a rolagem. Se
   // não sobra ao menos uma coluna visível ao lado, a fixação fica desligada nessa tela.
   const gradeRef = useRef<HTMLDivElement>(null);
@@ -239,7 +239,7 @@ function Grid({
 
   // `select-none`: sem isso, arrastar sobre a grade selecionava o texto das células —
   // o gesto já existia e produzia um efeito feio e sem função nenhuma.
-  return <div ref={gradeRef} className="select-none overflow-auto rounded-md border border-hoikos-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
+  return <div ref={gradeRef} className="select-none overflow-auto rounded-md border border-drap-200 bg-white" style={{ maxHeight: "62vh" }} onCopy={event => {
     if (editing) return;
     event.preventDefault(); event.clipboardData.setData("text/plain", onCopyCells());
   }} onCut={event => {
@@ -257,24 +257,24 @@ function Grid({
     <table className="border-collapse text-sm">
       <thead className="sticky top-0 z-10">
         <tr>
-          <th style={guia} className="sticky left-0 z-20 border border-hoikos-200 bg-hoikos-100 p-1 text-xs font-medium text-hoikos-600">#</th>
+          <th style={guia} className="sticky left-0 z-20 border border-drap-200 bg-drap-100 p-1 text-xs font-medium text-drap-600">#</th>
           {Array.from({ length: columns }, (_, column) => hiddenColumns.has(column) ? null : (
-            <th key={column} style={{ ...estiloColuna(column, "var(--color-hoikos-100, #f1f5f9)"), ...(column < frozen ? { zIndex: 25, boxShadow: "1px 0 0 0 var(--color-hoikos-200)" } : {}) }}
+            <th key={column} style={{ ...estiloColuna(column, "var(--color-drap-100, #f1f5f9)"), ...(column < frozen ? { zIndex: 25, boxShadow: "1px 0 0 0 var(--color-drap-200)" } : {}) }}
               title={hiddenColumns.has(column - 1) ? "Há coluna oculta antes desta. Botão direito para reexibir." : undefined}
-              className={`relative border border-hoikos-200 p-0 text-xs font-medium ${hiddenColumns.has(column - 1) ? "border-l-4 border-l-hoikos-500" : ""}`}>
+              className={`relative border border-drap-200 p-0 text-xs font-medium ${hiddenColumns.has(column - 1) ? "border-l-4 border-l-drap-500" : ""}`}>
               <button
                 type="button" onClick={() => onAxis("column", column)}
                 onContextMenu={() => { onAxis("column", column); onContexto({ tipo: "coluna", index: column }); }}
                 aria-label={`Selecionar coluna ${columnName(column)}`}
                 aria-pressed={axis?.kind === "column" && axis.index === column}
-                className={`h-7 w-full px-1 ${axis?.kind === "column" && axis.index === column ? "bg-hoikos-700 text-white" : "bg-hoikos-100 text-hoikos-700"}`}
+                className={`h-7 w-full px-1 ${axis?.kind === "column" && axis.index === column ? "bg-drap-700 text-white" : "bg-drap-100 text-drap-700"}`}
               >{columnName(column)}</button>
               {readOnly ? null : <div
                 role="separator" aria-orientation="vertical" tabIndex={0}
                 aria-label={`Largura da coluna ${columnName(column)}`}
                 aria-valuemin={LARGURA_MIN} aria-valuemax={LARGURA_MAX} aria-valuenow={largura(column)}
                 title="Arraste para ajustar a largura. Com o teclado, use as setas."
-                className="absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize touch-none outline-none hover:bg-hoikos-400 focus-visible:bg-hoikos-600"
+                className="absolute inset-y-0 -right-1 z-30 w-2 cursor-col-resize touch-none outline-none hover:bg-drap-400 focus-visible:bg-drap-600"
                 onPointerDown={(event) => {
                   event.preventDefault();
                   const inicio = event.clientX, base = largura(column);
@@ -308,13 +308,13 @@ function Grid({
         {Array.from({ length: rows }, (_, row) => hiddenRows.has(row) ? null : (
           <tr key={row} hidden={!!filter.trim() && !Array.from({ length: columns }, (_, column) => formattedCell(computed[cellKey({ column, row })], formats[columnName(column)])).join(" ").toLocaleLowerCase("pt-BR").includes(filter.trim().toLocaleLowerCase("pt-BR"))}>
             <th style={guia} title={hiddenRows.has(row - 1) ? "Há linha oculta acima desta. Botão direito para reexibir." : undefined}
-              className={`sticky left-0 z-10 border border-hoikos-200 bg-hoikos-100 p-0 text-xs font-medium ${hiddenRows.has(row - 1) ? "border-t-4 border-t-hoikos-500" : ""}`}>
+              className={`sticky left-0 z-10 border border-drap-200 bg-drap-100 p-0 text-xs font-medium ${hiddenRows.has(row - 1) ? "border-t-4 border-t-drap-500" : ""}`}>
               <button
                 type="button" onClick={() => onAxis("row", row)}
                 onContextMenu={() => { onAxis("row", row); onContexto({ tipo: "linha", index: row }); }}
                 aria-label={`Selecionar linha ${row + 1}`}
                 aria-pressed={axis?.kind === "row" && axis.index === row}
-                className={`h-8 w-full px-1 ${axis?.kind === "row" && axis.index === row ? "bg-hoikos-700 text-white" : "bg-hoikos-100 text-hoikos-600"}`}
+                className={`h-8 w-full px-1 ${axis?.kind === "row" && axis.index === row ? "bg-drap-700 text-white" : "bg-drap-100 text-drap-600"}`}
               >{row + 1}</button>
             </th>
             {Array.from({ length: columns }, (_, column) => {
@@ -336,17 +336,17 @@ function Grid({
                 key={key} title={[issues.get(key), nota ? `Nota: ${nota}` : ""].filter(Boolean).join("\n") || undefined}
                 colSpan={bloco?.colSpan} rowSpan={bloco?.rowSpan}
                 style={{
-                  ...estiloColuna(column, fundo ?? (fixa && marcada ? "var(--color-hoikos-50)" : undefined), bloco ? bloco.bounds.right : column),
+                  ...estiloColuna(column, fundo ?? (fixa && marcada ? "var(--color-drap-50)" : undefined), bloco ? bloco.bounds.right : column),
                   // Com fundo próprio, a seleção vira um véu por cima, senão sumiria.
                   ...(fundo && marcada ? { backgroundImage: "linear-gradient(rgba(15,23,42,.1),rgba(15,23,42,.1))" } : {}),
                   ...(bloco && bloco.rowSpan > 1 ? { height: 1 } : {}),
                   boxShadow: issues.has(key) ? "inset 0 -3px #dc2626" : undefined,
                   // Célula fixa desenha a própria borda: com `border-collapse` a borda não
                   // acompanha o `sticky` e o texto que rola por baixo aparecia pela fresta.
-                  ...(fixa ? { outline: `${isActive ? 2 : 1}px solid ${isActive ? "var(--color-hoikos-700)" : "var(--color-hoikos-200)"}`, outlineOffset: -1 } : {}),
+                  ...(fixa ? { outline: `${isActive ? 2 : 1}px solid ${isActive ? "var(--color-drap-700)" : "var(--color-drap-200)"}`, outlineOffset: -1 } : {}),
                   fontWeight: negrito.has(key) ? 700 : undefined,
                 }}
-                className={`border p-0 ${nota ? "relative" : ""} ${marcada ? "bg-hoikos-50" : ""} ${isActive ? "border-hoikos-700 ring-1 ring-hoikos-700" : "border-hoikos-200"}`}
+                className={`border p-0 ${nota ? "relative" : ""} ${marcada ? "bg-drap-50" : ""} ${isActive ? "border-drap-700 ring-1 ring-drap-700" : "border-drap-200"}`}
               >
                 {/* O triângulo do canto é a marca de nota do Excel e do Google Planilhas. */}
                 {nota ? <span aria-hidden="true" className="pointer-events-none absolute top-0 right-0 size-0 border-t-[7px] border-l-[7px] border-t-amber-500 border-l-transparent" /> : null}
@@ -438,7 +438,7 @@ function Grid({
                       }
                     }}
                     style={styleCss(estilo)}
-                    className={`w-full px-2 text-left ${estilo?.wrap ? `min-h-8 py-1 ${bloco && bloco.rowSpan > 1 ? "h-full" : ""}` : bloco && bloco.rowSpan > 1 ? "h-full min-h-8 truncate" : "h-8 truncate"} ${result?.error ? "text-hoikos-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""} ${negativoEmDestaque(result, formats[columnName(column)]) ? "text-red-700" : ""}`}
+                    className={`w-full px-2 text-left ${estilo?.wrap ? `min-h-8 py-1 ${bloco && bloco.rowSpan > 1 ? "h-full" : ""}` : bloco && bloco.rowSpan > 1 ? "h-full min-h-8 truncate" : "h-8 truncate"} ${result?.error ? "text-drap-700" : typeof result?.value === "number" ? "text-right tabular-nums" : ""} ${negativoEmDestaque(result, formats[columnName(column)]) ? "text-red-700" : ""}`}
                   >{formattedCell(result, formats[columnName(column)])}</button>
                 )}
               </td>;
@@ -1286,13 +1286,13 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     return normalized ? list.filter((item) => item.name.toLocaleLowerCase("pt-BR").includes(normalized)) : list;
   }, [list, query]);
 
-  if (loading) return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></CardContent></Card>;
+  if (loading) return <Card><CardContent className="grid min-h-64 place-items-center"><LoaderCircle className="size-6 animate-spin text-drap-600" /></CardContent></Card>;
 
   return <fieldset disabled={saving} className="min-w-0 space-y-5 border-0 p-0">
     <Card className="workspace-card">
       <CardHeader className="gap-3">
-        <CardTitle className="flex items-center gap-2 text-base"><Sigma className="size-4 text-hoikos-600" />Planilha e documento</CardTitle>
-        <p className="text-sm leading-6 text-hoikos-500">
+        <CardTitle className="flex items-center gap-2 text-base"><Sigma className="size-4 text-drap-600" />Planilha e documento</CardTitle>
+        <p className="text-sm leading-6 text-drap-500">
           Traga os dados reais da empresa e deixe a soma pronta. As fórmulas usam nomes em português — SOMA, MÉDIA, SE,
           SOMASE, PROCV, ARRED — com vírgula decimal e ponto e vírgula separando argumentos, como no Excel em português.
         </p>
@@ -1308,10 +1308,10 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
     </Card>
 
     {conflito ? (
-      <Card className="border-hoikos-200">
-        <CardContent className="space-y-3 p-4 text-sm text-hoikos-800">
+      <Card className="border-drap-200">
+        <CardContent className="space-y-3 p-4 text-sm text-drap-800">
           <p className="flex items-center gap-3 font-medium"><CircleAlert className="size-5 shrink-0" />Esta planilha mudou em outro acesso enquanto você editava</p>
-          <p className="text-xs text-hoikos-500">O que você digitou continua aqui na tela e ainda não foi enviado. Escolha o que fazer — nenhuma das opções acontece sozinha.</p>
+          <p className="text-xs text-drap-500">O que você digitou continua aqui na tela e ainda não foi enviado. Escolha o que fazer — nenhuma das opções acontece sozinha.</p>
           <div className="flex flex-wrap gap-2">
             <Button size="sm" disabled={saving} onClick={() => void salvarSobreVersaoNova()}>Salvar o meu por cima</Button>
             <Button size="sm" variant="outline" disabled={saving} onClick={usarVersaoDoServidor}>Descartar o meu e usar a versão nova</Button>
@@ -1320,13 +1320,13 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         </CardContent>
       </Card>
     ) : null}
-    {error ? <Card className="border-hoikos-200"><CardContent className="flex items-center gap-3 p-4 text-sm text-hoikos-800"><CircleAlert className="size-5 shrink-0" />{error}</CardContent></Card> : null}
+    {error ? <Card className="border-drap-200"><CardContent className="flex items-center gap-3 p-4 text-sm text-drap-800"><CircleAlert className="size-5 shrink-0" />{error}</CardContent></Card> : null}
 
     {!current ? (
       <div className="space-y-5">
         <Card><CardHeader className="gap-2">
           <CardTitle className="text-base">Comece por um modelo</CardTitle>
-          <p className="text-sm leading-6 text-hoikos-500">
+          <p className="text-sm leading-6 text-drap-500">
             Cada modelo já vem com o cabeçalho, as fórmulas e o papel de cada coluna marcado, então a leitura
             financeira funciona desde a primeira linha digitada. Nenhum traz dado de exemplo: a estrutura ajuda,
             número inventado atrapalha.
@@ -1334,17 +1334,17 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         </CardHeader></Card>
         {(Object.keys(templateCategories) as TemplateCategory[]).map((category) => (
           <section key={category} className="space-y-3">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-hoikos-600">{templateCategories[category]}</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-drap-600">{templateCategories[category]}</h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {worksheetTemplates.filter((template) => template.category === category).map((template) => (
                 <Card key={template.id} className="flex flex-col">
                   <CardHeader className="gap-1.5 pb-3">
                     <CardTitle className="text-base">{template.name}</CardTitle>
-                    <p className="text-sm leading-6 text-hoikos-600">{template.purpose}</p>
+                    <p className="text-sm leading-6 text-drap-600">{template.purpose}</p>
                   </CardHeader>
                   <CardContent className="mt-auto space-y-3 pt-0">
-                    <p className="text-xs leading-5 text-hoikos-500">{template.note}</p>
-                    <p className="text-xs text-hoikos-500">{template.headers.filter(Boolean).join(" · ")}</p>
+                    <p className="text-xs leading-5 text-drap-500">{template.note}</p>
+                    <p className="text-xs text-drap-500">{template.headers.filter(Boolean).join(" · ")}</p>
                     <Button size="sm" variant="outline" className="w-full" onClick={() => void create("sheet", template.id)}>
                       <Plus />Usar este modelo
                     </Button>
@@ -1355,8 +1355,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           </section>
         ))}
         <Card><CardContent className="flex flex-wrap items-center gap-3 p-5">
-          <FileSpreadsheet className="size-6 text-hoikos-500" />
-          <p className="min-w-0 flex-1 text-sm text-hoikos-600">Prefere começar do zero? A planilha em branco aceita qualquer dado e você marca os papéis depois.</p>
+          <FileSpreadsheet className="size-6 text-drap-500" />
+          <p className="min-w-0 flex-1 text-sm text-drap-600">Prefere começar do zero? A planilha em branco aceita qualquer dado e você marca os papéis depois.</p>
           <Button variant="outline" onClick={() => void create("sheet")}><Plus />Planilha em branco</Button>
         </CardContent></Card>
       </div>
@@ -1365,8 +1365,8 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <Input aria-label="Nome" value={current.name} readOnly={readOnly} onChange={(event) => { setCurrent({ ...current, name: event.target.value }); setDirty(true); }} className="h-9 max-w-xs font-medium" />
           <Badge variant="outline">{current.kind === "sheet" ? "Planilha" : current.kind === "document" ? "Documento" : "Saúde financeira"}</Badge>
-          {current.visibility === "restricted" ? <Badge variant="outline" className="gap-1 border-hoikos-300"><ShieldCheck className="size-3" />Acesso liberado pelo superadmin</Badge> : null}
-          {dirty ? <Badge variant="outline" className="border-hoikos-300">Não salvo</Badge> : <span className="text-xs text-hoikos-500">Revisão {current.revision}</span>}
+          {current.visibility === "restricted" ? <Badge variant="outline" className="gap-1 border-drap-300"><ShieldCheck className="size-3" />Acesso liberado pelo superadmin</Badge> : null}
+          {dirty ? <Badge variant="outline" className="border-drap-300">Não salvo</Badge> : <span className="text-xs text-drap-500">Revisão {current.revision}</span>}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {!readOnly && sources.length ? <NativeSelect aria-label="Inserir dados reais" value="" onChange={(event) => { void insertSource(event.target.value); event.target.value = ""; }} className="h-9">
               <option value="">Inserir dados reais…</option>
@@ -1383,7 +1383,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           </div>
         </div>
         {current.kind !== "document" ? <div className="flex flex-wrap items-center gap-2">
-          <span className="w-14 rounded-md border border-hoikos-200 bg-hoikos-50 px-2 py-1 text-center font-mono text-xs">{active}</span>
+          <span className="w-14 rounded-md border border-drap-200 bg-drap-50 px-2 py-1 text-center font-mono text-xs">{active}</span>
           <Input
             ref={formulaRef} aria-label="Conteúdo da célula" value={selection?.raw ?? ""}
             readOnly={readOnly} onChange={(event) => updateCell(active, event.target.value)}
@@ -1397,13 +1397,13 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
             <option value="">Função…</option>
             {SHEET_FUNCTIONS.map((name) => <option key={name} value={name}>{name}</option>)}
           </NativeSelect>
-          <span className={`min-w-[6rem] text-right text-sm tabular-nums ${selection?.result?.error ? "text-hoikos-700" : "font-semibold text-hoikos-900"}`}>
+          <span className={`min-w-[6rem] text-right text-sm tabular-nums ${selection?.result?.error ? "text-drap-700" : "font-semibold text-drap-900"}`}>
             {selection?.result?.display ?? ""}
           </span>
           {!readOnly && sugestoes.funcoes.length ? <div role="group" aria-label="Funções que completam o que você digitou" className="flex w-full flex-wrap items-center gap-1.5 text-xs">
-            <span className="text-hoikos-500">Completar com</span>
+            <span className="text-drap-500">Completar com</span>
             {sugestoes.funcoes.map((nome, indice) => <Button key={nome} size="sm" variant="outline" className="h-7 px-2 font-mono text-xs" onClick={() => completarFuncao(nome)}>
-              {nome}{indice === 0 ? <span className="ml-1 text-hoikos-500">Tab</span> : null}
+              {nome}{indice === 0 ? <span className="ml-1 text-drap-500">Tab</span> : null}
             </Button>)}
           </div> : null}
         </div> : null}
@@ -1428,9 +1428,9 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 {rowFilter && <Button size="sm" variant="ghost" onClick={() => setRowFilter("")}>Limpar filtro</Button>}
                 <Button size="sm" variant="outline" onClick={imprimir}><Printer />Imprimir ou PDF</Button>
               </div>
-              {rowFilter && <p className="text-xs text-hoikos-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
+              {rowFilter && <p className="text-xs text-drap-600">O filtro só oculta linhas. Fórmulas e seleções mantêm todas as células, inclusive as ocultas.</p>}
               {estadoDoMenu.ocultas.linhas || estadoDoMenu.ocultas.colunas ? (
-                <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-hoikos-600">
+                <p role="status" className="flex flex-wrap items-center gap-2 text-xs text-drap-600">
                   {[estadoDoMenu.ocultas.linhas ? `${estadoDoMenu.ocultas.linhas} linha(s) oculta(s)` : "", estadoDoMenu.ocultas.colunas ? `${estadoDoMenu.ocultas.colunas} coluna(s) oculta(s)` : ""].filter(Boolean).join(" · ")}
                   , fora da tela e da impressão, mas dentro das contas.
                   {readOnly ? null : <>
@@ -1452,10 +1452,10 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 const start = parseCellKey(rule.range.split(":")[0])!, end = parseCellKey(rule.range.split(":")[1] ?? rule.range)!, address = parseCellKey(active)!;
                 return address.row >= start.row && address.row <= end.row && address.column >= start.column && address.column <= end.column ? <NativeSelect key={index} aria-label={`Opções para ${active}`} value="" onChange={event => updateCell(active, event.target.value)}><option value="">Escolher valor para {active}…</option>{rule.options.map(option => <option key={option} value={option}>{option}</option>)}</NativeSelect> : null;
               })}
-              {readOnly ? <p className="rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-sm text-hoikos-800">
+              {readOnly ? <p className="rounded-md border border-drap-200 bg-drap-50 px-3 py-2 text-sm text-drap-800">
                 Seu acesso a esta planilha é somente de leitura.
               </p> : (
-                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-hoikos-50 p-2">
+                <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-drap-200 bg-drap-50 p-2">
                   {/*
                     Desfazer e refazer abrem a barra porque são a saída de todo o resto
                     dela: remover coluna e ordenar são as ações que a pessoa mais erra, e
@@ -1475,24 +1475,24 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                     title={history.redoLabel}
                     aria-label={history.redoLabel}
                   ><Redo2 />Refazer</Button>
-                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
+                  <span className="mx-1 h-5 w-px bg-drap-200" />
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-row")}><Rows3 />Inserir linha</Button>
                   <Button size="sm" variant="ghost" onClick={() => structural("delete-row")}>Remover linha</Button>
-                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
+                  <span className="mx-1 h-5 w-px bg-drap-200" />
                   <Button size="sm" variant="ghost" onClick={() => structural("insert-column")}><Columns3 />Inserir coluna</Button>
                   <Button size="sm" variant="ghost" onClick={() => structural("delete-column")}>Remover coluna</Button>
-                  <span className="mx-1 h-5 w-px bg-hoikos-200" />
+                  <span className="mx-1 h-5 w-px bg-drap-200" />
                   <Button size="sm" variant="ghost" onClick={() => preencher("baixo")}>Preencher para baixo</Button>
                   <Button size="sm" variant="ghost" onClick={() => sort("asc")}><ArrowDownAZ />Ordenar ↑</Button>
                   <Button size="sm" variant="ghost" onClick={() => sort("desc")}><ArrowDownWideNarrow />Ordenar ↓</Button>
                 </div>
               )}
-              {readOnly ? null : <div role="toolbar" aria-label="Formatação do texto" className="flex flex-wrap items-center gap-1.5 rounded-md border border-hoikos-200 bg-white p-2">
+              {readOnly ? null : <div role="toolbar" aria-label="Formatação do texto" className="flex flex-wrap items-center gap-1.5 rounded-md border border-drap-200 bg-white p-2">
                 <Toggle size="sm" variant="outline" aria-label="Negrito (Ctrl+B)" title="Negrito (Ctrl+B)" pressed={negritoLigado} onPressedChange={alternarNegrito}><Bold /></Toggle>
                 <Toggle size="sm" variant="outline" aria-label="Itálico (Ctrl+I)" title="Itálico (Ctrl+I)" pressed={marcaLigada("italic")} onPressedChange={() => alternarMarca("italic")}><Italic /></Toggle>
                 <Toggle size="sm" variant="outline" aria-label="Sublinhado (Ctrl+U)" title="Sublinhado (Ctrl+U)" pressed={marcaLigada("underline")} onPressedChange={() => alternarMarca("underline")}><Underline /></Toggle>
                 <Toggle size="sm" variant="outline" aria-label="Tachado" title="Tachado" pressed={marcaLigada("strike")} onPressedChange={() => alternarMarca("strike")}><Strikethrough /></Toggle>
-                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-drap-200" />
                 <ToggleGroup type="single" size="sm" variant="outline" aria-label="Alinhamento horizontal" value={alinhamentoAtual}
                   onValueChange={(valor) => definirEstilo("align", (valor || undefined) as CellStyle["align"], valor ? `Alinhar ${valor === "left" ? "à esquerda" : valor === "center" ? "ao centro" : "à direita"}` : "Alinhamento automático")}>
                   <ToggleGroupItem value="left" aria-label="Alinhar à esquerda" title="Alinhar à esquerda"><AlignLeft /></ToggleGroupItem>
@@ -1500,7 +1500,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   <ToggleGroupItem value="right" aria-label="Alinhar à direita" title="Alinhar à direita"><AlignRight /></ToggleGroupItem>
                 </ToggleGroup>
                 <Toggle size="sm" variant="outline" aria-label="Quebrar texto na célula" title="Quebrar texto na célula" pressed={marcaLigada("wrap")} onPressedChange={() => alternarMarca("wrap")}><WrapText /></Toggle>
-                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-drap-200" />
                 <NativeSelect aria-label="Cor do texto" value={valorComum("color")} onChange={event => definirEstilo("color", (event.target.value || undefined) as CellStyle["color"], event.target.value ? `Cor do texto: ${colorLabels[event.target.value]}` : "Cor do texto padrão")}>
                   <option value="">Texto: cor padrão</option>
                   {Object.keys(textColors).map((cor) => <option key={cor} value={cor}>Texto: {colorLabels[cor]}</option>)}
@@ -1509,11 +1509,11 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                   <option value="">Fundo: nenhum</option>
                   {Object.keys(fillColors).map((cor) => <option key={cor} value={cor}>Fundo: {colorLabels[cor]}</option>)}
                 </NativeSelect>
-                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-drap-200" />
                 <Button size="sm" variant="outline" onClick={mesclar} title="Junta o retângulo marcado numa célula só, centralizada"><TableCellsMerge />Mesclar</Button>
                 {mesclagemAtiva ? <Button size="sm" variant="outline" onClick={desmesclar}><TableCellsSplit />Desfazer mesclagem</Button> : null}
                 <Button size="sm" variant="ghost" onClick={limparFormatacao}><RemoveFormatting />Limpar formatação</Button>
-                <span aria-hidden="true" className="mx-1 h-5 w-px bg-hoikos-200" />
+                <span aria-hidden="true" className="mx-1 h-5 w-px bg-drap-200" />
                 <NativeSelect aria-label="Formato das colunas selecionadas" value="" onChange={event => {
                   const format = event.target.value;
                   updateContent("Formato da coluna", content => {
@@ -1557,7 +1557,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                 o "Total da coluna" — a leitura que interessa num orçamento.
                 `aria-live` porque a soma é o propósito da tela e mudava em silêncio.
               */}
-              <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-hoikos-200 bg-hoikos-50 px-3 py-2 text-xs text-hoikos-700">
+              <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md border border-drap-200 bg-drap-50 px-3 py-2 text-xs text-drap-700">
                 <span className="font-mono">
                   {axis
                     ? (axis.kind === "row" ? `Linha ${axis.index + 1}` : `Coluna ${columnName(axis.index)}`)
@@ -1577,16 +1577,16 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
                     <span>Média <strong className="tabular-nums">{displayValue(arredondarExibicao(resumo.media))}</strong></span>
                     <span>Mín <strong className="tabular-nums">{displayValue(resumo.minimo)}</strong></span>
                     <span>Máx <strong className="tabular-nums">{displayValue(resumo.maximo)}</strong></span>
-                    {resumo.numericas !== resumo.preenchidas ? <span className="text-hoikos-500">{resumo.numericas} numéricas</span> : null}
+                    {resumo.numericas !== resumo.preenchidas ? <span className="text-drap-500">{resumo.numericas} numéricas</span> : null}
                   </>
                 ) : null}
                 {resumo.celulas > 1 && resumo.soma === null ? (
                   // Nunca exibir "Soma 0" aqui: zero se lê como zero de verdade.
-                  <span className="text-hoikos-500">{resumo.preenchidas ? "sem número para somar" : "nenhuma célula preenchida"}</span>
+                  <span className="text-drap-500">{resumo.preenchidas ? "sem número para somar" : "nenhuma célula preenchida"}</span>
                 ) : null}
                 {resumo.comErro ? <span className="font-medium">{resumo.comErro} com erro, fora das contas</span> : null}
               </div>
-              <details className="text-xs leading-5 text-hoikos-500">
+              <details className="text-xs leading-5 text-drap-500">
                 <summary className="cursor-pointer">Atalhos</summary>
                 <p className="mt-1">
                   Enter ou F2 edita, setas navegam, Tab anda na linha, Delete limpa. Arraste com o mouse ou use
@@ -1624,7 +1624,7 @@ export function WorksheetsWorkspace({ query = "" }: { query?: string }) {
           <Textarea id="nota-da-celula" autoFocus maxLength={1000} value={notaEditando?.texto ?? ""}
             onChange={(event) => setNotaEditando((atual) => atual ? { ...atual, texto: event.target.value } : atual)}
             placeholder="Ex.: preço cotado com o fornecedor em 12/09" className="min-h-28" />
-          <p className="text-right text-xs text-hoikos-500">{notaEditando?.texto.length ?? 0}/1000</p>
+          <p className="text-right text-xs text-drap-500">{notaEditando?.texto.length ?? 0}/1000</p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setNotaEditando(null)}>Cancelar</Button>
             <Button type="submit">Salvar nota</Button>
@@ -1656,14 +1656,14 @@ function DocumentEditor({ body, cells, onChange, readOnly }: { body: string; cel
         placeholder={"Proposta comercial\n\nTotal dos serviços: {{=SOMA(A1:A20)}}\nValor por m²: {{=ARRED(B1/B2;2)}}"}
         className="min-h-[46vh] font-mono text-[13px]"
       />
-      <p className="mt-2 text-xs leading-5 text-hoikos-500">
+      <p className="mt-2 text-xs leading-5 text-drap-500">
         Escreva o texto e use <code>{"{{=SOMA(A1:A20)}}"}</code> ou <code>{"{{B4}}"}</code> para trazer um número da planilha
         desta mesma peça. O cálculo é refeito a cada alteração.
       </p>
     </div>
     <div>
-      <p className="mb-2 flex items-center gap-2 text-sm font-medium"><Table2 className="size-4 text-hoikos-600" />Como fica</p>
-      <div className="min-h-[46vh] whitespace-pre-wrap rounded-md border border-hoikos-200 bg-white p-4 text-sm leading-7 text-hoikos-900">{preview}</div>
+      <p className="mb-2 flex items-center gap-2 text-sm font-medium"><Table2 className="size-4 text-drap-600" />Como fica</p>
+      <div className="min-h-[46vh] whitespace-pre-wrap rounded-md border border-drap-200 bg-white p-4 text-sm leading-7 text-drap-900">{preview}</div>
     </div>
   </div>;
 }

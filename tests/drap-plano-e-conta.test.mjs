@@ -33,7 +33,7 @@ function drapFalsa(resposta, status = 200) {
 }
 
 /**
- * O motor financeiro é invisível para quem usa a H.OIKOS.
+ * O motor financeiro é invisível para quem usa o DRAP Backoffice.
  *
  * O plano e o valor são daqui. O que a plataforma consulta lá é binário — esta empresa
  * pode emitir nota, ou não pode — e sem isso a pessoa só descobriria tentando e levando
@@ -79,7 +79,7 @@ test("a consulta de módulos que falha não derruba o Financeiro", async () => {
 
 test("não existe rota que leve o usuário para fora do produto", async () => {
   // A opção de abrir a conta no motor financeiro foi removida de propósito: para quem
-  // usa a H.OIKOS, ele não existe.
+  // usa o DRAP Backoffice, ele não existe.
   await assert.rejects(() => source("app/api/integrations/drap/conta/route.ts"), /ENOENT/);
   await assert.rejects(() => source("app/api/integrations/drap/modulos/route.ts"), /ENOENT/);
 
@@ -106,7 +106,7 @@ test("vincular conta existente continua possível, e discreto", async () => {
   const tela = await source("components/drap-conectar.tsx");
   assert.match(tela, /Já tenho uma conta para vincular/);
   // Link de texto, não botão de mesmo peso ao lado do caminho comum.
-  assert.match(tela, /text-xs text-hoikos-500 underline/);
+  assert.match(tela, /text-xs text-drap-500 underline/);
   assert.doesNotMatch(tela, /grid grid-cols-2 gap-2/, "os dois caminhos não têm mais o mesmo peso");
   // Continua funcionando: o campo de código e o envio seguem lá.
   assert.match(tela, /name="codigo"/);

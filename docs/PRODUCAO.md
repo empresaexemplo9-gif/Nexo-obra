@@ -1,13 +1,13 @@
 # Produção: Vercel + Turso
 
-Este documento define quando a H.OIKOS pode ser considerada tecnicamente pronta para uso operacional. Ele não substitui homologação contratual de integrações externas nem revisão jurídica.
+Este documento define quando o DRAP Backoffice pode ser considerada tecnicamente pronta para uso operacional. Ele não substitui homologação contratual de integrações externas nem revisão jurídica.
 
 ## Arquitetura de produção
 
 - **Vercel** publica a aplicação Next.js a partir da branch `main`.
 - **Turso/libSQL** é a fonte relacional da plataforma: empresas, pessoas, clientes, CRM, projetos, tarefas, cronograma, orçamentos, diário, metadados de arquivos, financeiro operacional, auditoria e controles de acesso.
 - **Vercel Blob** guarda somente os binários. Fotos e documentos são cifrados em AES-256-GCM antes do upload; o Turso guarda a referência e os metadados, não o arquivo bruto.
-- **Drap** continua sendo a fonte financeira externa. A H.OIKOS não fabrica saldo nem confirmação de pagamento quando a Drap está indisponível.
+- **Drap** continua sendo a fonte financeira externa. O DRAP Backoffice não fabrica saldo nem confirmação de pagamento quando a Drap está indisponível.
 
 Não copie binários para o Turso. Banco relacional e armazenamento de objetos têm responsabilidades diferentes e a aplicação já está desenhada dessa forma.
 

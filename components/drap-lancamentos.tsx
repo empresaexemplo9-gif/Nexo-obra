@@ -13,13 +13,13 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { camposDoCorpo, lerEnvelope, lerValorBrasileiro } from "@/lib/drap-envelope";
 
-// Operação de lançamentos da Drap dentro da H.OIKOS.
+// Operação de lançamentos da Drap dentro do DRAP Backoffice.
 //
 // As rotas REST (/lancamentos, /parceiros, /categorias) já existiam completas no servidor
 // e nenhuma tela as chamava — por isso a integração parecia não fazer nada. Esta é a porta
 // de entrada delas.
 //
-// A credencial nunca chega aqui: o navegador fala com a própria H.OIKOS, que fala com a
+// A credencial nunca chega aqui: o navegador fala com o próprio DRAP Backoffice, que fala com a
 // Drap usando a chave do tenant da empresa.
 
 type Lancamento = { id: string; data?: string; descricao?: string; tipo?: string; valor?: number; status?: string };
@@ -152,7 +152,7 @@ export function DrapLancamentos({ canEdit, habilitado, centroCusto, escopo }: { 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
             <CardTitle className="text-base">Lançamentos na Drap</CardTitle>
-            <p className="mt-1 text-sm text-hoikos-500">Receitas e despesas gravadas direto no financeiro oficial. A credencial fica no servidor.{total !== null && total > itens.length ? ` Mostrando ${itens.length} de ${total}.` : ""}</p>
+            <p className="mt-1 text-sm text-drap-500">Receitas e despesas gravadas direto no financeiro oficial. A credencial fica no servidor.{total !== null && total > itens.length ? ` Mostrando ${itens.length} de ${total}.` : ""}</p>
           </div>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={() => void carregar()} disabled={carregando} aria-label="Atualizar"><RefreshCw className={carregando ? "animate-spin" : ""} />Atualizar</Button>
@@ -161,12 +161,12 @@ export function DrapLancamentos({ canEdit, habilitado, centroCusto, escopo }: { 
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {carregando ? <div className="grid min-h-64 place-items-center"><LoaderCircle className="animate-spin text-hoikos-600" /></div>
-          : erro ? <div role="alert" className="m-5 rounded-md border border-hoikos-300 bg-hoikos-50 p-4 text-sm leading-6 text-hoikos-800"><p className="font-medium">A consulta à Drap não foi concluída.</p><p className="mt-1">{erro}</p></div>
+        {carregando ? <div className="grid min-h-64 place-items-center"><LoaderCircle className="animate-spin text-drap-600" /></div>
+          : erro ? <div role="alert" className="m-5 rounded-md border border-drap-300 bg-drap-50 p-4 text-sm leading-6 text-drap-800"><p className="font-medium">A consulta à Drap não foi concluída.</p><p className="mt-1">{erro}</p></div>
           : itens.length ? <div className="overflow-x-auto"><Table>
-              <TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Descrição</TableHead><TableHead>Data</TableHead><TableHead>Situação</TableHead><TableHead className="text-right">Valor</TableHead>{canEdit ? <TableHead className="pr-5" /> : null}</TableRow></TableHeader>
+              <TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-5">Descrição</TableHead><TableHead>Data</TableHead><TableHead>Situação</TableHead><TableHead className="text-right">Valor</TableHead>{canEdit ? <TableHead className="pr-5" /> : null}</TableRow></TableHeader>
               <TableBody>{itens.map((item) => <TableRow key={item.id}>
-                <TableCell className="pl-5"><p className="font-medium">{item.descricao || "Sem descrição"}</p><p className="text-xs text-hoikos-500">{item.tipo === "despesa" ? "Despesa" : "Receita"}</p></TableCell>
+                <TableCell className="pl-5"><p className="font-medium">{item.descricao || "Sem descrição"}</p><p className="text-xs text-drap-500">{item.tipo === "despesa" ? "Despesa" : "Receita"}</p></TableCell>
                 <TableCell>{formatarData(item.data)}</TableCell>
                 <TableCell>{item.status ? <Badge variant="secondary">{item.status}</Badge> : "—"}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{item.tipo === "despesa" ? "−" : "+"}{moeda.format(Math.abs(Number(item.valor ?? 0)))}</TableCell>
@@ -182,13 +182,13 @@ export function DrapLancamentos({ canEdit, habilitado, centroCusto, escopo }: { 
         <DialogHeader><DialogTitle>Novo lançamento</DialogTitle><DialogDescription>Grava direto na Drap. Não existe cópia local do valor.{escopo ? ` Centro de custo: ${escopo}.` : ""}</DialogDescription></DialogHeader>
         <form onSubmit={criar} className="space-y-4">
           <fieldset disabled={salvando} className="space-y-4">
-            <div><label htmlFor="descricao" className="mb-1.5 block text-sm font-medium text-hoikos-700">Descrição</label><Input id="descricao" name="descricao" required maxLength={180} /></div>
+            <div><label htmlFor="descricao" className="mb-1.5 block text-sm font-medium text-drap-700">Descrição</label><Input id="descricao" name="descricao" required maxLength={180} /></div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div><label htmlFor="valor" className="mb-1.5 block text-sm font-medium text-hoikos-700">Valor</label><Input id="valor" name="valor" required inputMode="decimal" placeholder="1.500,00" /></div>
-              <div><label htmlFor="data" className="mb-1.5 block text-sm font-medium text-hoikos-700">Data</label><Input id="data" name="data" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></div>
+              <div><label htmlFor="valor" className="mb-1.5 block text-sm font-medium text-drap-700">Valor</label><Input id="valor" name="valor" required inputMode="decimal" placeholder="1.500,00" /></div>
+              <div><label htmlFor="data" className="mb-1.5 block text-sm font-medium text-drap-700">Data</label><Input id="data" name="data" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></div>
             </div>
-            <div><label htmlFor="tipo" className="mb-1.5 block text-sm font-medium text-hoikos-700">Tipo</label>
-              <select id="tipo" name="tipo" defaultValue="receita" className="h-9 w-full rounded-md border border-hoikos-200 bg-white px-3 text-sm outline-none focus:border-hoikos-500 focus:ring-2 focus:ring-hoikos-100">
+            <div><label htmlFor="tipo" className="mb-1.5 block text-sm font-medium text-drap-700">Tipo</label>
+              <select id="tipo" name="tipo" defaultValue="receita" className="h-9 w-full rounded-md border border-drap-200 bg-white px-3 text-sm outline-none focus:border-drap-500 focus:ring-2 focus:ring-drap-100">
                 <option value="receita">Receita</option><option value="despesa">Despesa</option>
               </select>
             </div>

@@ -126,13 +126,13 @@ test("supports verified organization selection", async () => {
   assert.match(onboarding, /organizationSelectionCookie/);
 });
 
-test("uses the supplied H.OIKOS brand across the product", async () => {
+test("uses the supplied DRAP Backoffice brand across the product", async () => {
   const app = await source("components/nexo-app.tsx");
   const layout = await source("app/layout.tsx");
   const brand = await source("components/brand-logo.tsx");
   assert.match(app, /BrandLogo/);
-  assert.match(layout, /H\.OIKOS/);
-  // O manual exige 150 px de largura mínima para o logotipo em uso digital.
+  assert.match(layout, /DRAP Backoffice para Arquitetos/);
+  // Largura mínima de 150 px para o lettering com assinatura em uso digital.
   assert.match(brand, /minWidth: 150/);
   for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page"]) {
     const ui = await source(`components/${screen}.tsx`);
@@ -141,11 +141,11 @@ test("uses the supplied H.OIKOS brand across the product", async () => {
   }
   for (const variant of ["wordmark", "stacked", "symbol", "signature", "lockup"]) {
     for (const tone of ["light", "dark"]) {
-      const svg = await source(`public/brand/hoikos-${variant}-${tone}.svg`);
+      const svg = await source(`public/brand/drap-${variant}-${tone}.svg`);
       assert.match(svg, /viewBox=/);
       assert.match(svg, /<path /);
       assert.doesNotMatch(svg, /<text|<script|<image|filter=/);
-      assert.match(svg, tone === "light" ? /#38301B/ : /#F7F7F0/);
+      assert.match(svg, tone === "light" ? /#0D151F/ : /#FFFFFF/);
     }
   }
   await assert.rejects(source("public/drap-architector-logo.png"));
@@ -155,8 +155,8 @@ test("serves the brand typography from the product itself", async () => {
   const css = await source("app/globals.css");
   const layout = await source("app/layout.tsx");
   // As duas famílias do manual (sans geométrica e serifada fina) vêm do próprio domínio.
-  assert.match(css, /font-family: "Hoikos Sans"/);
-  assert.match(css, /font-family: "Hoikos Display"/);
+  assert.match(css, /font-family: "Drap Sans"/);
+  assert.match(css, /font-family: "Drap Display"/);
   assert.match(css, /--font-display:/);
   assert.doesNotMatch(css, /fonts\.googleapis\.com|fonts\.gstatic\.com|@import url\(/);
   assert.match(layout, /rel="preload"[^>]*fonts\//);
@@ -165,13 +165,12 @@ test("serves the brand typography from the product itself", async () => {
   }
 });
 
-test("uses only the H.OIKOS master palette in the theme", async () => {
+test("uses only the DRAP Backoffice master palette in the theme", async () => {
   const css = await source("app/globals.css");
-  // As sete do GUIA DA IDENTIDADE VISUAL - H.OIKOS, lidas do arquivo do guia. As quatro
-  // primeiras já eram usadas; as três últimas existiam no guia e não tinham token, o que
-  // prendia a interface a um marrom só. O guarda continua fechado: qualquer cor fora
-  // desta lista quebra o teste.
-  const PALETA = ["#000000", "#38301B", "#B5B19E", "#F7F7F0", "#1C190F", "#F4F2E9", "#846100", "#FFFFFF"];
+  // Paleta da plataforma de referência DRAP mais as quatro cores de status. O guarda
+  // continua fechado: qualquer cor fora desta lista quebra o teste — marrom e dourado
+  // da marca anterior incluídos.
+  const PALETA = ["#0D151F", "#204362", "#27557B", "#24323B", "#6F7678", "#99A1A6", "#839099", "#B0ADA8", "#B5B4B1", "#090C12", "#FFFFFF", "#2E7D52", "#D9A441", "#A83232"];
   assert.deepEqual([...new Set(css.match(/#[0-9a-f]{6}/gi))].sort(), PALETA.sort());
   assert.doesNotMatch(css, /gradient\(|blueprint-grid/);
   for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page", "budgets-workspace", "finance-workspace", "diary-workspace", "platform-control", "portal-manager", "portal-shared", "team-access-manager"]) {
@@ -359,7 +358,7 @@ test("creates remote charges only with idempotency and confirmed Drap output", a
   assert.match(charges, /requireActiveDrapConnection/);
   assert.match(adapter, /Idempotency-Key/);
 
-  // A política de lembrete é da H.OIKOS e fica na H.OIKOS: a cobrança da Drap
+  // A política de lembrete é do DRAP Backoffice e fica no DRAP Backoffice: a cobrança da Drap
   // não tem esse campo. Enquanto o contrato era suposição, o adaptador mandava
   // `reminder_policy` no corpo — campo que o outro lado ignora, e que faria o
   // contrato divergir em silêncio. Quem guarda o prazo é a coluna local.

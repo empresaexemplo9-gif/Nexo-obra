@@ -149,8 +149,8 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => { setAberto(null); setControle(null); }}><ArrowLeft />Biblioteca</Button>
-          <div className="min-w-0"><h1 className="truncate text-lg font-semibold text-hoikos-950" title={aberto.name}>{aberto.name}</h1>
-            <p className="text-xs text-hoikos-500">{sizeLabel(aberto.sizeBytes)}{aberto.projectCode ? ` · ${aberto.projectCode}` : ""} · {aberto.uploadedByName}</p></div>
+          <div className="min-w-0"><h1 className="truncate text-lg font-semibold text-drap-950" title={aberto.name}>{aberto.name}</h1>
+            <p className="text-xs text-drap-500">{sizeLabel(aberto.sizeBytes)}{aberto.projectCode ? ` · ${aberto.projectCode}` : ""} · {aberto.uploadedByName}</p></div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => void baixar(aberto)} disabled={baixando === aberto.id}>{baixando === aberto.id ? <LoaderCircle className="animate-spin" /> : <Download />}Baixar original</Button>
@@ -159,7 +159,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
         </div>
       </div>
       {disponiveis.length ? <div className="flex flex-wrap items-center gap-2" aria-label="Converter">
-        <span className="text-sm font-medium text-hoikos-700">Converter para:</span>
+        <span className="text-sm font-medium text-drap-700">Converter para:</span>
         {disponiveis.map((id) => {
           const pronta = id === "dwg-dxf" || Boolean(controle?.disponiveis.includes(id));
           return <Button key={id} size="sm" variant="secondary" disabled={!pronta || convertendo} title={CONVERSOES[id].descricao}
@@ -181,7 +181,7 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
             {conversao?.startsWith("pdf-") ? <fieldset className="space-y-2"><legend className="text-sm font-medium">Páginas</legend>
               {(["todas", "atual"] as const).map((valor) => <label key={valor} className="flex items-center gap-2 text-sm"><input type="radio" name="paginas" value={valor} checked={opcoes.paginas === valor} onChange={() => setOpcoes((o) => ({ ...o, paginas: valor }))} />{valor === "todas" ? "Todas (até 60)" : "Só a página que está na tela"}</label>)}
             </fieldset> : null}
-            <p className="text-xs text-hoikos-500">{canEdit ? "O resultado entra na biblioteca ligado a este arquivo." : "Seu acesso à Prancheta é só de leitura: o resultado será baixado, sem ir para a biblioteca."}</p>
+            <p className="text-xs text-drap-500">{canEdit ? "O resultado entra na biblioteca ligado a este arquivo." : "Seu acesso à Prancheta é só de leitura: o resultado será baixado, sem ir para a biblioteca."}</p>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setConversao(null)} disabled={convertendo}>Cancelar</Button><Button onClick={() => conversao && void executarConversao(conversao)} disabled={convertendo}>{convertendo ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}Converter</Button></DialogFooter>
         </DialogContent>
@@ -191,17 +191,17 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
   }
 
   return <div className="space-y-5">
-    <div className="hoikos-module-heading flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-      <div><p className="eyebrow text-hoikos-600">Arquivos de projeto</p><h1 className="display-heading mt-2 text-3xl text-hoikos-950 sm:text-4xl">Prancheta</h1>
-        <p className="mt-2 max-w-2xl text-sm text-hoikos-500">Abra DWG, PDF, IFC e os demais arquivos de arquitetura, engenharia civil e elétrica sem instalar nada. Converta formatos e envie pela Comunicação no arquivo original.</p></div>
+    <div className="drap-module-heading flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div><p className="eyebrow text-drap-600">Arquivos de projeto</p><h1 className="display-heading mt-2 text-3xl text-drap-950 sm:text-4xl">Prancheta</h1>
+        <p className="mt-2 max-w-2xl text-sm text-drap-500">Abra DWG, PDF, IFC e os demais arquivos de arquitetura, engenharia civil e elétrica sem instalar nada. Converta formatos e envie pela Comunicação no arquivo original.</p></div>
       <NativeSelect aria-label="Filtrar por projeto" value={projeto} onChange={(event) => setProjeto(event.target.value)}><option value="todos">Todos os projetos</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</NativeSelect>
     </div>
 
     {canEdit ? <Card><CardContent className="space-y-3 p-4">
       <div onDragOver={(event) => { event.preventDefault(); setArrastando(true); }} onDragLeave={() => setArrastando(false)} onDrop={soltar}
-        className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors sm:flex-row sm:text-left ${arrastando ? "border-hoikos-600 bg-hoikos-50" : "border-hoikos-200"}`}>
-        <Upload className="size-8 shrink-0 text-hoikos-600" />
-        <div className="min-w-0 flex-1"><p className="font-medium text-hoikos-900">Arraste os arquivos para cá</p><p className="text-xs text-hoikos-500">{FORMATOS_ACEITOS_RESUMO}. Até {MAX_ORG_FILE_LABEL} por arquivo, cifrado antes de chegar ao armazenamento.</p></div>
+        className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors sm:flex-row sm:text-left ${arrastando ? "border-drap-600 bg-drap-50" : "border-drap-200"}`}>
+        <Upload className="size-8 shrink-0 text-drap-600" />
+        <div className="min-w-0 flex-1"><p className="font-medium text-drap-900">Arraste os arquivos para cá</p><p className="text-xs text-drap-500">{FORMATOS_ACEITOS_RESUMO}. Até {MAX_ORG_FILE_LABEL} por arquivo, cifrado antes de chegar ao armazenamento.</p></div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <NativeSelect aria-label="Vincular ao projeto" value={projetoEnvio} onChange={(event) => setProjetoEnvio(event.target.value)}><option value="">Sem projeto</option>{projects.map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}</NativeSelect>
           <Button onClick={() => entrada.current?.click()}><Upload />Escolher arquivos</Button>
@@ -209,22 +209,22 @@ export function PranchetaWorkspace({ projects, query, canEdit }: { projects: Pro
         </div>
       </div>
       {envios.length ? <ul className="space-y-2" aria-label="Envios em andamento">{envios.map((item) => <li key={item.chave} className="rounded-md border p-2 text-sm">
-        <div className="flex items-center justify-between gap-2"><span className="truncate">{item.nome}</span>{item.erro ? <Button size="sm" variant="ghost" onClick={() => setEnvios((atuais) => atuais.filter((envio) => envio.chave !== item.chave))}>Fechar</Button> : <span className="tabular-nums text-hoikos-500">{Math.round(item.progresso * 100)}%</span>}</div>
+        <div className="flex items-center justify-between gap-2"><span className="truncate">{item.nome}</span>{item.erro ? <Button size="sm" variant="ghost" onClick={() => setEnvios((atuais) => atuais.filter((envio) => envio.chave !== item.chave))}>Fechar</Button> : <span className="tabular-nums text-drap-500">{Math.round(item.progresso * 100)}%</span>}</div>
         {item.erro ? <p className="mt-1 text-xs text-red-700" role="alert">{item.erro}</p> : <Progress value={item.progresso * 100} className="mt-1.5 h-1.5" aria-label={`Envio de ${item.nome}`} />}
       </li>)}</ul> : null}
     </CardContent></Card> : null}
 
-    {carregando ? <Card className="p-8 text-center text-sm text-hoikos-500" role="status"><LoaderCircle className="mx-auto mb-3 animate-spin" />Carregando a biblioteca…</Card>
-      : erro ? <Card className="p-6"><p className="text-sm text-hoikos-700" role="alert">{erro}</p><Button variant="outline" className="mt-4" onClick={() => void recarregar()}>Tentar novamente</Button></Card>
-        : !filtrados.length ? <Card className="p-8 text-center"><PenTool className="mx-auto size-8 text-hoikos-500" /><p className="mt-3 font-medium">{arquivos.length ? "Nenhum arquivo com essa busca" : "A biblioteca está vazia"}</p><p className="mt-1 text-sm text-hoikos-500">{canEdit ? "Envie plantas, memoriais, modelos e fotos do projeto." : "Quando alguém da empresa enviar um arquivo, ele aparece aqui."}</p></Card>
+    {carregando ? <Card className="p-8 text-center text-sm text-drap-500" role="status"><LoaderCircle className="mx-auto mb-3 animate-spin" />Carregando a biblioteca…</Card>
+      : erro ? <Card className="p-6"><p className="text-sm text-drap-700" role="alert">{erro}</p><Button variant="outline" className="mt-4" onClick={() => void recarregar()}>Tentar novamente</Button></Card>
+        : !filtrados.length ? <Card className="p-8 text-center"><PenTool className="mx-auto size-8 text-drap-500" /><p className="mt-3 font-medium">{arquivos.length ? "Nenhum arquivo com essa busca" : "A biblioteca está vazia"}</p><p className="mt-1 text-sm text-drap-500">{canEdit ? "Envie plantas, memoriais, modelos e fotos do projeto." : "Quando alguém da empresa enviar um arquivo, ele aparece aqui."}</p></Card>
           : <Card className="overflow-hidden"><ul className="divide-y">{filtrados.map((item) => {
             const Icone = icones[visualizadorPara(item.extension)];
             return <li key={item.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
               <button type="button" onClick={() => setAberto(item)} className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-2">
-                <span className="grid size-10 shrink-0 place-items-center rounded-md bg-hoikos-50 text-hoikos-700"><Icone className="size-5" /></span>
-                <span className="min-w-0"><span className="block truncate font-medium text-hoikos-950">{item.name}</span>
-                  <span className="mt-0.5 block text-xs text-hoikos-500">{item.extension.toUpperCase() || "Arquivo"} · {sizeLabel(item.sizeBytes)}{item.projectCode ? ` · ${item.projectCode}` : ""} · {item.uploadedByName} · {dataCurta(item.createdAt)}</span>
-                  {item.conversion ? <span className="mt-1 block text-xs text-hoikos-600">{CONVERSION_LABELS[item.conversion] ?? "Conversão"}{item.sourceFileId && nomes.get(item.sourceFileId) ? ` de “${nomes.get(item.sourceFileId)}”` : ""}</span> : null}
+                <span className="grid size-10 shrink-0 place-items-center rounded-md bg-drap-50 text-drap-700"><Icone className="size-5" /></span>
+                <span className="min-w-0"><span className="block truncate font-medium text-drap-950">{item.name}</span>
+                  <span className="mt-0.5 block text-xs text-drap-500">{item.extension.toUpperCase() || "Arquivo"} · {sizeLabel(item.sizeBytes)}{item.projectCode ? ` · ${item.projectCode}` : ""} · {item.uploadedByName} · {dataCurta(item.createdAt)}</span>
+                  {item.conversion ? <span className="mt-1 block text-xs text-drap-600">{CONVERSION_LABELS[item.conversion] ?? "Conversão"}{item.sourceFileId && nomes.get(item.sourceFileId) ? ` de “${nomes.get(item.sourceFileId)}”` : ""}</span> : null}
                 </span>
               </button>
               <div className="flex flex-wrap gap-2 sm:shrink-0">

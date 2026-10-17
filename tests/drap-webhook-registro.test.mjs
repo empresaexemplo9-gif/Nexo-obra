@@ -62,19 +62,24 @@ test("o endereço do receptor vem de configuração, nunca do pedido", async () 
 });
 
 test("usa o domínio de produção da Vercel quando não há endereço explícito", () => {
-  ambiente({ VERCEL_PROJECT_PRODUCTION_URL: "hoikos.com.br" });
-  assert.equal(registro.urlDoReceptor(), "https://hoikos.com.br/api/integrations/drap/webhook");
+  ambiente({ VERCEL_PROJECT_PRODUCTION_URL: "exemplo.com.br" });
+  assert.equal(registro.urlDoReceptor(), "https://exemplo.com.br/api/integrations/drap/webhook");
 });
 
 test("o endereço explícito vence o da Vercel", () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br", VERCEL_PROJECT_PRODUCTION_URL: "hoikos.vercel.app" });
-  assert.equal(registro.urlDoReceptor(), "https://app.hoikos.com.br/api/integrations/drap/webhook");
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br", VERCEL_PROJECT_PRODUCTION_URL: "exemplo.vercel.app" });
+  assert.equal(registro.urlDoReceptor(), "https://app.exemplo.com.br/api/integrations/drap/webhook");
+});
+
+test("o nome anterior da variável continua aceito", () => {
+  ambiente({ HOIKOS_PUBLIC_URL: "https://app.exemplo.com.br" });
+  assert.equal(registro.urlDoReceptor(), "https://app.exemplo.com.br/api/integrations/drap/webhook");
 });
 
 test("endereço sem HTTPS não vira destino de webhook", () => {
   // A Drap recusa destino que não seja HTTPS. Falhar aqui, com a configuração à vista, diz
   // o que corrigir; deixar passar renderia um 400 de lá sem explicação.
-  ambiente({ HOIKOS_PUBLIC_URL: "http://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "http://app.exemplo.com.br" });
   assert.equal(registro.urlDoReceptor(), null);
 });
 
@@ -86,12 +91,12 @@ test("sem endereço configurado, não registra e diz por quê", async () => {
 
   assert.equal(resultado.ok, false);
   assert.equal(resultado.codigo, "url-publica-ausente");
-  assert.equal(resultado.motivo.includes("HOIKOS_PUBLIC_URL"), true);
+  assert.equal(resultado.motivo.includes("APP_PUBLIC_URL"), true);
   assert.equal(chamadas.length, 0, "não deve falar com a Drap sem saber o destino");
 });
 
 test("caminho feliz: consulta, cria e devolve o segredo", async () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   const chamadas = fetchFalso([
     { corpo: { items: [] } },
     { status: 201, corpo: { webhook: { id: "w1" }, secret: "segredo-da-drap" } },
@@ -101,19 +106,19 @@ test("caminho feliz: consulta, cria e devolve o segredo", async () => {
 
   assert.equal(resultado.ok, true);
   assert.equal(resultado.segredo, "segredo-da-drap");
-  assert.equal(resultado.url, "https://app.hoikos.com.br/api/integrations/drap/webhook");
+  assert.equal(resultado.url, "https://app.exemplo.com.br/api/integrations/drap/webhook");
   assert.equal(chamadas[0].method, "GET");
   assert.equal(chamadas[1].method, "POST");
-  assert.equal(chamadas[1].body.url, "https://app.hoikos.com.br/api/integrations/drap/webhook");
+  assert.equal(chamadas[1].body.url, "https://app.exemplo.com.br/api/integrations/drap/webhook");
 });
 
 test("consulta antes de criar, porque criar não é idempotente na Drap", async () => {
   // `POST /api/v1/webhooks` não aceita Idempotency-Key. Sem a consulta, uma segunda
   // tentativa criaria a segunda assinatura para a mesma URL e cada evento chegaria em
   // dobro — até alguém notar.
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   const chamadas = fetchFalso([
-    { corpo: { items: [{ id: "w1", url: "https://app.hoikos.com.br/api/integrations/drap/webhook" }] } },
+    { corpo: { items: [{ id: "w1", url: "https://app.exemplo.com.br/api/integrations/drap/webhook" }] } },
   ]);
 
   const resultado = await registro.registrarWebhookNaDrap("drap_live_x");
@@ -124,7 +129,7 @@ test("consulta antes de criar, porque criar não é idempotente na Drap", async 
 });
 
 test("assinatura de outra URL não impede registrar a nossa", async () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([
     { corpo: { items: [{ id: "w1", url: "https://outro-sistema.com.br/hook" }] } },
     { status: 201, corpo: { secret: "s" } },
@@ -137,7 +142,7 @@ test("assinatura de outra URL não impede registrar a nossa", async () => {
 
 test("403 na consulta é reportado como falta de escopo", async () => {
   // Acontece com empresa conectada antes de a plataforma passar a pedir `webhooks:*`.
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([{ status: 403, corpo: { error: "insufficient-scope", detail: "Escopo webhooks:read ausente." } }]);
 
   const resultado = await registro.registrarWebhookNaDrap("drap_live_x");
@@ -147,7 +152,7 @@ test("403 na consulta é reportado como falta de escopo", async () => {
 });
 
 test("recusa da Drap não vira sucesso, e o motivo dela sobe", async () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([
     { corpo: { items: [] } },
     { status: 403, corpo: { error: "module-required", detail: "Módulo Integrações inativo." } },
@@ -163,7 +168,7 @@ test("recusa da Drap não vira sucesso, e o motivo dela sobe", async () => {
 test("criação sem segredo na resposta é falha, não sucesso", async () => {
   // Sem segredo não há como conferir assinatura nenhuma: toda entrega seria recusada com
   // 401. Gravar isso como conectado esconderia um webhook que nunca funciona.
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([{ corpo: { items: [] } }, { status: 201, corpo: { webhook: { id: "w1" } } }]);
 
   const resultado = await registro.registrarWebhookNaDrap("drap_live_x");
@@ -173,7 +178,7 @@ test("criação sem segredo na resposta é falha, não sucesso", async () => {
 });
 
 test("Drap fora do ar não lança: vira estado, não exceção", async () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([() => { throw new Error("ECONNRESET"); }]);
 
   const resultado = await registro.registrarWebhookNaDrap("drap_live_x");
@@ -222,9 +227,9 @@ test("não pede escopo de apagar o que nunca apaga", () => {
 
 test("desconectar remove só a assinatura desta plataforma", async () => {
   // A empresa pode ter assinaturas próprias, criadas pelo dono dela para outros sistemas.
-  // Sair da H.OIKOS não é motivo para derrubá-las.
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
-  const nossa = "https://app.hoikos.com.br/api/integrations/drap/webhook";
+  // Sair do DRAP Backoffice não é motivo para derrubá-las.
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
+  const nossa = "https://app.exemplo.com.br/api/integrations/drap/webhook";
   const chamadas = fetchFalso([
     { corpo: { items: [{ id: "outro", url: "https://outro.com/hook" }, { id: "nosso", url: nossa }] } },
     { status: 204, corpo: {} },
@@ -239,7 +244,7 @@ test("desconectar remove só a assinatura desta plataforma", async () => {
 });
 
 test("sem assinatura nossa, desconectar não apaga nada", async () => {
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   const chamadas = fetchFalso([{ corpo: { items: [{ id: "outro", url: "https://outro.com/hook" }] } }]);
 
   const resultado = await registro.removerWebhookNaDrap("drap_live_x");
@@ -251,7 +256,7 @@ test("sem assinatura nossa, desconectar não apaga nada", async () => {
 test("Drap fora do ar não prende o usuário à conexão", async () => {
   // Travar aqui deixaria alguém preso a um vínculo que mandou desfazer. A falha é dita,
   // com o que fazer à mão.
-  ambiente({ HOIKOS_PUBLIC_URL: "https://app.hoikos.com.br" });
+  ambiente({ APP_PUBLIC_URL: "https://app.exemplo.com.br" });
   fetchFalso([() => { throw new Error("ECONNRESET"); }]);
 
   const resultado = await registro.removerWebhookNaDrap("drap_live_x");

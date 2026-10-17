@@ -87,7 +87,7 @@ test("leitor da equipe não consulta convites restritos", async () => {
 test("minuta distingue desenvolvedora de operadora e não oferece aceite", async () => {
   await mount(ProposedTermsPage, {});
   assert.match(textOf(container), /sem vigência contratual/);
-  assert.match(textOf(container), /A Drap desenvolve a H.OIKOS para venda à adquirente/);
+  assert.match(textOf(container), /A Drap desenvolve o DRAP Backoffice para venda à adquirente/);
   assert.doesNotMatch(textOf(container), /64\.759\.314/);
   assert.ok(container.querySelector('a[href*="l13709compilado"]'));
   assert.ok(container.querySelector('a[href*="l12378"]'));

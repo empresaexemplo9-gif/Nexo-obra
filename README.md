@@ -1,8 +1,8 @@
-# H.OIKOS
+# DRAP Backoffice
 
-> **H.OIKOS — Ecossistema para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
+> **DRAP · Backoffice para arquitetos.** Um SaaS objetivo para escritórios de arquitetura, engenharia, reformas e construção civil.
 
-A interface segue o manual de identidade visual da marca. Os vetores em `public/brand/` são os contornos originais do manual, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo. A paleta usa branco `#FFFFFF` como fundo predominante e preto `#000000`, marrom `#38301B`, acinzentado `#B5B19E`, off-white `#F7F7F0`, marrom quase preto `#1C190F`, off-white quente `#F4F2E9` e dourado `#846100` — este último reservado a acento, por ser a única cor de matiz diferente no guia. A tipografia usa a **Ador Hairline licenciada** nos títulos, servida de `public/fonts/` nos cinco pesos recebidos (Light, Black e três itálicos); a Cormorant fica como reserva. A Barium continua sem licença web e a Jost segue no lugar dela. Consulte [Identidade H.OIKOS](docs/HOIKOS-IDENTITY.md).
+A interface usa a marca **DRAP Backoffice para Arquitetos** (DRAP Soluções Tecnológicas). Os vetores em `public/brand/` trazem o símbolo “D” da DRAP e o lettering em contorno, em cinco aplicações (símbolo, lettering, assinatura, versão empilhada e lockup horizontal), positivo e negativo, com PNG e favicon `.ico`. A paleta é de azuis e cinzas: Abismo Nanquim `#0D151F` no menu, Azul Cianótipo `#204362` no banner e em texto pequeno de destaque, Azul Prancheta `#27557B` na ação principal, Pedra Clara `#B0ADA8` no fundo e Papel Cinza `#B5B4B1` nos cards, mais quatro cores de status em chips. A tipografia não mudou: **Ador Hairline licenciada** nos títulos, servida de `public/fonts/` nos cinco pesos recebidos (Light, Black e três itálicos), com a Cormorant de reserva; a Barium continua sem licença web e a Jost segue no lugar dela. Consulte [Identidade DRAP Backoffice](docs/DRAP-IDENTITY.md).
 
 Este repositório contém uma fundação executável do produto: interface responsiva, criação e seleção de empresas, dados persistentes com isolamento multiempresa e integração financeira remota com a Drap.
 
@@ -34,7 +34,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 - CAD do editor próprio: linha de comandos, medidas fracionárias e importação NEXO, DXF e DWG (conversão local em WebAssembly, sem configuração externa obrigatória). [Comandos](docs/comandos-cad.md), [escopo implementado e pendências](docs/cad-implementation.md) e [como adicionar um formato](docs/adicionar-formato.md). A página `/formatos` informa a compatibilidade real; o CAD completo 2D/3D da especificação ainda está em implementação.
 
 - Política Drap por empresa e módulo: preço oficial como mínimo, acréscimo opcional exclusivo do superadministrador, revisão concorrente e preço congelado por solicitação. Confirmação HMAC registra base, total e comissão mensal para conciliação; não comprova pagamento. Contratação real aguarda conclusão/homologação pela Drap, por orientação do responsável. Consulte [Ativação e controle](docs/DRAP-ACTIVATION.md).
-- Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em branco, marrom e off-white, com profundidade e acentos dourados.
+- Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em Pedra Clara e Papel Cinza, menu em Abismo Nanquim e banner em Azul Cianótipo.
 - Áreas navegáveis de projetos, obras, orçamentos, cronograma, Prancheta, Editor CAD, Criador de layout, Comunicação, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
@@ -63,7 +63,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 - Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).
 - Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
-- Termos de Uso versionados e aceite eletrônico com evidência original preservada. Nova [minuta jurídica para a futura operadora](docs/TERMOS-HOIKOS-2026-09-20.md) em `/termos/proposta`, sem vigência nem coleta de aceite. A Drap desenvolve para venda à adquirente; não foi identificada como operadora H.OIKOS.
+- Termos de Uso versionados e aceite eletrônico com evidência original preservada. Nova [minuta jurídica para a futura operadora](docs/TERMOS-DRAP-BACKOFFICE-2026-09-20.md) em `/termos/proposta`, sem vigência nem coleta de aceite. A Drap desenvolve para venda à adquirente; não foi identificada como operadora do DRAP Backoffice.
 - Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
 - Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado. O superadmin opera o mesmo ambiente pela sessão da plataforma, com recursos que a manutenção não tem.
 - Identidade e organização resolvidas no servidor pelos cabeçalhos autenticados da plataforma.
@@ -196,7 +196,7 @@ credenciais já guardadas — as empresas precisam reconectar.
 
 ### O motor financeiro é invisível
 
-O plano e o valor são da H.OIKOS. Para quem usa a plataforma, a Drap não aparece: não há
+O plano e o valor são do DRAP Backoffice. Para quem usa a plataforma, a Drap não aparece: não há
 preço dela na tela, não há link para o produto dela, e não há como sair daqui para lá.
 Mandar alguém para outro produto no meio do trabalho seria anunciar um fornecedor que não
 é problema do cliente.
@@ -257,7 +257,7 @@ Financeiro só descobria lançamento novo quando alguém abria a tela, e ligar o
 um humano colar URL e copiar segredo no painel da Drap, empresa por empresa — o mesmo
 "segundo login adiado" que o provisionamento existe para eliminar.
 
-Para isso funcionar, a instalação precisa saber o próprio endereço público: `HOIKOS_PUBLIC_URL`,
+Para isso funcionar, a instalação precisa saber o próprio endereço público: `APP_PUBLIC_URL`,
 ou o domínio de produção que a Vercel preenche sozinha. O endereço **não** é derivado do
 cabeçalho `Host` da requisição — esse cabeçalho vem do cliente, e aceitá-lo deixaria quem
 conecta escolher para onde o financeiro da empresa é enviado.
@@ -277,9 +277,9 @@ A Drap publica a API em `https://empresa.drap.app.br/api-docs`. Lançamentos, pa
 
 Por isso:
 
-- o resumo financeiro vem somado pela Drap em `/api/v1/resumo`; quando o endpoint não existe no ambiente, a H.OIKOS soma pelos lançamentos e marca o total como parcial em vez de exibi-lo como completo;
+- o resumo financeiro vem somado pela Drap em `/api/v1/resumo`; quando o endpoint não existe no ambiente, o DRAP Backoffice soma pelos lançamentos e marca o total como parcial em vez de exibi-lo como completo;
 - o token nunca é enviado ao navegador nem entra em variável `NEXT_PUBLIC_*`;
-- a chave resolve o tenant no servidor da Drap; a H.OIKOS nunca envia identificador de empresa na chamada;
+- a chave resolve o tenant no servidor da Drap; o DRAP Backoffice nunca envia identificador de empresa na chamada;
 - o adaptador aceita nomes de campos comuns em português e inglês, mas deve ser ajustado ao JSON oficial;
 - enquanto a credencial real não for homologada, a tela informa que a integração está indisponível, sem fabricar valores;
 - nenhuma escrita financeira é liberada antes da homologação com chave real.
@@ -287,7 +287,7 @@ Por isso:
 ### Conectar uma empresa
 
 Com `DRAP_PARTNER_TOKEN` e `SECRETS_ENCRYPTION_KEY` configurados, quem administra a
-empresa conecta pela própria H.OIKOS, em Financeiro → Conexão DRAP:
+empresa conecta pelo próprio DRAP Backoffice, em Financeiro → Conexão DRAP:
 
 - **Criar empresa** — a empresa ainda não existe na Drap. A plataforma cria e guarda a
   chave dela, cifrada. O documento (CNPJ/CPF) é o que impede empresa duplicada lá.
@@ -315,13 +315,13 @@ O roteiro completo — pré-requisitos, preset de escopo correto e o que cada fa
 
 ## Divisão de responsabilidade dos dados
 
-| Dado | Fonte oficial | Uso na H.OIKOS |
+| Dado | Fonte oficial | Uso no DRAP Backoffice |
 | --- | --- | --- |
-| Clientes | H.OIKOS, com ID remoto opcional | CRM, projeto, obra e proposta |
-| Projetos e obras | H.OIKOS | Contexto central de operação |
-| Tarefas, horas e cronograma | H.OIKOS | Planejamento e execução |
-| Orçamentos técnicos e versões | H.OIKOS | Composição, BDI, margem e aceite |
-| Arquivos e revisões | H.OIKOS | R2 + metadados no banco |
+| Clientes | DRAP Backoffice, com ID remoto opcional | CRM, projeto, obra e proposta |
+| Projetos e obras | DRAP Backoffice | Contexto central de operação |
+| Tarefas, horas e cronograma | DRAP Backoffice | Planejamento e execução |
+| Orçamentos técnicos e versões | DRAP Backoffice | Composição, BDI, margem e aceite |
+| Arquivos e revisões | DRAP Backoffice | R2 + metadados no banco |
 | Lançamentos, contas e saldo | Drap | Consulta remota e vínculo por centro de custo |
 | Cobranças, PIX, boleto e nota | Drap | Acionamento remoto após confirmação |
 | DRE e conciliação | Drap | Leitura e contextualização por projeto |
@@ -490,7 +490,7 @@ CLAUDE.md
 - Conector Drap homologado em sandbox.
 - Vínculo de projeto com centro de custo remoto, recortado no servidor da Drap pelo campo `centro_custo` do lançamento. Obra sem movimento e centro de custo que não casa aparecem como casos diferentes na tela. **Concluído no produto; homologação Drap pendente.**
 - Leitura de saldos e contas por projeto, com relatório CSV. Os totais vêm somados pela Drap, com plano B local declarado como parcial. **Concluída no produto; homologação Drap pendente.**
-- Criação remota de cobrança com idempotência e política de lembretes. A cobrança sai na conta Asaas da própria empresa; os lembretes são da H.OIKOS. **Concluída no produto; homologação Drap pendente.**
+- Criação remota de cobrança com idempotência e política de lembretes. A cobrança sai na conta Asaas da própria empresa; os lembretes são do DRAP Backoffice. **Concluída no produto; homologação Drap pendente.**
 - Processador assíncrono de webhook, reconciliação e tela de falhas.
 - Alertas úteis: atraso, caixa negativo, margem baixa e tarefa bloqueadora.
 

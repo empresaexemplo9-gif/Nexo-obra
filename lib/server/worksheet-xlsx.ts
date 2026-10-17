@@ -95,7 +95,7 @@ export async function importXlsx(bytes: Buffer): Promise<ImportedSheet[]> {
 
 export async function exportXlsx(name: string, content: z.infer<typeof contentSchema>, columns: number) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "H.OIKOS";
+  workbook.creator = "DRAP Backoffice";
   const sheet = workbook.addWorksheet(name.replace(/[\\/*?:[\]\u0000-\u001f]/g, " ").trim().slice(0, 31).replace(/^'+|'+$/g, "") || "Planilha");
   const computed = evaluateSheet(content.cells), colors = conditionalColors(computed, content.advanced ?? emptyAdvanced);
   if (content.frozenColumns > 0) sheet.views = [{ state: "frozen", xSplit: content.frozenColumns, ySplit: 0 }];

@@ -229,66 +229,66 @@ export function ComunicacaoWorkspace({ canUseLibrary, onUnread }: { canUseLibrar
   const semDireta = lista?.members.filter((m) => !diretas.some((d) => d.otherMemberId === m.id)) ?? [];
 
   const itemDaLista = (item: Conversa) => <li key={item.id}><button type="button" onClick={() => setAtiva(item.id)} aria-current={item.id === ativa ? "true" : undefined}
-    className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-hoikos-50 focus-visible:outline-2 ${item.id === ativa ? "bg-hoikos-100" : ""}`}>
-    {item.kind === "canal" ? <Hash className="mt-0.5 size-4 shrink-0 text-hoikos-500" /> : <UserRound className="mt-0.5 size-4 shrink-0 text-hoikos-500" />}
-    <span className="min-w-0 flex-1"><span className={`block truncate text-sm ${item.unread ? "font-semibold text-hoikos-950" : "text-hoikos-800"}`}>{item.name}</span>
-      {item.lastPreview ? <span className="block truncate text-xs text-hoikos-500">{item.lastPreview}</span> : null}</span>
+    className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-drap-50 focus-visible:outline-2 ${item.id === ativa ? "bg-drap-100" : ""}`}>
+    {item.kind === "canal" ? <Hash className="mt-0.5 size-4 shrink-0 text-drap-500" /> : <UserRound className="mt-0.5 size-4 shrink-0 text-drap-500" />}
+    <span className="min-w-0 flex-1"><span className={`block truncate text-sm ${item.unread ? "font-semibold text-drap-950" : "text-drap-800"}`}>{item.name}</span>
+      {item.lastPreview ? <span className="block truncate text-xs text-drap-500">{item.lastPreview}</span> : null}</span>
     {item.unread ? <Badge className="shrink-0" aria-label={`${item.unread} não lidas`}>{item.unread > 99 ? "99+" : item.unread}</Badge> : null}
   </button></li>;
 
   return <div className="space-y-4">
     {/* No celular, com a conversa aberta, o cabeçalho sai para a caixa de mensagem caber na tela. */}
-    <div className={`hoikos-module-heading ${ativa ? "hidden md:block" : ""}`}><p className="eyebrow text-hoikos-600">Equipe</p><h1 className="display-heading mt-2 text-3xl text-hoikos-950 sm:text-4xl">Comunicação</h1>
-      <p className="mt-2 max-w-2xl text-sm text-hoikos-500">Mensagens, arquivos no formato original e lembretes com data, só entre as pessoas desta empresa.</p></div>
+    <div className={`drap-module-heading ${ativa ? "hidden md:block" : ""}`}><p className="eyebrow text-drap-600">Equipe</p><h1 className="display-heading mt-2 text-3xl text-drap-950 sm:text-4xl">Comunicação</h1>
+      <p className="mt-2 max-w-2xl text-sm text-drap-500">Mensagens, arquivos no formato original e lembretes com data, só entre as pessoas desta empresa.</p></div>
     <Card className="overflow-hidden p-0">
       <div className="grid h-[calc(100svh-8rem)] min-h-[440px] md:h-[calc(100svh-13rem)] md:min-h-[520px] md:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className={`${ativa ? "hidden md:flex" : "flex"} min-h-0 flex-col border-r border-hoikos-200`} aria-label="Conversas">
+        <aside className={`${ativa ? "hidden md:flex" : "flex"} min-h-0 flex-col border-r border-drap-200`} aria-label="Conversas">
           {erroLista ? <div className="p-4 text-sm" role="alert">{erroLista}<Button size="sm" variant="outline" className="mt-2" onClick={() => void recarregarLista()}>Tentar novamente</Button></div>
             : !lista ? <p className="flex items-center gap-2 p-4 text-sm" role="status"><LoaderCircle className="animate-spin" />Carregando…</p>
               : <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-2">
-                <section><div className="flex items-center justify-between px-2"><h2 className="text-xs font-semibold uppercase tracking-wider text-hoikos-500">Canais</h2>
+                <section><div className="flex items-center justify-between px-2"><h2 className="text-xs font-semibold uppercase tracking-wider text-drap-500">Canais</h2>
                   <Button size="icon" variant="ghost" className="size-7" onClick={() => setNovoCanal(novoCanal === null ? "" : null)} aria-label="Novo canal" aria-expanded={novoCanal !== null}><Plus /></Button></div>
                   {novoCanal !== null ? <form className="flex gap-1 p-2" onSubmit={(event) => { event.preventDefault(); void criarNovoCanal(); }}>
                     <Input autoFocus value={novoCanal} onChange={(event) => setNovoCanal(event.target.value)} maxLength={60} placeholder="Ex.: Obra Casa Alfa" aria-label="Nome do canal" className="h-8" />
                     <Button size="sm" type="submit" disabled={novoCanal.trim().length < 2}>Criar</Button></form> : null}
                   <ul>{canais.map(itemDaLista)}</ul></section>
-                <section><h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-hoikos-500">Conversas diretas</h2>
+                <section><h2 className="px-2 text-xs font-semibold uppercase tracking-wider text-drap-500">Conversas diretas</h2>
                   <ul>{diretas.map(itemDaLista)}</ul>
                   {semDireta.length ? <NativeSelect aria-label="Conversar com" value="" onChange={(event) => void conversarCom(event.target.value)} className="mx-2 mt-2 w-[calc(100%-1rem)]">
                     <option value="">Conversar com…</option>{semDireta.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</NativeSelect>
-                    : !lista.members.length ? <p className="px-2 pt-1 text-xs text-hoikos-500">Convide pessoas em Equipe para conversar.</p> : null}
+                    : !lista.members.length ? <p className="px-2 pt-1 text-xs text-drap-500">Convide pessoas em Equipe para conversar.</p> : null}
                 </section>
               </div>}
         </aside>
 
         <section className={`${ativa ? "flex" : "hidden md:flex"} min-h-0 min-w-0 flex-col`} aria-label="Mensagens">
-          {!conversa ? <div className="grid flex-1 place-items-center p-6 text-center text-sm text-hoikos-500"><div><MessageCircle className="mx-auto mb-2 size-8" />Escolha uma conversa.</div></div> : <>
-            <header className="flex items-center gap-2 border-b border-hoikos-200 p-2">
+          {!conversa ? <div className="grid flex-1 place-items-center p-6 text-center text-sm text-drap-500"><div><MessageCircle className="mx-auto mb-2 size-8" />Escolha uma conversa.</div></div> : <>
+            <header className="flex items-center gap-2 border-b border-drap-200 p-2">
               <Button size="icon" variant="ghost" className="md:hidden" onClick={() => setAtiva(null)} aria-label="Voltar às conversas"><ArrowLeft /></Button>
-              {conversa.kind === "canal" ? <Hash className="size-4 text-hoikos-500" /> : <UserRound className="size-4 text-hoikos-500" />}
+              {conversa.kind === "canal" ? <Hash className="size-4 text-drap-500" /> : <UserRound className="size-4 text-drap-500" />}
               <h2 className="min-w-0 flex-1 truncate font-semibold">{conversa.name}</h2>
               {conversa.canDelete ? <Button size="sm" variant="ghost" onClick={() => void excluirCanal(conversa)}><Trash2 />Excluir canal</Button> : null}
             </header>
-            <div ref={rolagem} className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-hoikos-50/40 p-3" aria-live="polite"
+            <div ref={rolagem} className="min-h-0 flex-1 space-y-1 overflow-y-auto bg-drap-50/40 p-3" aria-live="polite"
               onScroll={(event) => { const el = event.currentTarget; noFim.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; }}>
               {temMais ? <div className="text-center"><Button size="sm" variant="outline" onClick={() => void carregarAnteriores()}>Mensagens anteriores</Button></div> : null}
               {carregandoMensagens ? <p className="flex items-center justify-center gap-2 p-6 text-sm" role="status"><LoaderCircle className="animate-spin" />Abrindo…</p>
                 : erroMensagens ? <p className="p-6 text-center text-sm" role="alert">{erroMensagens}</p>
-                  : !mensagens.length ? <p className="p-6 text-center text-sm text-hoikos-500">Nenhuma mensagem ainda. Escreva a primeira.</p>
-                    : mensagens.map((mensagem) => <article key={mensagem.id} className={`group rounded-lg px-3 py-2 ${mensagem.mine ? "ml-auto bg-hoikos-100" : "bg-white"} max-w-[min(42rem,92%)] shadow-sm`}>
-                      <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-hoikos-500"><span className="font-semibold text-hoikos-900">{mensagem.mine ? "Você" : mensagem.authorName}</span><time dateTime={mensagem.createdAt}>{horaDaMensagem(mensagem.createdAt)}</time>{mensagem.editedAt && !mensagem.deleted ? <span>(editada)</span> : null}</p>
-                      {mensagem.deleted ? <p className="mt-1 text-sm italic text-hoikos-500">Mensagem apagada.</p>
+                  : !mensagens.length ? <p className="p-6 text-center text-sm text-drap-500">Nenhuma mensagem ainda. Escreva a primeira.</p>
+                    : mensagens.map((mensagem) => <article key={mensagem.id} className={`group rounded-lg px-3 py-2 ${mensagem.mine ? "ml-auto bg-drap-100" : "bg-white"} max-w-[min(42rem,92%)] shadow-sm`}>
+                      <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-drap-500"><span className="font-semibold text-drap-900">{mensagem.mine ? "Você" : mensagem.authorName}</span><time dateTime={mensagem.createdAt}>{horaDaMensagem(mensagem.createdAt)}</time>{mensagem.editedAt && !mensagem.deleted ? <span>(editada)</span> : null}</p>
+                      {mensagem.deleted ? <p className="mt-1 text-sm italic text-drap-500">Mensagem apagada.</p>
                         : editando?.id === mensagem.id ? <div className="mt-1 space-y-2"><Textarea value={editando.texto} onChange={(event) => setEditando({ id: mensagem.id, texto: event.target.value })} maxLength={4000} rows={3} aria-label="Editar mensagem" autoFocus />
                           <div className="flex gap-2"><Button size="sm" onClick={() => void salvarEdicao()} disabled={!editando.texto.trim()}>Salvar</Button><Button size="sm" variant="outline" onClick={() => setEditando(null)}>Cancelar</Button></div></div>
-                          : mensagem.reminder ? <div className={`mt-1 rounded-md border p-2 ${mensagem.reminder.doneAt ? "border-hoikos-200 bg-white/60" : "border-amber-300 bg-amber-50"}`}>
-                            <p className="flex items-center gap-1.5 text-xs font-semibold text-hoikos-700"><CalendarClock className="size-3.5" />Lembrete para {mensagem.reminder.targetName ?? "todos da conversa"} · {dataCurta(mensagem.reminder.dueDay)}</p>
-                            <p className={`mt-1 whitespace-pre-wrap break-words text-sm ${mensagem.reminder.doneAt ? "text-hoikos-500 line-through" : "text-hoikos-950"}`}>{mensagem.reminder.text}</p>
-                            {mensagem.reminder.doneAt ? <p className="mt-1 text-xs text-hoikos-600">Feito por {mensagem.reminder.doneByName}.</p> : null}
+                          : mensagem.reminder ? <div className={`mt-1 rounded-md border p-2 ${mensagem.reminder.doneAt ? "border-drap-200 bg-white/60" : "border-amber-300 bg-amber-50"}`}>
+                            <p className="flex items-center gap-1.5 text-xs font-semibold text-drap-700"><CalendarClock className="size-3.5" />Lembrete para {mensagem.reminder.targetName ?? "todos da conversa"} · {dataCurta(mensagem.reminder.dueDay)}</p>
+                            <p className={`mt-1 whitespace-pre-wrap break-words text-sm ${mensagem.reminder.doneAt ? "text-drap-500 line-through" : "text-drap-950"}`}>{mensagem.reminder.text}</p>
+                            {mensagem.reminder.doneAt ? <p className="mt-1 text-xs text-drap-600">Feito por {mensagem.reminder.doneByName}.</p> : null}
                             {mensagem.reminder.canComplete ? <Button size="sm" variant="outline" className="mt-2" onClick={() => void marcarLembrete(mensagem, !mensagem.reminder!.doneAt)}>{mensagem.reminder.doneAt ? <><RotateCcw />Reabrir</> : <><Check />Marcar como feito</>}</Button> : null}
                           </div>
-                            : mensagem.body ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-hoikos-950">{mensagem.body}</p> : null}
-                      {mensagem.files.length ? <ul className="mt-2 space-y-1.5">{mensagem.files.map((arquivo) => <li key={arquivo.id} className="flex flex-wrap items-center gap-2 rounded-md border border-hoikos-200 bg-white p-2">
-                        <Paperclip className="size-4 shrink-0 text-hoikos-500" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{arquivo.name}</span><span className="text-xs text-hoikos-500">{arquivo.extension.toUpperCase()} · {sizeLabel(arquivo.sizeBytes)}</span></span>
+                            : mensagem.body ? <p className="mt-1 whitespace-pre-wrap break-words text-sm text-drap-950">{mensagem.body}</p> : null}
+                      {mensagem.files.length ? <ul className="mt-2 space-y-1.5">{mensagem.files.map((arquivo) => <li key={arquivo.id} className="flex flex-wrap items-center gap-2 rounded-md border border-drap-200 bg-white p-2">
+                        <Paperclip className="size-4 shrink-0 text-drap-500" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{arquivo.name}</span><span className="text-xs text-drap-500">{arquivo.extension.toUpperCase()} · {sizeLabel(arquivo.sizeBytes)}</span></span>
                         {visualizadorPara(arquivo.extension) !== "nenhum" ? <Button size="sm" variant="outline" onClick={() => setVisualizando(arquivo)}><Eye />Abrir</Button> : null}
                         <Button size="sm" variant="outline" onClick={() => void downloadAndSave(arquivo).catch((causa) => toast.error(causa instanceof Error ? causa.message : "Não foi possível baixar."))}><Download />Baixar</Button>
                       </li>)}</ul> : null}
@@ -299,17 +299,17 @@ export function ComunicacaoWorkspace({ canUseLibrary, onUnread }: { canUseLibrar
                     </article>)}
             </div>
 
-            <form className="space-y-2 border-t border-hoikos-200 bg-white p-2" onSubmit={(event) => { event.preventDefault(); void enviar(); }}>
+            <form className="space-y-2 border-t border-drap-200 bg-white p-2" onSubmit={(event) => { event.preventDefault(); void enviar(); }}>
               {anexos.length ? <ul className="flex flex-wrap gap-2" aria-label="Anexos">{anexos.map((anexo) => <li key={anexo.chave} className="flex max-w-full items-center gap-2 rounded-md border px-2 py-1 text-xs">
                 <Paperclip className="size-3.5 shrink-0" /><span className="max-w-[12rem] truncate">{anexo.nome}</span>
                 {anexo.erro ? <span className="text-red-700" role="alert">{anexo.erro}</span> : !anexo.arquivo ? <Progress value={anexo.progresso * 100} className="h-1.5 w-16" aria-label={`Envio de ${anexo.nome}`} /> : <Check className="size-3.5 text-green-700" aria-label="Pronto" />}
-                <button type="button" onClick={() => removerAnexo(anexo)} aria-label={`Remover ${anexo.nome}`} className="rounded p-0.5 hover:bg-hoikos-100"><X className="size-3.5" /></button>
+                <button type="button" onClick={() => removerAnexo(anexo)} aria-label={`Remover ${anexo.nome}`} className="rounded p-0.5 hover:bg-drap-100"><X className="size-3.5" /></button>
               </li>)}</ul> : null}
               {lembrete ? <div className="flex flex-wrap items-end gap-2 rounded-md bg-amber-50 p-2">
                 <div><Label htmlFor="lembrete-dia" className="text-xs">Lembrar em</Label><Input id="lembrete-dia" type="date" value={lembrete.dia} min={hojeLocal()} onChange={(event) => setLembrete({ ...lembrete, dia: event.target.value })} className="mt-1 h-8" /></div>
                 <div><Label htmlFor="lembrete-para" className="text-xs">Para</Label><NativeSelect id="lembrete-para" value={lembrete.para} onChange={(event) => setLembrete({ ...lembrete, para: event.target.value })} className="mt-1 h-8">
                   <option value="">Todos da conversa</option>{pessoasDaConversa.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</NativeSelect></div>
-                <p className="flex-1 text-xs text-hoikos-600">Aparece em Lembretes do dia até alguém marcar como feito.</p>
+                <p className="flex-1 text-xs text-drap-600">Aparece em Lembretes do dia até alguém marcar como feito.</p>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setLembrete(null)}>Cancelar lembrete</Button>
               </div> : null}
               <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
@@ -365,9 +365,9 @@ function ListaDaPrancheta({ onEscolher }: { onEscolher: (arquivo: OrgFileInfo) =
     <Input value={busca} onChange={(event) => setBusca(event.target.value)} placeholder="Buscar pelo nome" aria-label="Buscar arquivo" />
     <div className="max-h-80 overflow-y-auto">
       {erro ? <p className="p-3 text-sm" role="alert">{erro}</p> : !arquivos ? <p className="flex items-center gap-2 p-3 text-sm" role="status"><LoaderCircle className="animate-spin" />Carregando…</p>
-        : !filtrados.length ? <p className="p-3 text-sm text-hoikos-500">Nenhum arquivo encontrado.</p>
-          : <ul className="divide-y">{filtrados.map((a) => <li key={a.id}><button type="button" onClick={() => onEscolher(a)} className="flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-hoikos-50 focus-visible:outline-2">
-            <Paperclip className="size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{a.name}</span><span className="shrink-0 text-xs text-hoikos-500">{sizeLabel(a.sizeBytes)}</span></button></li>)}</ul>}
+        : !filtrados.length ? <p className="p-3 text-sm text-drap-500">Nenhum arquivo encontrado.</p>
+          : <ul className="divide-y">{filtrados.map((a) => <li key={a.id}><button type="button" onClick={() => onEscolher(a)} className="flex w-full items-center gap-2 p-2 text-left text-sm hover:bg-drap-50 focus-visible:outline-2">
+            <Paperclip className="size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{a.name}</span><span className="shrink-0 text-xs text-drap-500">{sizeLabel(a.sizeBytes)}</span></button></li>)}</ul>}
     </div>
   </>;
 }

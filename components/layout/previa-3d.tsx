@@ -139,11 +139,11 @@ export const Previa3d = forwardRef<Previa3dRef, { doc: LayoutConteudo }>(functio
   }, [doc, pronto]);
 
   return <div className="flex h-full min-h-0 flex-col">
-    <div className="flex flex-wrap items-center gap-2 border-b border-hoikos-200 bg-white p-2">
+    <div className="flex flex-wrap items-center gap-2 border-b border-drap-200 bg-white p-2">
       <Button size="sm" variant="outline" onClick={() => vista("perspectiva")} disabled={!pronto}><Maximize />Perspectiva</Button>
       <Button size="sm" variant="outline" onClick={() => vista("cima")} disabled={!pronto}><MoveDown />De cima</Button>
       <Button size="sm" variant="outline" onClick={() => vista("frente")} disabled={!pronto}><Eye />Altura dos olhos</Button>
-      <p className="hidden text-xs text-hoikos-500 md:block">Arraste para girar · role para aproximar · botão direito para mover</p>
+      <p className="hidden text-xs text-drap-500 md:block">Arraste para girar · role para aproximar · botão direito para mover</p>
     </div>
     <div className="relative min-h-[320px] flex-1">
       <div ref={host} className="absolute inset-0" role="img" aria-label="Prévia 3D do layout" />

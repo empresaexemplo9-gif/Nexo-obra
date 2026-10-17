@@ -46,7 +46,7 @@ export async function POST(request: Request, { params }: Params) {
     if (access.expires_at <= Date.now()) throw new ApiError(410, "portal_invitation_expired", "Este convite expirou. Solicite um novo à empresa.");
     const email = access.email.trim().toLowerCase();
     if (await credentialExists(email)) {
-      throw new ApiError(409, "account_exists", `O e-mail ${email} já tem acesso à H.OIKOS. Entre com a sua senha e abra o convite de novo.`);
+      throw new ApiError(409, "account_exists", `O e-mail ${email} já tem acesso ao DRAP Backoffice. Entre com a sua senha e abra o convite de novo.`);
     }
 
     const user = { id: crypto.randomUUID(), email, displayName: access.name || email.split("@")[0] };
@@ -80,7 +80,7 @@ export async function POST(request: Request, { params }: Params) {
     const gravada = await db.prepare("SELECT user_id FROM user_credentials WHERE email = ?1").bind(user.email).first<{ user_id: string }>();
     if (gravada?.user_id !== user.id) {
       await devolver();
-      throw new ApiError(409, "account_exists", `O e-mail ${email} já tem acesso à H.OIKOS. Entre com a sua senha e abra o convite de novo.`);
+      throw new ApiError(409, "account_exists", `O e-mail ${email} já tem acesso ao DRAP Backoffice. Entre com a sua senha e abra o convite de novo.`);
     }
     const session = await createSessionCookie(user);
     return Response.json({ accepted: true, accessId: access.id }, { status: 201, headers: { ...portalHeaders, "Set-Cookie": session.cookie } });

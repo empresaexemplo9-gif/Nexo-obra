@@ -83,8 +83,8 @@ export function LayoutWorkspace({ projects, query, canEdit, empresa }: { project
   const filtrados = (lista ?? []).filter((item) => !termo || `${item.name} ${item.projectCode ?? ""} ${item.projectName ?? ""}`.toLocaleLowerCase("pt-BR").includes(termo));
 
   return <div className="space-y-5">
-    <div className="hoikos-module-heading"><p className="eyebrow text-hoikos-600">Proposta</p><h1 className="display-heading mt-2 text-3xl text-hoikos-950 sm:text-4xl">Criador de layout</h1>
-      <p className="mt-2 max-w-2xl text-sm text-hoikos-500">Monte a planta com móveis, eletrodomésticos e carros na medida real e mostre ao cliente, em 3D, como o espaço vai ficar pronto.</p></div>
+    <div className="drap-module-heading"><p className="eyebrow text-drap-600">Proposta</p><h1 className="display-heading mt-2 text-3xl text-drap-950 sm:text-4xl">Criador de layout</h1>
+      <p className="mt-2 max-w-2xl text-sm text-drap-500">Monte a planta com móveis, eletrodomésticos e carros na medida real e mostre ao cliente, em 3D, como o espaço vai ficar pronto.</p></div>
     {canEdit ? <Card><CardContent className="p-4">
       <form className="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1.5fr)_minmax(0,1.5fr)_auto] md:items-end" onSubmit={(evento) => { evento.preventDefault(); void criar(); }}>
         <div><Label htmlFor="layout-nome">Nome</Label><Input id="layout-nome" className="mt-1.5" value={novo.name} maxLength={100} onChange={(evento) => setNovo({ ...novo, name: evento.target.value })} placeholder="Ex.: Casa Lago — estudo de layout" /></div>
@@ -92,15 +92,15 @@ export function LayoutWorkspace({ projects, query, canEdit, empresa }: { project
         <div><Label htmlFor="layout-projeto">Projeto (opcional)</Label><NativeSelect id="layout-projeto" className="mt-1.5 w-full" value={novo.projectId} onChange={(evento) => setNovo({ ...novo, projectId: evento.target.value })}><option value="">Sem projeto</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</NativeSelect></div>
         <Button type="submit" disabled={criando}>{criando ? <LoaderCircle className="animate-spin" /> : <Plus />}Criar layout</Button>
       </form>
-      <p className="mt-2 text-xs text-hoikos-500">{MODELOS.find((modelo) => modelo.id === novo.modelo)?.descricao}</p>
+      <p className="mt-2 text-xs text-drap-500">{MODELOS.find((modelo) => modelo.id === novo.modelo)?.descricao}</p>
     </CardContent></Card> : null}
     {erro ? <Card className="p-6"><p className="text-sm" role="alert">{erro}</p><Button variant="outline" className="mt-3" onClick={() => void recarregar()}>Tentar novamente</Button></Card>
       : !lista ? <Card className="p-8 text-center text-sm" role="status"><LoaderCircle className="mx-auto mb-2 animate-spin" />Carregando layouts…</Card>
-        : !filtrados.length ? <Card className="p-8 text-center"><Sofa className="mx-auto size-8 text-hoikos-500" /><p className="mt-3 font-medium">{lista.length ? "Nenhum layout com essa busca" : "Nenhum layout ainda"}</p><p className="mt-1 text-sm text-hoikos-500">{canEdit ? "Comece por um modelo pronto e ajuste à obra." : "Quando a equipe criar um layout, ele aparece aqui."}</p></Card>
+        : !filtrados.length ? <Card className="p-8 text-center"><Sofa className="mx-auto size-8 text-drap-500" /><p className="mt-3 font-medium">{lista.length ? "Nenhum layout com essa busca" : "Nenhum layout ainda"}</p><p className="mt-1 text-sm text-drap-500">{canEdit ? "Comece por um modelo pronto e ajuste à obra." : "Quando a equipe criar um layout, ele aparece aqui."}</p></Card>
           : <Card className="overflow-hidden"><ul className="divide-y">{filtrados.map((item) => <li key={item.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
             <button type="button" className="min-w-0 flex-1 rounded text-left focus-visible:outline-2" onClick={() => void abrir(item.id)}>
-              <span className="block truncate font-medium text-hoikos-950">{item.name}</span>
-              <span className="mt-0.5 block text-xs text-hoikos-500">{item.projectCode ? `${item.projectCode} · ` : ""}{item.comodos} cômodo(s) · {m2(item.areaM2)} · {item.itens} item(ns) · {item.updatedByName}, {dataHora(item.updatedAt)}</span>
+              <span className="block truncate font-medium text-drap-950">{item.name}</span>
+              <span className="mt-0.5 block text-xs text-drap-500">{item.projectCode ? `${item.projectCode} · ` : ""}{item.comodos} cômodo(s) · {m2(item.areaM2)} · {item.itens} item(ns) · {item.updatedByName}, {dataHora(item.updatedAt)}</span>
             </button>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void abrir(item.id)} disabled={abrindo === item.id}>{abrindo === item.id ? <LoaderCircle className="animate-spin" /> : null}Abrir</Button>
@@ -364,14 +364,14 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
         <ul className="grid max-h-[40svh] grid-cols-2 gap-1 overflow-y-auto p-2 sm:grid-cols-4 xl:grid-cols-2">
           {CATALOGO.filter((item) => item.categoria === categoria).map((item) => {
             const lado = Math.max(item.largura, item.profundidade) * 1.3;
-            return <li key={item.id}><button type="button" draggable onDragStart={(evento) => { evento.dataTransfer.setData("application/x-hoikos-item", item.id); evento.dataTransfer.effectAllowed = "copy"; }}
-              onClick={() => adicionarItem(item.id)} className="flex w-full flex-col items-center gap-1 rounded-md border border-transparent p-1.5 text-center text-[11px] leading-tight hover:border-hoikos-200 hover:bg-hoikos-50 focus-visible:outline-2" title={`${item.nome} · ${item.largura / 10} × ${item.profundidade / 10} cm${item.materiais ? ` · acabamentos: ${item.materiais.map((m) => materialLabels[m].toLowerCase()).join(", ")}` : ""}`}>
+            return <li key={item.id}><button type="button" draggable onDragStart={(evento) => { evento.dataTransfer.setData("application/x-drap-item", item.id); evento.dataTransfer.effectAllowed = "copy"; }}
+              onClick={() => adicionarItem(item.id)} className="flex w-full flex-col items-center gap-1 rounded-md border border-transparent p-1.5 text-center text-[11px] leading-tight hover:border-drap-200 hover:bg-drap-50 focus-visible:outline-2" title={`${item.nome} · ${item.largura / 10} × ${item.profundidade / 10} cm${item.materiais ? ` · acabamentos: ${item.materiais.map((m) => materialLabels[m].toLowerCase()).join(", ")}` : ""}`}>
               <svg viewBox={`${-lado / 2} ${-lado / 2} ${lado} ${lado}`} className="size-14" aria-hidden><SimboloItem forma={item.forma} variante={item.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={item.material} /></svg>
               <span>{item.nome}</span>
             </button></li>;
           })}
         </ul>
-        <p className="border-t p-2 text-[11px] text-hoikos-500">Clique para pôr no centro da tela ou arraste para a planta.</p>
+        <p className="border-t p-2 text-[11px] text-drap-500">Clique para pôr no centro da tela ou arraste para a planta.</p>
       </Card> : null}
 
       <Card className="space-y-3 p-3" aria-label="Propriedades">
@@ -379,7 +379,7 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
           const base = itemDoCatalogo(itemSel.catalogo)!;
           const mudar = (campo: "largura" | "profundidade" | "altura" | "rotacao" | "cor" | "rotulo", valor: number | string) => atualizar((d) => { const alvo = d.itens.find((i) => i.id === itemSel.id); if (alvo) (alvo as Record<string, unknown>)[campo] = valor; });
           return <>
-            <p className="font-semibold text-hoikos-950">{base.nome}</p>
+            <p className="font-semibold text-drap-950">{base.nome}</p>
             <div><Label htmlFor="rotulo" className="text-xs">Rótulo</Label><Input id="rotulo" className="mt-1 h-8" value={itemSel.rotulo} maxLength={60} disabled={somenteLeitura} onChange={(evento) => mudar("rotulo", evento.target.value)} placeholder="Opcional" /></div>
             <div className="grid grid-cols-3 gap-2">
               <CampoNumero id="larg" rotulo="Largura" unidade="cm" valor={itemSel.largura / 10} min={5} max={2000} desativado={somenteLeitura} aoMudar={(v) => mudar("largura", Math.round(v * 10))} />
@@ -411,7 +411,7 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
               for (const a of d.aberturas) if (a.paredeId === p.id && a.peitoril + a.altura > p.altura) a.altura = Math.max(300, p.altura - a.peitoril);
             })} />
           </div>
-          <p className="text-xs text-hoikos-500">Arraste as bolinhas nas pontas para mudar o comprimento; os cantos ligados acompanham.</p>
+          <p className="text-xs text-drap-500">Arraste as bolinhas nas pontas para mudar o comprimento; os cantos ligados acompanham.</p>
           {!somenteLeitura ? <Button size="sm" variant="outline" onClick={apagarSelecao}><Trash2 />Excluir parede</Button> : null}
         </> : aberturaSel ? (() => {
           const parede = doc.paredes.find((p) => p.id === aberturaSel.paredeId);
@@ -442,8 +442,8 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
           {!somenteLeitura ? <Button size="sm" variant="outline" onClick={apagarSelecao}><Trash2 />Excluir piso</Button> : null}
         </> : <>
           <p className="font-semibold">Resumo</p>
-          <p className="text-sm text-hoikos-600">{doc.comodos.length} cômodo(s) · {m2(areaTotal)} · {doc.paredes.length} parede(s) · {doc.itens.length} item(ns)</p>
-          <ul className="space-y-1 text-xs text-hoikos-500">
+          <p className="text-sm text-drap-600">{doc.comodos.length} cômodo(s) · {m2(areaTotal)} · {doc.paredes.length} parede(s) · {doc.itens.length} item(ns)</p>
+          <ul className="space-y-1 text-xs text-drap-500">
             <li>Clique num item, parede, porta ou piso para editar.</li>
             <li>Atalhos: V seleciona, W parede, C cômodo, P porta, J janela, G portão.</li>
             <li>R gira, setas movem, Ctrl+D duplica, Delete apaga, Ctrl+S salva.</li>
@@ -454,7 +454,7 @@ function Editor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aber
 
       <Card className="order-1 overflow-hidden p-0 xl:order-2">
         <div className={`grid h-[calc(100svh-17rem)] min-h-[440px] ${modo === "ambos" ? "lg:grid-cols-2" : ""}`}>
-          {modo !== "3d" ? <div className="flex min-h-0 flex-col border-hoikos-200 lg:border-r">
+          {modo !== "3d" ? <div className="flex min-h-0 flex-col border-drap-200 lg:border-r">
             <PlantaEditor ref={planta} doc={doc} alterar={alterar} selecao={selecao} selecionar={setSelecao} ferramenta={ferramenta} setFerramenta={setFerramenta} somenteLeitura={somenteLeitura} avisar={(mensagem) => toast.info(mensagem)} />
           </div> : null}
           {modo !== "planta" ? <div className="min-h-0"><Previa3d ref={previa} doc={doc} /></div> : null}

@@ -15,4 +15,4 @@ de outra família.
 
 São as substitutas livres das fontes do manual da marca. Ao receber os arquivos licenciados de
 Barium e Ador Hairline, troque os `src` das regras `@font-face` em `app/globals.css` e remova
-estes arquivos. Ver `docs/HOIKOS-IDENTITY.md`.
+estes arquivos. Ver `DRAP-IDENTITY.md`.

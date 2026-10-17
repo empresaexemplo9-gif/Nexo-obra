@@ -23,7 +23,7 @@ async function verifyDrapConnection(externalCompanyId: string) {
   } catch {
     return {
       status: "pending",
-      lastError: "Vínculo salvo. Aguardando validação da credencial técnica DRAP para liberar o uso dentro da H.OIKOS.",
+      lastError: "Vínculo salvo. Aguardando validação da credencial técnica DRAP para liberar o uso dentro do DRAP Backoffice.",
     } as const;
   }
 }
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
      * Emissão de nota entra como CAPACIDADE, junto das outras, e não como uma seção de
      * plano com marca e preço de outro produto.
      *
-     * Para quem usa a H.OIKOS o motor financeiro é invisível: o plano e o valor são
+     * Para quem usa o DRAP Backoffice o motor financeiro é invisível: o plano e o valor são
      * daqui. O que a tela precisa saber é binário — dá para emitir, ou não dá — e sem
      * isso a pessoa só descobriria tentando e levando erro, na frente do cliente dela.
      *

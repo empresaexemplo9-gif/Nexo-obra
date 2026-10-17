@@ -83,7 +83,7 @@ export async function DELETE(request: Request, route: RouteContext) {
           throw new ApiError(
             409,
             "drap_recusou_exclusao",
-            `${detalhe} Para apagar apenas na H.OIKOS, confirme que a empresa continuará existindo na Drap.`,
+            `${detalhe} Para apagar apenas no DRAP Backoffice, confirme que a empresa continuará existindo na Drap.`,
           );
         }
       }

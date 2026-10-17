@@ -64,13 +64,13 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
  *  credenciais do superadministrador que trazem a pessoa de volta para cá. */
 function IrParaLogin() {
   useEffect(() => { window.location.replace("/entrar?return_to=/superadmin"); }, []);
-  return <main className="grid min-h-svh place-items-center bg-primary p-5 text-center text-sm text-hoikos-300">
+  return <main className="grid min-h-svh place-items-center bg-drap-deep p-5 text-center text-sm text-drap-300">
     <p>Entre com o seu e-mail e a sua senha. <a href="/entrar?return_to=/superadmin" className="underline underline-offset-2">Ir para o acesso</a></p>
   </main>;
 }
 
 function Metric({ icon: Icon, label, value }: { icon: typeof Building2; label: string; value: number }) {
-  return <Card className="workspace-card"><CardContent className="flex items-center gap-4 p-5"><span className="grid size-11 place-items-center rounded-md bg-hoikos-50 text-hoikos-600"><Icon className="size-5" /></span><div><p className="metric-number text-3xl font-semibold text-hoikos-950">{value}</p><p className="text-sm text-hoikos-500">{label}</p></div></CardContent></Card>;
+  return <Card className="workspace-card"><CardContent className="flex items-center gap-4 p-5"><span className="grid size-11 place-items-center rounded-md bg-drap-50 text-drap-600"><Icon className="size-5" /></span><div><p className="metric-number text-3xl font-semibold text-drap-950">{value}</p><p className="text-sm text-drap-500">{label}</p></div></CardContent></Card>;
 }
 
 function InvitationsPanel({ organizations }: { organizations: Overview["organizations"] }) {
@@ -127,7 +127,7 @@ function InvitationsPanel({ organizations }: { organizations: Overview["organiza
     catch (causa) { setError(causa instanceof Error ? causa.message : "Não foi possível remover o convite."); }
   }
 
-  return <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><MailPlus className="size-5 text-hoikos-600" />Liberar acesso do contratante</CardTitle><p className="text-sm leading-6 text-hoikos-500">Este link cria o proprietário da empresa. Depois, ele mesmo libera colaboradores e prestadores com permissões específicas.</p></CardHeader><CardContent><form onSubmit={createInvitation} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-company">Empresa</label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="invite-company" className="h-11 w-full"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select></div><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do contratante</label><Input id="invite-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-11" placeholder="responsavel@empresa.com" /></div><div className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900"><strong>Perfil:</strong> Contratante · proprietário</div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="submit" disabled={saving || !organizationId} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <MailPlus />}Gerar link principal</Button></form>{latestLink ? <div className="mt-5 rounded-md border border-hoikos-200 bg-hoikos-50 p-4"><p className="flex items-center gap-2 text-sm font-medium text-hoikos-800"><Check className="size-4" />Link criado</p><p className="mt-2 break-all text-xs text-hoikos-700">{latestLink}</p><Button type="button" size="sm" variant="outline" onClick={() => void copyLink()} className="mt-3 border-hoikos-300 bg-white text-hoikos-800">{copied ? <Check /> : <Copy />}{copied ? "Copiado" : "Copiar link"}</Button></div> : null}</CardContent></Card><Card className="overflow-hidden workspace-card"><CardHeader className="border-b"><CardTitle className="text-lg">Convites de contratantes</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-5">Usuário</TableHead><TableHead>Empresa</TableHead><TableHead>Perfil</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{invitations.length ? invitations.map((invitation) => <TableRow key={invitation.id}><TableCell className="pl-5"><p className="font-medium">{invitation.email}</p><p className="text-xs text-hoikos-500">Expira em {new Date(invitation.expiresAt).toLocaleDateString("pt-BR")}</p></TableCell><TableCell>{invitation.organizationName}</TableCell><TableCell>{roleLabels[invitation.role] ?? invitation.role}</TableCell><TableCell><Badge variant="outline">{invitation.status === "pending" ? "Pendente" : invitation.status === "accepted" ? "Aceito" : invitation.status === "expired" ? "Expirado" : "Revogado"}</Badge></TableCell><TableCell className="text-right">{invitation.status === "pending" ? <Button type="button" size="sm" variant="ghost" onClick={() => void revoke(invitation.id)} className="text-hoikos-600 hover:text-hoikos-700"><XCircle />Revogar</Button> : <Button type="button" size="sm" variant="ghost" onClick={() => void remover(invitation.id)} className="text-hoikos-500 hover:text-hoikos-700"><Trash2 />Remover</Button>}</TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-32 text-center text-hoikos-500">Nenhum convite criado.</TableCell></TableRow>}</TableBody></Table></div></Card></div>;
+  return <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><MailPlus className="size-5 text-drap-600" />Liberar acesso do contratante</CardTitle><p className="text-sm leading-6 text-drap-500">Este link cria o proprietário da empresa. Depois, ele mesmo libera colaboradores e prestadores com permissões específicas.</p></CardHeader><CardContent><form onSubmit={createInvitation} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-company">Empresa</label><Select value={organizationId} onValueChange={setOrganizationId}><SelectTrigger id="invite-company" className="h-11 w-full"><SelectValue placeholder="Selecione a empresa" /></SelectTrigger><SelectContent>{organizations.map((organization) => <SelectItem key={organization.id} value={organization.id}>{organization.name}</SelectItem>)}</SelectContent></Select></div><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do contratante</label><Input id="invite-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required className="h-11" placeholder="responsavel@empresa.com" /></div><div className="rounded-md border border-drap-100 bg-drap-50 p-3 text-sm text-drap-900"><strong>Perfil:</strong> Contratante · proprietário</div>{error ? <p role="alert" className="text-sm text-drap-600">{error}</p> : null}<Button type="submit" disabled={saving || !organizationId} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <MailPlus />}Gerar link principal</Button></form>{latestLink ? <div className="mt-5 rounded-md border border-drap-200 bg-drap-50 p-4"><p className="flex items-center gap-2 text-sm font-medium text-drap-800"><Check className="size-4" />Link criado</p><p className="mt-2 break-all text-xs text-drap-700">{latestLink}</p><Button type="button" size="sm" variant="outline" onClick={() => void copyLink()} className="mt-3 border-drap-300 bg-white text-drap-800">{copied ? <Check /> : <Copy />}{copied ? "Copiado" : "Copiar link"}</Button></div> : null}</CardContent></Card><Card className="overflow-hidden workspace-card"><CardHeader className="border-b"><CardTitle className="text-lg">Convites de contratantes</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-5">Usuário</TableHead><TableHead>Empresa</TableHead><TableHead>Perfil</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Ação</TableHead></TableRow></TableHeader><TableBody>{invitations.length ? invitations.map((invitation) => <TableRow key={invitation.id}><TableCell className="pl-5"><p className="font-medium">{invitation.email}</p><p className="text-xs text-drap-500">Expira em {new Date(invitation.expiresAt).toLocaleDateString("pt-BR")}</p></TableCell><TableCell>{invitation.organizationName}</TableCell><TableCell>{roleLabels[invitation.role] ?? invitation.role}</TableCell><TableCell><Badge variant="outline">{invitation.status === "pending" ? "Pendente" : invitation.status === "accepted" ? "Aceito" : invitation.status === "expired" ? "Expirado" : "Revogado"}</Badge></TableCell><TableCell className="text-right">{invitation.status === "pending" ? <Button type="button" size="sm" variant="ghost" onClick={() => void revoke(invitation.id)} className="text-drap-600 hover:text-drap-700"><XCircle />Revogar</Button> : <Button type="button" size="sm" variant="ghost" onClick={() => void remover(invitation.id)} className="text-drap-500 hover:text-drap-700"><Trash2 />Remover</Button>}</TableCell></TableRow>) : <TableRow><TableCell colSpan={5} className="h-32 text-center text-drap-500">Nenhum convite criado.</TableCell></TableRow>}</TableBody></Table></div></Card></div>;
 }
 
 /**
@@ -160,14 +160,14 @@ function ConfirmarExclusao({ rotulo, aviso, acao, onPronto, onCancelar }: {
     catch (causa) { setErro(causa instanceof Error ? causa.message : "Não foi possível apagar."); setApagando(false); }
   }
 
-  return <form onSubmit={apagar} className="mt-3 rounded-md border border-hoikos-gold/40 bg-hoikos-gold/10 p-4">
-    <p className="text-sm font-medium text-hoikos-900">{aviso}</p>
-    <label className="mt-3 block text-xs text-hoikos-700" htmlFor="confirmar-exclusao">
+  return <form onSubmit={apagar} className="mt-3 rounded-md border border-drap-danger/40 bg-drap-danger/10 p-4">
+    <p className="text-sm font-medium text-drap-900">{aviso}</p>
+    <label className="mt-3 block text-xs text-drap-700" htmlFor="confirmar-exclusao">
       Para confirmar, digite <strong>{rotulo}</strong>
     </label>
     <Input id="confirmar-exclusao" value={digitado} onChange={(evento) => setDigitado(evento.target.value)}
       autoComplete="off" className="mt-1.5 h-10 bg-white" />
-    {erro ? <p role="alert" className="mt-2 text-sm text-hoikos-700">{erro}</p> : null}
+    {erro ? <p role="alert" className="mt-2 text-sm text-drap-700">{erro}</p> : null}
     <div className="mt-3 flex gap-2">
       <Button type="submit" size="sm" variant="destructive" disabled={!confere || apagando}>
         {apagando ? <LoaderCircle className="animate-spin" /> : <Trash2 />}Apagar definitivamente
@@ -199,7 +199,7 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
     } finally { setSaving(false); }
   }
 
-  return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-hoikos-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-hoikos-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
+  return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-drap-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-drap-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-drap-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-drap-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
 }
 
 type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number };
@@ -221,15 +221,15 @@ function BuildPanel() {
   }, [builtAt]);
   const stale = days !== null && days >= 2;
 
-  return <Card className={stale ? "border-hoikos-400 bg-hoikos-50" : "workspace-card"}>
+  return <Card className={stale ? "border-drap-400 bg-drap-50" : "workspace-card"}>
     <CardContent className="flex flex-wrap items-center gap-3 p-4">
-      <GitCommitHorizontal className={`size-5 ${stale ? "text-hoikos-700" : "text-hoikos-600"}`} />
-      <p className="min-w-0 flex-1 text-sm text-hoikos-700">
+      <GitCommitHorizontal className={`size-5 ${stale ? "text-drap-700" : "text-drap-600"}`} />
+      <p className="min-w-0 flex-1 text-sm text-drap-700">
         Versão no ar: <strong className="font-mono">{PLATFORM_BUILD}</strong>
         {builtAt ? ` · compilada em ${builtAt.toLocaleString("pt-BR")}` : ""}
         {stale ? ` · há ${days} dia(s)` : ""}
       </p>
-      {stale ? <p className="w-full text-sm leading-6 text-hoikos-800">
+      {stale ? <p className="w-full text-sm leading-6 text-drap-800">
         Se você publicou alterações depois dessa data, elas não estão neste build. Confira se o último envio
         para o repositório terminou de compilar no provedor de publicação; enquanto o build novo não sobe, o
         anterior continua servindo.
@@ -258,26 +258,26 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
 
   if (!status.pending.length) {
     return <Card className="workspace-card"><CardContent className="flex flex-wrap items-center gap-3 p-4">
-      <Database className="size-5 text-hoikos-600" />
-      <p className="min-w-0 flex-1 text-sm text-hoikos-600">
+      <Database className="size-5 text-drap-600" />
+      <p className="min-w-0 flex-1 text-sm text-drap-600">
         Banco de dados em dia: {status.applied.length} de {status.total} atualizações aplicadas.
         {done ? ` ${done} aplicada(s) agora.` : ""}
       </p>
     </CardContent></Card>;
   }
 
-  return <Card className="border-hoikos-400 bg-hoikos-50">
+  return <Card className="border-drap-400 bg-drap-50">
     <CardHeader className="gap-2">
-      <CardTitle className="flex items-center gap-2 text-lg"><Database className="size-5 text-hoikos-700" />Banco de dados desatualizado</CardTitle>
-      <p className="text-sm leading-6 text-hoikos-800">
+      <CardTitle className="flex items-center gap-2 text-lg"><Database className="size-5 text-drap-700" />Banco de dados desatualizado</CardTitle>
+      <p className="text-sm leading-6 text-drap-800">
         Faltam {status.pending.length} de {status.total} atualizações de esquema. Enquanto isso, as áreas que
         dependem das tabelas novas — planilhas, lembretes, metas e tempo de uso — respondem erro. Aplicar é seguro:
         o que já existe é reconhecido e nada é recriado.
       </p>
     </CardHeader>
     <CardContent className="space-y-3">
-      <p className="break-all text-xs text-hoikos-600">{status.pending.join(", ")}</p>
-      {error ? <p role="alert" className="text-sm font-medium text-hoikos-800">{error}</p> : null}
+      <p className="break-all text-xs text-drap-600">{status.pending.join(", ")}</p>
+      {error ? <p role="alert" className="text-sm font-medium text-drap-800">{error}</p> : null}
       <Button onClick={() => void apply()} disabled={applying} className="h-11 w-full sm:w-auto">
         {applying ? <LoaderCircle className="animate-spin" /> : <Database />}Atualizar banco de dados
       </Button>
@@ -300,7 +300,7 @@ function MaintenancePanel({ maintenance }: { maintenance: Overview["maintenance"
     }
   }
 
-  return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Wrench className="size-5 text-hoikos-600" />Ambiente de manutenção</CardTitle><p className="text-sm leading-6 text-hoikos-500">O administrador de manutenção continua com login próprio em <span className="whitespace-nowrap">/manutencao</span>, confinado a este ambiente. Você entra aqui pela sessão da plataforma, sem a senha dele, e mantém os recursos que só o superadmin tem: cadastrar empresas, controlar acessos, assinaturas e trocar de empresa sem sair.</p></CardHeader><CardContent className="space-y-4">{maintenance.ready ? <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt className="text-hoikos-500">Membros</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.members}</dd></div><div><dt className="text-hoikos-500">Trabalhos</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.projects}</dd></div><div><dt className="text-hoikos-500">Tarefas abertas</dt><dd className="metric-number text-2xl font-semibold text-hoikos-950">{maintenance.openTasks}</dd></div></dl> : <p className="rounded-md border border-hoikos-100 bg-hoikos-50 p-3 text-sm text-hoikos-900">O ambiente ainda não foi criado. Ele nasce vazio no primeiro acesso, seu ou do administrador de manutenção.</p>}<p className="text-sm text-hoikos-500">{maintenance.lastEntryAt ? `Última entrada da plataforma em ${new Date(maintenance.lastEntryAt).toLocaleString("pt-BR")}.` : "Nenhuma entrada da plataforma registrada."}</p>{error ? <p role="alert" className="text-sm text-hoikos-600">{error}</p> : null}<Button type="button" onClick={() => void open()} disabled={opening} className="h-11 w-full">{opening ? <LoaderCircle className="animate-spin" /> : <Wrench />}Abrir ambiente de manutenção</Button></CardContent></Card>;
+  return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Wrench className="size-5 text-drap-600" />Ambiente de manutenção</CardTitle><p className="text-sm leading-6 text-drap-500">O administrador de manutenção continua com login próprio em <span className="whitespace-nowrap">/manutencao</span>, confinado a este ambiente. Você entra aqui pela sessão da plataforma, sem a senha dele, e mantém os recursos que só o superadmin tem: cadastrar empresas, controlar acessos, assinaturas e trocar de empresa sem sair.</p></CardHeader><CardContent className="space-y-4">{maintenance.ready ? <dl className="grid grid-cols-3 gap-3 text-sm"><div><dt className="text-drap-500">Membros</dt><dd className="metric-number text-2xl font-semibold text-drap-950">{maintenance.members}</dd></div><div><dt className="text-drap-500">Trabalhos</dt><dd className="metric-number text-2xl font-semibold text-drap-950">{maintenance.projects}</dd></div><div><dt className="text-drap-500">Tarefas abertas</dt><dd className="metric-number text-2xl font-semibold text-drap-950">{maintenance.openTasks}</dd></div></dl> : <p className="rounded-md border border-drap-100 bg-drap-50 p-3 text-sm text-drap-900">O ambiente ainda não foi criado. Ele nasce vazio no primeiro acesso, seu ou do administrador de manutenção.</p>}<p className="text-sm text-drap-500">{maintenance.lastEntryAt ? `Última entrada da plataforma em ${new Date(maintenance.lastEntryAt).toLocaleString("pt-BR")}.` : "Nenhuma entrada da plataforma registrada."}</p>{error ? <p role="alert" className="text-sm text-drap-600">{error}</p> : null}<Button type="button" onClick={() => void open()} disabled={opening} className="h-11 w-full">{opening ? <LoaderCircle className="animate-spin" /> : <Wrench />}Abrir ambiente de manutenção</Button></CardContent></Card>;
 }
 
 type Conta = { id: string; email: string; displayName: string | null; empresas: number; temSenha: boolean };
@@ -332,22 +332,22 @@ function ContasPanel({ session }: { session: Session }) {
   return <Card className="mt-6 overflow-hidden workspace-card">
     <CardHeader className="border-b bg-white">
       <CardTitle className="text-lg">Contas de acesso</CardTitle>
-      <p className="text-sm text-hoikos-500">Apagar remove a pessoa de todas as empresas e o login dela. O que ela cadastrou fica com a empresa.</p>
+      <p className="text-sm text-drap-500">Apagar remove a pessoa de todas as empresas e o login dela. O que ela cadastrou fica com a empresa.</p>
     </CardHeader>
-    {erro ? <p role="alert" className="px-6 py-4 text-sm text-hoikos-600">{erro}</p> : null}
+    {erro ? <p role="alert" className="px-6 py-4 text-sm text-drap-600">{erro}</p> : null}
     <div className="overflow-x-auto"><Table>
-      <TableHeader><TableRow className="bg-hoikos-50">
+      <TableHeader><TableRow className="bg-drap-50">
         <TableHead className="pl-6">Conta</TableHead><TableHead>Empresas</TableHead>
         <TableHead>Senha</TableHead><TableHead className="pr-5 text-right">Ação</TableHead>
       </TableRow></TableHeader>
       <TableBody>{contas.length ? contas.map((conta) => <TableRow key={conta.id}>
-        <TableCell className="pl-6"><p className="font-medium text-hoikos-900">{conta.email}</p>{conta.displayName ? <p className="text-xs text-hoikos-500">{conta.displayName}</p> : null}</TableCell>
+        <TableCell className="pl-6"><p className="font-medium text-drap-900">{conta.email}</p>{conta.displayName ? <p className="text-xs text-drap-500">{conta.displayName}</p> : null}</TableCell>
         <TableCell>{conta.empresas}</TableCell>
         <TableCell><Badge variant="outline">{conta.temSenha ? "Definida" : "Sem senha"}</Badge></TableCell>
         <TableCell className="pr-5 text-right">
           {conta.email.toLowerCase() === session.email.toLowerCase()
-            ? <span className="text-xs text-hoikos-500">Sua conta</span>
-            : <Button type="button" size="sm" variant="ghost" className="text-hoikos-600 hover:text-hoikos-700" onClick={() => setApagando(apagando === conta.id ? "" : conta.id)} aria-label={`Apagar ${conta.email}`}><Trash2 /></Button>}
+            ? <span className="text-xs text-drap-500">Sua conta</span>
+            : <Button type="button" size="sm" variant="ghost" className="text-drap-600 hover:text-drap-700" onClick={() => setApagando(apagando === conta.id ? "" : conta.id)} aria-label={`Apagar ${conta.email}`}><Trash2 /></Button>}
           {apagando === conta.id ? <div className="text-left"><ConfirmarExclusao
             rotulo={conta.email}
             aviso={conta.empresas > 0 ? `Remove esta pessoa de ${conta.empresas} empresa(s) e apaga o login dela. Não há desfazer.` : "Apaga o login desta conta, que hoje não pertence a nenhuma empresa. Não há desfazer."}
@@ -355,7 +355,7 @@ function ContasPanel({ session }: { session: Session }) {
             onPronto={async () => { setApagando(""); await carregar(); }}
             onCancelar={() => setApagando("")} /></div> : null}
         </TableCell>
-      </TableRow>) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-hoikos-500">Nenhuma conta criada.</TableCell></TableRow>}</TableBody>
+      </TableRow>) : <TableRow><TableCell colSpan={4} className="h-32 text-center text-drap-500">Nenhuma conta criada.</TableCell></TableRow>}</TableBody>
     </Table></div>
   </Card>;
 }
@@ -404,7 +404,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
     } catch (causa) {
       const motivo = causa instanceof Error ? causa.message : "Não foi possível apagar a empresa.";
       if (!/Drap/i.test(motivo)) throw causa;
-      if (!window.confirm(`${motivo}\n\nApagar apenas na H.OIKOS? A empresa continuará existindo na Drap, com o financeiro dela.`)) throw causa;
+      if (!window.confirm(`${motivo}\n\nApagar apenas no DRAP Backoffice? A empresa continuará existindo na Drap, com o financeiro dela.`)) throw causa;
       await api(`/api/superadmin/organizations/${organizationId}?manterNaDrap=1`, { method: "DELETE" });
     }
   }
@@ -421,29 +421,29 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
   }
 
   return (
-    <main className="min-h-svh bg-hoikos-100">
-      <header className="border-b border-hoikos-800 bg-primary text-white shadow-none">
+    <main className="min-h-svh bg-drap-100">
+      <header className="border-b border-drap-800 bg-drap-deep text-white shadow-none">
         <div className="mx-auto flex max-w-[1480px] items-center gap-4 px-5 py-4 sm:px-8">
           <BrandLogo dark className="h-auto w-[180px]" />
-          <Badge className="ml-2 border-hoikos-300/20 bg-hoikos-300/10 text-hoikos-200">Superadmin</Badge>
-          <div className="ml-auto hidden text-right sm:block"><p className="text-sm font-medium">{session.email}</p><p className="text-xs text-hoikos-500">Sessão protegida</p></div>
-          <Button variant="ghost" size="sm" onClick={onLogout} className="text-hoikos-300 hover:bg-white/10 hover:text-white"><LogOut />Sair</Button>
+          <Badge className="ml-2 border-drap-300/20 bg-drap-300/10 text-drap-200">Superadmin</Badge>
+          <div className="ml-auto hidden text-right sm:block"><p className="text-sm font-medium">{session.email}</p><p className="text-xs text-drap-500">Sessão protegida</p></div>
+          <Button variant="ghost" size="sm" onClick={onLogout} className="text-drap-300 hover:bg-white/10 hover:text-white"><LogOut />Sair</Button>
         </div>
       </header>
       <div className=" mx-auto max-w-[1480px] px-5 py-7 sm:px-8 sm:py-10">
-        <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-hoikos-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-hoikos-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-hoikos-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
+        <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-drap-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-drap-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-drap-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
         <div className="mb-4"><BuildPanel /></div>
         {database ? <div className="mb-6"><DatabasePanel status={database} onApplied={reload} /></div> : null}
-        {error && !database?.pending.length ? <Card className="border-hoikos-200 bg-hoikos-50 p-5 text-hoikos-700">{error}</Card>
+        {error && !database?.pending.length ? <Card className="border-drap-200 bg-drap-50 p-5 text-drap-700">{error}</Card>
           : error ? null
-          : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></Card> : <>
+          : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-drap-600" /></Card> : <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric icon={Building2} label="Empresas" value={overview.totals.organizations} /><Metric icon={Users} label="Membros ativos" value={overview.totals.members} /><Metric icon={Target} label="Clientes" value={overview.totals.clients} /><Metric icon={FolderKanban} label="Projetos e obras" value={overview.totals.projects} /><Metric icon={ListChecks} label="Tarefas abertas" value={overview.totals.open_tasks} /></div>
-          <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><div className="grid gap-6"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-hoikos-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-hoikos-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card><MaintenancePanel maintenance={overview.maintenance} /></div></div>
+          <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><div className="grid gap-6"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-drap-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-drap-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card><MaintenancePanel maintenance={overview.maintenance} /></div></div>
           <InvitationsPanel organizations={overview.organizations} />
           <PlatformControl organizations={overview.organizations} maintenanceId={overview.maintenance.ready ? overview.maintenance.id : undefined} />
           <SinapiControl />
           {overview.organizations.length ? <section className="mt-6 space-y-4"><h2 className="text-xl font-semibold">Tempo online de todos os acessos</h2><UsageWorkspace /></section> : null}
-          <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-hoikos-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-hoikos-900">{organization.name}</p><p className="text-xs text-hoikos-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button><Button type="button" size="sm" variant="ghost" className="text-hoikos-600 hover:text-hoikos-700" onClick={() => setApagandoEmpresa(apagandoEmpresa === organization.id ? "" : organization.id)} aria-label={`Apagar ${organization.name}`}><Trash2 /></Button></div>{apagandoEmpresa === organization.id ? <div className="text-left"><ConfirmarExclusao rotulo={organization.name} aviso={`Apaga a empresa e tudo que pendura nela: ${organization.clients} cliente(s), ${organization.projects} projeto(s), orçamentos, diários e histórico. Quem só pertencia a ela perde o login. Não há desfazer.`} acao={() => apagarEmpresa(organization.id)} onPronto={async () => { setApagandoEmpresa(""); await reload(); }} onCancelar={() => setApagandoEmpresa("")} /></div> : null}</TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-hoikos-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
+          <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-drap-900">{organization.name}</p><p className="text-xs text-drap-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button><Button type="button" size="sm" variant="ghost" className="text-drap-600 hover:text-drap-700" onClick={() => setApagandoEmpresa(apagandoEmpresa === organization.id ? "" : organization.id)} aria-label={`Apagar ${organization.name}`}><Trash2 /></Button></div>{apagandoEmpresa === organization.id ? <div className="text-left"><ConfirmarExclusao rotulo={organization.name} aviso={`Apaga a empresa e tudo que pendura nela: ${organization.clients} cliente(s), ${organization.projects} projeto(s), orçamentos, diários e histórico. Quem só pertencia a ela perde o login. Não há desfazer.`} acao={() => apagarEmpresa(organization.id)} onPronto={async () => { setApagandoEmpresa(""); await reload(); }} onCancelar={() => setApagandoEmpresa("")} /></div> : null}</TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-drap-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
           <ContasPanel session={session} />
         </>}
       </div>
@@ -467,7 +467,7 @@ export function SuperAdminApp() {
     await api("/api/superadmin/session", { method: "DELETE" }).catch(() => undefined);
     setSession(null);
   }
-  if (loading) return <main className="grid min-h-svh place-items-center bg-primary"><LoaderCircle className="size-7 animate-spin text-hoikos-300" /></main>;
+  if (loading) return <main className="grid min-h-svh place-items-center bg-drap-deep"><LoaderCircle className="size-7 animate-spin text-drap-300" /></main>;
   if (!session) return <IrParaLogin />;
   return <Dashboard session={session} onLogout={() => void logout()} />;
 }

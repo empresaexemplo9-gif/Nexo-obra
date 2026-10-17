@@ -71,7 +71,7 @@ export function aciMaisProximo(cor: string | null | undefined): number {
  * escuro some no fundo preto; o traço fica com o mesmo matiz, só mais escuro ou mais claro.
  */
 export function corNaTela(cor: string | null | undefined, fundoEscuro: boolean): string {
-  if (!cor) return fundoEscuro ? "#f2f0e8" : "#1C190F";
+  if (!cor) return fundoEscuro ? "#ffffff" : "#0D151F";
   const n = Number.parseInt(cor.slice(1), 16);
   const r = n >> 16, g = (n >> 8) & 255, b = n & 255;
   const luz = (0.299 * r + 0.587 * g + 0.114 * b) / 255;

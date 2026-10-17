@@ -82,7 +82,7 @@ export async function POST(request: Request, route: RouteContext) {
     // (e portanto tem o link) abria o link deslogado, escolhia uma senha e tomava a conta de
     // quem já usava a plataforma em outra empresa.
     if (!existing && await credentialExists(invitation.email)) {
-      throw new ApiError(409, "account_exists", `O e-mail ${invitation.email} já tem acesso à H.OIKOS. Entre com a sua senha e abra o convite de novo para aceitar.`);
+      throw new ApiError(409, "account_exists", `O e-mail ${invitation.email} já tem acesso ao DRAP Backoffice. Entre com a sua senha e abra o convite de novo para aceitar.`);
     }
     const identity = existing ?? {
       id: crypto.randomUUID(),

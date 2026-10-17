@@ -4,7 +4,7 @@ import { PasswordResetApp } from "@/components/password-reset-app";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Nova senha | H.OIKOS",
+  title: "Nova senha | DRAP Backoffice",
   referrer: "no-referrer",
   robots: { index: false, follow: false },
 };

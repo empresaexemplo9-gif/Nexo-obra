@@ -48,8 +48,8 @@ test("o título pede um peso que existe de verdade", () => {
 });
 
 test("a reserva continua disponível e a Ador vem primeiro", () => {
-  assert.match(css, /--font-display:\s*"Hoikos Display",\s*"Hoikos Display Reserva"/);
-  assert.match(css, /font-family:\s*"Hoikos Display Reserva"/);
+  assert.match(css, /--font-display:\s*"Drap Display",\s*"Drap Display Reserva"/);
+  assert.match(css, /font-family:\s*"Drap Display Reserva"/);
 });
 
 test("todas as regras adiam o texto em vez de escondê-lo", () => {

@@ -1,6 +1,6 @@
 # Editor CAD
 
-Desenho técnico em camadas dentro da H.OIKOS. Menu **Editor CAD**; cada prancha abre em
+Desenho técnico em camadas dentro do DRAP Backoffice. Menu **Editor CAD**; cada prancha abre em
 outra aba (`/prancheta/[id]`). Permissão: módulo `studio` (ver para abrir, editar para
 desenhar, importar e gravar). Tudo é da empresa da sessão — a prancha, o arquivo importado
 da biblioteca e as imagens.

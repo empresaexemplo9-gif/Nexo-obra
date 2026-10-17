@@ -1,6 +1,6 @@
 # Superadministrador da plataforma
 
-O superadministrador é o titular da H.OIKOS. Ele entra em `/superadmin` com credenciais
+O superadministrador é o titular do DRAP Backoffice. Ele entra em `/superadmin` com credenciais
 próprias — e-mail, senha com hash PBKDF2 e sessão assinada — separadas do login das
 empresas. A partir dessa sessão ele tem poder total sobre a plataforma.
 

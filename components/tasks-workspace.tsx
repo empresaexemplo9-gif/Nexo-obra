@@ -53,9 +53,9 @@ export function TasksWorkspace({ tasks, members, query, canEdit, onCreate, onCha
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="display-heading text-4xl">Tarefas</h1>{canEdit && <Button onClick={onCreate}>Nova tarefa</Button>}</div>
-    <div className="flex flex-wrap items-center gap-3"><NativeSelect aria-label="Filtrar tarefas por situação" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Todas as situações</option>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</NativeSelect><span className="text-sm text-hoikos-500">{visible.length} tarefa(s)</span></div>
+    <div className="flex flex-wrap items-center gap-3"><NativeSelect aria-label="Filtrar tarefas por situação" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Todas as situações</option>{Object.entries(statuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</NativeSelect><span className="text-sm text-drap-500">{visible.length} tarefa(s)</span></div>
     {!visible.length ? <Card className="p-6 text-sm">Nenhuma tarefa corresponde aos filtros. Crie uma tarefa ou ajuste a busca.</Card> : <Card><CardContent className="divide-y p-0">{visible.map(task => <div key={task.id} className="flex flex-wrap items-center gap-3 p-4">
-      <div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-hoikos-500">{task.projectName} · {task.assigneeName ?? "Sem responsável"}</p><p className="mt-1 text-xs">{task.dueAt ? `Prazo: ${new Date(task.dueAt).toLocaleDateString("pt-BR")}` : "Sem prazo"} · Prioridade {priorities[task.priority as keyof typeof priorities] ?? task.priority}</p></div>
+      <div className="min-w-0 flex-1"><p className="font-medium">{task.title}</p><p className="text-xs text-drap-500">{task.projectName} · {task.assigneeName ?? "Sem responsável"}</p><p className="mt-1 text-xs">{task.dueAt ? `Prazo: ${new Date(task.dueAt).toLocaleDateString("pt-BR")}` : "Sem prazo"} · Prioridade {priorities[task.priority as keyof typeof priorities] ?? task.priority}</p></div>
       <span className="text-sm">{statuses[task.status as keyof typeof statuses] ?? task.status}</span>
       {canEdit && <Button size="sm" variant="outline" aria-label={`Editar tarefa ${task.title}`} onClick={() => { setError(""); setEditing(task); }}>Editar</Button>}
     </div>)}</CardContent></Card>}
@@ -68,7 +68,7 @@ export function TasksWorkspace({ tasks, members, query, canEdit, onCreate, onCha
         <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Início<Input name="startsAt" type="datetime-local" defaultValue={localDateInput(editing.startsAt)} /></label><label className="text-sm">Prazo final<Input name="dueAt" type="datetime-local" defaultValue={localDateInput(editing.dueAt)} /></label></div>
         <label className="block text-sm">Estimativa (minutos)<Input name="estimate" type="number" min={0} max={100000} step={1} defaultValue={editing.estimatedMinutes} /></label>
         <label className="block text-sm">Depende de<NativeSelect name="parent" defaultValue={editing.parentTaskId ?? ""}><option value="">Sem dependência</option>{editing.parentTaskId && !tasks.some(t => t.id === editing.parentTaskId) && <option value={editing.parentTaskId}>Dependência atual (fora desta lista)</option>}{tasks.filter(t => t.id !== editing.id && t.projectId === editing.projectId).map(task => <option key={task.id} value={task.id}>{task.title}</option>)}</NativeSelect></label>
-        {error && <p role="alert" className="text-sm text-hoikos-700">{error}</p>}<Button type="submit" className="w-full">{saving ? "Salvando…" : "Salvar tarefa"}</Button>
+        {error && <p role="alert" className="text-sm text-drap-700">{error}</p>}<Button type="submit" className="w-full">{saving ? "Salvando…" : "Salvar tarefa"}</Button>
       </fieldset></form>}
     </DialogContent></Dialog>
   </div>;

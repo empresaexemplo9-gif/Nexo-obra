@@ -4,8 +4,8 @@ import { InvitationApp } from "@/components/invitation-app";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Convite | H.OIKOS",
-  description: "Aceite seu convite para acessar a H.OIKOS.",
+  title: "Convite | DRAP Backoffice",
+  description: "Aceite seu convite para acessar o DRAP Backoffice.",
   referrer: "no-referrer",
 };
 

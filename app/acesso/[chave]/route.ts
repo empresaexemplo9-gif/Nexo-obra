@@ -18,7 +18,7 @@ export async function GET(_request: Request, route: RouteContext) {
   // chegar por outro site (WhatsApp, e-mail), e assim o próximo pedido já é do próprio site.
   return new Response(
     '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/">'
-      + '<title>Entrando · H.OIKOS</title></head><body><p>Entrando… <a href="/">Abrir a plataforma</a></p></body></html>',
+      + '<title>Entrando · DRAP Backoffice</title></head><body><p>Entrando… <a href="/">Abrir a plataforma</a></p></body></html>',
     { headers: { ...privateHeaders, "Content-Type": "text/html; charset=utf-8", "Set-Cookie": await createLinkAccessCookie() } },
   );
 }

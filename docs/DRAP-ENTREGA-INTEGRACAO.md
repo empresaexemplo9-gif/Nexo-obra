@@ -1,10 +1,10 @@
-# Integração Drap: entrega do lado H.OIKOS
+# Integração Drap: entrega do lado DRAP Backoffice
 
 ## Responsabilidades e estado
 
-A Drap desenvolve a H.OIKOS para venda à adquirente e fornece os próprios módulos de gestão. A operadora H.OIKOS, suas contas de infraestrutura e seus canais definitivos devem ser identificados na entrega. O responsável pediu aguardar a Drap concluir a vinculação. Este documento não autoriza criar empresas, cobrar, emitir notas ou cancelar serviços em produção.
+A Drap desenvolve o DRAP Backoffice para venda à adquirente e fornece os próprios módulos de gestão. A operadora do DRAP Backoffice, suas contas de infraestrutura e seus canais definitivos devem ser identificados na entrega. O responsável pediu aguardar a Drap concluir a vinculação. Este documento não autoriza criar empresas, cobrar, emitir notas ou cancelar serviços em produção.
 
-O lado H.OIKOS possui adaptadores, isolamento, seleção de módulos e diagnóstico. Isso não comprova homologação de todas as funções comerciais. Concluir a vinculação de uma chave não cria automaticamente APIs que ainda não tenham contrato acordado.
+O lado DRAP Backoffice possui adaptadores, isolamento, seleção de módulos e diagnóstico. Isso não comprova homologação de todas as funções comerciais. Concluir a vinculação de uma chave não cria automaticamente APIs que ainda não tenham contrato acordado.
 
 ## Caminho de validação no produto
 
@@ -17,7 +17,7 @@ O lado H.OIKOS possui adaptadores, isolamento, seleção de módulos e diagnóst
 
 ## Matriz de entrega e dependências
 
-| Fluxo | Lado H.OIKOS | Evidência externa ainda necessária |
+| Fluxo | Lado DRAP Backoffice | Evidência externa ainda necessária |
 | --- | --- | --- |
 | Criação ou vínculo de empresa | API de parceiro, código de vínculo, idempotência e cifra | Contrato parceiro e execução com tenant de homologação |
 | Leitura financeira | Resumo e lançamentos com paginação, centro de custo e indicação de parcialidade | Credencial, escopos e retorno real da empresa |
@@ -36,7 +36,7 @@ O lado H.OIKOS possui adaptadores, isolamento, seleção de módulos e diagnóst
 
 - Operação de parceiro existente: `POST /api/partner/v1/empresas` com referência externa da organização e escopos; vínculo por código no adaptador `lib/integrations/drap-partner.ts`. Não trocar o ID da organização por entrada livre do navegador.
 - API operacional: base HTTPS oficial, credencial por tenant e recursos da allowlist em `lib/server/drap-resources.ts`. Resposta 403 indica falta de acesso; 404 indica recurso ausente; 429 deve preservar Retry-After. Uma rota identificada não comprova sucesso de escrita.
-- Destino de eventos H.OIKOS: `/api/integrations/drap/webhook`, calculado a partir do domínio público configurado, não do cabeçalho Host do navegador.
+- Destino de eventos DRAP Backoffice: `/api/integrations/drap/webhook`, calculado a partir do domínio público configurado, não do cabeçalho Host do navegador.
 - Ativação: `DRAP_ACTIVATION_URL`, `DRAP_ACTIVATION_TOKEN` e `DRAP_ACTIVATION_WEBHOOK_SECRET`; formato atual em `DRAP-ACTIVATION.md`. Receptor `/api/integrations/drap/activation`. A URL de contratação não foi inventada nem configurada durante esta entrega.
 - Criptografia: `SECRETS_ENCRYPTION_KEY` de 32 bytes em base64. Chave de parceiro e cifra são somente servidor. Não fornecer valores em chat ou commit.
 - Legado: `DRAP_API_TOKEN` só é aceito quando `DRAP_LEGACY_COMPANY_ID` corresponde exatamente à empresa. Instalação multiempresa deve usar provisionamento com credenciais cifradas ou `DRAP_TENANTS_JSON` individualizado. Uma chave global não pode operar qualquer identificador.
@@ -44,6 +44,6 @@ O lado H.OIKOS possui adaptadores, isolamento, seleção de módulos e diagnóst
 
 ## Critérios para afirmar integração concluída
 
-Em ambiente de homologação separado, validar dois tenants reais autorizados: criação/repetição, vínculos negados, conta errada, revogação de chave, cada escopo e módulo contratado, assinatura sem e com acréscimo, mínimo obrigatório, retorno de checkout, falha após efeito remoto, repetição, suspensão/cancelamento, fatura paga/estornada e conciliação de comissão. Confirmar que nenhuma operação atravessa empresas e que a indisponibilidade Drap não bloqueia módulos H.OIKOS independentes.
+Em ambiente de homologação separado, validar dois tenants reais autorizados: criação/repetição, vínculos negados, conta errada, revogação de chave, cada escopo e módulo contratado, assinatura sem e com acréscimo, mínimo obrigatório, retorno de checkout, falha após efeito remoto, repetição, suspensão/cancelamento, fatura paga/estornada e conciliação de comissão. Confirmar que nenhuma operação atravessa empresas e que a indisponibilidade Drap não bloqueia módulos DRAP Backoffice independentes.
 
 O roteiro operacional de leitura já existe em `scripts/homologar-drap.mjs`; a modalidade de escrita deve ser usada somente no tenant autorizado para testes. Não usar dados fictícios na conta de produção de um cliente. A conclusão exige evidências dos testes conjuntos, não apenas todas as configurações marcadas no diagnóstico.

@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const db = getDatabase();
     const result = await applyMigrations(db);
     if (result.applied.length) {
-      console.log(`H.OIKOS migrações aplicadas por ${admin.email}: ${result.applied.map((item) => item.id).join(", ")}`);
+      console.log(`DRAP Backoffice migrações aplicadas por ${admin.email}: ${result.applied.map((item) => item.id).join(", ")}`);
     }
     return Response.json(result, { headers: { "Cache-Control": "private, no-store" } });
   });

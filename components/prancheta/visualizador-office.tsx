@@ -43,10 +43,10 @@ export function VisualizadorDocx({ blob, nome }: PropsVisualizador) {
     return () => { vivo = false; };
   }, [blob]);
 
-  if (erro) return <p className="p-6 text-center text-sm text-hoikos-700" role="alert">{erro}</p>;
+  if (erro) return <p className="p-6 text-center text-sm text-drap-700" role="alert">{erro}</p>;
   if (html === null) return <p className="flex items-center justify-center gap-2 p-6 text-sm" role="status"><LoaderCircle className="animate-spin" />Abrindo o documento…</p>;
   // sandbox vazio: sem script, sem acesso à página, sem navegar para fora.
-  return <iframe title={nome} sandbox="" srcDoc={html} className="min-h-[480px] w-full flex-1 border-0 bg-hoikos-100" />;
+  return <iframe title={nome} sandbox="" srcDoc={html} className="min-h-[480px] w-full flex-1 border-0 bg-drap-100" />;
 }
 
 type Aba = { nome: string; linhas: string[][]; totalLinhas: number; totalColunas: number };
@@ -103,18 +103,18 @@ export function VisualizadorPlanilha({ blob, extensao }: PropsVisualizador) {
     return () => { vivo = false; };
   }, [blob, extensao]);
 
-  if (erro) return <p className="p-6 text-center text-sm text-hoikos-700" role="alert">{erro}</p>;
+  if (erro) return <p className="p-6 text-center text-sm text-drap-700" role="alert">{erro}</p>;
   if (!abas) return <p className="flex items-center justify-center gap-2 p-6 text-sm" role="status"><LoaderCircle className="animate-spin" />Abrindo a planilha…</p>;
   const aba = abas[ativa];
   if (!aba) return <p className="p-6 text-center text-sm">A planilha não tem abas.</p>;
   const letra = (n: number) => { let s = ""; n += 1; while (n) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
   return <div className="flex h-full min-h-0 flex-col">
-    {abas.length > 1 ? <div className="flex gap-1 overflow-x-auto border-b border-hoikos-200 bg-white p-2" role="tablist">{abas.map((item, indice) => <Button key={item.nome + indice} size="sm" role="tab" aria-selected={indice === ativa} variant={indice === ativa ? "default" : "outline"} onClick={() => setAtiva(indice)}>{item.nome}</Button>)}</div> : null}
-    {aba.totalLinhas > MAX_LINHAS || aba.totalColunas > MAX_COLUNAS ? <p className="border-b bg-hoikos-50 px-3 py-2 text-xs text-hoikos-600">Mostrando até {MAX_LINHAS} linhas e {MAX_COLUNAS} colunas de {aba.totalLinhas} × {aba.totalColunas}. Baixe o arquivo para ver tudo, ou importe na aba Planilha.</p> : null}
+    {abas.length > 1 ? <div className="flex gap-1 overflow-x-auto border-b border-drap-200 bg-white p-2" role="tablist">{abas.map((item, indice) => <Button key={item.nome + indice} size="sm" role="tab" aria-selected={indice === ativa} variant={indice === ativa ? "default" : "outline"} onClick={() => setAtiva(indice)}>{item.nome}</Button>)}</div> : null}
+    {aba.totalLinhas > MAX_LINHAS || aba.totalColunas > MAX_COLUNAS ? <p className="border-b bg-drap-50 px-3 py-2 text-xs text-drap-600">Mostrando até {MAX_LINHAS} linhas e {MAX_COLUNAS} colunas de {aba.totalLinhas} × {aba.totalColunas}. Baixe o arquivo para ver tudo, ou importe na aba Planilha.</p> : null}
     <div className="min-h-[360px] flex-1 overflow-auto bg-white">
       <table className="border-collapse text-xs">
-        <thead className="sticky top-0 bg-hoikos-100"><tr><th className="border px-2 py-1" />{(aba.linhas[0] ?? []).map((_, c) => <th key={c} scope="col" className="border px-2 py-1 font-medium">{letra(c)}</th>)}</tr></thead>
-        <tbody>{aba.linhas.map((linha, r) => <tr key={r}><th scope="row" className="border bg-hoikos-50 px-2 py-1 text-right font-medium">{r + 1}</th>{linha.map((valor, c) => <td key={c} className="max-w-[24rem] truncate border px-2 py-1" title={valor}>{valor}</td>)}</tr>)}</tbody>
+        <thead className="sticky top-0 bg-drap-100"><tr><th className="border px-2 py-1" />{(aba.linhas[0] ?? []).map((_, c) => <th key={c} scope="col" className="border px-2 py-1 font-medium">{letra(c)}</th>)}</tr></thead>
+        <tbody>{aba.linhas.map((linha, r) => <tr key={r}><th scope="row" className="border bg-drap-50 px-2 py-1 text-right font-medium">{r + 1}</th>{linha.map((valor, c) => <td key={c} className="max-w-[24rem] truncate border px-2 py-1" title={valor}>{valor}</td>)}</tr>)}</tbody>
       </table>
     </div>
   </div>;

@@ -17,20 +17,20 @@ const percent = (value: number) => `${value.toLocaleString("pt-BR", { maximumFra
 const number = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 
 const severityStyles: Record<string, string> = {
-  perda: "border-hoikos-400 bg-hoikos-50",
-  abaixo: "border-hoikos-300 bg-hoikos-50",
-  saudavel: "border-hoikos-200 bg-white",
-  faltando: "border-dashed border-hoikos-300 bg-white",
+  perda: "border-drap-400 bg-drap-50",
+  abaixo: "border-drap-300 bg-drap-50",
+  saudavel: "border-drap-200 bg-white",
+  faltando: "border-dashed border-drap-300 bg-white",
 };
 const severityLabels: Record<string, string> = {
   perda: "Perde dinheiro", abaixo: "Abaixo da meta", saudavel: "Saudável", faltando: "Falta dado",
 };
 
 function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return <div className="rounded-md border border-hoikos-100 p-3">
-    <p className="text-xs text-hoikos-500">{label}</p>
-    <p className="metric-number mt-1 text-xl font-semibold tabular-nums text-hoikos-950">{value}</p>
-    {hint ? <p className="mt-0.5 text-xs text-hoikos-500">{hint}</p> : null}
+  return <div className="rounded-md border border-drap-100 p-3">
+    <p className="text-xs text-drap-500">{label}</p>
+    <p className="metric-number mt-1 text-xl font-semibold tabular-nums text-drap-950">{value}</p>
+    {hint ? <p className="mt-0.5 text-xs text-drap-500">{hint}</p> : null}
   </div>;
 }
 
@@ -61,9 +61,9 @@ export function AnalysisPanel({
 
   if (!hasData) {
     return <Card><CardContent className="p-6 text-center">
-      <Info className="mx-auto size-6 text-hoikos-500" />
-      <p className="mt-3 font-medium text-hoikos-900">A planilha ainda está vazia</p>
-      <p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-hoikos-500">
+      <Info className="mx-auto size-6 text-drap-500" />
+      <p className="mt-3 font-medium text-drap-900">A planilha ainda está vazia</p>
+      <p className="mx-auto mt-1 max-w-xl text-sm leading-6 text-drap-500">
         Digite ou traga os dados reais da empresa. Assim que houver conteúdo, esta aba propõe o papel de cada
         coluna e passa a calcular margem, preço por hora e onde a operação ganha ou perde.
       </p>
@@ -74,16 +74,16 @@ export function AnalysisPanel({
     <Card>
       <CardHeader className="gap-2">
         <CardTitle className="text-base">O que é cada coluna</CardTitle>
-        <p className="text-sm leading-6 text-hoikos-500">
+        <p className="text-sm leading-6 text-drap-500">
           A leitura só usa o que estiver marcado aqui. Nenhum papel é aplicado sozinho: uma coluna marcada
           errado mudaria todos os números, então a confirmação é sua.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
         {canEdit && unmarked.length ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-3">
-            <Wand2 className="size-4 text-hoikos-600" />
-            <p className="flex-1 text-sm text-hoikos-800">
+          <div className="flex flex-wrap items-center gap-3 rounded-md border border-drap-200 bg-drap-50 p-3">
+            <Wand2 className="size-4 text-drap-600" />
+            <p className="flex-1 text-sm text-drap-800">
               Pelo cabeçalho, {unmarked.length} coluna(s) parecem ser: {unmarked.map(([letter, role]) => `${letter} = ${COLUMN_ROLES[role].label}`).join(", ")}.
             </p>
             <Button size="sm" onClick={() => onChange({ ...settings, roles: { ...suggestions, ...settings.roles } })}>Aplicar sugestão</Button>
@@ -92,8 +92,8 @@ export function AnalysisPanel({
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
           {headers.map(({ letter, header }) => (
             <label key={letter} className="flex items-center gap-2 text-sm">
-              <span className="w-10 shrink-0 rounded border border-hoikos-200 bg-hoikos-50 px-1 py-0.5 text-center font-mono text-xs">{letter}</span>
-              <span className="min-w-0 flex-1 truncate text-hoikos-600" title={header}>{header || "sem cabeçalho"}</span>
+              <span className="w-10 shrink-0 rounded border border-drap-200 bg-drap-50 px-1 py-0.5 text-center font-mono text-xs">{letter}</span>
+              <span className="min-w-0 flex-1 truncate text-drap-600" title={header}>{header || "sem cabeçalho"}</span>
               <NativeSelect
                 aria-label={`Papel da coluna ${letter}`} disabled={!canEdit}
                 value={settings.roles[letter] ?? "ignorar"}
@@ -126,7 +126,7 @@ export function AnalysisPanel({
               }}
               className="mt-1 h-9 w-28" />
           </label>
-          <p className="text-sm text-hoikos-500">
+          <p className="text-sm text-drap-500">
             {analysis.rowsCounted} linha(s) com valor entram na conta.
             {settings.ignoreRows?.length ? " A linha de totais fica de fora para não contar duas vezes." : ""}
           </p>
@@ -156,9 +156,9 @@ export function AnalysisPanel({
             <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-start">
               <Badge variant="outline" className="w-fit shrink-0">{severityLabels[finding.severity]}</Badge>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-hoikos-900">{finding.title}</p>
-                <p className="mt-1 text-sm leading-6 text-hoikos-600">{finding.detail}</p>
-                {finding.action ? <p className="mt-2 text-sm font-medium leading-6 text-hoikos-800">→ {finding.action}</p> : null}
+                <p className="font-medium text-drap-900">{finding.title}</p>
+                <p className="mt-1 text-sm leading-6 text-drap-600">{finding.detail}</p>
+                {finding.action ? <p className="mt-2 text-sm font-medium leading-6 text-drap-800">→ {finding.action}</p> : null}
               </div>
             </CardContent>
           </Card>
@@ -169,7 +169,7 @@ export function AnalysisPanel({
         <CardHeader className="border-b py-3"><CardTitle className="text-base">Onde ganha e onde perde</CardTitle></CardHeader>
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow className="bg-hoikos-50">
+            <TableHeader><TableRow className="bg-drap-50">
               <TableHead className="pl-5">Setor</TableHead><TableHead className="text-right">Receita</TableHead>
               <TableHead className="text-right">Custo</TableHead><TableHead className="text-right">Sobra</TableHead>
               <TableHead className="text-right">Margem</TableHead><TableHead className="pr-5 text-right">Preço a ajustar</TableHead>
@@ -177,18 +177,18 @@ export function AnalysisPanel({
             <TableBody>{analysis.sectors.map((sector) => (
               <TableRow key={sector.name}>
                 <TableCell className="pl-5">
-                  <span className="flex items-center gap-2 font-medium text-hoikos-900">
-                    {sector.margin >= 0 ? <TrendingUp className="size-4 text-hoikos-600" /> : <TrendingDown className="size-4 text-hoikos-700" />}
+                  <span className="flex items-center gap-2 font-medium text-drap-900">
+                    {sector.margin >= 0 ? <TrendingUp className="size-4 text-drap-600" /> : <TrendingDown className="size-4 text-drap-700" />}
                     {sector.name}
                   </span>
-                  <span className="text-xs text-hoikos-500">{sector.rows} lançamento(s){sector.hours ? ` · ${number(sector.hours)} h` : ""}</span>
+                  <span className="text-xs text-drap-500">{sector.rows} lançamento(s){sector.hours ? ` · ${number(sector.hours)} h` : ""}</span>
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{money(sector.revenue)}</TableCell>
                 <TableCell className="text-right tabular-nums">{money(sector.cost + sector.collaboratorCost)}</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums">{money(sector.margin)}</TableCell>
                 <TableCell className="text-right tabular-nums">{sector.marginPercent !== null ? percent(sector.marginPercent) : "—"}</TableCell>
                 <TableCell className="pr-5 text-right tabular-nums">
-                  {sector.status === "saudavel" ? <span className="text-hoikos-500">na meta</span>
+                  {sector.status === "saudavel" ? <span className="text-drap-500">na meta</span>
                     : sector.priceIncreasePercent !== null ? `+${percent(sector.priceIncreasePercent)}` : "—"}
                 </TableCell>
               </TableRow>
@@ -198,11 +198,11 @@ export function AnalysisPanel({
       </Card> : null}
     </> : (
       <Card><CardContent className="space-y-2 p-5">
-        <p className="font-medium text-hoikos-900">A leitura ainda não pode ser feita</p>
-        <ul className="list-inside list-disc space-y-1 text-sm leading-6 text-hoikos-600">
+        <p className="font-medium text-drap-900">A leitura ainda não pode ser feita</p>
+        <ul className="list-inside list-disc space-y-1 text-sm leading-6 text-drap-600">
           {analysis.missing.map((item) => <li key={item}>{item}</li>)}
         </ul>
-        <p className="text-sm text-hoikos-500">Enquanto faltar dado, nenhum número é estimado.</p>
+        <p className="text-sm text-drap-500">Enquanto faltar dado, nenhum número é estimado.</p>
       </CardContent></Card>
     )}
   </div>;
@@ -244,18 +244,18 @@ export function GrantsPanel({ worksheetId }: { worksheetId: string }) {
 
   return <Card>
     <CardHeader className="gap-2">
-      <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-hoikos-600" />Quem pode abrir esta planilha</CardTitle>
-      <p className="text-sm leading-6 text-hoikos-500">
+      <CardTitle className="flex items-center gap-2 text-base"><ShieldCheck className="size-4 text-drap-600" />Quem pode abrir esta planilha</CardTitle>
+      <p className="text-sm leading-6 text-drap-500">
         Esta planilha é fechada por padrão. Quem não estiver liberado aqui não a vê na lista nem consegue abri-la.
       </p>
     </CardHeader>
     <CardContent className="space-y-2">
-      {error ? <p role="alert" className="text-sm text-hoikos-700">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-drap-700">{error}</p> : null}
       {members?.length ? members.map((member) => (
-        <div key={member.id} className="flex flex-wrap items-center gap-3 rounded-md border border-hoikos-100 p-3">
+        <div key={member.id} className="flex flex-wrap items-center gap-3 rounded-md border border-drap-100 p-3">
           <div className="min-w-0 flex-1">
-            <p className="font-medium text-hoikos-900">{member.name}</p>
-            <p className="truncate text-xs text-hoikos-500">{member.email}</p>
+            <p className="font-medium text-drap-900">{member.name}</p>
+            <p className="truncate text-xs text-drap-500">{member.email}</p>
           </div>
           <NativeSelect aria-label={`Acesso de ${member.name}`} value={member.level} disabled={busy === member.id}
             onChange={(event) => void change(member.id, event.target.value)} className="h-9 w-52">
@@ -264,7 +264,7 @@ export function GrantsPanel({ worksheetId }: { worksheetId: string }) {
             <option value="edit">Ver e editar</option>
           </NativeSelect>
         </div>
-      )) : <p className="py-4 text-sm text-hoikos-500">{members ? "Nenhuma pessoa cadastrada nesta empresa." : "Carregando…"}</p>}
+      )) : <p className="py-4 text-sm text-drap-500">{members ? "Nenhuma pessoa cadastrada nesta empresa." : "Carregando…"}</p>}
     </CardContent>
   </Card>;
 }

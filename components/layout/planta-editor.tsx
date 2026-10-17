@@ -269,7 +269,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
   }
 
   function aoSoltarArquivo(evento: React.DragEvent<SVGSVGElement>) {
-    const catalogo = evento.dataTransfer.getData("application/x-hoikos-item");
+    const catalogo = evento.dataTransfer.getData("application/x-drap-item");
     if (!catalogo || somenteLeitura) return;
     evento.preventDefault();
     const p = paraPlanta(evento);
@@ -294,7 +294,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
       className={`block touch-none select-none bg-[#f7f5ef] outline-none ${ferramenta === "selecionar" ? "cursor-default" : "cursor-crosshair"}`}
       onPointerDown={aoPressionar} onPointerMove={aoMover} onPointerUp={aoSoltar} onPointerCancel={aoSoltar} onPointerLeave={() => setCursor(null)}
       onDoubleClick={() => setInicioParede(null)} onContextMenu={(evento) => { evento.preventDefault(); setInicioParede(null); }}
-      onDragOver={(evento) => { if (evento.dataTransfer.types.includes("application/x-hoikos-item")) evento.preventDefault(); }} onDrop={aoSoltarArquivo}>
+      onDragOver={(evento) => { if (evento.dataTransfer.types.includes("application/x-drap-item")) evento.preventDefault(); }} onDrop={aoSoltarArquivo}>
       <defs>
         <pattern id="grade" width={grade} height={grade} patternUnits="userSpaceOnUse"><path d={`M ${grade} 0 L 0 0 0 ${grade}`} fill="none" stroke="#e3ded2" vectorEffect="non-scaling-stroke" /></pattern>
         <pattern id="piso-madeira" width={1200} height={150} patternUnits="userSpaceOnUse"><rect width={1200} height={150} fill={corDoPiso.madeira} /><path d="M 0 0 H 1200 M 700 0 V 150" stroke={tom(corDoPiso.madeira, 0.8)} vectorEffect="non-scaling-stroke" /></pattern>
@@ -307,7 +307,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
         const selecionado = selecao?.tipo === "comodo" && selecao.id === comodo.id;
         const preenchimento = ["madeira", "deck", "porcelanato", "ceramica", "pedra"].includes(comodo.piso) ? `url(#piso-${comodo.piso})` : corDoPiso[comodo.piso];
         return <polygon key={comodo.id} data-tipo="comodo" data-id={comodo.id} points={comodo.pontos.map((p) => `${p.x},${p.y}`).join(" ")} fill={preenchimento}
-          stroke={selecionado ? "#c98a1b" : "none"} strokeWidth={selecionado ? 3 : 0} vectorEffect="non-scaling-stroke" />;
+          stroke={selecionado ? "#27557B" : "none"} strokeWidth={selecionado ? 3 : 0} vectorEffect="non-scaling-stroke" />;
       })}
 
       {doc.itens.map((item) => {
@@ -318,7 +318,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
         if (!abaixo) return null;
         return <g key={item.id} data-tipo="item" data-id={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotacao})`} style={{ cursor: somenteLeitura ? "default" : "move" }}>
           <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={materialDoItem(base, item.material)} />
-          {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#c98a1b" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
+          {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#27557B" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
         </g>;
       })}
 
@@ -348,7 +348,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
           </> : abertura.tipo === "portao" ? <>
             <line x1={-w / 2} y1={0} x2={w / 2} y2={0} stroke="#3d3a36" strokeDasharray="12 6" strokeWidth={2} vectorEffect="non-scaling-stroke" />
           </> : null}
-          <rect x={-w / 2} y={-t / 2 - 5} width={w} height={t + 10} fill="transparent" stroke={selecionada ? "#c98a1b" : "none"} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+          <rect x={-w / 2} y={-t / 2 - 5} width={w} height={t + 10} fill="transparent" stroke={selecionada ? "#27557B" : "none"} strokeWidth={2} vectorEffect="non-scaling-stroke" />
         </g>;
       })}
 
@@ -358,7 +358,7 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
         const selecionado = selecao?.tipo === "item" && selecao.id === item.id;
         return <g key={item.id} data-tipo="item" data-id={item.id} transform={`translate(${item.x} ${item.y}) rotate(${item.rotacao})`} style={{ cursor: somenteLeitura ? "default" : "move" }}>
           <SimboloItem forma={base.forma} variante={base.variante} w={item.largura} d={item.profundidade} cor={item.cor} material={materialDoItem(base, item.material)} />
-          {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#c98a1b" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
+          {selecionado ? <rect data-overlay="sel" x={-item.largura / 2 - 40} y={-item.profundidade / 2 - 40} width={item.largura + 80} height={item.profundidade + 80} fill="none" stroke="#27557B" strokeDasharray="8 5" strokeWidth={2} vectorEffect="non-scaling-stroke" /> : null}
         </g>;
       })}
 
@@ -378,17 +378,17 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
       })}
 
       {paredeSelecionada && !somenteLeitura ? <g data-overlay="sel">
-        {(["a", "b"] as const).map((ponta) => <circle key={ponta} data-tipo="ponta" data-id={`${paredeSelecionada.id}:${ponta}`} cx={paredeSelecionada[ponta].x} cy={paredeSelecionada[ponta].y} r={9 * px} fill="#ffffff" stroke="#c98a1b" strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ cursor: "grab" }} />)}
+        {(["a", "b"] as const).map((ponta) => <circle key={ponta} data-tipo="ponta" data-id={`${paredeSelecionada.id}:${ponta}`} cx={paredeSelecionada[ponta].x} cy={paredeSelecionada[ponta].y} r={9 * px} fill="#ffffff" stroke="#27557B" strokeWidth={2} vectorEffect="non-scaling-stroke" style={{ cursor: "grab" }} />)}
         <text x={(paredeSelecionada.a.x + paredeSelecionada.b.x) / 2} y={(paredeSelecionada.a.y + paredeSelecionada.b.y) / 2 - 16 * px} textAnchor="middle" fontSize={13 * px} fill="#7a5a2b" pointerEvents="none">{medida(comprimentoDaParede(paredeSelecionada))}</text>
       </g> : null}
 
       {ferramenta === "parede" && inicioParede && cursor ? <g data-overlay="sel" pointerEvents="none">
-        <line x1={inicioParede.x} y1={inicioParede.y} x2={cursor.x} y2={cursor.y} stroke="#c98a1b" strokeWidth={150} strokeOpacity={0.45} />
+        <line x1={inicioParede.x} y1={inicioParede.y} x2={cursor.x} y2={cursor.y} stroke="#27557B" strokeWidth={150} strokeOpacity={0.45} />
         <text x={(inicioParede.x + cursor.x) / 2} y={(inicioParede.y + cursor.y) / 2 - 14 * px} textAnchor="middle" fontSize={13 * px} fill="#7a5a2b">{medida(Math.hypot(cursor.x - inicioParede.x, cursor.y - inicioParede.y))}</text>
       </g> : null}
-      {ferramenta === "parede" && cursor ? <circle data-overlay="sel" cx={cursor.x} cy={cursor.y} r={5 * px} fill="#c98a1b" pointerEvents="none" /> : null}
+      {ferramenta === "parede" && cursor ? <circle data-overlay="sel" cx={cursor.x} cy={cursor.y} r={5 * px} fill="#27557B" pointerEvents="none" /> : null}
       {retangulo ? <g data-overlay="sel" pointerEvents="none">
-        <rect x={Math.min(retangulo.a.x, retangulo.b.x)} y={Math.min(retangulo.a.y, retangulo.b.y)} width={Math.abs(retangulo.b.x - retangulo.a.x)} height={Math.abs(retangulo.b.y - retangulo.a.y)} fill="#c98a1b" fillOpacity={0.12} stroke="#c98a1b" strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <rect x={Math.min(retangulo.a.x, retangulo.b.x)} y={Math.min(retangulo.a.y, retangulo.b.y)} width={Math.abs(retangulo.b.x - retangulo.a.x)} height={Math.abs(retangulo.b.y - retangulo.a.y)} fill="#27557B" fillOpacity={0.12} stroke="#27557B" strokeWidth={2} vectorEffect="non-scaling-stroke" />
         <text x={(retangulo.a.x + retangulo.b.x) / 2} y={(retangulo.a.y + retangulo.b.y) / 2} textAnchor="middle" fontSize={13 * px} fill="#7a5a2b">{medida(Math.abs(retangulo.b.x - retangulo.a.x))} × {medida(Math.abs(retangulo.b.y - retangulo.a.y))}</text>
       </g> : null}
     </svg>
@@ -397,8 +397,8 @@ export const PlantaEditor = forwardRef<PlantaRef, Props>(function PlantaEditor({
       <Button size="icon" variant="ghost" className="size-8" onClick={() => zoom(1.3)} aria-label="Afastar"><Minus /></Button>
       <Button size="icon" variant="ghost" className="size-8" onClick={enquadrar} aria-label="Enquadrar tudo"><Scan /></Button>
     </div>
-    {ferramenta === "parede" ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-hoikos-700 shadow">{inicioParede ? "Clique para o próximo canto · duplo clique ou Esc termina · Shift desliga o esquadro" : "Clique no primeiro canto da parede"}</p> : null}
-    {ferramenta === "comodo" ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-hoikos-700 shadow">Arraste um retângulo: paredes e piso saem juntos</p> : null}
-    {["porta", "janela", "portao", "vao"].includes(ferramenta) ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-hoikos-700 shadow">Clique sobre uma parede</p> : null}
+    {ferramenta === "parede" ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-drap-700 shadow">{inicioParede ? "Clique para o próximo canto · duplo clique ou Esc termina · Shift desliga o esquadro" : "Clique no primeiro canto da parede"}</p> : null}
+    {ferramenta === "comodo" ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-drap-700 shadow">Arraste um retângulo: paredes e piso saem juntos</p> : null}
+    {["porta", "janela", "portao", "vao"].includes(ferramenta) ? <p className="pointer-events-none absolute left-2 top-2 rounded bg-white/90 px-2 py-1 text-xs text-drap-700 shadow">Clique sobre uma parede</p> : null}
   </div>;
 });

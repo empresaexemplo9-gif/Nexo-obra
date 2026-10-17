@@ -13,7 +13,7 @@ test("DRAP signup uses only the official signup URL and audits the redirect", as
   assert.doesNotMatch(route, /redirectUrl\s*:\s*parsed|new URL\([^)]*catalogItemId/);
 });
 
-test("H.OIKOS activates DRAP only after the operational API validates the tenant", async () => {
+test("DRAP Backoffice activates DRAP only after the operational API validates the tenant", async () => {
   const connection = await source("app/api/integrations/drap/connection/route.ts");
   assert.match(connection, /requestDrapApi\(externalCompanyId, "\/api\/v1\/lancamentos\?limit=1&offset=0"\)/);
   assert.match(connection, /status: "active"/);
@@ -21,12 +21,12 @@ test("H.OIKOS activates DRAP only after the operational API validates the tenant
   assert.doesNotMatch(connection, /sendReadyNotifications|sendDrapReadyEmail|transactionalEmailConfigured|drap_ready_notification/);
 });
 
-test("solutions screen redirects to DRAP signup and confirms activation inside H.OIKOS", async () => {
+test("solutions screen redirects to DRAP signup and confirms activation inside DRAP Backoffice", async () => {
   const ui = await source("components/drap-solutions-workspace.tsx");
   assert.match(ui, /\/api\/integrations\/drap\/signup/);
   assert.match(ui, /window\.location\.assign\(body\.redirectUrl\)/);
   assert.match(ui, /Criar conta DRAP/);
-  assert.match(ui, /DRAP conectada à H\.OIKOS/);
+  assert.match(ui, /DRAP conectada ao DRAP Backoffice/);
   assert.doesNotMatch(ui, /e-mail|email|MailCheck|Brevo|Resend/);
 });
 

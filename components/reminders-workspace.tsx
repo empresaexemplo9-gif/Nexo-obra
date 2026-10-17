@@ -76,7 +76,7 @@ export function ReminderBell({ pending, onOpen }: { pending: number; onOpen: () 
   return <Button variant="ghost" size="icon" onClick={onOpen} className="relative"
     aria-label={pending ? `Lembretes do dia: ${pending} para hoje ou atrasados` : "Lembretes do dia"}>
     <BellRing />
-    {pending ? <span className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-hoikos-800 px-1 text-[10px] font-semibold text-white">{pending > 99 ? "99+" : pending}</span> : null}
+    {pending ? <span className="absolute -right-0.5 -top-0.5 grid min-w-4 place-items-center rounded-full bg-drap-800 px-1 text-[10px] font-semibold text-white">{pending > 99 ? "99+" : pending}</span> : null}
   </Button>;
 }
 
@@ -119,7 +119,7 @@ function GoalForm({ metrics, members, onCreated }: {
 
   if (!open) return <Button size="sm" variant="outline" onClick={() => setOpen(true)}><Plus />Nova meta</Button>;
 
-  return <form onSubmit={submit} className="grid gap-3 rounded-md border border-hoikos-200 bg-hoikos-50 p-4 sm:grid-cols-2">
+  return <form onSubmit={submit} className="grid gap-3 rounded-md border border-drap-200 bg-drap-50 p-4 sm:grid-cols-2">
     <label className="text-sm sm:col-span-2">Nome da meta
       <Input value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} placeholder="Faturamento de setembro" className="mt-1 h-10" />
     </label>
@@ -139,7 +139,7 @@ function GoalForm({ metrics, members, onCreated }: {
         {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
       </NativeSelect>
     </label>
-    {error ? <p role="alert" className="text-sm text-hoikos-700 sm:col-span-2">{error}</p> : null}
+    {error ? <p role="alert" className="text-sm text-drap-700 sm:col-span-2">{error}</p> : null}
     <div className="flex gap-2 sm:col-span-2">
       <Button type="submit" size="sm" disabled={saving}>{saving ? <LoaderCircle className="animate-spin" /> : <Check />}Criar meta</Button>
       <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
@@ -180,12 +180,12 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
   }
 
   if (error && !agenda) {
-    return <Card className="border-hoikos-200"><CardContent className="flex flex-col items-start gap-3 p-6">
-      <CircleAlert className="size-6 text-hoikos-600" /><p className="text-sm text-hoikos-800">{error}</p>
+    return <Card className="border-drap-200"><CardContent className="flex flex-col items-start gap-3 p-6">
+      <CircleAlert className="size-6 text-drap-600" /><p className="text-sm text-drap-800">{error}</p>
       <Button onClick={() => void reload()}>Tentar novamente</Button>
     </CardContent></Card>;
   }
-  if (!agenda) return <Card><CardContent className="grid min-h-56 place-items-center"><LoaderCircle className="size-6 animate-spin text-hoikos-600" /></CardContent></Card>;
+  if (!agenda) return <Card><CardContent className="grid min-h-56 place-items-center"><LoaderCircle className="size-6 animate-spin text-drap-600" /></CardContent></Card>;
 
   const total = agenda.reminders.length;
 
@@ -193,11 +193,11 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
     <Card className="workspace-card">
       <CardHeader className="gap-2">
         <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-          <AlarmClock className="size-4 text-hoikos-600" />Lembretes de {dayLabel(agenda.day)}
-          {agenda.counts.atrasado ? <Badge variant="outline" className="border-hoikos-400">{agenda.counts.atrasado} atrasado(s)</Badge> : null}
+          <AlarmClock className="size-4 text-drap-600" />Lembretes de {dayLabel(agenda.day)}
+          {agenda.counts.atrasado ? <Badge variant="outline" className="border-drap-400">{agenda.counts.atrasado} atrasado(s)</Badge> : null}
           {agenda.counts.hoje ? <Badge variant="outline">{agenda.counts.hoje} para hoje</Badge> : null}
         </CardTitle>
-        <p className="text-sm leading-6 text-hoikos-500">
+        <p className="text-sm leading-6 text-drap-500">
           Cobranças a confirmar, boletos a vencer, follow-ups do funil, tarefas com prazo, recados da Comunicação e metas em aberto até {dayLabel(agenda.horizon)}.
           Cada lembrete aponta para um registro real e some sozinho quando o registro deixa de estar pendente.
           {agenda.dismissedCount ? ` ${agenda.dismissedCount} dispensado(s) hoje.` : ""}
@@ -207,20 +207,20 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
 
     {total === 0 ? (
       <Card><CardContent className="grid min-h-48 place-items-center p-6 text-center"><div>
-        <Check className="mx-auto size-7 text-hoikos-600" />
-        <p className="mt-3 font-medium text-hoikos-900">Nada pendente para hoje</p>
-        <p className="mt-1 text-sm text-hoikos-500">Nenhuma cobrança, boleto, follow-up, tarefa, recado ou meta exige ação agora.</p>
+        <Check className="mx-auto size-7 text-drap-600" />
+        <p className="mt-3 font-medium text-drap-900">Nada pendente para hoje</p>
+        <p className="mt-1 text-sm text-drap-500">Nenhuma cobrança, boleto, follow-up, tarefa, recado ou meta exige ação agora.</p>
       </div></CardContent></Card>
     ) : (["atrasado", "hoje", "proximo"] as const).filter((severity) => grouped[severity].length).map((severity) => (
       <Card key={severity} className="overflow-hidden">
-        <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold text-hoikos-700">{severityLabels[severity]} · {grouped[severity].length}</CardTitle></CardHeader>
+        <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold text-drap-700">{severityLabels[severity]} · {grouped[severity].length}</CardTitle></CardHeader>
         <CardContent className="divide-y p-0">
           {grouped[severity].map((reminder) => (
             <div key={reminder.key} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center">
               <Badge variant="outline" className="w-fit shrink-0">{groupLabels[reminder.group]}</Badge>
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-hoikos-900">{reminder.title}</p>
-                <p className="mt-0.5 text-sm text-hoikos-500">{reminder.detail}</p>
+                <p className="font-medium text-drap-900">{reminder.title}</p>
+                <p className="mt-0.5 text-sm text-drap-500">{reminder.detail}</p>
               </div>
               {reminder.amountCents ? <p className="shrink-0 font-semibold tabular-nums">{currency(reminder.amountCents)}</p> : null}
               <Button size="sm" variant="ghost" onClick={() => void mark(reminder.key, "dismissed")} aria-label={`Dispensar hoje: ${reminder.title}`}>
@@ -234,27 +234,27 @@ export function RemindersWorkspace({ agenda, error, reload, mark, members }: {
 
     <Card className="overflow-hidden">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 border-b">
-        <CardTitle className="flex items-center gap-2 text-base"><Target className="size-4 text-hoikos-600" />Metas do período</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base"><Target className="size-4 text-drap-600" />Metas do período</CardTitle>
         {canManage && metrics.length ? <GoalForm metrics={metrics} members={members} onCreated={reload} /> : null}
       </CardHeader>
       <CardContent className="space-y-4 p-4">
         {agenda.goals.length === 0 ? (
-          <p className="py-6 text-center text-sm text-hoikos-500">
+          <p className="py-6 text-center text-sm text-drap-500">
             {canManage ? "Nenhuma meta ativa. Crie uma e o realizado é calculado a partir dos dados reais da empresa." : "Nenhuma meta ativa para você no período."}
           </p>
         ) : agenda.goals.map((goal) => (
-          <div key={goal.id} className="rounded-md border border-hoikos-100 p-4">
+          <div key={goal.id} className="rounded-md border border-drap-100 p-4">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium text-hoikos-900">{goal.name}</p>
+              <p className="font-medium text-drap-900">{goal.name}</p>
               <Badge variant="outline">{goal.label}</Badge>
               {goal.mine ? <Badge variant="outline">Sua meta</Badge> : null}
-              <span className="ml-auto text-sm tabular-nums text-hoikos-600">
+              <span className="ml-auto text-sm tabular-nums text-drap-600">
                 {goal.money ? currency(goal.current) : goal.current} de {goal.money ? currency(goal.target) : goal.target}
               </span>
               {canManage ? <Button size="sm" variant="ghost" onClick={() => void closeGoal(goal.id)} aria-label={`Encerrar meta ${goal.name}`}><Trash2 /></Button> : null}
             </div>
             <Progress value={Math.min(100, goal.percent)} className="mt-3" />
-            <p className="mt-2 text-xs text-hoikos-500">
+            <p className="mt-2 text-xs text-drap-500">
               {goal.percent}% · {dayLabel(goal.periodStart)} a {dayLabel(goal.periodEnd)}
               {goal.percent >= 100 ? " · meta batida" : ""}
             </p>

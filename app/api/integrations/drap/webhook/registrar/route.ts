@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 // Nova tentativa de registrar o webhook desta empresa na Drap.
 //
 // Conectar já tenta sozinho. Esta rota existe para o que sobra: a Drap estava fora do ar
-// naquele instante, ou a instalação ainda não tinha `HOIKOS_PUBLIC_URL`, ou a empresa foi
+// naquele instante, ou a instalação ainda não tinha `APP_PUBLIC_URL`, ou a empresa foi
 // conectada antes de a plataforma passar a registrar. Em todos esses casos a conexão
 // funciona e só falta o aviso automático — e obrigar a desconectar e conectar de novo só
 // para isso seria desfazer o que está certo para consertar o que falta.

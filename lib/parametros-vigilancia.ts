@@ -76,7 +76,7 @@ export const buscaHttp: Buscador = async (url) => {
       redirect: "follow",
       cache: "no-store",
       signal: AbortSignal.timeout(20000),
-      headers: { "User-Agent": "H.OIKOS/1.0 (verificador de vigencia de norma)" },
+      headers: { "User-Agent": "DRAP-Backoffice/1.0 (verificador de vigencia de norma)" },
     });
     const bruto = await resposta.text();
     return { ok: resposta.ok, status: resposta.status, corpo: bruto.slice(0, 2 * 1024 * 1024) };

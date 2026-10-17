@@ -67,7 +67,7 @@ export function WorksheetContextMenu({ estado, onAcao }: { estado: EstadoDoMenu;
   const linhasTxt = plural(linhas, "linha", "linhas"), colunasTxt = plural(colunas, "coluna", "colunas");
 
   return <ContextMenuContent className="w-[min(18rem,var(--radix-context-menu-content-available-width))]" collisionPadding={8} aria-label="Ações da planilha">
-    <ContextMenuLabel className="text-xs font-normal text-hoikos-500">
+    <ContextMenuLabel className="text-xs font-normal text-drap-500">
       {alvo.tipo === "linha" ? estado.rotuloLinhas : alvo.tipo === "coluna" ? estado.rotuloColunas : estado.rotuloIntervalo}
     </ContextMenuLabel>
     {readOnly ? null : item("recortar", "Recortar", <Scissors />, { atalho: "Ctrl+X" })}
@@ -77,7 +77,7 @@ export function WorksheetContextMenu({ estado, onAcao }: { estado: EstadoDoMenu;
       <ContextMenuSub>
         <ContextMenuSubTrigger><ClipboardPaste className="mr-2" />Colar especial</ContextMenuSubTrigger>
         <ContextMenuSubContent className="w-64">
-          {!estado.temRecorte ? <ContextMenuLabel className="text-xs font-normal text-hoikos-500">Copie ou recorte na planilha primeiro</ContextMenuLabel> : null}
+          {!estado.temRecorte ? <ContextMenuLabel className="text-xs font-normal text-drap-500">Copie ou recorte na planilha primeiro</ContextMenuLabel> : null}
           {item("colar-valores", "Somente valores", <Sigma />, { desabilitado: !estado.temRecorte })}
           {item("colar-formatacao", "Somente formatação", <Paintbrush />, { desabilitado: !estado.temRecorte })}
           {item("colar-transposto", "Transposto (linhas viram colunas)", <MoveHorizontal />, { desabilitado: !estado.temRecorte })}
