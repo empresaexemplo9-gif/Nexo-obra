@@ -338,6 +338,48 @@ export const budgetItems = sqliteTable("budget_items", {
   sourceReference: text("source_reference"),
 }, (table) => [index("idx_budget_items_version_order").on(table.budgetVersionId, table.sortOrder)]);
 
+// Proposta comercial enviada ao cliente. O conteúdo é um documento próprio (cópia editável
+// dos itens do orçamento de origem), porque a proposta é editada em qualquer parte sem
+// mexer no orçamento. O aceite guarda uma cópia exata do que o cliente leu.
+export const proposals = sqliteTable("proposals", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  projectId: text("project_id").references(() => projects.id),
+  clientId: text("client_id").references(() => clients.id),
+  budgetVersionId: text("budget_version_id").references(() => budgetVersions.id),
+  code: text("code").notNull(),
+  title: text("title").notNull(),
+  recipientName: text("recipient_name").notNull().default(""),
+  recipientEmail: text("recipient_email"),
+  recipientPhone: text("recipient_phone"),
+  contentJson: text("content_json").notNull(),
+  totalCents: integer("total_cents").notNull().default(0),
+  validityDays: integer("validity_days").notNull().default(15),
+  status: text("status").notNull().default("draft"),
+  linkNonce: text("link_nonce").notNull(),
+  scheduledAt: integer("scheduled_at"),
+  scheduledChannel: text("scheduled_channel"),
+  issuedAt: integer("issued_at"),
+  sentAt: integer("sent_at"),
+  sentChannel: text("sent_channel"),
+  firstViewedAt: integer("first_viewed_at"),
+  lastViewedAt: integer("last_viewed_at"),
+  viewCount: integer("view_count").notNull().default(0),
+  acceptedAt: integer("accepted_at"),
+  acceptedName: text("accepted_name"),
+  acceptedDocument: text("accepted_document"),
+  acceptedSnapshotJson: text("accepted_snapshot_json"),
+  acceptedIpHash: text("accepted_ip_hash"),
+  acceptedUserAgentHash: text("accepted_user_agent_hash"),
+  noticeAckAt: integer("notice_ack_at"),
+  createdByName: text("created_by_name").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_proposals_org_code").on(table.organizationId, table.code),
+  index("idx_proposals_org_status").on(table.organizationId, table.status, table.updatedAt),
+]);
+
 export const budgetCatalogItems = sqliteTable("budget_catalog_items", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),

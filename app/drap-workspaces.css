@@ -240,3 +240,18 @@
   }
   .drap-focus::after { width: 100%; opacity: .3; -webkit-mask-image: none; mask-image: none; }
 }
+
+/* Proposta comercial: folha branca de leitura, igual na tela da equipe e na do cliente. */
+.proposal-heading {
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--drap-band); padding-bottom: 0.5rem; border-bottom: 1px solid color-mix(in srgb, var(--drap-support) 25%, transparent);
+}
+.proposal-sheet { font-family: var(--font-sans); }
+@media print {
+  @page { size: A4; margin: 16mm; }
+  .proposal-page { background: var(--drap-white) !important; padding: 0 !important; }
+  .proposal-actions, .proposal-accept form { display: none !important; }
+  .proposal-paper, .proposal-accept { box-shadow: none !important; padding: 0 !important; max-width: none !important; }
+}
+/* Na folha branca do cliente, campo cinza parecia desativado. */
+.proposal-accept :is([data-slot="input"], [data-slot="checkbox"]) { background: var(--drap-white); border-color: color-mix(in srgb, var(--drap-support) 55%, var(--drap-white)); }

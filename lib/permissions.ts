@@ -10,7 +10,7 @@ export type PermissionSet = Record<PermissionModule, PermissionGrant>;
 export const permissionModuleLabels: Record<PermissionModule, string> = {
   overview: "Visão geral",
   projects: "Projetos e obras",
-  budgets: "Orçamentos",
+  budgets: "Orçamentos e propostas",
   schedule: "Cronograma",
   diary: "Diário de obra",
   portal: "Portal do cliente",

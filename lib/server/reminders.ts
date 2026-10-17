@@ -6,7 +6,7 @@ import { usageDayKey, usageDayStart } from "@/lib/server/usage";
 // e some sozinho quando o registro deixa de estar pendente. Dispensar vale só para o dia.
 
 export type ReminderSeverity = "atrasado" | "hoje" | "proximo";
-export type ReminderGroup = "cobranca" | "boleto" | "followup" | "tarefa" | "meta" | "recado";
+export type ReminderGroup = "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado";
 
 export type Reminder = {
   key: string;
@@ -169,6 +169,62 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
         detail: `${opportunity.next_action ?? "Sem próximo passo descrito"}${opportunity.client_name ? ` · ${opportunity.client_name}` : ""} · ${dayLabel(due)}`,
         amountCents: Number(opportunity.estimated_value_cents ?? 0) || null, dueDay: due, module: "crm", entityId: opportunity.id,
       });
+    }
+  }
+
+  if (may(context, "budgets")) {
+    // Proposta: hora de enviar o que foi agendado, e aviso de que o cliente abriu ou
+    // aceitou. O aviso some quando alguém da equipe abre a proposta na aba Propostas.
+    const horizonEnd = usageDayStart(horizon, organization.timezone, now) + 86_400_000 - 1;
+    // Entre a publicação e a migração aplicada pelo superadmin a tabela ainda não existe.
+    // Sem esta trava, a falta dela derrubava os lembretes inteiros, não só os de proposta.
+    const proposals = await db.prepare(
+      `SELECT pr.id, pr.code, pr.title, pr.status, pr.recipient_name, pr.total_cents, pr.scheduled_at, pr.scheduled_channel,
+         pr.first_viewed_at, pr.last_viewed_at, pr.view_count, pr.accepted_at, pr.accepted_name, pr.notice_ack_at
+       FROM proposals pr
+       WHERE pr.organization_id = ?1 AND (
+         (pr.status = 'scheduled' AND pr.scheduled_at <= ?2)
+         OR (pr.accepted_at IS NOT NULL AND pr.accepted_at > COALESCE(pr.notice_ack_at, 0))
+         OR (pr.status = 'sent' AND pr.first_viewed_at IS NOT NULL AND pr.first_viewed_at > COALESCE(pr.notice_ack_at, 0))
+       )
+       ORDER BY COALESCE(pr.accepted_at, pr.last_viewed_at, pr.scheduled_at) LIMIT 200`,
+    ).bind(organization.id, horizonEnd).all<{
+      id: string; code: string; title: string; status: string; recipient_name: string; total_cents: number;
+      scheduled_at: number | null; scheduled_channel: string | null; first_viewed_at: number | null; last_viewed_at: number | null;
+      view_count: number; accepted_at: number | null; accepted_name: string | null; notice_ack_at: number | null;
+    }>().catch((error: unknown) => {
+      if (/no such table:?\s*proposals/i.test(String(error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : error))) return { results: [] };
+      throw error;
+    });
+    const clock = (ms: number) => new Date(ms).toLocaleString("pt-BR", { timeZone: organization.timezone, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    for (const proposal of proposals.results) {
+      const who = proposal.recipient_name ? ` · ${proposal.recipient_name}` : "";
+      if (proposal.accepted_at && proposal.accepted_at > (proposal.notice_ack_at ?? 0)) {
+        reminders.push({
+          key: `proposta-aceita:${proposal.id}`, group: "proposta", severity: "hoje",
+          title: `Proposta aceita: ${proposal.code} — ${proposal.title}`,
+          detail: `${money(Number(proposal.total_cents))} · aceita por ${proposal.accepted_name ?? "cliente"} em ${clock(proposal.accepted_at)}`,
+          amountCents: Number(proposal.total_cents), dueDay: usageDayKey(proposal.accepted_at, organization.timezone), module: "proposals", entityId: proposal.id,
+        });
+      } else if (proposal.status === "scheduled" && proposal.scheduled_at) {
+        const due = usageDayKey(proposal.scheduled_at, organization.timezone);
+        const ready = proposal.scheduled_at <= now;
+        reminders.push({
+          key: `proposta-envio:${proposal.id}`, group: "proposta",
+          severity: ready ? (due < today ? "atrasado" : "hoje") : "proximo",
+          title: ready ? `Hora de enviar: ${proposal.code} — ${proposal.title}` : `Envio agendado: ${proposal.code} — ${proposal.title}`,
+          detail: `por ${proposal.scheduled_channel === "whatsapp" ? "WhatsApp" : "e-mail"} · ${clock(proposal.scheduled_at)}${who}`,
+          amountCents: Number(proposal.total_cents), dueDay: due, module: "proposals", entityId: proposal.id,
+        });
+      } else if (proposal.first_viewed_at) {
+        const last = proposal.last_viewed_at ?? proposal.first_viewed_at;
+        reminders.push({
+          key: `proposta-aberta:${proposal.id}`, group: "proposta", severity: "hoje",
+          title: `Cliente abriu a proposta ${proposal.code} — ${proposal.title}`,
+          detail: `${Number(proposal.view_count) > 1 ? `${proposal.view_count} aberturas · última` : "aberta"} em ${clock(last)}${who}`,
+          amountCents: null, dueDay: usageDayKey(last, organization.timezone), module: "proposals", entityId: proposal.id,
+        });
+      }
     }
   }
 

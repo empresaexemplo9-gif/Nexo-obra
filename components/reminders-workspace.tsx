@@ -13,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { lerValorBrasileiro } from "@/lib/drap-envelope";
 
 export type Reminder = {
-  key: string; group: "cobranca" | "boleto" | "followup" | "tarefa" | "meta" | "recado";
+  key: string; group: "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado";
   severity: "atrasado" | "hoje" | "proximo";
   title: string; detail: string; amountCents: number | null; dueDay: string | null;
   module: string; entityId: string;
@@ -29,7 +29,7 @@ export type Agenda = {
 };
 
 const groupLabels: Record<Reminder["group"], string> = {
-  cobranca: "Cobrança", boleto: "Boleto", followup: "Follow-up", tarefa: "Tarefa", meta: "Meta", recado: "Recado",
+  cobranca: "Cobrança", boleto: "Boleto", followup: "Follow-up", proposta: "Proposta", tarefa: "Tarefa", meta: "Meta", recado: "Recado",
 };
 const severityLabels: Record<Reminder["severity"], string> = {
   atrasado: "Atrasado", hoje: "Hoje", proximo: "Próximos dias",
@@ -59,7 +59,7 @@ export function useReminders(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const timer = window.setTimeout(() => { void load(); }, 0);
-    const interval = window.setInterval(() => { void load(); }, 10 * 60_000);
+    const interval = window.setInterval(() => { void load(); }, 2 * 60_000);
     return () => { window.clearTimeout(timer); window.clearInterval(interval); };
   }, [enabled, load]);
 

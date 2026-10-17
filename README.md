@@ -35,9 +35,10 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 
 - Política Drap por empresa e módulo: preço oficial como mínimo, acréscimo opcional exclusivo do superadministrador, revisão concorrente e preço congelado por solicitação. Confirmação HMAC registra base, total e comissão mensal para conciliação; não comprova pagamento. Contratação real aguarda conclusão/homologação pela Drap, por orientação do responsável. Consulte [Ativação e controle](docs/DRAP-ACTIVATION.md).
 - Painel “Visão geral” com prioridade do dia, indicadores, primeiros passos e listas reais de tarefas e projetos. Composição em Pedra Clara e Papel Cinza, menu em Abismo Nanquim e banner em Azul Cianótipo.
-- Áreas navegáveis de projetos, obras, orçamentos, cronograma, Prancheta, Editor CAD, Criador de layout, Comunicação, CRM, financeiro, equipe, tarefas e arquivos.
+- Áreas navegáveis de projetos, obras, orçamentos, propostas, cronograma, Prancheta, Editor CAD, Criador de layout, Comunicação, CRM, financeiro, equipe, tarefas e arquivos.
 - Central própria de cada projeto/obra, com resumo, planejamento, tarefas, custos e registros no mesmo contexto.
 - Orçamentos reais com versões por projeto, BDI, margem, itens em lote e biblioteca própria da empresa.
+- Propostas (aba própria): documento comercial criado de um orçamento ou em branco, editável em qualquer parte (cabeçalho, seções, itens, desconto, validade e fechamento), com prévia igual à do cliente. Envio pelo WhatsApp ou e-mail do próprio usuário (link `wa.me`, `mailto:` ou Gmail com mensagem e link prontos) ou link copiado. Data e hora da proposta registradas no primeiro envio, validade calculada a partir dela. Agendamento: na hora marcada a proposta vira “Hora de enviar” nos lembretes e na aba; o link só entra no ar quando é enviada. O cliente abre `/proposta/<link assinado>`, sem conta, e aceita ali mesmo; a equipe é avisada da abertura e do aceite nos lembretes, no sino e na própria aba. O aceite guarda nome, documento, data, hash de IP e navegador e cópia exata da versão lida; proposta aceita fica travada. Consulte [Propostas](docs/PROPOSTAS.md).
 - Financeiro contextual por obra, com centros de custo, contas, cobranças confirmadas pela Drap, lembretes e relatórios CSV.
 - Diário de obra persistente, com atividades, clima, equipe, ocorrências, fotos privadas, histórico de correções e relatório para impressão/PDF. Atualização automática a cada 15 segundos nas telas visíveis, sem dados demonstrativos.
 - Portal do cliente por obra, com convites vinculados ao e-mail, publicação seletiva de textos e fotos do diário, aprovações e solicitações de ajustes com histórico preservado.
@@ -474,7 +475,7 @@ CLAUDE.md
 - Conversão de oportunidade em projeto/obra com o cliente existente. **Implementada, com edição do seguimento comercial.**
 - Biblioteca de serviços, insumos e composições. **Concluída para cadastro próprio.**
 - BDI, margem e versões numeradas. **Implementados, com bloqueio após envio e cópia para novo rascunho.**
-- Proposta para impressão/PDF. **Implementada.** Aceite digital do cliente vinculado ao orçamento permanece pendente; registrar aprovação interna não substitui esse aceite.
+- Proposta para impressão/PDF. **Implementada.** Aba Propostas com envio por WhatsApp/e-mail, agendamento, aviso de abertura e aceite digital do cliente na própria proposta. **Implementada.** O aceite não muda sozinho a situação do orçamento de origem.
 - Importação SINAPI dentro da plataforma e renovação automática implementadas para a UF/regime configurados; ativação inicial exige conferência do arquivo real no superadmin. Veja [SINAPI](docs/SINAPI-INTEGRATION.md).
 
 ### Fase 3 — planejamento e obra

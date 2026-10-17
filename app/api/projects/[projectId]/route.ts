@@ -162,7 +162,7 @@ export async function DELETE(request: Request, route: RouteContext) {
       // Oportunidade ganha, portal do cliente, horas, cobranças, notas e desenhos também
       // apontam para a obra. A lista acima não cobre todos; o banco cobre.
       if (String(error).includes("FOREIGN KEY constraint")) {
-        throw new ApiError(409, "project_in_use", "Este projeto tem registros vinculados (CRM, portal, horas, cobranças, notas ou desenhos) e não pode ser excluído. Arquive-o.");
+        throw new ApiError(409, "project_in_use", "Este projeto tem registros vinculados (CRM, propostas, portal, horas, cobranças, notas ou desenhos) e não pode ser excluído. Arquive-o.");
       }
       throw error;
     }

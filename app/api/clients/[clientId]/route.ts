@@ -142,7 +142,7 @@ export async function DELETE(request: Request, route: RouteContext) {
       ]);
     } catch (error) {
       if (String(error).includes("FOREIGN KEY constraint")) {
-        throw new ApiError(409, "client_in_use", "Este cliente tem oportunidades, cobranças ou notas vinculadas e não pode ser excluído.");
+        throw new ApiError(409, "client_in_use", "Este cliente tem oportunidades, propostas, cobranças ou notas vinculadas e não pode ser excluído.");
       }
       throw error;
     }
