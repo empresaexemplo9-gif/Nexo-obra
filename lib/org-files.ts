@@ -44,7 +44,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   doc: "application/msword", xls: "application/vnd.ms-excel", ppt: "application/vnd.ms-powerpoint",
   odt: "application/vnd.oasis.opendocument.text", ods: "application/vnd.oasis.opendocument.spreadsheet",
-  csv: "text/csv", txt: "text/plain", json: "application/json", xml: "application/xml",
+  csv: "text/csv", txt: "text/plain", md: "text/markdown", json: "application/json", xml: "application/xml",
   ifc: "application/x-step", step: "application/step", stp: "application/step",
   stl: "model/stl", obj: "model/obj", gltf: "model/gltf+json", glb: "model/gltf-binary", ply: "application/octet-stream",
   "3mf": "model/3mf", skp: "application/vnd.sketchup.skp", rvt: "application/octet-stream", rfa: "application/octet-stream",
@@ -87,4 +87,14 @@ export const CONVERSION_LABELS: Record<string, string> = {
   "pdf-png": "PDF → PNG",
   "pdf-jpg": "PDF → JPG",
   "imagem-pdf": "Imagem → PDF",
+  "md-pdf": "Documento → PDF",
+  "pdf-md": "PDF → texto",
+  "pdf-organizar": "PDF organizado",
+  "pdf-dividir": "Parte do PDF",
+  "pdf-carimbo": "PDF numerado ou com marca d'água",
+  "pdf-reduzir": "PDF reduzido",
 };
+
+/** Saídas da aba Documentos e PDF que nascem de um único arquivo da biblioteca. */
+export const DOCUMENT_CONVERSIONS = ["md-pdf", "pdf-md", "pdf-organizar", "pdf-dividir", "pdf-carimbo", "pdf-reduzir"] as const;
+export type DocumentConversion = typeof DOCUMENT_CONVERSIONS[number];

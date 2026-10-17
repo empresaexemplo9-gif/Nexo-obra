@@ -4,7 +4,7 @@ import { ApiError, auditStatement, isPlatformSuperAdmin, type OrganizationContex
 import { deleteObject, getObject, putObject } from "@/lib/server/storage";
 import {
   blockedExtension, chunkCountFor, expectedChunkSize, extensionOf, FILE_CHUNK_BYTES, MAX_ORG_FILE_BYTES,
-  MAX_ORG_FILE_LABEL, mimeFor, safeFileName,
+  MAX_ORG_FILE_LABEL, mimeFor, safeFileName, DOCUMENT_CONVERSIONS,
 } from "@/lib/org-files";
 
 // Arquivos da empresa em partes cifradas. Ver o comentário de `org_files` em db/schema.ts.
@@ -55,7 +55,7 @@ export const createUploadSchema = z.object({
   area: z.enum(["prancheta", "conversa"]),
   projectId: z.string().trim().min(1).max(80).optional().nullable(),
   sourceFileId: z.string().trim().min(1).max(80).optional().nullable(),
-  conversion: z.enum(["dxf-pdf", "dxf-svg", "dxf-png", "pdf-png", "pdf-jpg", "imagem-pdf"]).optional().nullable(),
+  conversion: z.enum(["dxf-pdf", "dxf-svg", "dxf-png", "pdf-png", "pdf-jpg", "imagem-pdf", ...DOCUMENT_CONVERSIONS]).optional().nullable(),
 }).strict();
 
 const now = () => new Date().toISOString();

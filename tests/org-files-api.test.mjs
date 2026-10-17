@@ -147,6 +147,18 @@ test("conversão de desenho gerada no navegador entra ligada ao original", async
   assert.equal(foreign.status, 404, "origem de outra empresa não é aceita");
 });
 
+test("saída da aba Documentos e PDF entra ligada ao original; tipo desconhecido é recusado", async () => {
+  const source = await upload("owner", "memorial.md", new TextEncoder().encode("# Memorial\n"));
+  assert.equal(source.mimeType, "text/markdown");
+  const pdf = await upload("owner", "memorial.pdf", randomBytes(200), { extra: { sourceFileId: source.id, conversion: "md-pdf" } });
+  assert.equal(pdf.sourceFileId, source.id);
+  assert.equal(pdf.conversion, "md-pdf");
+  const invented = await open("owner", { name: "x.pdf", sizeBytes: 10, area: "prancheta", sourceFileId: source.id, conversion: "pdf-qualquer" });
+  assert.equal(invented.status, 400);
+  const foreign = await open("owner-b", { name: "x.pdf", sizeBytes: 10, area: "prancheta", sourceFileId: source.id, conversion: "pdf-organizar" }, orgB);
+  assert.equal(foreign.status, 404, "origem de outra empresa não é aceita");
+});
+
 test("DWG vira DXF no servidor, preserva a codificação do arquivo e não converte duas vezes", async () => {
   // Cabeçalho de DWG 2018 (AC1032) para o reconhecimento pelo conteúdo.
   const dwg = new Uint8Array(4096); dwg.set(new TextEncoder().encode("AC1032"), 0);
