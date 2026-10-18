@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleAlert, Clock, LoaderCircle, RefreshCw } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -43,17 +43,25 @@ const clock = (value: number) => new Date(value).toLocaleTimeString("pt-BR", { h
 
 // O sinal de presença. Só envia com a aba visível: minimizar ou trocar de aba pausa a
 // contagem, e o servidor credita apenas o intervalo entre dois sinais que recebeu.
-export function useUsageHeartbeat(enabled: boolean, accessId?: string) {
+/**
+ * Batimento de presença a cada 30 s com a aba visível. Também é o sinal de sessão: um 401
+ * aqui quer dizer que o login venceu, e `onSignedOut` tira a pessoa de uma tela que já
+ * não consegue salvar nada.
+ */
+export function useUsageHeartbeat(enabled: boolean, accessId?: string, onSignedOut?: () => void) {
+  const avisar = useRef(onSignedOut);
+  useEffect(() => { avisar.current = onSignedOut; }, [onSignedOut]);
   useEffect(() => {
     if (!enabled) return;
     let stopped = false;
     let timer = 0;
     const beat = async () => {
       if (stopped || document.visibilityState !== "visible") return;
-      await fetch("/api/usage", {
+      const response = await fetch("/api/usage", {
         method: "POST", cache: "no-store", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(accessId ? { accessId } : {}),
       }).catch(() => undefined);
+      if (response?.status === 401 && !stopped) avisar.current?.();
     };
     const schedule = () => { timer = window.setInterval(() => { void beat(); }, 30_000); };
     const kick = window.setTimeout(() => { void beat(); schedule(); }, 0);

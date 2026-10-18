@@ -249,3 +249,23 @@ test("sem projeto, a aba Tarefa explica o motivo e oferece o caminho", async () 
   assert.equal(dialogo().querySelector('button[type="submit"]'), null,
     "nem um botão de salvar que não salva");
 });
+
+test("login vencido com a tela aberta volta para a entrada com aviso, em vez de botões mudos", async () => {
+  let vencida = false;
+  await abrir(sessionFor("owner"), {
+    "/api/session": () => vencida ? { authenticated: false, needsOrganization: false, organizations: [] } : sessionFor("owner"),
+    "/api/usage": () => ({ __status: vencida ? 401 : 200, error: "Entre com sua conta para acessar os dados da empresa." }),
+  });
+  assert.ok(menu().length, "a área de trabalho abriu com a sessão válida");
+  vencida = true;
+  await act(async () => { document.dispatchEvent(new dom.window.Event("visibilitychange")); });
+  for (let ciclo = 0; ciclo < 5; ciclo += 1) await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+  assert.match(textOf(container), /Sua sessão terminou/);
+  assert.ok(container.querySelector('input[type="password"]'), "a entrada pede a senha de novo");
+});
+
+test("401 isolado não derruba quem ainda tem sessão válida", async () => {
+  await abrir(sessionFor("owner"), { "/api/usage": { __status: 401, error: "Entre com sua conta." } });
+  assert.doesNotMatch(textOf(container), /Sua sessão terminou/);
+  assert.ok(menu().length);
+});
