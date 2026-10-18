@@ -15,13 +15,21 @@ import { runtimeEnv } from "@/lib/server/runtime";
 
 const SESSION_COOKIE = "__Host-nexo-session";
 const SESSION_DURATION_SECONDS = 12 * 60 * 60;
+// Renovação deslizante: quem está usando não cai a cada 12 horas. O cookie é reemitido
+// no batimento de uso quando já tem uma hora, até sete dias depois de a senha ter sido
+// digitada — daí em diante só entrando de novo.
+const RENEW_AFTER_MS = 60 * 60 * 1000;
+const MAX_SIGNED_IN_MS = 7 * 24 * 60 * 60 * 1000;
 const LOCK_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 const encoder = new TextEncoder();
 
 export type SessionUser = { id: string; email: string; displayName: string };
-/** Sessão lida do cookie: `issuedAt` (ms) permite recusar sessões anteriores à última troca de senha. */
-export type SessionRead = SessionUser & { issuedAt: number };
+/**
+ * Sessão lida do cookie: `issuedAt` (ms) permite recusar sessões anteriores à última troca
+ * de senha; `signedInAt` (ms) é quando a senha foi digitada e não muda na renovação.
+ */
+export type SessionRead = SessionUser & { issuedAt: number; signedInAt: number };
 
 function sessionSecret() {
   const env = runtimeEnv();
@@ -78,11 +86,11 @@ export function assertPasswordStrength(password: string) {
 // Sessão
 // ---------------------------------------------------------------------------
 
-export async function createSessionCookie(user: SessionUser) {
+export async function createSessionCookie(user: SessionUser, signedInAt?: number) {
   const issuedAt = Date.now();
   const expiresAt = Math.floor(issuedAt / 1000) + SESSION_DURATION_SECONDS;
   const payload = toBase64Url(encoder.encode(JSON.stringify({
-    sub: user.id, email: user.email, name: user.displayName, exp: expiresAt, iat: issuedAt,
+    sub: user.id, email: user.email, name: user.displayName, exp: expiresAt, iat: issuedAt, auth: signedInAt ?? issuedAt,
   })));
   const signature = await sign(payload, sessionSecret());
   return {
@@ -106,11 +114,11 @@ export async function readSessionUser(request: Request): Promise<SessionRead | n
   if (!await verifySignature(payload, signature, secret)) return null;
   try {
     const parsed = JSON.parse(new TextDecoder().decode(fromBase64Url(payload))) as {
-      sub?: unknown; email?: unknown; name?: unknown; exp?: unknown; iat?: unknown;
+      sub?: unknown; email?: unknown; name?: unknown; exp?: unknown; iat?: unknown; auth?: unknown;
     };
     if (typeof parsed.sub !== "string" || typeof parsed.email !== "string") return null;
     if (typeof parsed.exp !== "number" || parsed.exp <= Math.floor(Date.now() / 1000)) return null;
-    return {
+    const read = {
       id: parsed.sub,
       email: parsed.email,
       displayName: typeof parsed.name === "string" && parsed.name ? parsed.name : parsed.email,
@@ -119,9 +127,30 @@ export async function readSessionUser(request: Request): Promise<SessionRead | n
       // aberta no próprio aceite do convite, gravado milissegundos antes do cookie.
       issuedAt: typeof parsed.iat === "number" ? parsed.iat : (parsed.exp - SESSION_DURATION_SECONDS) * 1000 + 999,
     };
+    // Cookie anterior ao campo `auth`: a própria emissão é o limite seguro.
+    return { ...read, signedInAt: typeof parsed.auth === "number" ? parsed.auth : read.issuedAt };
   } catch {
     return null;
   }
+}
+
+/**
+ * Cookie novo para uma sessão em uso, ou nulo quando não é hora de renovar. Só chame
+ * depois de a requisição ter sido autenticada: a revogação por troca de senha é
+ * conferida antes, e uma sessão revogada nunca chega aqui.
+ */
+export async function renewedSessionCookie(request: Request, now = Date.now()) {
+  const session = await readSessionUser(request);
+  if (!session) return null;
+  if (now - session.issuedAt < RENEW_AFTER_MS) return null;
+  if (now - session.signedInAt >= MAX_SIGNED_IN_MS) return null;
+  // Confere de novo aqui: a requisição pode ter entrado por outro cookie (superadmin), e
+  // renovar uma sessão revogada ou de conta desativada apagaria a revogação.
+  const credential = await getDatabase().prepare("SELECT password_updated_at, active FROM user_credentials WHERE user_id = ?1")
+    .bind(session.id).first<{ password_updated_at: number; active: number }>();
+  if (credential && (credential.active !== 1 || credential.password_updated_at > session.issuedAt)) return null;
+  const renewed = await createSessionCookie({ id: session.id, email: session.email, displayName: session.displayName }, session.signedInAt);
+  return renewed.cookie;
 }
 
 // ---------------------------------------------------------------------------

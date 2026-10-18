@@ -41,6 +41,10 @@ uso do link ficam na auditoria da empresa.
 - A sessão não fica no banco: é um cookie `__Host-nexo-session` assinado com HMAC-SHA256
   sobre `SESSION_SECRET`, com validade de 12 horas. `HttpOnly`, `Secure`, `SameSite=Lax`
   — Lax porque o acesso chega por link de convite, que é navegação vinda de outro site.
+- Quem está usando não cai: o batimento de uso (`POST /api/usage`, a cada 30 s com a aba
+  visível) reemite o cookie quando ele já tem uma hora, até sete dias depois de a senha ter
+  sido digitada. Senha trocada ou conta desativada não renovam. Se a sessão vence com a
+  aba aberta, a tela volta para a entrada com o aviso, em vez de seguir sem salvar nada.
 - Cinco senhas erradas na mesma origem bloqueiam por 15 minutos, e o bloqueio vale
   inclusive para a senha correta. E-mail inexistente e senha errada devolvem a mesma
   mensagem, para não revelar quem tem conta.

@@ -9,6 +9,7 @@ import {
   validationError,
   type OrganizationContext,
 } from "@/lib/server/backend";
+import { renewedSessionCookie } from "@/lib/server/auth";
 import { clientAccess } from "@/lib/server/portal";
 import { podeConsultarUsoDaEmpresa } from "@/lib/permissions";
 import {
@@ -39,6 +40,14 @@ function subjectFromContext(context: OrganizationContext): UsageSubject {
   };
 }
 
+// Resposta do batimento. Quem está usando renova a sessão aqui, depois de autenticado.
+async function heartbeatResponse(request: Request, body: object) {
+  const headers = new Headers({ "Cache-Control": "private, no-store" });
+  const cookie = await renewedSessionCookie(request);
+  if (cookie) headers.append("Set-Cookie", cookie);
+  return Response.json(body, { headers });
+}
+
 // Todo acesso conta: contratante, equipe, parceiro, prestador, manutenção, superadmin e
 // cliente do portal. O corpo só informa qual portal está aberto; identidade e empresa
 // continuam sendo resolvidas no servidor.
@@ -59,12 +68,12 @@ export async function POST(request: Request) {
         memberId: null,
         timeZone: "America/Sao_Paulo",
       });
-      return Response.json({ ...result, beatMs: USAGE_BEAT_MS }, { headers: { "Cache-Control": "private, no-store" } });
+      return heartbeatResponse(request, { ...result, beatMs: USAGE_BEAT_MS });
     }
 
     const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
     const result = await recordUsageHeartbeat(context.db, subjectFromContext(context));
-    return Response.json({ ...result, beatMs: USAGE_BEAT_MS }, { headers: { "Cache-Control": "private, no-store" } });
+    return heartbeatResponse(request, { ...result, beatMs: USAGE_BEAT_MS });
   });
 }
 

@@ -48,6 +48,7 @@ const organizations = await vite.ssrLoadModule("/app/api/superadmin/organization
 const invitations = await vite.ssrLoadModule("/app/api/superadmin/invitations/route.ts");
 const accept = await vite.ssrLoadModule("/app/api/invitations/[token]/accept/route.ts");
 const clients = await vite.ssrLoadModule("/app/api/clients/route.ts");
+const usage = await vite.ssrLoadModule("/app/api/usage/route.ts");
 
 const EMAIL = "dono@escritorio.test";
 const SENHA = "senha-do-convidado-2026";
@@ -289,4 +290,44 @@ test("um só login: as credenciais da plataforma levam ao painel do superadminis
   const empresa = await entrar({ email: EMAIL, password: SENHA });
   assert.equal(empresa.status, 200);
   assert.equal((await empresa.json()).redirectTo, "/");
+});
+
+// Cookie de sessão assinado com o segredo de teste, com emissão e login escolhidos.
+async function cookieAssinado(campos) {
+  const payload = base64url(Buffer.from(JSON.stringify(campos)));
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const assinatura = base64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload))));
+  return `__Host-nexo-session=${payload}.${assinatura}`;
+}
+const lerPayload = (cookie) => JSON.parse(Buffer.from(cookie.split("=")[1].split(".")[0], "base64url").toString());
+
+test("sessão em uso se renova sozinha, mantendo a hora do login e o limite de sete dias", async () => {
+  const { token, organizationId } = await convite();
+  assert.equal((await aceitar(token, { acceptTerms: true, password: SENHA })).status, 200);
+  const login = (await entrar({ email: EMAIL, password: SENHA })).headers.get("set-cookie").split(";")[0];
+  const pedido = (cookie) => new Request("https://platform.test/api/usage", { method: "POST", headers: { cookie, "content-type": "application/json" }, body: "{}" });
+  const original = lerPayload(login);
+
+  assert.equal(await auth.renewedSessionCookie(pedido(login), original.iat + 10 * 60_000), null, "cookie recente não é reemitido");
+  const renovado = await auth.renewedSessionCookie(pedido(login), original.iat + 2 * 3_600_000);
+  assert.match(renovado, /HttpOnly; Secure; SameSite=Lax; Max-Age=43200/);
+  assert.equal(lerPayload(renovado.split(";")[0]).auth, original.auth, "renovar não conta como digitar a senha");
+
+  const { sub } = original;
+  const horas = (n) => Date.now() - n * 3_600_000;
+  // Os cookies abaixo simulam um login de horas atrás; a senha precisa ser ainda mais antiga.
+  db.sqlite.prepare("UPDATE user_credentials SET password_updated_at = ? WHERE user_id = ?").run(horas(24 * 8), sub);
+  const antigo = await cookieAssinado({ sub, email: EMAIL, name: "Dono", iat: horas(2), auth: horas(24 * 7 + 1), exp: Math.floor(Date.now() / 1000) + 3600 });
+  assert.equal(await auth.renewedSessionCookie(pedido(antigo)), null, "depois de sete dias só entrando de novo");
+
+  // O batimento de uso é quem renova: a resposta traz o cookie novo.
+  const emUso = await cookieAssinado({ sub, email: EMAIL, name: "Dono", iat: horas(2), auth: horas(3), exp: Math.floor(Date.now() / 1000) + 3600 });
+  const batimento = await usage.POST(pedido(`${emUso}; __Host-nexo-organization=${organizationId}`));
+  assert.equal(batimento.status, 200, await batimento.clone().text());
+  assert.match(batimento.headers.get("set-cookie") ?? "", /__Host-nexo-session=/);
+
+  // Senha trocada depois da emissão: a sessão foi revogada e não pode renascer renovada.
+  db.sqlite.prepare("UPDATE user_credentials SET password_updated_at = ? WHERE user_id = ?").run(Date.now(), sub);
+  assert.equal(await auth.renewedSessionCookie(pedido(emUso)), null);
+  assert.equal((await usage.POST(pedido(`${emUso}; __Host-nexo-organization=${organizationId}`))).status, 401);
 });
