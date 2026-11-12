@@ -95,13 +95,13 @@
 :root {
   --drap-deep: #0D151F;     /* Abismo Nanquim: menu lateral, selos escuros, linhas grossas */
   --drap-band: #204362;     /* Azul Cianótipo: faixa de destaque e texto pequeno em destaque */
-  --drap-accent: #27557B;   /* Azul Prancheta: ação, ícones e topo de cards. Texto pequeno não: 3,5:1 */
+  --drap-accent: #27557B;   /* Azul Prancheta: ação, ícones e topo de cards; 6,9:1 sobre Pedra Clara */
   --drap-support: #24323B;  /* Aço Escuro: bordas, divisórias, item escuro selecionado */
   --drap-graphite: #6F7678; /* Cinza Grafite: cards escuros, numeração decorativa */
   --drap-mist: #99A1A6;     /* Cinza Névoa: cards secundários, selos, rótulos sobre fundo escuro */
   --drap-fog: #839099;      /* Cinza Neblina: hover, estados vazios */
-  --drap-stone: #B0ADA8;    /* Pedra Clara: fundo da página */
-  --drap-paper: #B5B4B1;    /* Papel Cinza: cards, barra superior, campos */
+  --drap-stone: #EEF0F2;    /* Pedra Clara: fundo da página, luminoso */
+  --drap-paper: #FAFBFC;    /* Papel Claro: cards, barra superior, campos — quase branco */
   --drap-ink: #090C12;      /* Tinta: texto sobre fundo claro */
   --drap-white: #FFFFFF;    /* texto sobre Abismo, Cianótipo, Prancheta e Grafite */
   /* Status: a referência não tem; usados só em chip ou ponto, sempre com texto ao lado. */
@@ -109,7 +109,7 @@
   --drap-warning: #D9A441;
   --drap-danger: #A83232;
   --drap-info: var(--drap-accent);
-  /* Três camadas: fundo em Pedra Clara, cartão e popover em Papel Cinza. */
+  /* Três camadas: fundo em Pedra Clara, cartão e popover em Papel Claro. */
   --background: var(--drap-stone);
   --foreground: var(--drap-ink);
   --card: var(--drap-paper);
@@ -249,7 +249,7 @@ h1, h2, h3, h4 { letter-spacing: -0.01em; }
 label, th, [data-slot="sidebar-group-label"] { letter-spacing: 0.01em; }
 .metric-number { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 
-/* A área de trabalho fica na Pedra Clara: é ela que faz o cartão em Papel Cinza
+/* A área de trabalho fica na Pedra Clara: é ela que faz o cartão em Papel Claro
    parecer levantado. Com as duas na mesma cor, a tela inteira lia como uma folha só. */
 .nexo-shell, .nexo-canvas { background: var(--drap-stone); }
 /* A largura reservada pelo menu lateral não pode encolher quando um módulo contém

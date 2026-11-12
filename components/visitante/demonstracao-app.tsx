@@ -72,7 +72,7 @@ export function DemonstracaoApp({ areaInicial }: { areaInicial: AreaDemo }) {
           <FlaskConical aria-hidden="true" className="size-4 shrink-0" />
           <span><strong className="font-medium text-white">Demonstração.</strong> Dados fictícios; nada é salvo.</span>
         </p>
-        <Button asChild className="ml-auto h-10 bg-drap-400 text-drap-950 hover:bg-drap-200"><Link href={agendar(area)}><CalendarClock />Agendar reunião</Link></Button>
+        <Button asChild className="ml-auto h-10 bg-white text-drap-950 hover:bg-drap-100"><Link href={agendar(area)}><CalendarClock />Agendar reunião</Link></Button>
       </div>
       <nav aria-label="Áreas da demonstração" className="flex gap-1 overflow-x-auto border-t border-white/10 px-2 py-1.5 sm:px-4">
         {areasDemo.map(({ id, nome, icone: Icone }) => <button key={id} type="button" onClick={() => abrir(id)} aria-current={area === id ? "page" : undefined}

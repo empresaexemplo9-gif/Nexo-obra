@@ -170,7 +170,7 @@ test("uses only the DRAP Backoffice master palette in the theme", async () => {
   // Paleta da plataforma de referência DRAP mais as quatro cores de status. O guarda
   // continua fechado: qualquer cor fora desta lista quebra o teste — marrom e dourado
   // da marca anterior incluídos.
-  const PALETA = ["#0D151F", "#204362", "#27557B", "#24323B", "#6F7678", "#99A1A6", "#839099", "#B0ADA8", "#B5B4B1", "#090C12", "#FFFFFF", "#2E7D52", "#D9A441", "#A83232"];
+  const PALETA = ["#0D151F", "#204362", "#27557B", "#24323B", "#6F7678", "#99A1A6", "#839099", "#EEF0F2", "#FAFBFC", "#090C12", "#FFFFFF", "#2E7D52", "#D9A441", "#A83232"];
   assert.deepEqual([...new Set(css.match(/#[0-9a-f]{6}/gi))].sort(), PALETA.sort());
   assert.doesNotMatch(css, /gradient\(|blueprint-grid/);
   for (const screen of ["nexo-app", "project-hub", "superadmin-app", "maintenance-login", "invitation-app", "client-portal-app", "terms-page", "budgets-workspace", "finance-workspace", "diary-workspace", "platform-control", "portal-manager", "portal-shared", "team-access-manager"]) {

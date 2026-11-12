@@ -20,8 +20,8 @@ desfoque ou ornamento.
 | `--drap-graphite` | Cinza Grafite | `#6F7678` | Cards escuros, numeração “01, 02” |
 | `--drap-mist` | Cinza Névoa | `#99A1A6` | Cards secundários, “Próximas tarefas”, rótulos sobre fundo escuro |
 | `--drap-fog` | Cinza Neblina | `#839099` | Hover e áreas de apoio |
-| `--drap-stone` | Pedra Clara | `#B0ADA8` | Fundo da página |
-| `--drap-paper` | Papel Cinza | `#B5B4B1` | Cards, barra superior, campos |
+| `--drap-stone` | Pedra Clara | `#EEF0F2` | Fundo da página |
+| `--drap-paper` | Papel Claro | `#FAFBFC` | Cards, barra superior, campos |
 | `--drap-ink` | Tinta | `#090C12` | Texto sobre fundo claro |
 | `--drap-white` | Branco | `#FFFFFF` | Texto sobre Abismo, Cianótipo, Prancheta e Grafite |
 
@@ -35,12 +35,12 @@ Status, sempre como chip ou ponto e com a palavra ao lado:
 | `--drap-info` | Informação / enviado / a fazer | `#27557B` | branco |
 
 Regra de contraste: texto pequeno em destaque sobre fundo claro usa **Azul Cianótipo**; o Azul
-Prancheta (3,5:1 sobre Pedra Clara) fica para botão, ícone e elemento grande. Todo tom da interface é
+Prancheta (6,9:1 sobre Pedra Clara) fica para botão, ícone e elemento grande. Todo tom da interface é
 uma dessas cores ou uma mistura entre elas (`color-mix`); o teste `tests/product-contract.test.mjs`
 falha se outro HEX entrar em `app/globals.css`.
 
 A escala utilitária `drap-50` … `drap-950` continua existindo para os componentes e aponta para
-esses tokens: `50` Papel Cinza, `100` superfície secundária, `200` borda, `300`/`400` Cinza Névoa,
+esses tokens: `50` Papel Claro, `100` superfície secundária, `200` borda, `300`/`400` Cinza Névoa,
 `500` metadado legível, `600`–`800` Aço Escuro, `900` Abismo, `950` Tinta.
 
 ## Marca
@@ -107,9 +107,9 @@ já existente sem nenhum ganho para quem usa a plataforma. A variável `HOIKOS_P
 
 ## Composição da área de trabalho
 
-Fundo em Pedra Clara, cards e barra superior em Papel Cinza, menu em Abismo Nanquim com item ativo
+Fundo em Pedra Clara, cards e barra superior em Papel Claro, menu em Abismo Nanquim com item ativo
 branco. O banner da visão geral é Azul Cianótipo com a mesma foto; os indicadores ficam
-transparentes sobre linha grossa em Abismo; “Primeiros passos” usa Papel Cinza com topo em Azul
+transparentes sobre linha grossa em Abismo; “Primeiros passos” usa Papel Claro com topo em Azul
 Prancheta e numeração em Grafite; “Próximas tarefas” fica em Cinza Névoa. A navegação e os
 formulários sobre fundo escuro têm contraste próprio; em celular, os painéis se empilham e os
 indicadores usam duas colunas.

@@ -43,7 +43,7 @@ export function HomeVisitante({ onEntrar }: { onEntrar: () => void }) {
             <h1 className="display-heading mt-4 text-4xl leading-tight sm:text-6xl 2xl:text-7xl">Do primeiro contato à entrega da obra, em um só lugar.</h1>
             <p className="mt-5 text-base leading-7 text-drap-300 sm:text-lg">Clientes, propostas, orçamentos, projetos, obra e desenho técnico no mesmo fluxo. Teste agora com dados de exemplo — sem cadastro e sem salvar nada.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button asChild className="h-12 bg-drap-400 px-6 text-base text-drap-950 hover:bg-drap-200"><Link href="/demonstracao">Testar com dados de exemplo<ArrowRight /></Link></Button>
+              <Button asChild className="h-12 bg-white px-6 text-base text-drap-950 hover:bg-drap-100"><Link href="/demonstracao">Testar com dados de exemplo<ArrowRight /></Link></Button>
               <Button asChild variant="outline" className="h-12 border-white/25 bg-transparent px-6 text-base text-white hover:bg-white/10 hover:text-white"><Link href="/agendar"><CalendarClock />Agendar reunião</Link></Button>
             </div>
           </div>
