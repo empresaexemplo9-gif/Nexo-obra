@@ -34,6 +34,35 @@ Cadastro com CNPJ/CPF (único por empresa), contato, cidade/UF, o que fornece, c
 - **Do catálogo**: busca na GOINFRA, na SINAPI (referência aprovada da UF) ou na biblioteca de orçamentos da empresa. A tela envia só a referência; descrição, unidade e custo são lidos no servidor. Importar de novo devolve o mesmo produto.
 - O histórico de preços mostra o que cada fornecedor cotou para o produto.
 
+## Estoque
+
+Aba **Estoque** dentro de Compras. O saldo é a soma dos movimentos por produto e local — cada obra tem o seu, e há o **Depósito central** — e não fica guardado em separado.
+
+- **Entrada automática**: receber material de um pedido (total ou em parte) lança a entrada no local do pedido, pelo preço da cotação comprada, no mesmo lote que marca o item como recebido. Item avulso, sem produto cadastrado, não entra no estoque.
+- **Entrada manual**: sobra de outra obra, compra no balcão, doação — com custo opcional.
+- **Baixa**: material aplicado, perdido ou devolvido, com o destino obrigatório (serviço, frente ou motivo). A baixa nunca deixa saldo negativo: a conferência do saldo e a gravação são a mesma instrução, então duas baixas simultâneas não passam juntas.
+- Reenviar o mesmo formulário depois de falha de rede não lança o movimento duas vezes (chave do formulário).
+- **Estoque mínimo** por produto e local; zero desliga o aviso.
+
+### Atenção
+
+No topo da aba, e em **Lembretes do dia**:
+
+- **Em falta** (saldo zerado) e **abaixo do mínimo**, dizendo se há compra aberta para aquele local e em que pé ela está;
+- **Sem previsão de entrega**: pedido comprado sem data de chegada;
+- **Entrega atrasada**: previsão vencida.
+
+Os pedidos sem previsão também aparecem marcados no quadro e nas entregas.
+
+### Outros fornecedores possíveis
+
+Cada item de atenção e o detalhe do pedido (em “A orçar”, ou com entrega atrasada, sem previsão ou depois da necessidade) mostram até quatro fornecedores, com telefone e e-mail:
+
+1. quem já cotou o mesmo produto para a empresa, com o último preço e prazo que deu — ordenado por entregas no prazo e depois por preço;
+2. quem declara no cadastro que fornece aquela categoria ou material (comparação pelas palavras da categoria e da descrição).
+
+O fornecedor atual e quem já cotou o pedido ficam de fora. Sem histórico nem categoria parecida, a lista vem vazia e a tela diz isso — nenhuma indicação é inventada.
+
 ## GOINFRA
 
 A Agência Goiana de Infraestrutura e Transportes publica a tabela de preços no próprio site, em planilha, sem API. O superadministrador baixa a planilha oficial e envia em **Painel da plataforma → Referência GOINFRA** (XLSX ou CSV, até 30 MB), escolhendo tabela (obras civis ou rodoviária), regime (desonerada ou não) e referência (mês).
@@ -50,7 +79,7 @@ A Agência Goiana de Infraestrutura e Transportes publica a tabela de preços no
 - **Obras e projetos**: todo pedido pode ser ligado a uma obra da empresa; o quadro e as entregas filtram por obra.
 - **Orçamentos**: cópia dos itens de um orçamento para um pedido; biblioteca de orçamentos como catálogo de produtos.
 - **SINAPI e GOINFRA**: catálogo e preço de referência do comparativo.
-- **Lembretes do dia**: compra ainda não feita com necessidade nos próximos 7 dias, e entrega prevista ou atrasada. Somem sozinhos quando o pedido sai, chega ou é cancelado.
+- **Lembretes do dia**: compra ainda não feita com necessidade nos próximos 7 dias, entrega prevista, atrasada ou sem previsão, e material em falta ou abaixo do mínimo. Somem sozinhos quando o pedido sai, chega ou é cancelado.
 - **Financeiro**: a Drap continua sendo a fonte financeira. Compras não cria conta a pagar nem lançamento; o “comprado a receber” é a soma dos pedidos em andamento, não saldo.
 
 ## Permissões
@@ -68,5 +97,6 @@ Contas com permissões já personalizadas não ganham o módulo sozinhas: o admi
 
 - Envio automático do pedido de cotação ou do pedido ao fornecedor (e-mail/WhatsApp).
 - Lançamento da compra como conta a pagar na Drap.
-- Estoque e consumo por obra depois do recebimento.
+- Transferência direta entre locais (hoje: baixa num local e entrada no outro).
+- Inventário com contagem física e ajuste.
 - Download automático da tabela GOINFRA.

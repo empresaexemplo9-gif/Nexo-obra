@@ -19,6 +19,7 @@ import {
 import { PedidoDetalhe } from "@/components/compras/pedido-detalhe";
 import { Fornecedores } from "@/components/compras/fornecedores";
 import { Produtos } from "@/components/compras/produtos";
+import { Estoque, type DadosEstoque } from "@/components/compras/estoque";
 
 type Orcamento = { id: string; projectId: string | null; projectName: string | null; code: string; version: number; status: string; itemCount: number };
 const COLUNAS: StatusCompra[] = ["a_orcar", "a_comprar", "comprado", "em_entrega", "entregue"];
@@ -36,6 +37,8 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
   const [novo, setNovo] = useState(false);
   const [obra, setObra] = useState("");
   const [mostrarCancelados, setMostrarCancelados] = useState(false);
+  const [estoque, setEstoque] = useState<DadosEstoque | null>(null);
+  const [inicial, setInicial] = useState<{ productId: string; quantity: number; location: string } | null>(null);
 
   const carregarPedidos = useCallback(async () => {
     const r = await api<{ requests: PedidoResumo[]; today: string; canImportBudget: boolean }>("/api/compras");
@@ -48,12 +51,13 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
     ]);
     setFornecedores(f.suppliers); setProdutos(p.products);
   }, []);
+  const carregarEstoque = useCallback(async () => { setEstoque(await api<DadosEstoque>("/api/compras/estoque")); }, []);
   const carregar = useCallback(async () => {
     setCarregando(true); setErro("");
-    try { await Promise.all([carregarPedidos(), carregarCadastros()]); }
+    try { await Promise.all([carregarPedidos(), carregarCadastros(), carregarEstoque()]); }
     catch (causa) { setErro(mensagem(causa, "Não foi possível carregar Compras.")); }
     finally { setCarregando(false); }
-  }, [carregarPedidos, carregarCadastros]);
+  }, [carregarPedidos, carregarCadastros, carregarEstoque]);
   useEffect(() => { const t = window.setTimeout(() => { void carregar(); }, 0); return () => window.clearTimeout(t); }, [carregar]);
 
   const termo = query.trim().toLocaleLowerCase("pt-BR");
@@ -66,7 +70,7 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
 
   if (aberto) {
     return <PedidoDetalhe key={aberto} id={aberto} projetos={projects} fornecedores={fornecedores} produtos={produtos} canEdit={canEdit}
-      onVoltar={() => { setAberto(null); void carregarPedidos().catch(() => undefined); }}
+      onVoltar={() => { setAberto(null); void carregarPedidos().catch(() => undefined); void carregarEstoque().catch(() => undefined); }}
       onAlterado={() => { void carregarPedidos().catch(() => undefined); void carregarCadastros().catch(() => undefined); }} />;
   }
 
@@ -83,6 +87,7 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
           <TabsList className="h-auto flex-wrap rounded-md">
             <TabsTrigger value="pedidos">Pedidos <Badge variant="secondary">{pedidos.filter((p) => p.status !== "entregue" && p.status !== "cancelado").length}</Badge></TabsTrigger>
             <TabsTrigger value="entregas"><Truck />Entregas{atrasadas.length ? <Badge variant="destructive">{atrasadas.length}</Badge> : null}</TabsTrigger>
+            <TabsTrigger value="estoque">Estoque{estoque?.attention.length ? <Badge variant="destructive" aria-label={`${estoque.attention.length} itens de atenção`}>{estoque.attention.length}</Badge> : null}</TabsTrigger>
             <TabsTrigger value="fornecedores">Fornecedores <Badge variant="secondary">{fornecedores.filter((f) => f.active).length}</Badge></TabsTrigger>
             <TabsTrigger value="produtos">Produtos <Badge variant="secondary">{produtos.length}</Badge></TabsTrigger>
           </TabsList>
@@ -111,12 +116,16 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
         </TabsContent>
 
         <TabsContent value="entregas"><Entregas pedidos={filtrados} hoje={hoje} onAbrir={setAberto} /></TabsContent>
+        <TabsContent value="estoque">{estoque ? <Estoque dados={estoque} produtos={produtos} projetos={projects} canEdit={canEdit} busca={query} onAbrirPedido={setAberto}
+          onAlterado={async () => { await carregarEstoque().catch((c) => toast.error(mensagem(c, "Não foi possível atualizar o estoque."))); }}
+          onComprar={(dados) => { setInicial(dados); setNovo(true); }} /> : null}</TabsContent>
         <TabsContent value="fornecedores"><Fornecedores fornecedores={fornecedores} canEdit={canEdit} busca={query} onAlterado={async () => { await carregarCadastros().catch((c) => toast.error(mensagem(c, "Não foi possível atualizar a lista."))); }} /></TabsContent>
         <TabsContent value="produtos"><Produtos produtos={produtos} canEdit={canEdit} canBiblioteca={podeOrcamento} busca={query} onAlterado={async () => { await carregarCadastros().catch((c) => toast.error(mensagem(c, "Não foi possível atualizar a lista."))); }} /></TabsContent>
       </Tabs>}
 
-    <NovoPedido aberto={novo} onFechar={() => setNovo(false)} projetos={projects} produtos={produtos} podeOrcamento={podeOrcamento} obraInicial={obra}
-      onCriado={async (id) => { setNovo(false); await carregarPedidos().catch(() => undefined); setAberto(id); }} />
+    <NovoPedido key={inicial ? `${inicial.productId}-${inicial.location}` : "novo"} aberto={novo} onFechar={() => { setNovo(false); setInicial(null); }} projetos={projects} produtos={produtos} podeOrcamento={podeOrcamento}
+      obraInicial={inicial ? (inicial.location === "central" ? "" : inicial.location) : obra} inicial={inicial}
+      onCriado={async (id) => { setNovo(false); setInicial(null); await carregarPedidos().catch(() => undefined); void carregarEstoque().catch(() => undefined); setAberto(id); }} />
   </div>;
 }
 
@@ -172,12 +181,16 @@ function Entregas({ pedidos, hoje, onAbrir }: { pedidos: PedidoResumo[]; hoje: s
 
 type LinhaNova = { key: string; productId: string | null; description: string; unit: string; quantidade: string };
 
-function NovoPedido({ aberto, onFechar, projetos, produtos, podeOrcamento, obraInicial, onCriado }: {
+function NovoPedido({ aberto, onFechar, projetos, produtos, podeOrcamento, obraInicial, inicial, onCriado }: {
   aberto: boolean; onFechar: () => void; projetos: Projeto[]; produtos: Produto[]; podeOrcamento: boolean; obraInicial: string;
+  inicial: { productId: string; quantity: number } | null;
   onCriado: (id: string) => Promise<void>;
 }) {
   const [origem, setOrigem] = useState<"itens" | "orcamento">("itens");
-  const [linhas, setLinhas] = useState<LinhaNova[]>([]);
+  const [linhas, setLinhas] = useState<LinhaNova[]>(() => {
+    const p = inicial ? produtos.find((x) => x.id === inicial.productId) : null;
+    return p && inicial ? [{ key: "inicial", productId: p.id, description: p.name, unit: p.unit, quantidade: inicial.quantity.toLocaleString("pt-BR", { maximumFractionDigits: 3 }) }] : [];
+  });
   const [produto, setProduto] = useState("");
   const [orcamentos, setOrcamentos] = useState<Orcamento[] | null>(null);
   const [salvando, setSalvando] = useState(false);

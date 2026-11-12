@@ -1,12 +1,13 @@
 import { requireModulePermission, type OrganizationContext } from "@/lib/server/backend";
 import { pendingChatReminders } from "@/lib/server/chat";
+import { faltasDeEstoque } from "@/lib/server/estoque";
 import { usageDayKey, usageDayStart } from "@/lib/server/usage";
 
 // Lembretes do dia. Nada aqui inventa pendência: cada item aponta para um registro real
 // e some sozinho quando o registro deixa de estar pendente. Dispensar vale só para o dia.
 
 export type ReminderSeverity = "atrasado" | "hoje" | "proximo";
-export type ReminderGroup = "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado" | "compra" | "entrega";
+export type ReminderGroup = "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado" | "compra" | "entrega" | "estoque";
 
 export type Reminder = {
   key: string;
@@ -260,7 +261,7 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
        LEFT JOIN projects p ON p.id = r.project_id AND p.organization_id = r.organization_id
        WHERE r.organization_id = ?1 AND (
          (r.status IN ('a_orcar', 'a_comprar') AND r.needed_by IS NOT NULL AND r.needed_by <= ?2)
-         OR (r.status IN ('comprado', 'em_entrega') AND r.expected_delivery_date IS NOT NULL AND r.expected_delivery_date <= ?2))
+         OR (r.status IN ('comprado', 'em_entrega') AND (r.expected_delivery_date IS NULL OR r.expected_delivery_date <= ?2)))
        ORDER BY COALESCE(r.expected_delivery_date, r.needed_by) LIMIT 200`,
     ).bind(organization.id, horizon).all<{ id: string; number: number; title: string; status: string; needed_by: string | null; expected_delivery_date: string | null; project_name: string | null }>();
     for (const pedido of pedidos.results) {
@@ -272,6 +273,14 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
           detail: `${codigo} · ${pedido.project_name ?? "Sem obra"} · necessário em ${dayLabel(pedido.needed_by!)}`,
           amountCents: null, dueDay: pedido.needed_by, module: "purchases", entityId: pedido.id,
         });
+      } else if (!pedido.expected_delivery_date) {
+        // Comprado sem data de chegada: ninguém sabe quando o material vem. Atenção já.
+        reminders.push({
+          key: `entrega:${pedido.id}`, group: "entrega", severity: "hoje",
+          title: `Entrega sem previsão: ${pedido.title}`,
+          detail: `${codigo} · ${pedido.project_name ?? "Sem obra"} · peça a data ao fornecedor ou veja outros fornecedores`,
+          amountCents: null, dueDay: today, module: "purchases", entityId: pedido.id,
+        });
       } else {
         const due = pedido.expected_delivery_date!;
         reminders.push({
@@ -279,6 +288,26 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
           title: due < today ? `Entrega atrasada: ${pedido.title}` : `Entrega prevista: ${pedido.title}`,
           detail: `${codigo} · ${pedido.project_name ?? "Sem obra"} · previsão ${dayLabel(due)}`,
           amountCents: null, dueDay: due, module: "purchases", entityId: pedido.id,
+        });
+      }
+    }
+  }
+
+  if (may(context, "purchases")) {
+    const faltas = await faltasDeEstoque(context);
+    if (faltas.length) {
+      const nomes = await db.prepare("SELECT id, name, unit FROM purchase_products WHERE organization_id = ?1").bind(organization.id).all<{ id: string; name: string; unit: string }>();
+      const obras = await db.prepare("SELECT id, name FROM projects WHERE organization_id = ?1").bind(organization.id).all<{ id: string; name: string }>();
+      for (const falta of faltas) {
+        const produto = nomes.results.find((p) => p.id === falta.productId);
+        if (!produto) continue;
+        const local = falta.location === "central" ? "Depósito central" : obras.results.find((o) => o.id === falta.location)?.name ?? "Obra";
+        const fmt = (n: number) => n.toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+        reminders.push({
+          key: `estoque:${falta.productId}:${falta.location}`, group: "estoque", severity: falta.balance <= 0 ? "atrasado" : "hoje",
+          title: `${falta.balance <= 0 ? "Em falta" : "Abaixo do mínimo"}: ${produto.name}`,
+          detail: `${local} · saldo ${fmt(falta.balance)} ${produto.unit} de mínimo ${fmt(falta.minimum)}`,
+          amountCents: null, dueDay: today, module: "purchases", entityId: falta.productId,
         });
       }
     }

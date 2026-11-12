@@ -6,9 +6,12 @@ import {
 } from "@/lib/compras";
 import { rotuloRegimeGoinfra, rotuloTabelaGoinfra, type TabelaGoinfra } from "@/lib/integrations/goinfra-planilha";
 import { DEFAULT_SINAPI_UF } from "@/lib/integrations/sinapi-contract";
+import { preparadorDeSugestoes } from "@/lib/server/estoque";
 
 // Leitura do módulo Compras. Toda consulta filtra a empresa resolvida pela sessão; o id
 // que vem do navegador só escolhe entre registros que já são da empresa.
+
+const encerradaOuNao = (status: StatusCompra) => status === "entregue" || status === "cancelado";
 
 export const hojeDaEmpresa = (context: OrganizationContext) => usageDayKey(Date.now(), context.organization.timezone);
 
@@ -147,7 +150,16 @@ export async function detalharPedido(context: OrganizationContext, id: string) {
   const eventos = await context.db.prepare(
     "SELECT id, kind, detail, author_name, created_at FROM purchase_events WHERE organization_id = ?1 AND request_id = ?2 ORDER BY created_at DESC, id DESC LIMIT 100",
   ).bind(context.organization.id, id).all<{ id: string; kind: string; detail: string; author_name: string; created_at: string }>();
+  // Outros fornecedores possíveis: para pedir cotação enquanto orça, ou para trocar
+  // quando a entrega atrasou ou ficou sem previsão. Exclui quem já cotou.
+  const sugerir = await preparadorDeSugestoes(context);
+  const alternativas = encerradaOuNao(pedido.status) ? [] : sugerir({
+    productIds: itens.map((i) => i.product_id).filter((id): id is string => Boolean(id)),
+    termos: [pedido.title, ...itens.map((i) => i.description)],
+    excluir: cotacoes.map((q) => q.supplier_id),
+  });
   return {
+    alternatives: alternativas,
     request: resumoDoPedido(pedido, itens, comparativo, cotacoes, hoje),
     items: itens.map(itemJson),
     quotes: cotacoes.map((q) => ({

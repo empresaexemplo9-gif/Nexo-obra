@@ -211,6 +211,13 @@
       "when": 1794513355497,
       "tag": "0029_old_deathbird",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1794514879083,
+      "tag": "0030_previous_dracula",
+      "breakpoints": true
     }
   ]
 }

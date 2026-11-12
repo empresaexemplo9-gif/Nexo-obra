@@ -5,7 +5,7 @@ import {
 } from "@/lib/server/backend";
 import { acaoEntrada } from "@/lib/server/compras-entrada";
 import { carregarPedido, detalharPedido, eventoStatement, exigirRevisao, gravarComRevisao, hojeDaEmpresa, itensDoPedido, totalDaCotacao } from "@/lib/server/compras";
-import { rotuloStatus, somarDias, type StatusCompra } from "@/lib/compras";
+import { numeroDoPedido, rotuloStatus, somarDias, type StatusCompra } from "@/lib/compras";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +104,21 @@ export async function POST(request: Request, route: RouteContext) {
             .bind(atualizado.get(item.id), item.id, requestId, org)),
         eventoStatement(context, requestId, completo ? "entregue" : "recebido_parcial", `${completo ? "Entrega concluída" : "Recebido em parte"} em ${data(recebidoEm)}: ${linhas.join("; ")}${acao.note ? ` · ${acao.note}` : ""}`),
       ];
+      // O que chega e tem produto cadastrado entra no estoque do local do pedido (a obra,
+      // ou o depósito central), pelo preço da cotação comprada. Mesmo lote: se a gravação
+      // do recebimento for recusada, a entrada também não acontece.
+      const precos = pedido.selected_quote_id ? new Map((await context.db.prepare("SELECT request_item_id, unit_price_cents FROM purchase_quote_items WHERE quote_id = ?1 AND organization_id = ?2")
+        .bind(pedido.selected_quote_id, org).all<{ request_item_id: string; unit_price_cents: number }>()).results.map((r) => [r.request_item_id, Number(r.unit_price_cents)])) : new Map<string, number>();
+      const codigo = numeroDoPedido(pedido.number);
+      for (const item of itens) {
+        const chegou = Math.round((atualizado.get(item.id)! - Number(item.received_quantity)) * 1000) / 1000;
+        if (!item.product_id || chegou <= 0) continue;
+        lote.push(context.db.prepare(
+          `INSERT INTO stock_movements (id, organization_id, product_id, project_id, kind, quantity, unit_cost_cents, source, request_id, client_key, note, occurred_on, author_name, created_at)
+           VALUES (?1, ?2, ?3, ?4, 'entrada', ?5, ?6, 'compra', ?7, ?8, ?9, ?10, ?11, ?12)`,
+        ).bind(crypto.randomUUID(), org, item.product_id, pedido.project_id, chegou, precos.get(item.id) ?? null, requestId,
+          `compra:${requestId}:${acao.revision}:${item.id}`, `Recebido do ${codigo}${acao.note ? ` · ${acao.note}` : ""}`, recebidoEm, context.user.displayName, new Date().toISOString()));
+      }
     } else {
       exigirEtapa(pedido.status, ["a_orcar", "a_comprar", "comprado", "em_entrega"], "cancelar");
       lote = [avancar("status = 'cancelado', cancel_reason = ?4", acao.reason), eventoStatement(context, requestId, "cancelado", `Cancelado: ${acao.reason}`)];

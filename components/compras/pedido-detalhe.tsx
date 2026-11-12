@@ -18,6 +18,7 @@ import {
   api, CampoArea, CampoTexto, centavosParaTexto, dataCurta, dinheiro, ErroDeApi, Escolha, lerCentavos, lerQuantidade, mensagem, numero,
   SeloEntrega, SeloStatus, type Fornecedor, type PedidoResumo, type Produto, type Projeto,
 } from "@/components/compras/comum";
+import { OutrosFornecedores, type Sugestao } from "@/components/compras/estoque";
 
 type Item = { id: string; productId: string | null; description: string; unit: string; quantity: number; receivedQuantity: number; referenceCostCents: number | null };
 type Cotacao = {
@@ -26,6 +27,7 @@ type Cotacao = {
   validUntil: string | null; negotiationScore: number; notes: string; createdByName: string; updatedAt: string; prices: Record<string, number>;
 };
 type Detalhe = {
+  alternatives: Sugestao[];
   request: PedidoResumo; items: Item[]; quotes: Cotacao[]; comparison: Comparativo;
   events: { id: string; kind: string; detail: string; authorName: string; createdAt: string }[]; today: string;
 };
@@ -94,6 +96,10 @@ export function PedidoDetalhe({ id, projetos, fornecedores, produtos, canEdit, o
       <div className="min-w-0 space-y-5">
         <Etapa detalhe={detalhe} canEdit={canEdit} salvando={salvando} agir={agir}
           onLogistica={(corpo) => gravar(`/api/compras/${id}`, { method: "PATCH", body: JSON.stringify({ revision: pedido.revision, ...corpo }) }, "Logística atualizada")} />
+        {pedido.status === "a_orcar" || pedido.delivery === "atrasada" || pedido.delivery === "sem_previsao" || pedido.delivery === "depois_da_necessidade" ? <Card className={pedido.status === "a_orcar" ? "" : "border-destructive/40"}>
+          <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">{pedido.status === "a_orcar" ? "Quem mais pode cotar" : "Atenção: outros fornecedores possíveis"}</CardTitle>{pedido.status !== "a_orcar" ? <p className="mt-1 text-xs text-drap-600">{pedido.delivery === "sem_previsao" ? "O fornecedor não deu previsão de entrega." : pedido.delivery === "atrasada" ? "A previsão de entrega venceu." : "A previsão fica depois da data em que a obra precisa."} Cobre o fornecedor ou consulte outro.</p> : null}</CardHeader>
+          <CardContent className="p-4"><OutrosFornecedores sugestoes={detalhe.alternatives ?? []} vazio="Nenhum outro fornecedor cotou estes materiais nem declara essa categoria no cadastro." /></CardContent>
+        </Card> : null}
         <DadosDoPedido pedido={pedido} projetos={projetos} canEdit={canEdit && !fechado} salvando={salvando}
           onSalvar={(corpo) => gravar(`/api/compras/${id}`, { method: "PATCH", body: JSON.stringify({ revision: pedido.revision, ...corpo }) }, "Pedido atualizado")} />
         <Card><CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">Linha do tempo</CardTitle></CardHeader>

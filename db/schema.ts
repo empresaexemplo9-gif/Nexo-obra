@@ -1218,3 +1218,47 @@ export const goinfraItens = sqliteTable("goinfra_itens", {
   uniqueIndex("uidx_goinfra_itens_tabela_codigo").on(t.tabelaId, t.codigo),
   index("idx_goinfra_itens_descricao").on(t.tabelaId, t.descricao),
 ]);
+
+// ## Estoque
+//
+// O saldo não é guardado: é a soma dos movimentos. Entrada soma, baixa subtrai, e cada
+// movimento diz quem, quando, onde e por quê. Guardar o saldo à parte criaria uma segunda
+// verdade que diverge na primeira gravação concorrente.
+//
+// Local é a obra (`project_id`) ou o depósito central (`project_id` nulo). Recebimento de
+// compra vira entrada sozinho, no mesmo lote que marca o item como recebido.
+export const stockMovements = sqliteTable("stock_movements", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  productId: text("product_id").notNull().references(() => purchaseProducts.id),
+  projectId: text("project_id").references(() => projects.id),
+  // entrada | baixa
+  kind: text("kind").notNull(),
+  // Com sinal: positivo na entrada, negativo na baixa.
+  quantity: real("quantity").notNull(),
+  unitCostCents: integer("unit_cost_cents"),
+  // manual | compra
+  source: text("source").notNull().default("manual"),
+  requestId: text("request_id").references(() => purchaseRequests.id),
+  // Reenviar o mesmo formulário depois de falha de rede não lança o movimento duas vezes.
+  clientKey: text("client_key").notNull(),
+  note: text("note").notNull().default(""),
+  occurredOn: text("occurred_on").notNull(),
+  authorName: text("author_name").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("uidx_stock_movements_client_key").on(table.organizationId, table.clientKey),
+  index("idx_stock_movements_product").on(table.organizationId, table.productId, table.projectId),
+  index("idx_stock_movements_created").on(table.organizationId, table.createdAt),
+]);
+
+// Estoque mínimo por produto e local ('central' ou o id da obra). Abaixo dele o item
+// entra em "Atenção".
+export const stockMinimums = sqliteTable("stock_minimums", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  productId: text("product_id").notNull().references(() => purchaseProducts.id),
+  location: text("location").notNull(),
+  minimum: real("minimum").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [uniqueIndex("uidx_stock_minimums_product_location").on(table.organizationId, table.productId, table.location)]);

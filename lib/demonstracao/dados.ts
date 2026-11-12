@@ -62,6 +62,7 @@ export function comprasDeExemplo(projetos: { id: string; code: string; name: str
   const dia = (n: number) => new Date(Date.parse(`${hoje}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const obra = projetos.find((p) => p.kind === "work") ?? projetos[0] ?? null;
   const agora = new Date().toISOString();
+  const dataBr = (d: string) => d.split("-").reverse().join("/");
   const fornecedores = [
     { id: "demo-forn-1", name: "Depósito Exemplo Materiais (exemplo)", document: "", contactName: "Rita", email: "", phone: "(62) 3000-0001", city: "Goiânia", uf: "GO", categories: "Cimento, areia, brita, blocos", paymentTerms: "28 dias", leadTimeDays: 5, negotiationScore: 3, notes: "", active: true, stats: { quotes: 3, won: 2, delivered: 1, onTime: 1, averageLeadDays: 4, purchasedCents: 1_248_000 } },
     { id: "demo-forn-2", name: "Casa do Construtor Modelo (exemplo)", document: "", contactName: "Paulo", email: "", phone: "(62) 3000-0002", city: "Aparecida de Goiânia", uf: "GO", categories: "Hidráulica, elétrica, ferragens", paymentTerms: "30/60", leadTimeDays: 2, negotiationScore: 5, notes: "", active: true, stats: { quotes: 2, won: 1, delivered: 0, onTime: 0, averageLeadDays: null, purchasedCents: 386_500 } },
@@ -117,13 +118,36 @@ export function comprasDeExemplo(projetos: { id: string; code: string; name: str
       referenceCents: comparison.referenciaCents, partial: false,
       delivery: situacaoDaEntrega({ status, expectedDeliveryDate: (base.expectedDeliveryDate as string) ?? null, neededBy: (base.neededBy as string) ?? null, parcial: false }, hoje),
     };
+    const quemCotou = new Set(cotacoes.map((c) => c.supplierId));
+    const alternativas = status === "entregue" ? [] : fornecedores.filter((f) => !quemCotou.has(f.id)).slice(0, 2).map((f) => ({
+      supplierId: f.id, name: f.name, phone: f.phone, email: f.email, reason: `Fornece ${f.categories}`, lastPriceCents: null, deliveryDays: f.leadTimeDays, onTime: f.stats.onTime, delivered: f.stats.delivered,
+    }));
     respostas[`/api/compras/${base.id}`] = {
-      request, items: itens, comparison, today: hoje,
+      alternatives: alternativas, request, items: itens, comparison, today: hoje,
       quotes: cotacoes.map((c) => ({ ...c, supplierName: nomeDe(c.supplierId), supplierPhone: "", supplierEmail: "", notes: "", createdByName: "Equipe de exemplo", updatedAt: agora })),
       events: eventos.map((detail, i) => ({ id: `${base.id}-ev-${i}`, kind: "registro", detail, authorName: "Equipe de exemplo", createdAt: agora })),
     };
     return request;
   });
+  const local = obra?.id ?? "central";
+  const nomeLocal = obra ? `${obra.code} · ${obra.name}` : "Depósito central";
+  const sugestao = (f: typeof fornecedores[number], reason: string) => ({ supplierId: f.id, name: f.name, phone: f.phone, email: f.email, reason, lastPriceCents: null, deliveryDays: f.leadTimeDays, onTime: f.stats.onTime, delivered: f.stats.delivered });
+  const saldo = (p: typeof produtos[number], balance: number, minimum: number | null, location = local, locationName = nomeLocal) => ({
+    productId: p.id, productName: p.name, unit: p.unit, category: p.category, location, locationName, balance, minimum, lastMovementOn: dia(-2),
+    state: minimum && balance < minimum ? (balance <= 0 ? "falta" : "abaixo") : balance <= 0 ? "zerado" : "ok",
+  });
+  respostas["/api/compras/estoque"] = {
+    balances: [saldo(produtos[0], 18, 40), saldo(produtos[1], 0, 3), saldo(produtos[2], 22, 10), saldo(produtos[0], 35, null, "central", "Depósito central")],
+    attention: [
+      { key: "demo-at-1", kind: "falta", title: produtos[1].name, locationName: nomeLocal, detail: "Saldo 0 m³ de mínimo 3 · nenhuma compra aberta", productId: produtos[1].id, location: local, requestId: null, requestCode: null, suggestions: [sugestao(fornecedores[0], "Fornece Cimento, areia, brita, blocos")], suggestedQuantity: 3, unit: "m³" },
+      { key: "demo-at-2", kind: "atrasada", title: "Hidráulica do banheiro social", locationName: nomeLocal, detail: `PC-0002 · 1 item pendente · previsão era ${dataBr(dia(-1))}`, productId: null, location: local, requestId: "demo-pc-3", requestCode: "PC-0002", suggestions: [], suggestedQuantity: null, unit: null },
+      { key: "demo-at-3", kind: "abaixo", title: produtos[0].name, locationName: nomeLocal, detail: "Saldo 18 sc de mínimo 40 · PC-0004 ainda não comprado", productId: produtos[0].id, location: local, requestId: "demo-pc-1", requestCode: "PC-0004", suggestions: [sugestao(fornecedores[2], "Já cotou material parecido")], suggestedQuantity: null, unit: "sc" },
+    ],
+    movements: [
+      { id: "demo-mov-1", productId: produtos[0].id, productName: produtos[0].name, unit: "sc", location: local, locationName: nomeLocal, kind: "baixa", quantity: -22, unitCostCents: null, source: "manual", requestId: null, requestCode: null, note: "Contrapiso da sala", occurredOn: dia(-2), authorName: "Equipe de exemplo", createdAt: agora },
+      { id: "demo-mov-2", productId: produtos[2].id, productName: produtos[2].name, unit: "br", location: local, locationName: nomeLocal, kind: "entrada", quantity: 22, unitCostCents: 5_480, source: "manual", requestId: null, requestCode: null, note: "Sobra de outra obra", occurredOn: dia(-5), authorName: "Equipe de exemplo", createdAt: agora },
+    ],
+  };
   respostas["/api/compras"] = { requests: resumos, today: hoje, canEdit: true, canImportBudget: true };
   respostas["/api/compras/fornecedores"] = { suppliers: fornecedores };
   respostas["/api/compras/produtos"] = { products: produtos };

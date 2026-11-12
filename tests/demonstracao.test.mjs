@@ -210,6 +210,9 @@ test("Compras abre na demonstração com o comparativo real e recusa compra, cot
   assert.equal(cotando.comparison.linhas.length, 2);
   assert.equal(cotando.comparison.linhas.filter((l) => l.recomendada).length, 1);
   assert.ok(servidor.responder("GET", "/api/compras/fornecedores?inativos=1", null).body.suppliers.length >= 2);
+  const estoque = servidor.responder("GET", "/api/compras/estoque", null).body;
+  assert.ok(estoque.attention.some((a) => a.kind === "falta"));
+  assert.equal(servidor.responder("POST", "/api/compras/estoque/movimentos", { kind: "baixa" }).status, 403, "baixa não é feita na demonstração");
   for (const [metodo, caminho] of [["POST", "/api/compras"], ["POST", `/api/compras/${cotando.request.id}/acoes`], ["POST", `/api/compras/${cotando.request.id}/cotacoes`], ["POST", "/api/compras/fornecedores"], ["POST", "/api/compras/produtos"]]) {
     const resposta = servidor.responder(metodo, caminho, { action: "comprar", revision: 1 });
     assert.equal(resposta.status, 403, `${metodo} ${caminho}`);

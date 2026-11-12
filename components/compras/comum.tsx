@@ -94,7 +94,7 @@ export function SeloStatus({ status }: { status: StatusCompra }) {
 
 export function SeloEntrega({ situacao }: { situacao: SituacaoDaEntrega | null }) {
   if (!situacao) return null;
-  const alerta = situacao === "atrasada" || situacao === "depois_da_necessidade";
+  const alerta = situacao === "atrasada" || situacao === "depois_da_necessidade" || situacao === "sem_previsao";
   return <Badge variant={alerta ? "destructive" : "outline"} className={alerta ? "" : "text-drap-700"}>{rotuloSituacao[situacao]}</Badge>;
 }
 
