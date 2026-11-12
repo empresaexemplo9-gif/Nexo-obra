@@ -31,8 +31,7 @@ type Resumo = {
   id: string; name: string; projectId: string | null; projectCode: string | null; projectName: string | null; revision: number;
   updatedByName: string; updatedAt: string; itens: number; comodos: number; areaM2: number;
 };
-export type LayoutAberto = Resumo & { content: LayoutConteudo };
-type Aberto = LayoutAberto;
+type Aberto = Resumo & { content: LayoutConteudo };
 
 const dataHora = (valor: string) => new Date(valor).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const m2 = (valor: number) => `${valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²`;
@@ -138,11 +137,7 @@ const ferramentas: Array<{ id: Ferramenta; rotulo: string; icone: typeof MousePo
   { id: "vao", rotulo: "Vão", icone: Fence, tecla: "" },
 ];
 
-/**
- * Editor de um layout aberto. Com `demonstracao`, nada vai ao servidor: salvar avisa
- * `aoSalvar` em vez de gravar, e as exportações são baixadas no próprio navegador.
- */
-export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demonstracao = null }: { inicial: Aberto; projects: Project[]; canEdit: boolean; empresa: string; fechar: () => void; demonstracao?: { aoSalvar: () => void } | null }) {
+function LayoutEditor({ inicial, projects, canEdit, empresa, fechar }: { inicial: Aberto; projects: Project[]; canEdit: boolean; empresa: string; fechar: () => void }) {
   const [doc, setDoc] = useState<LayoutConteudo>(inicial.content);
   const [nome, setNome] = useState(inicial.name);
   const [projeto, setProjeto] = useState(inicial.projectId ?? "");
@@ -189,7 +184,6 @@ export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demo
 
   const salvar = useCallback(async () => {
     if (somenteLeitura || salvando) return;
-    if (demonstracao) { demonstracao.aoSalvar(); return; }
     setSalvando(true);
     try {
       const { layout } = await pedir<{ layout: Aberto }>(`/api/layouts/${inicial.id}`, { method: "PUT", body: JSON.stringify({ name: nome.trim() || inicial.name, projectId: projeto || null, revision: revisao, content: doc }) });
@@ -199,7 +193,7 @@ export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demo
       // Falhou: nada é dado por salvo e o desenho continua na tela para tentar de novo.
       toast.error(causa instanceof Error ? causa.message : "Não foi possível salvar. Tente de novo.");
     } finally { setSalvando(false); }
-  }, [demonstracao, doc, inicial.id, inicial.name, nome, projeto, revisao, salvando, somenteLeitura]);
+  }, [doc, inicial.id, inicial.name, nome, projeto, revisao, salvando, somenteLeitura]);
 
   const apagarSelecao = useCallback(() => {
     if (!selecao || somenteLeitura) return;
@@ -266,14 +260,14 @@ export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demo
   }, [alterar, apagarSelecao, desfazer, doc, duplicar, girar, refazer, salvar, selecao, somenteLeitura]);
 
   useEffect(() => {
-    if (!sujo || demonstracao) return;
+    if (!sujo) return;
     const aviso = (evento: BeforeUnloadEvent) => { evento.preventDefault(); };
     window.addEventListener("beforeunload", aviso);
     return () => window.removeEventListener("beforeunload", aviso);
-  }, [sujo, demonstracao]);
+  }, [sujo]);
 
   function voltar() {
-    if (sujo && !demonstracao && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
+    if (sujo && !window.confirm("Há alterações não salvas. Sair mesmo assim?")) return;
     fechar();
   }
 
@@ -317,8 +311,15 @@ export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demo
         const pdf = await pranchaPdf({ titulo: nome.trim() || inicial.name, subtitulo: projetoAtual ? `${projetoAtual.code} · ${projetoAtual.name}` : "Estudo de layout", empresa, doc, imagem3d, planta: imagemPlanta });
         blob = new Blob([pdf.slice().buffer], { type: "application/pdf" }); arquivo = `${base} - prancha de proposta.pdf`;
       }
-      if (!canEdit || demonstracao) { saveBlob(blob, arquivo); return; }
-      const salvo = await uploadOrgFile(blob, arquivo, { area: "prancheta", projectId: projeto || null });
+      if (!canEdit) { saveBlob(blob, arquivo); return; }
+      // A exportação já está pronta: se guardar na biblioteca falhar, a pessoa ainda baixa
+      // o arquivo em vez de perder o que acabou de gerar.
+      let salvo: OrgFileInfo;
+      try { salvo = await uploadOrgFile(blob, arquivo, { area: "prancheta", projectId: projeto || null }); }
+      catch (causa) {
+        toast.error(causa instanceof Error ? causa.message : "Não foi possível guardar na Prancheta.", { description: "O arquivo foi gerado; baixe para não perder.", action: { label: "Baixar", onClick: () => saveBlob(blob, arquivo) } });
+        return;
+      }
       setUltimo(salvo);
       toast.success(`“${arquivo}” salvo na Prancheta`, { action: { label: "Baixar", onClick: () => saveBlob(blob, arquivo) } });
     } catch (causa) { toast.error(causa instanceof Error ? causa.message : "Não foi possível exportar."); }
@@ -335,16 +336,16 @@ export function LayoutEditor({ inicial, projects, canEdit, empresa, fechar, demo
   return <div className="space-y-3">
     <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <Button size="sm" variant="outline" onClick={voltar}><ArrowLeft />{demonstracao ? "Voltar" : "Layouts"}</Button>
+        <Button size="sm" variant="outline" onClick={voltar}><ArrowLeft />Layouts</Button>
         <Input aria-label="Nome do layout" value={nome} maxLength={100} onChange={(evento) => { setNome(evento.target.value); setSujo(true); }} disabled={somenteLeitura} className="h-9 w-full max-w-xs font-semibold sm:w-72" />
         <NativeSelect aria-label="Projeto do layout" value={projeto} onChange={(evento) => { setProjeto(evento.target.value); setSujo(true); }} disabled={somenteLeitura} className="h-9"><option value="">Sem projeto</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</NativeSelect>
-        <Badge variant="outline" role="status">{demonstracao ? "Demonstração · nada é salvo" : somenteLeitura ? "Somente leitura" : sujo ? "Alterações não salvas" : "Salvo"}</Badge>
+        <Badge variant="outline" role="status">{somenteLeitura ? "Somente leitura" : sujo ? "Alterações não salvas" : "Salvo"}</Badge>
       </div>
       <div className="flex flex-wrap gap-2">
         {!somenteLeitura ? <>
           <Button size="icon" variant="outline" onClick={desfazer} aria-label="Desfazer (Ctrl+Z)"><Undo2 /></Button>
           <Button size="icon" variant="outline" onClick={refazer} aria-label="Refazer (Ctrl+Shift+Z)"><Redo2 /></Button>
-          <Button size="sm" onClick={() => void salvar()} disabled={salvando || (!sujo && !demonstracao)}>{salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>
+          <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>{salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Salvar</Button>
         </> : null}
         <Button size="sm" variant="outline" onClick={() => void exportar("3d")} disabled={Boolean(exportando)}>{exportando === "3d" ? <LoaderCircle className="animate-spin" /> : <FileImage />}Imagem 3D</Button>
         <Button size="sm" variant="outline" onClick={() => void exportar("planta")} disabled={Boolean(exportando)}>{exportando === "planta" ? <LoaderCircle className="animate-spin" /> : <Download />}Planta</Button>

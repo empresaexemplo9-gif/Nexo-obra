@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import test, { after, beforeEach } from "node:test";
 
 import { createHarness, params, root } from "./helpers/api-harness.mjs";
@@ -19,6 +19,8 @@ const superadmin = await h.load("/lib/server/superadmin.ts");
 const regras = await h.load("/lib/reunioes.ts");
 const dados = await h.load("/lib/demonstracao/dados.ts");
 const prancheta = await h.load("/lib/prancheta.ts");
+const demo = await h.load("/lib/demonstracao/servidor.ts");
+const capturado = JSON.parse(await readFile(join(root, "lib/demonstracao/respostas.json"), "utf8"));
 after(() => h.close());
 
 let cookie;
@@ -112,14 +114,95 @@ test("só o superadministrador lê e muda o andamento dos pedidos", async () => 
   assert.equal(gravados()[0].status, "contacted");
 });
 
-test("a planta e os números de exemplo são válidos pelas regras reais", () => {
+test("pedido de proposta dispensa dia e período e fica separado do pedido de reunião", async () => {
+  const proposta = await pedir({ ...valido({ kind: "proposal" }), preferredDay: undefined, preferredPeriod: undefined });
+  assert.equal(proposta.status, 201);
+  const [linha] = gravados();
+  assert.equal(linha.kind, "proposal");
+  assert.equal(linha.preferred_day, "", "proposta não tem data inventada");
+  // Reunião sem dia continua recusada; e a mesma pessoa pode pedir as duas coisas.
+  assert.equal((await pedir({ ...valido(), preferredDay: undefined })).body.details.preferredDay[0], "Escolha um dia.");
+  assert.equal((await pedir(valido())).status, 201);
+  assert.equal((await pedir(valido({ kind: "outro" }))).status, 400);
+  const resposta = await lista.GET(new Request("https://platform.test/api/superadmin/reunioes", { headers: { cookie } }));
+  assert.deepEqual((await resposta.json()).requests.map((item) => item.kind).sort(), ["meeting", "proposal"]);
+});
+
+// ── servidor da demonstração: roda no navegador; aqui, com um sessionStorage de teste ──
+function navegadorDeTeste() {
+  const guardado = new Map();
+  globalThis.window = { sessionStorage: { getItem: (k) => guardado.get(k) ?? null, setItem: (k, v) => { guardado.set(k, v); }, removeItem: (k) => { guardado.delete(k); } } };
+  return guardado;
+}
+
+test("a demonstração responde no formato real e com datas trazidas para hoje", () => {
+  navegadorDeTeste();
+  const servidor = new demo.ServidorDemo();
+  const sessao = servidor.responder("GET", "/api/session", null);
+  assert.equal(sessao.status, 200);
+  assert.equal(sessao.body.authenticated, true);
+  assert.equal(sessao.body.organization.name, "Escritório Modelo Arquitetura");
+  for (const [caminho, campo] of [["/api/clients", "clients"], ["/api/projects", "projects"], ["/api/tasks", "tasks"], ["/api/crm", "opportunities"], ["/api/budgets", "budgets"], ["/api/layouts", "layouts"], ["/api/studio", "pranchas"], ["/api/proposals", "proposals"]]) {
+    const resposta = servidor.responder("GET", caminho, null);
+    assert.equal(resposta.status, 200, caminho);
+    assert.ok(resposta.body[campo].length > 0, `${caminho} traz dados de exemplo`);
+    assert.deepEqual(Object.keys(resposta.body[campo][0]).sort(), Object.keys(capturado.respostas[caminho].body[campo][0]).sort(), `${caminho} mantém o formato da API`);
+  }
+  const hoje = new Date().toISOString().slice(0, 10);
+  assert.equal(servidor.responder("GET", "/api/reminders", null).body.day.slice(0, 7), hoje.slice(0, 7), "o dia dos lembretes acompanha o calendário");
+  const prancha = servidor.responder("GET", `/api/studio/${servidor.responder("GET", "/api/studio", null).body.pranchas[0].id}`, null).body.prancha;
+  assert.equal(prancheta.documentoSchema.safeParse(prancha.documento).success, true);
+  assert.ok(prancha.documento.elementos.length > 30, "a prancha de exemplo abre com desenho");
+  assert.equal(servidor.responder("GET", "/api/nao-existe", null).status, 404);
+});
+
+test("edições do visitante valem só na aba e somem ao recomeçar", () => {
+  const guardado = navegadorDeTeste();
+  const servidor = new demo.ServidorDemo();
+  const projeto = servidor.responder("GET", "/api/projects", null).body.projects[0];
+  const antes = servidor.responder("GET", "/api/tasks", null).body.tasks.length;
+  const criada = servidor.responder("POST", "/api/tasks", { projectId: projeto.id, title: "Tarefa criada no teste", priority: "high" });
+  assert.equal(criada.status, 201);
+  assert.equal(criada.body.task.projectName, projeto.name);
+  assert.equal(servidor.responder("GET", "/api/tasks", null).body.tasks.length, antes + 1);
+  const feita = servidor.responder("PATCH", `/api/tasks/${criada.body.task.id}`, { status: "done" });
+  assert.ok(feita.body.task.completedAt);
+  assert.equal(servidor.responder("POST", "/api/tasks", { title: "x" }).status, 400, "validação continua valendo");
+
+  const negocio = servidor.responder("GET", "/api/crm", null).body.opportunities[0];
+  const convertido = servidor.responder("POST", `/api/crm/${negocio.id}`, { code: "TST-01", kind: "work" });
+  assert.equal(convertido.status, 201);
+  assert.equal(convertido.body.opportunity.stage, "won");
+  assert.ok(servidor.responder("GET", "/api/projects", null).body.projects.some((item) => item.id === convertido.body.projectId));
+
+  // Outra página da mesma aba (central do projeto, prancha) enxerga a edição…
+  const outraPagina = new demo.ServidorDemo();
+  assert.equal(outraPagina.responder("GET", "/api/tasks", null).body.tasks.length, antes + 1);
+  // …e recomeçar, ou fechar a aba, devolve os dados de exemplo.
+  demo.ServidorDemo.recomecar();
+  assert.equal(guardado.size, 0);
+  assert.equal(new demo.ServidorDemo().responder("GET", "/api/tasks", null).body.tasks.length, antes);
+});
+
+test("o que não é emulado é recusado, nunca dado como feito", () => {
+  navegadorDeTeste();
+  const servidor = new demo.ServidorDemo();
+  for (const [metodo, caminho] of [
+    ["POST", "/api/integrations/drap/charges"], ["POST", "/api/integrations/drap/nfse"], ["POST", "/api/integrations/drap/lancamentos"],
+    ["POST", "/api/organization-invitations"], ["POST", "/api/onboarding"], ["POST", "/api/auth/password"], ["POST", "/api/arquivos"], ["POST", "/api/proposals"],
+  ]) {
+    const resposta = servidor.responder(metodo, caminho, { qualquer: 1 });
+    assert.equal(resposta.status, 403, `${metodo} ${caminho}`);
+    assert.equal(resposta.body.code, "demonstracao");
+    assert.equal(resposta.body.error, demo.RECUSA_DEMO);
+  }
+  assert.equal(servidor.responder("GET", "/api/integrations/drap/summary", null).body.source, "drap");
+});
+
+test("a planta de exemplo é válida pelas regras reais", () => {
   const planta = dados.plantaDeExemplo();
   assert.equal(prancheta.documentoSchema.safeParse(planta).success, true);
-  assert.ok(planta.elementos.length > 30);
   assert.ok(prancheta.quantitativo(planta));
-  const { custo, venda } = dados.totalDoOrcamento(dados.itensOrcamentoExemplo, 25);
-  assert.equal(venda, Math.round(custo * 1.25));
-  assert.ok(Number.isInteger(custo), "dinheiro em centavos inteiros");
 });
 
 async function fontes(dir) {
@@ -133,30 +216,24 @@ async function fontes(dir) {
 }
 
 test("dado fictício fica confinado à demonstração e não chega a API nem a tela de empresa", async () => {
-  const permitidos = new Set(["components/visitante/demonstracao-app.tsx", "components/visitante/painel-exemplo.tsx"]);
   const importadores = [];
   for (const arquivo of [...await fontes("app"), ...await fontes("components"), ...await fontes("lib"), ...await fontes("db")]) {
-    const caminho = relative(root, join(root, arquivo));
-    if (caminho.startsWith("lib/demonstracao/")) continue;
-    if (/lib\/demonstracao\/dados/.test(await readFile(join(root, arquivo), "utf8"))) importadores.push(caminho);
+    if (arquivo.startsWith("lib/demonstracao/")) continue;
+    if (/lib\/demonstracao\//.test(await readFile(join(root, arquivo), "utf8"))) importadores.push(arquivo);
   }
-  assert.deepEqual(importadores.sort(), [...permitidos].sort());
+  assert.deepEqual(importadores, ["components/visitante/demonstracao-app.tsx"], "só a moldura da demonstração usa os dados fictícios");
   for (const arquivo of await fontes("app/api")) {
     assert.doesNotMatch(await readFile(join(root, arquivo), "utf8"), /demonstracao|visitante\//, `${arquivo} não conhece a demonstração`);
   }
+  // A moldura só existe nas rotas /demonstracao: nenhuma outra página a monta.
+  for (const arquivo of await fontes("app")) {
+    if (arquivo.startsWith("app/demonstracao/")) continue;
+    assert.doesNotMatch(await readFile(join(root, arquivo), "utf8"), /demonstracao-app/, `${arquivo} não monta a demonstração`);
+  }
 });
 
-test("as telas da demonstração não chamam o servidor e os editores não gravam em modo de demonstração", async () => {
-  for (const arquivo of ["components/visitante/demonstracao-app.tsx", "components/visitante/painel-exemplo.tsx", "components/visitante/home-visitante.tsx"]) {
-    assert.doesNotMatch(await readFile(join(root, arquivo), "utf8"), /fetch\(|\/api\//, `${arquivo} não faz chamada de rede`);
-  }
-  const cad = await readFile(join(root, "components/prancheta-editor.tsx"), "utf8");
-  const salvarCad = cad.slice(cad.indexOf("async function salvar()"), cad.indexOf("function baixar("));
-  assert.ok(salvarCad.indexOf("demonstracao.aoGravar()") > 0 && salvarCad.indexOf("demonstracao.aoGravar()") < salvarCad.indexOf("fetch("), "o CAD sai antes do pedido de gravação");
-  const importarCad = cad.slice(cad.indexOf("async function importar("), cad.indexOf("async function importar(") + 400);
-  assert.match(importarCad, /if \(demonstracao\) \{[^}]*return; \}/);
-  const layout = await readFile(join(root, "components/layout/layout-workspace.tsx"), "utf8");
-  const salvarLayout = layout.slice(layout.indexOf("const salvar = useCallback"), layout.indexOf("const apagarSelecao"));
-  assert.ok(salvarLayout.indexOf("demonstracao.aoSalvar()") > 0 && salvarLayout.indexOf("demonstracao.aoSalvar()") < salvarLayout.indexOf("pedir<"), "o layout sai antes do pedido de gravação");
-  assert.match(layout, /if \(!canEdit \|\| demonstracao\) \{ saveBlob\(blob, arquivo\); return; \}/, "exportação da demonstração é baixada, não enviada");
+test("dentro da demonstração só o pedido de reunião ou proposta chega ao servidor de verdade", async () => {
+  const moldura = await readFile(join(root, "components/visitante/demonstracao-app.tsx"), "utf8");
+  assert.match(moldura, /const REAIS = \["\/api\/reunioes"\];/);
+  assert.match(moldura, /window\.fetch = original/, "sair da demonstração devolve o fetch do navegador");
 });

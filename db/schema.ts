@@ -107,7 +107,10 @@ export const meetingRequests = sqliteTable("meeting_requests", {
   phone: text("phone").notNull(),
   /** Faixa de tamanho da equipe, das opções de `lib/reunioes.ts`. */
   teamSize: text("team_size").notNull(),
-  /** Dia preferido (AAAA-MM-DD) e período; a reunião só existe depois da confirmação humana. */
+  /** 'meeting' (pedido de reunião) ou 'proposal' (pedido de envio de proposta). */
+  kind: text("kind").notNull().default("meeting"),
+  /** Dia preferido (AAAA-MM-DD) e período; vazios no pedido de proposta. A reunião só
+   *  existe depois da confirmação humana. */
   preferredDay: text("preferred_day").notNull(),
   preferredPeriod: text("preferred_period").notNull(),
   message: text("message"),

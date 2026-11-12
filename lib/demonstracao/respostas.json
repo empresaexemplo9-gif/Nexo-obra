@@ -1,0 +1,3724 @@
+{
+ "geradoEm": "2026-11-12T08:08:01.402Z",
+ "respostas": {
+  "/api/session": {
+   "status": 200,
+   "body": {
+    "authenticated": true,
+    "authMethod": "password",
+    "maintenanceEnvironment": false,
+    "needsOrganization": false,
+    "user": {
+     "id": "demo-ana",
+     "email": "ana@escritoriomodelo.example",
+     "displayName": "Ana Ribeiro (exemplo)"
+    },
+    "member": {
+     "id": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+     "role": "owner",
+     "permissions": {
+      "overview": {
+       "view": true,
+       "edit": true
+      },
+      "projects": {
+       "view": true,
+       "edit": true
+      },
+      "budgets": {
+       "view": true,
+       "edit": true
+      },
+      "schedule": {
+       "view": true,
+       "edit": true
+      },
+      "diary": {
+       "view": true,
+       "edit": true
+      },
+      "portal": {
+       "view": true,
+       "edit": true
+      },
+      "crm": {
+       "view": true,
+       "edit": true
+      },
+      "finance": {
+       "view": true,
+       "edit": true
+      },
+      "team": {
+       "view": true,
+       "edit": true
+      },
+      "tasks": {
+       "view": true,
+       "edit": true
+      },
+      "files": {
+       "view": true,
+       "edit": true
+      },
+      "studio": {
+       "view": true,
+       "edit": true
+      }
+     }
+    },
+    "terms": {
+     "version": "2026-09-10",
+     "accepted": true
+    },
+    "organization": {
+     "id": "3c6cee55-3901-4f6b-a336-7446e148b40b",
+     "name": "Escritório Modelo Arquitetura",
+     "slug": "escritorio-modelo-arquitetura-3c6cee55",
+     "timezone": "America/Sao_Paulo"
+    },
+    "organizations": [
+     {
+      "id": "3c6cee55-3901-4f6b-a336-7446e148b40b",
+      "name": "Escritório Modelo Arquitetura",
+      "slug": "escritorio-modelo-arquitetura-3c6cee55",
+      "timezone": "America/Sao_Paulo",
+      "role": "owner"
+     }
+    ]
+   }
+  },
+  "/api/health": {
+   "status": 200,
+   "body": {
+    "pronto": false,
+    "versao": "ffda2eb",
+    "compiladoEm": "2026-11-12T08:07:43.051Z",
+    "banco": "falta_migrar",
+    "sessao": "ok",
+    "superadmin": "nao_configurado",
+    "armazenamento": "nao_configurado",
+    "migracoes": {
+     "aplicadas": 0,
+     "pendentes": 28
+    },
+    "detalhes": {
+     "superadmin": "Faltam configurar SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD_HASH e SUPERADMIN_SESSION_SECRET.",
+     "armazenamento": "Falta configurar BLOB_READ_WRITE_TOKEN."
+    }
+   }
+  },
+  "/api/clients": {
+   "status": 200,
+   "body": {
+    "clients": [
+     {
+      "id": "dfce747e-abf8-4537-a960-506971f2a4a0",
+      "name": "Clínica Bem Viver Ltda. (exemplo)",
+      "document": "00.000.000/0001-00",
+      "email": "contato@bemviver.example",
+      "phone": "(11) 3000-0003",
+      "notes": "",
+      "externalFinancialId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "c8fe6531-ff18-4811-8796-441b2326ea0d",
+      "name": "Família Andrade (exemplo)",
+      "document": null,
+      "email": "andrade@cliente.example",
+      "phone": "(11) 90000-0001",
+      "notes": "",
+      "externalFinancialId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "2877fb6a-6083-4272-927d-48507e9817df",
+      "name": "Loja Conceito Centro Ltda. (exemplo)",
+      "document": null,
+      "email": "obras@lojaconceito.example",
+      "phone": "(11) 3000-0004",
+      "notes": "",
+      "externalFinancialId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "43495257-7045-46a1-852a-614cd2f9c7c5",
+      "name": "Marina Moreira (exemplo)",
+      "document": null,
+      "email": "marina@cliente.example",
+      "phone": "(11) 90000-0002",
+      "notes": "",
+      "externalFinancialId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "eafb3b60-89dc-40ce-abe7-c7680c74b99b",
+      "name": "Roberto Sales (exemplo)",
+      "document": null,
+      "email": "roberto@cliente.example",
+      "phone": "(11) 90000-0005",
+      "notes": "",
+      "externalFinancialId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     }
+    ]
+   }
+  },
+  "/api/projects": {
+   "status": 200,
+   "body": {
+    "projects": [
+     {
+      "id": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "clientId": "c8fe6531-ff18-4811-8796-441b2326ea0d",
+      "clientName": "Família Andrade (exemplo)",
+      "code": "OBR-014",
+      "name": "Casa Jardim das Acácias",
+      "kind": "work",
+      "status": "active",
+      "phase": "Alvenaria e instalações",
+      "progressPercent": 46,
+      "ownerMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "ownerName": "Carla Nunes (exemplo)",
+      "startDate": "2026-07-15",
+      "targetDate": "2027-03-22",
+      "budgetCents": 68400000,
+      "externalFinancialCostCenterId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "clientId": "43495257-7045-46a1-852a-614cd2f9c7c5",
+      "clientName": "Marina Moreira (exemplo)",
+      "code": "PRJ-017",
+      "name": "Apartamento Vista Parque",
+      "kind": "project",
+      "status": "active",
+      "phase": "Projeto executivo",
+      "progressPercent": 72,
+      "ownerMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "ownerName": "Bruno Tavares (exemplo)",
+      "startDate": "2026-09-13",
+      "targetDate": "2026-12-18",
+      "budgetCents": 4200000,
+      "externalFinancialCostCenterId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "clientId": "dfce747e-abf8-4537-a960-506971f2a4a0",
+      "clientName": "Clínica Bem Viver Ltda. (exemplo)",
+      "code": "OBR-019",
+      "name": "Consultório Bem Viver",
+      "kind": "work",
+      "status": "active",
+      "phase": "Acabamentos",
+      "progressPercent": 88,
+      "ownerMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "ownerName": "Carla Nunes (exemplo)",
+      "startDate": "2026-06-15",
+      "targetDate": "2026-11-30",
+      "budgetCents": 21900000,
+      "externalFinancialCostCenterId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "clientId": "2877fb6a-6083-4272-927d-48507e9817df",
+      "clientName": "Loja Conceito Centro Ltda. (exemplo)",
+      "code": "PRJ-021",
+      "name": "Loja Conceito Centro",
+      "kind": "project",
+      "status": "active",
+      "phase": "Estudo preliminar",
+      "progressPercent": 18,
+      "ownerMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "ownerName": "Ana Ribeiro (exemplo)",
+      "startDate": "2026-10-31",
+      "targetDate": "2027-01-29",
+      "budgetCents": 3600000,
+      "externalFinancialCostCenterId": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     }
+    ]
+   }
+  },
+  "/api/tasks": {
+   "status": 200,
+   "body": {
+    "tasks": [
+     {
+      "id": "f5574424-1592-4e78-ab53-4e7527d12d2b",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Liberar concretagem da laje",
+      "description": "Aguardando laudo do ensaio de corpo de prova.",
+      "status": "blocked",
+      "priority": "critical",
+      "assigneeMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-14T15:00:00.000Z",
+      "dueAt": "2026-11-18T15:00:00.000Z",
+      "estimatedMinutes": 90,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "b6bb49bb-6ede-4871-aa51-795e8ad28dd3",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "title": "Enviar revisão 3 do projeto elétrico",
+      "description": "",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-09T15:00:00.000Z",
+      "dueAt": "2026-11-12T20:00:00.000Z",
+      "estimatedMinutes": 240,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "abec5ee3-f7db-4d53-b24a-37156e471295",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "title": "Compatibilizar hidráulica com estrutura",
+      "description": "",
+      "status": "in_progress",
+      "priority": "normal",
+      "assigneeMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-06T15:00:00.000Z",
+      "dueAt": "2026-11-20T15:00:00.000Z",
+      "estimatedMinutes": 480,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "c082106f-f110-4d03-b704-11df0a5fc297",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Aprovar amostra do porcelanato com o cliente",
+      "description": "",
+      "status": "todo",
+      "priority": "high",
+      "assigneeMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-08T15:00:00.000Z",
+      "dueAt": "2026-11-11T15:00:00.000Z",
+      "estimatedMinutes": 60,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "95d6b315-cbab-455c-8859-581fe8cc4919",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Conferir medição da alvenaria do térreo",
+      "description": "",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-11T15:00:00.000Z",
+      "dueAt": "2026-11-12T21:00:00.000Z",
+      "estimatedMinutes": 120,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "d9432ff5-d21e-4bf7-b91b-6377dcace1b5",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Cotar esquadrias com três fornecedores",
+      "description": "",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-12T15:00:00.000Z",
+      "dueAt": "2026-11-14T15:00:00.000Z",
+      "estimatedMinutes": 180,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "331bee89-b256-437f-8af2-a2de91bc224c",
+      "projectId": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "projectName": "Loja Conceito Centro",
+      "title": "Montar prancha de layout para a reunião",
+      "description": "",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-13T15:00:00.000Z",
+      "dueAt": "2026-11-15T15:00:00.000Z",
+      "estimatedMinutes": 300,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "e807c30b-bd78-448e-a48b-c89cb1e9a47c",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Vistoria final com o cliente",
+      "description": "",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-24T15:00:00.000Z",
+      "dueAt": "2026-11-26T15:00:00.000Z",
+      "estimatedMinutes": 120,
+      "completedAt": null,
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "57f13978-255f-43e8-8470-b8ce23a4ce0c",
+      "projectId": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "projectName": "Loja Conceito Centro",
+      "title": "Levantamento do imóvel",
+      "description": "",
+      "status": "done",
+      "priority": "normal",
+      "assigneeMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-02T15:00:00.000Z",
+      "dueAt": "2026-11-04T15:00:00.000Z",
+      "estimatedMinutes": 240,
+      "completedAt": "2026-11-12T08:07:45.864Z",
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     },
+     {
+      "id": "97139362-4e05-4edf-8081-ffbe1ed986de",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Registrar diário de obra com fotos",
+      "description": "",
+      "status": "done",
+      "priority": "normal",
+      "assigneeMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-09T15:00:00.000Z",
+      "dueAt": "2026-11-10T15:00:00.000Z",
+      "estimatedMinutes": 30,
+      "completedAt": "2026-11-12T08:07:45.853Z",
+      "createdAt": "2026-11-12 08:07:45",
+      "updatedAt": "2026-11-12 08:07:45"
+     }
+    ]
+   }
+  },
+  "/api/schedule": {
+   "status": 200,
+   "body": {
+    "tasks": [
+     {
+      "id": "57f13978-255f-43e8-8470-b8ce23a4ce0c",
+      "projectId": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "projectName": "Loja Conceito Centro",
+      "title": "Levantamento do imóvel",
+      "status": "done",
+      "priority": "normal",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-02T15:00:00.000Z",
+      "dueAt": "2026-11-04T15:00:00.000Z",
+      "estimatedMinutes": 240
+     },
+     {
+      "id": "97139362-4e05-4edf-8081-ffbe1ed986de",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Registrar diário de obra com fotos",
+      "status": "done",
+      "priority": "normal",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-09T15:00:00.000Z",
+      "dueAt": "2026-11-10T15:00:00.000Z",
+      "estimatedMinutes": 30
+     },
+     {
+      "id": "c082106f-f110-4d03-b704-11df0a5fc297",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Aprovar amostra do porcelanato com o cliente",
+      "status": "todo",
+      "priority": "high",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-08T15:00:00.000Z",
+      "dueAt": "2026-11-11T15:00:00.000Z",
+      "estimatedMinutes": 60
+     },
+     {
+      "id": "b6bb49bb-6ede-4871-aa51-795e8ad28dd3",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "title": "Enviar revisão 3 do projeto elétrico",
+      "status": "in_progress",
+      "priority": "high",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-09T15:00:00.000Z",
+      "dueAt": "2026-11-12T20:00:00.000Z",
+      "estimatedMinutes": 240
+     },
+     {
+      "id": "95d6b315-cbab-455c-8859-581fe8cc4919",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Conferir medição da alvenaria do térreo",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-11T15:00:00.000Z",
+      "dueAt": "2026-11-12T21:00:00.000Z",
+      "estimatedMinutes": 120
+     },
+     {
+      "id": "d9432ff5-d21e-4bf7-b91b-6377dcace1b5",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Cotar esquadrias com três fornecedores",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-12T15:00:00.000Z",
+      "dueAt": "2026-11-14T15:00:00.000Z",
+      "estimatedMinutes": 180
+     },
+     {
+      "id": "331bee89-b256-437f-8af2-a2de91bc224c",
+      "projectId": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "projectName": "Loja Conceito Centro",
+      "title": "Montar prancha de layout para a reunião",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-13T15:00:00.000Z",
+      "dueAt": "2026-11-15T15:00:00.000Z",
+      "estimatedMinutes": 300
+     },
+     {
+      "id": "f5574424-1592-4e78-ab53-4e7527d12d2b",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "title": "Liberar concretagem da laje",
+      "status": "blocked",
+      "priority": "critical",
+      "assigneeName": "Carla Nunes (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-14T15:00:00.000Z",
+      "dueAt": "2026-11-18T15:00:00.000Z",
+      "estimatedMinutes": 90
+     },
+     {
+      "id": "abec5ee3-f7db-4d53-b24a-37156e471295",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "title": "Compatibilizar hidráulica com estrutura",
+      "status": "in_progress",
+      "priority": "normal",
+      "assigneeName": "Bruno Tavares (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-06T15:00:00.000Z",
+      "dueAt": "2026-11-20T15:00:00.000Z",
+      "estimatedMinutes": 480
+     },
+     {
+      "id": "e807c30b-bd78-448e-a48b-c89cb1e9a47c",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "title": "Vistoria final com o cliente",
+      "status": "todo",
+      "priority": "normal",
+      "assigneeName": "Ana Ribeiro (exemplo)",
+      "parentTaskId": null,
+      "startsAt": "2026-11-24T15:00:00.000Z",
+      "dueAt": "2026-11-26T15:00:00.000Z",
+      "estimatedMinutes": 120
+     }
+    ]
+   }
+  },
+  "/api/members": {
+   "status": 200,
+   "body": {
+    "members": [
+     {
+      "id": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "name": "Ana Ribeiro (exemplo)",
+      "email": "ana@escritoriomodelo.example",
+      "role": "owner",
+      "permissions": {
+       "overview": {
+        "view": true,
+        "edit": true
+       },
+       "projects": {
+        "view": true,
+        "edit": true
+       },
+       "budgets": {
+        "view": true,
+        "edit": true
+       },
+       "schedule": {
+        "view": true,
+        "edit": true
+       },
+       "diary": {
+        "view": true,
+        "edit": true
+       },
+       "portal": {
+        "view": true,
+        "edit": true
+       },
+       "crm": {
+        "view": true,
+        "edit": true
+       },
+       "finance": {
+        "view": true,
+        "edit": true
+       },
+       "team": {
+        "view": true,
+        "edit": true
+       },
+       "tasks": {
+        "view": true,
+        "edit": true
+       },
+       "files": {
+        "view": true,
+        "edit": true
+       },
+       "studio": {
+        "view": true,
+        "edit": true
+       }
+      },
+      "weeklyCapacityMinutes": 2400,
+      "active": true,
+      "updatedAt": "2026-11-12 08:07:44"
+     },
+     {
+      "id": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "name": "Bruno Tavares (exemplo)",
+      "email": "bruno@escritoriomodelo.example",
+      "role": "manager",
+      "permissions": {
+       "overview": {
+        "view": true,
+        "edit": true
+       },
+       "projects": {
+        "view": true,
+        "edit": true
+       },
+       "budgets": {
+        "view": true,
+        "edit": true
+       },
+       "schedule": {
+        "view": true,
+        "edit": true
+       },
+       "diary": {
+        "view": true,
+        "edit": true
+       },
+       "portal": {
+        "view": true,
+        "edit": true
+       },
+       "crm": {
+        "view": true,
+        "edit": true
+       },
+       "finance": {
+        "view": true,
+        "edit": true
+       },
+       "team": {
+        "view": true,
+        "edit": true
+       },
+       "tasks": {
+        "view": true,
+        "edit": true
+       },
+       "files": {
+        "view": true,
+        "edit": true
+       },
+       "studio": {
+        "view": true,
+        "edit": true
+       }
+      },
+      "weeklyCapacityMinutes": 2400,
+      "active": true,
+      "updatedAt": "2026-11-12 08:07:44"
+     },
+     {
+      "id": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "name": "Carla Nunes (exemplo)",
+      "email": "carla@escritoriomodelo.example",
+      "role": "member",
+      "permissions": {
+       "overview": {
+        "view": true,
+        "edit": true
+       },
+       "projects": {
+        "view": true,
+        "edit": true
+       },
+       "budgets": {
+        "view": true,
+        "edit": true
+       },
+       "schedule": {
+        "view": true,
+        "edit": true
+       },
+       "diary": {
+        "view": true,
+        "edit": true
+       },
+       "portal": {
+        "view": true,
+        "edit": true
+       },
+       "crm": {
+        "view": true,
+        "edit": true
+       },
+       "finance": {
+        "view": true,
+        "edit": true
+       },
+       "team": {
+        "view": true,
+        "edit": true
+       },
+       "tasks": {
+        "view": true,
+        "edit": true
+       },
+       "files": {
+        "view": true,
+        "edit": true
+       },
+       "studio": {
+        "view": true,
+        "edit": true
+       }
+      },
+      "weeklyCapacityMinutes": 2400,
+      "active": true,
+      "updatedAt": "2026-11-12 08:07:44"
+     },
+     {
+      "id": "434058c4-8f74-4c7c-b0d4-954a2f9e72ae",
+      "name": "Diego Prado (exemplo)",
+      "email": "diego@escritoriomodelo.example",
+      "role": "finance",
+      "permissions": {
+       "overview": {
+        "view": true,
+        "edit": true
+       },
+       "projects": {
+        "view": true,
+        "edit": true
+       },
+       "budgets": {
+        "view": true,
+        "edit": true
+       },
+       "schedule": {
+        "view": true,
+        "edit": true
+       },
+       "diary": {
+        "view": true,
+        "edit": true
+       },
+       "portal": {
+        "view": true,
+        "edit": true
+       },
+       "crm": {
+        "view": true,
+        "edit": true
+       },
+       "finance": {
+        "view": true,
+        "edit": true
+       },
+       "team": {
+        "view": true,
+        "edit": true
+       },
+       "tasks": {
+        "view": true,
+        "edit": true
+       },
+       "files": {
+        "view": true,
+        "edit": true
+       },
+       "studio": {
+        "view": true,
+        "edit": true
+       }
+      },
+      "weeklyCapacityMinutes": 2400,
+      "active": true,
+      "updatedAt": "2026-11-12 08:07:44"
+     }
+    ]
+   }
+  },
+  "/api/reminders": {
+   "status": 200,
+   "body": {
+    "day": "2026-11-12",
+    "horizon": "2026-11-19",
+    "seen": false,
+    "reminders": [
+     {
+      "key": "followup:45f79d7f-9271-4282-9ebd-9d1c54558107",
+      "group": "followup",
+      "severity": "atrasado",
+      "title": "Retomar contato: Projeto de interiores do escritório",
+      "detail": "Confirmar recebimento da proposta · Loja Conceito Centro Ltda. (exemplo) · 11/11/2026",
+      "amountCents": 6800000,
+      "dueDay": "2026-11-11",
+      "module": "crm",
+      "entityId": "45f79d7f-9271-4282-9ebd-9d1c54558107"
+     },
+     {
+      "key": "followup:539472f7-3764-492d-bed0-6180239e6abc",
+      "group": "followup",
+      "severity": "proximo",
+      "title": "Retomar contato: Reforma de cobertura",
+      "detail": "Ligar para marcar visita técnica · Roberto Sales (exemplo) · 13/11/2026",
+      "amountCents": 18500000,
+      "dueDay": "2026-11-13",
+      "module": "crm",
+      "entityId": "539472f7-3764-492d-bed0-6180239e6abc"
+     },
+     {
+      "key": "followup:640e8102-cbfb-4e06-b7bd-7cb0da58a338",
+      "group": "followup",
+      "severity": "proximo",
+      "title": "Retomar contato: Casa de campo 240 m²",
+      "detail": "Enviar cronograma revisado · Marina Moreira (exemplo) · 14/11/2026",
+      "amountCents": 92000000,
+      "dueDay": "2026-11-14",
+      "module": "crm",
+      "entityId": "640e8102-cbfb-4e06-b7bd-7cb0da58a338"
+     },
+     {
+      "key": "followup:fbf9cf26-13a5-4f4f-adf6-b328cfa5538a",
+      "group": "followup",
+      "severity": "proximo",
+      "title": "Retomar contato: Retrofit de fachada",
+      "detail": "Agendar apresentação · Clínica Bem Viver Ltda. (exemplo) · 16/11/2026",
+      "amountCents": 31000000,
+      "dueDay": "2026-11-16",
+      "module": "crm",
+      "entityId": "fbf9cf26-13a5-4f4f-adf6-b328cfa5538a"
+     },
+     {
+      "key": "meta:b17885d3-9211-4326-be05-67671daf2711",
+      "group": "meta",
+      "severity": "proximo",
+      "title": "Meta em aberto: Tarefas concluídas no mês",
+      "detail": "10% de 20 tarefas concluídas · faltam 18 até 30/11/2026",
+      "amountCents": null,
+      "dueDay": "2026-11-30",
+      "module": "overview",
+      "entityId": "b17885d3-9211-4326-be05-67671daf2711"
+     }
+    ],
+    "dismissedCount": 0,
+    "counts": {
+     "atrasado": 1,
+     "hoje": 0,
+     "proximo": 4
+    },
+    "goals": [
+     {
+      "id": "b17885d3-9211-4326-be05-67671daf2711",
+      "name": "Tarefas concluídas no mês",
+      "metric": "tasks_done",
+      "label": "Tarefas concluídas",
+      "money": false,
+      "target": 20,
+      "current": 2,
+      "percent": 10,
+      "periodStart": "2026-10-31",
+      "periodEnd": "2026-11-30",
+      "ownerMemberId": null,
+      "mine": false
+     }
+    ]
+   }
+  },
+  "/api/goals": {
+   "status": 200,
+   "body": {
+    "goals": [
+     {
+      "id": "b17885d3-9211-4326-be05-67671daf2711",
+      "name": "Tarefas concluídas no mês",
+      "metric": "tasks_done",
+      "label": "Tarefas concluídas",
+      "money": false,
+      "target": 20,
+      "current": 2,
+      "percent": 10,
+      "periodStart": "2026-10-31",
+      "periodEnd": "2026-11-30",
+      "ownerMemberId": null,
+      "mine": false
+     }
+    ],
+    "metrics": [
+     {
+      "id": "tasks_done",
+      "label": "Tarefas concluídas",
+      "money": false
+     },
+     {
+      "id": "clients_new",
+      "label": "Clientes novos",
+      "money": false
+     },
+     {
+      "id": "projects_done",
+      "label": "Trabalhos entregues",
+      "money": false
+     },
+     {
+      "id": "opportunities_won",
+      "label": "Oportunidades ganhas",
+      "money": false
+     },
+     {
+      "id": "budgets_approved_cents",
+      "label": "Orçamentos aprovados (R$)",
+      "money": true
+     },
+     {
+      "id": "charges_amount_cents",
+      "label": "Cobranças emitidas (R$)",
+      "money": true
+     }
+    ],
+    "canManage": true
+   }
+  },
+  "/api/crm": {
+   "status": 200,
+   "body": {
+    "opportunities": [
+     {
+      "id": "45f79d7f-9271-4282-9ebd-9d1c54558107",
+      "clientId": "2877fb6a-6083-4272-927d-48507e9817df",
+      "clientName": "Loja Conceito Centro Ltda. (exemplo)",
+      "title": "Projeto de interiores do escritório",
+      "stage": "proposal",
+      "estimatedValueCents": 6800000,
+      "probabilityPercent": 55,
+      "ownerMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "ownerName": "Bruno Tavares (exemplo)",
+      "nextAction": "Confirmar recebimento da proposta",
+      "nextActionAt": "2026-11-11T15:00:00.000Z",
+      "wonProjectId": null,
+      "wonProjectName": null,
+      "lostReason": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "539472f7-3764-492d-bed0-6180239e6abc",
+      "clientId": "eafb3b60-89dc-40ce-abe7-c7680c74b99b",
+      "clientName": "Roberto Sales (exemplo)",
+      "title": "Reforma de cobertura",
+      "stage": "new",
+      "estimatedValueCents": 18500000,
+      "probabilityPercent": 20,
+      "ownerMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "ownerName": "Ana Ribeiro (exemplo)",
+      "nextAction": "Ligar para marcar visita técnica",
+      "nextActionAt": "2026-11-13T15:00:00.000Z",
+      "wonProjectId": null,
+      "wonProjectName": null,
+      "lostReason": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "640e8102-cbfb-4e06-b7bd-7cb0da58a338",
+      "clientId": "43495257-7045-46a1-852a-614cd2f9c7c5",
+      "clientName": "Marina Moreira (exemplo)",
+      "title": "Casa de campo 240 m²",
+      "stage": "negotiation",
+      "estimatedValueCents": 92000000,
+      "probabilityPercent": 70,
+      "ownerMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "ownerName": "Ana Ribeiro (exemplo)",
+      "nextAction": "Enviar cronograma revisado",
+      "nextActionAt": "2026-11-14T15:00:00.000Z",
+      "wonProjectId": null,
+      "wonProjectName": null,
+      "lostReason": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "fbf9cf26-13a5-4f4f-adf6-b328cfa5538a",
+      "clientId": "dfce747e-abf8-4537-a960-506971f2a4a0",
+      "clientName": "Clínica Bem Viver Ltda. (exemplo)",
+      "title": "Retrofit de fachada",
+      "stage": "proposal",
+      "estimatedValueCents": 31000000,
+      "probabilityPercent": 40,
+      "ownerMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "ownerName": "Bruno Tavares (exemplo)",
+      "nextAction": "Agendar apresentação",
+      "nextActionAt": "2026-11-16T15:00:00.000Z",
+      "wonProjectId": null,
+      "wonProjectName": null,
+      "lostReason": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     }
+    ],
+    "stages": [
+     "new",
+     "diagnosis",
+     "proposal",
+     "negotiation",
+     "won",
+     "lost"
+    ]
+   }
+  },
+  "/api/budgets": {
+   "status": 200,
+   "body": {
+    "budgets": [
+     {
+      "id": "65162102-293c-44cd-a798-faa20a62601c",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "code": "ORC-014",
+      "version": 1,
+      "status": "draft",
+      "directCostCents": 6961940,
+      "bdiPercent": 25,
+      "marginPercent": 12,
+      "totalCents": 9746716,
+      "itemCount": 5,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:47"
+     },
+     {
+      "id": "61f8a788-3a50-4603-91f3-6890f998c107",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "code": "ORC-017",
+      "version": 1,
+      "status": "draft",
+      "directCostCents": 1560000,
+      "bdiPercent": 0,
+      "marginPercent": 30,
+      "totalCents": 2960000,
+      "itemCount": 2,
+      "createdAt": "2026-11-12 08:07:47",
+      "updatedAt": "2026-11-12 08:07:47"
+     }
+    ]
+   }
+  },
+  "/api/budget-library": {
+   "status": 200,
+   "body": {
+    "items": [
+     {
+      "id": "8ab65717-1443-4b64-adb5-1da92c47bd43",
+      "code": "ALV-01",
+      "description": "Alvenaria de vedação em bloco cerâmico",
+      "category": "Alvenaria",
+      "unit": "m²",
+      "unitCostCents": 9850,
+      "defaultUnitPriceCents": 12800,
+      "source": "manual",
+      "sourceReference": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "0a08557f-01c3-4f36-9f4b-bddf53513817",
+      "code": "ELE-11",
+      "description": "Ponto de tomada completo",
+      "category": "Elétrica",
+      "unit": "un",
+      "unitCostCents": 14300,
+      "defaultUnitPriceCents": 18600,
+      "source": "manual",
+      "sourceReference": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "890b3f2f-1e5b-4d06-b788-4895c315d8dc",
+      "code": "PIN-03",
+      "description": "Pintura acrílica, duas demãos",
+      "category": "Pintura",
+      "unit": "m²",
+      "unitCostCents": 3240,
+      "defaultUnitPriceCents": 4200,
+      "source": "manual",
+      "sourceReference": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "bab1e262-2e47-4d6e-85f7-d5a2e64707dc",
+      "code": "PIS-02",
+      "description": "Contrapiso em argamassa, 4 cm",
+      "category": "Pisos",
+      "unit": "m²",
+      "unitCostCents": 4620,
+      "defaultUnitPriceCents": 6000,
+      "source": "manual",
+      "sourceReference": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     },
+     {
+      "id": "0a0f0a99-803b-4f85-bf67-dfd757d0439e",
+      "code": "PIS-07",
+      "description": "Porcelanato 80×80 assentado",
+      "category": "Pisos",
+      "unit": "m²",
+      "unitCostCents": 18900,
+      "defaultUnitPriceCents": 24600,
+      "source": "manual",
+      "sourceReference": null,
+      "createdAt": "2026-11-12 08:07:46",
+      "updatedAt": "2026-11-12 08:07:46"
+     }
+    ]
+   }
+  },
+  "/api/budgets/65162102-293c-44cd-a798-faa20a62601c/items": {
+   "status": 200,
+   "body": {
+    "items": [
+     {
+      "id": "3b1f6018-328c-4bd3-803f-053f80c9c3fd",
+      "code": "ALV-01",
+      "description": "Alvenaria de vedação em bloco cerâmico",
+      "unit": "m²",
+      "quantity": 186,
+      "unitCostCents": 9850,
+      "unitPriceCents": 13790,
+      "source": "library",
+      "sourceReference": null,
+      "sortOrder": 0,
+      "totalCents": 2564940
+     },
+     {
+      "id": "e879998b-5cfe-47f1-b6be-1d4890ce1293",
+      "code": "PIS-02",
+      "description": "Contrapiso em argamassa, 4 cm",
+      "unit": "m²",
+      "quantity": 142,
+      "unitCostCents": 4620,
+      "unitPriceCents": 6468,
+      "source": "library",
+      "sourceReference": null,
+      "sortOrder": 1,
+      "totalCents": 918456
+     },
+     {
+      "id": "27799d6e-68ff-4633-ab62-ecdeb527eee8",
+      "code": "PIS-07",
+      "description": "Porcelanato 80×80 assentado",
+      "unit": "m²",
+      "quantity": 118,
+      "unitCostCents": 18900,
+      "unitPriceCents": 26460,
+      "source": "library",
+      "sourceReference": null,
+      "sortOrder": 2,
+      "totalCents": 3122280
+     },
+     {
+      "id": "be665d62-c6ee-4685-9f2f-8a104047d363",
+      "code": "ELE-11",
+      "description": "Ponto de tomada completo",
+      "unit": "un",
+      "quantity": 64,
+      "unitCostCents": 14300,
+      "unitPriceCents": 20020,
+      "source": "library",
+      "sourceReference": null,
+      "sortOrder": 3,
+      "totalCents": 1281280
+     },
+     {
+      "id": "d8db4a0b-7c9b-43c7-a93e-0265ba1e9163",
+      "code": "PIN-03",
+      "description": "Pintura acrílica, duas demãos",
+      "unit": "m²",
+      "quantity": 410,
+      "unitCostCents": 3240,
+      "unitPriceCents": 4536,
+      "source": "library",
+      "sourceReference": null,
+      "sortOrder": 4,
+      "totalCents": 1859760
+     }
+    ]
+   }
+  },
+  "/api/budgets/61f8a788-3a50-4603-91f3-6890f998c107/items": {
+   "status": 200,
+   "body": {
+    "items": [
+     {
+      "id": "fdc77948-8a0d-45d4-a6e5-faf676a63056",
+      "code": null,
+      "description": "Projeto executivo de arquitetura",
+      "unit": "vb",
+      "quantity": 1,
+      "unitCostCents": 1400000,
+      "unitPriceCents": 2600000,
+      "source": "manual",
+      "sourceReference": null,
+      "sortOrder": 0,
+      "totalCents": 2600000
+     },
+     {
+      "id": "75cdabe8-49f4-4ff5-80fc-9db3dc1c515c",
+      "code": null,
+      "description": "Acompanhamento de obra",
+      "unit": "visita",
+      "quantity": 8,
+      "unitCostCents": 20000,
+      "unitPriceCents": 45000,
+      "source": "manual",
+      "sourceReference": null,
+      "sortOrder": 1,
+      "totalCents": 360000
+     }
+    ]
+   }
+  },
+  "/api/proposals": {
+   "status": 200,
+   "body": {
+    "proposals": [
+     {
+      "id": "8cf1b575-31bc-4442-8d4f-7cbe77c8bc26",
+      "code": "PROP-0002",
+      "title": "Reforma de cobertura — estudo inicial",
+      "status": "draft",
+      "projectId": null,
+      "projectName": null,
+      "clientId": "eafb3b60-89dc-40ce-abe7-c7680c74b99b",
+      "clientName": "Roberto Sales (exemplo)",
+      "budgetVersionId": null,
+      "recipientName": "Roberto Sales (exemplo)",
+      "recipientEmail": "roberto@cliente.example",
+      "recipientPhone": "(11) 90000-0005",
+      "totalCents": 0,
+      "validityDays": 15,
+      "scheduledAt": null,
+      "scheduledChannel": null,
+      "issuedAt": null,
+      "sentAt": null,
+      "sentChannel": null,
+      "firstViewedAt": null,
+      "lastViewedAt": null,
+      "viewCount": 0,
+      "acceptedAt": null,
+      "acceptedName": null,
+      "acceptedDocument": null,
+      "unseenNotice": false,
+      "createdByName": "Ana Ribeiro (exemplo)",
+      "createdAt": 1794470867629,
+      "updatedAt": 1794470867629,
+      "link": null
+     },
+     {
+      "id": "ee305b5f-e94a-4b42-9abf-da4670aa0024",
+      "code": "PROP-0001",
+      "title": "Projeto Apartamento Vista Parque",
+      "status": "draft",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectName": "Apartamento Vista Parque",
+      "clientId": "43495257-7045-46a1-852a-614cd2f9c7c5",
+      "clientName": "Marina Moreira (exemplo)",
+      "budgetVersionId": "61f8a788-3a50-4603-91f3-6890f998c107",
+      "recipientName": "Marina Moreira (exemplo)",
+      "recipientEmail": "marina@cliente.example",
+      "recipientPhone": "(11) 90000-0002",
+      "totalCents": 2960000,
+      "validityDays": 15,
+      "scheduledAt": null,
+      "scheduledChannel": null,
+      "issuedAt": null,
+      "sentAt": null,
+      "sentChannel": null,
+      "firstViewedAt": null,
+      "lastViewedAt": null,
+      "viewCount": 0,
+      "acceptedAt": null,
+      "acceptedName": null,
+      "acceptedDocument": null,
+      "unseenNotice": false,
+      "createdByName": "Ana Ribeiro (exemplo)",
+      "createdAt": 1794470867609,
+      "updatedAt": 1794470867609,
+      "link": null
+     }
+    ],
+    "now": 1794470871529
+   }
+  },
+  "/api/proposals/ee305b5f-e94a-4b42-9abf-da4670aa0024": {
+   "status": 200,
+   "body": {
+    "proposal": {
+     "id": "ee305b5f-e94a-4b42-9abf-da4670aa0024",
+     "code": "PROP-0001",
+     "title": "Projeto Apartamento Vista Parque",
+     "status": "draft",
+     "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+     "projectName": "Apartamento Vista Parque",
+     "clientId": "43495257-7045-46a1-852a-614cd2f9c7c5",
+     "clientName": "Marina Moreira (exemplo)",
+     "budgetVersionId": "61f8a788-3a50-4603-91f3-6890f998c107",
+     "recipientName": "Marina Moreira (exemplo)",
+     "recipientEmail": "marina@cliente.example",
+     "recipientPhone": "(11) 90000-0002",
+     "totalCents": 2960000,
+     "validityDays": 15,
+     "scheduledAt": null,
+     "scheduledChannel": null,
+     "issuedAt": null,
+     "sentAt": null,
+     "sentChannel": null,
+     "firstViewedAt": null,
+     "lastViewedAt": null,
+     "viewCount": 0,
+     "acceptedAt": null,
+     "acceptedName": null,
+     "acceptedDocument": null,
+     "unseenNotice": false,
+     "createdByName": "Ana Ribeiro (exemplo)",
+     "createdAt": 1794470867609,
+     "updatedAt": 1794470867609,
+     "link": null,
+     "content": {
+      "heading": "Proposta comercial",
+      "sectionsBefore": [
+       {
+        "id": "bb586f51-832",
+        "title": "Apresentação",
+        "body": "Agradecemos a oportunidade de apresentar esta proposta. A seguir estão o escopo, os valores e as condições para a realização do trabalho."
+       },
+       {
+        "id": "bb1dc5de-479",
+        "title": "Escopo dos serviços",
+        "body": ""
+       }
+      ],
+      "itemsTitle": "Investimento",
+      "items": [
+       {
+        "id": "04039327-919",
+        "description": "Projeto executivo de arquitetura",
+        "unit": "vb",
+        "quantity": 1,
+        "unitPriceCents": 2600000
+       },
+       {
+        "id": "429885c5-e71",
+        "description": "Acompanhamento de obra",
+        "unit": "visita",
+        "quantity": 8,
+        "unitPriceCents": 45000
+       }
+      ],
+      "discountCents": 0,
+      "sectionsAfter": [
+       {
+        "id": "b5b68e09-8da",
+        "title": "Prazo de execução",
+        "body": ""
+       },
+       {
+        "id": "2aa355ab-8dc",
+        "title": "Condições de pagamento",
+        "body": ""
+       },
+       {
+        "id": "0139a690-0b3",
+        "title": "Observações",
+        "body": "Valores válidos até a data de validade desta proposta. Serviços não descritos no escopo serão orçados à parte."
+       }
+      ],
+      "closing": "Ficamos à disposição para esclarecer qualquer ponto."
+     }
+    }
+   }
+  },
+  "/api/studio": {
+   "status": 200,
+   "body": {
+    "pranchas": [
+     {
+      "id": "62958b53-15da-4a57-aa29-f876773f6fd0",
+      "nome": "Planta de exemplo — térreo",
+      "especie": "planta",
+      "revisao": 1,
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "projectCode": "OBR-014",
+      "autor": "Ana Ribeiro (exemplo)",
+      "criadoEm": "2026-11-12 08:07:47",
+      "atualizadoEm": "2026-11-12 08:07:47"
+     }
+    ]
+   }
+  },
+  "/api/studio/62958b53-15da-4a57-aa29-f876773f6fd0": {
+   "status": 200,
+   "body": {
+    "prancha": {
+     "id": "62958b53-15da-4a57-aa29-f876773f6fd0",
+     "nome": "Planta de exemplo — térreo",
+     "especie": "planta",
+     "revisao": 1,
+     "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+     "projectName": "Casa Jardim das Acácias",
+     "projectCode": "OBR-014",
+     "autor": "Ana Ribeiro (exemplo)",
+     "criadoEm": "2026-11-12 08:07:47",
+     "atualizadoEm": "2026-11-12 08:07:47",
+     "documento": {
+      "folhaLarguraMm": 841,
+      "folhaAlturaMm": 594,
+      "escala": 50,
+      "malhaMm": 100,
+      "camadas": [
+       {
+        "id": "layout",
+        "nome": "Layout e arquitetura",
+        "disciplina": "layout",
+        "visivel": true,
+        "bloqueada": false
+       },
+       {
+        "id": "eletrico",
+        "nome": "Elétrico",
+        "disciplina": "eletrico",
+        "visivel": true,
+        "bloqueada": false
+       },
+       {
+        "id": "luminotecnico",
+        "nome": "Luminotécnico",
+        "disciplina": "luminotecnico",
+        "visivel": true,
+        "bloqueada": false
+       },
+       {
+        "id": "mobiliario",
+        "nome": "Mobiliário e interiores",
+        "disciplina": "mobiliario",
+        "visivel": true,
+        "bloqueada": false
+       },
+       {
+        "id": "anotacao",
+        "nome": "Anotações e cotas",
+        "disciplina": "anotacao",
+        "visivel": true,
+        "bloqueada": false
+       }
+      ],
+      "elementos": [],
+      "fundo": null
+     }
+    }
+   }
+  },
+  "/api/studio/assets": {
+   "status": 200,
+   "body": {
+    "itens": []
+   }
+  },
+  "/api/layouts": {
+   "status": 200,
+   "body": {
+    "layouts": [
+     {
+      "id": "02d9cdb8-707b-426d-b61f-5a972f3a225b",
+      "name": "Apartamento compacto",
+      "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "projectCode": "PRJ-017",
+      "projectName": "Apartamento Vista Parque",
+      "revision": 1,
+      "createdByName": "Ana Ribeiro (exemplo)",
+      "updatedByName": "Ana Ribeiro (exemplo)",
+      "createdAt": "2026-11-12T08:07:48.079Z",
+      "updatedAt": "2026-11-12T08:07:48.079Z",
+      "itens": 15,
+      "comodos": 4,
+      "areaM2": 43.2
+     },
+     {
+      "id": "311ef80b-429a-426e-84e8-826f78e28c8e",
+      "name": "Casa térrea com garagem",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectCode": "OBR-014",
+      "projectName": "Casa Jardim das Acácias",
+      "revision": 1,
+      "createdByName": "Ana Ribeiro (exemplo)",
+      "updatedByName": "Ana Ribeiro (exemplo)",
+      "createdAt": "2026-11-12T08:07:48.037Z",
+      "updatedAt": "2026-11-12T08:07:48.037Z",
+      "itens": 20,
+      "comodos": 5,
+      "areaM2": 102.5
+     }
+    ]
+   }
+  },
+  "/api/layouts/311ef80b-429a-426e-84e8-826f78e28c8e": {
+   "status": 200,
+   "body": {
+    "layout": {
+     "id": "311ef80b-429a-426e-84e8-826f78e28c8e",
+     "name": "Casa térrea com garagem",
+     "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+     "projectCode": "OBR-014",
+     "projectName": "Casa Jardim das Acácias",
+     "revision": 1,
+     "createdByName": "Ana Ribeiro (exemplo)",
+     "updatedByName": "Ana Ribeiro (exemplo)",
+     "createdAt": "2026-11-12T08:07:48.037Z",
+     "updatedAt": "2026-11-12T08:07:48.037Z",
+     "itens": 20,
+     "comodos": 5,
+     "areaM2": 102.5,
+     "content": {
+      "versao": 1,
+      "paredes": [
+       {
+        "id": "pa-5c2a7c9b-58b",
+        "a": {
+         "x": 0,
+         "y": 0
+        },
+        "b": {
+         "x": 7000,
+         "y": 0
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-c7e039a3-11d",
+        "a": {
+         "x": 7000,
+         "y": 0
+        },
+        "b": {
+         "x": 7000,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-4a4ee432-40e",
+        "a": {
+         "x": 7000,
+         "y": 5000
+        },
+        "b": {
+         "x": 0,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-c84092c8-a8c",
+        "a": {
+         "x": 0,
+         "y": 5000
+        },
+        "b": {
+         "x": 0,
+         "y": 0
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-654911c2-0a9",
+        "a": {
+         "x": 3500,
+         "y": 5000
+        },
+        "b": {
+         "x": 3500,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-60366acf-880",
+        "a": {
+         "x": 3500,
+         "y": 8500
+        },
+        "b": {
+         "x": 0,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-74beb330-ffd",
+        "a": {
+         "x": 0,
+         "y": 8500
+        },
+        "b": {
+         "x": 0,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-44425b88-81d",
+        "a": {
+         "x": 7000,
+         "y": 5000
+        },
+        "b": {
+         "x": 7000,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-09fd944d-06e",
+        "a": {
+         "x": 7000,
+         "y": 8500
+        },
+        "b": {
+         "x": 3500,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-892da4ed-52c",
+        "a": {
+         "x": 7000,
+         "y": 5000
+        },
+        "b": {
+         "x": 9000,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-d151b47c-d35",
+        "a": {
+         "x": 9000,
+         "y": 5000
+        },
+        "b": {
+         "x": 9000,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-f4c1c40b-a42",
+        "a": {
+         "x": 9000,
+         "y": 8500
+        },
+        "b": {
+         "x": 7000,
+         "y": 8500
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-39e242a8-b61",
+        "a": {
+         "x": 7000,
+         "y": -1000
+        },
+        "b": {
+         "x": 13000,
+         "y": -1000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-22060202-851",
+        "a": {
+         "x": 13000,
+         "y": -1000
+        },
+        "b": {
+         "x": 13000,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-c9e0a594-2f5",
+        "a": {
+         "x": 13000,
+         "y": 5000
+        },
+        "b": {
+         "x": 9000,
+         "y": 5000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-28d178bf-934",
+        "a": {
+         "x": 7000,
+         "y": 0
+        },
+        "b": {
+         "x": 7000,
+         "y": -1000
+        },
+        "espessura": 150,
+        "altura": 2800
+       }
+      ],
+      "aberturas": [
+       {
+        "id": "ab-5bbfa9c8-2b3",
+        "paredeId": "pa-5c2a7c9b-58b",
+        "tipo": "porta",
+        "posicao": 2000,
+        "largura": 900,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-4ef1afe6-0b3",
+        "paredeId": "pa-5c2a7c9b-58b",
+        "tipo": "janela",
+        "posicao": 4800,
+        "largura": 2000,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-9f6cb6c8-9aa",
+        "paredeId": "pa-c84092c8-a8c",
+        "tipo": "janela",
+        "posicao": 2500,
+        "largura": 1500,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-b4511e56-856",
+        "paredeId": "pa-4a4ee432-40e",
+        "tipo": "porta",
+        "posicao": 5250,
+        "largura": 800,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-8f44f8db-a58",
+        "paredeId": "pa-60366acf-880",
+        "tipo": "janela",
+        "posicao": 1750,
+        "largura": 1200,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-029f3360-3d8",
+        "paredeId": "pa-4a4ee432-40e",
+        "tipo": "porta",
+        "posicao": 1750,
+        "largura": 800,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-0c64881a-b6c",
+        "paredeId": "pa-09fd944d-06e",
+        "tipo": "janela",
+        "posicao": 1750,
+        "largura": 1200,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-04a92cd7-d4d",
+        "paredeId": "pa-44425b88-81d",
+        "tipo": "porta",
+        "posicao": 1200,
+        "largura": 700,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-3da7696c-b79",
+        "paredeId": "pa-d151b47c-d35",
+        "tipo": "janela",
+        "posicao": 1750,
+        "largura": 600,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-d09e145f-d7c",
+        "paredeId": "pa-c9e0a594-2f5",
+        "tipo": "portao",
+        "posicao": 2000,
+        "largura": 4000,
+        "altura": 2300,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-43fa43f2-7c5",
+        "paredeId": "pa-c7e039a3-11d",
+        "tipo": "porta",
+        "posicao": 2500,
+        "largura": 900,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       }
+      ],
+      "comodos": [
+       {
+        "id": "co-aec29372-b48",
+        "nome": "Sala e cozinha",
+        "pontos": [
+         {
+          "x": 0,
+          "y": 0
+         },
+         {
+          "x": 7000,
+          "y": 0
+         },
+         {
+          "x": 7000,
+          "y": 5000
+         },
+         {
+          "x": 0,
+          "y": 5000
+         }
+        ],
+        "piso": "porcelanato"
+       },
+       {
+        "id": "co-70dcf81e-f2f",
+        "nome": "Quarto 1",
+        "pontos": [
+         {
+          "x": 0,
+          "y": 5000
+         },
+         {
+          "x": 3500,
+          "y": 5000
+         },
+         {
+          "x": 3500,
+          "y": 8500
+         },
+         {
+          "x": 0,
+          "y": 8500
+         }
+        ],
+        "piso": "madeira"
+       },
+       {
+        "id": "co-3034bd5e-63a",
+        "nome": "Quarto 2",
+        "pontos": [
+         {
+          "x": 3500,
+          "y": 5000
+         },
+         {
+          "x": 7000,
+          "y": 5000
+         },
+         {
+          "x": 7000,
+          "y": 8500
+         },
+         {
+          "x": 3500,
+          "y": 8500
+         }
+        ],
+        "piso": "madeira"
+       },
+       {
+        "id": "co-0c1de49c-b4f",
+        "nome": "Banheiro",
+        "pontos": [
+         {
+          "x": 7000,
+          "y": 5000
+         },
+         {
+          "x": 9000,
+          "y": 5000
+         },
+         {
+          "x": 9000,
+          "y": 8500
+         },
+         {
+          "x": 7000,
+          "y": 8500
+         }
+        ],
+        "piso": "ceramica"
+       },
+       {
+        "id": "co-692851f1-fe7",
+        "nome": "Garagem",
+        "pontos": [
+         {
+          "x": 7000,
+          "y": -1000
+         },
+         {
+          "x": 13000,
+          "y": -1000
+         },
+         {
+          "x": 13000,
+          "y": 5000
+         },
+         {
+          "x": 7000,
+          "y": 5000
+         }
+        ],
+        "piso": "cimento"
+       }
+      ],
+      "itens": [
+       {
+        "id": "it-8be13f84-503",
+        "catalogo": "sofa-3",
+        "x": 1800,
+        "y": 1300,
+        "rotacao": 0,
+        "largura": 2100,
+        "profundidade": 900,
+        "altura": 850,
+        "cor": "#8c7b6b",
+        "rotulo": ""
+       },
+       {
+        "id": "it-1b819b43-dbb",
+        "catalogo": "tapete",
+        "x": 1800,
+        "y": 2500,
+        "rotacao": 0,
+        "largura": 3000,
+        "profundidade": 2000,
+        "altura": 10,
+        "cor": "#c9b79c",
+        "rotulo": ""
+       },
+       {
+        "id": "it-0856f30f-857",
+        "catalogo": "mesa-centro",
+        "x": 1800,
+        "y": 2500,
+        "rotacao": 0,
+        "largura": 1000,
+        "profundidade": 600,
+        "altura": 400,
+        "cor": "#6b4f3a",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-ad126fb6-cc5",
+        "catalogo": "rack-tv",
+        "x": 1800,
+        "y": 4700,
+        "rotacao": 180,
+        "largura": 1800,
+        "profundidade": 450,
+        "altura": 1300,
+        "cor": "#5a4636",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-cfe25067-cbb",
+        "catalogo": "mesa-4",
+        "x": 4600,
+        "y": 1500,
+        "rotacao": 0,
+        "largura": 1200,
+        "profundidade": 800,
+        "altura": 750,
+        "cor": "#7a5c43",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-d533863c-bb3",
+        "catalogo": "bancada-pia",
+        "x": 5300,
+        "y": 4625,
+        "rotacao": 180,
+        "largura": 1500,
+        "profundidade": 600,
+        "altura": 900,
+        "cor": "#e9e4dc",
+        "rotulo": "",
+        "material": "granito"
+       },
+       {
+        "id": "it-ba9e5e3a-135",
+        "catalogo": "geladeira",
+        "x": 6550,
+        "y": 4550,
+        "rotacao": 180,
+        "largura": 700,
+        "profundidade": 750,
+        "altura": 1800,
+        "cor": "#d5d7d8",
+        "rotulo": ""
+       },
+       {
+        "id": "it-8995f2f8-a58",
+        "catalogo": "fogao-4",
+        "x": 4200,
+        "y": 4625,
+        "rotacao": 180,
+        "largura": 550,
+        "profundidade": 600,
+        "altura": 850,
+        "cor": "#dcdcdc",
+        "rotulo": ""
+       },
+       {
+        "id": "it-e7ed8b45-064",
+        "catalogo": "cama-queen",
+        "x": 1750,
+        "y": 7400,
+        "rotacao": 180,
+        "largura": 1580,
+        "profundidade": 1980,
+        "altura": 550,
+        "cor": "#e8e1d4",
+        "rotulo": ""
+       },
+       {
+        "id": "it-0227abc7-2ca",
+        "catalogo": "criado",
+        "x": 600,
+        "y": 8025,
+        "rotacao": 180,
+        "largura": 500,
+        "profundidade": 400,
+        "altura": 550,
+        "cor": "#7a5c43",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-146640a1-3b7",
+        "catalogo": "guarda-roupa",
+        "x": 1750,
+        "y": 5400,
+        "rotacao": 0,
+        "largura": 2000,
+        "profundidade": 600,
+        "altura": 2300,
+        "cor": "#d9d2c5",
+        "rotulo": "",
+        "material": "laca"
+       },
+       {
+        "id": "it-5eae762b-338",
+        "catalogo": "cama-solteiro",
+        "x": 4300,
+        "y": 7475,
+        "rotacao": 180,
+        "largura": 880,
+        "profundidade": 1880,
+        "altura": 550,
+        "cor": "#e8e1d4",
+        "rotulo": ""
+       },
+       {
+        "id": "it-ff7ba4ea-289",
+        "catalogo": "escrivaninha",
+        "x": 6575,
+        "y": 6200,
+        "rotacao": 90,
+        "largura": 1400,
+        "profundidade": 700,
+        "altura": 750,
+        "cor": "#8a6a4f",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-ed3b2be8-710",
+        "catalogo": "vaso",
+        "x": 8600,
+        "y": 6000,
+        "rotacao": 90,
+        "largura": 380,
+        "profundidade": 650,
+        "altura": 780,
+        "cor": "#f7f7f5",
+        "rotulo": ""
+       },
+       {
+        "id": "it-6ab9e4cb-cd5",
+        "catalogo": "lavatorio",
+        "x": 7300,
+        "y": 7300,
+        "rotacao": 270,
+        "largura": 800,
+        "profundidade": 450,
+        "altura": 850,
+        "cor": "#8a6a4f",
+        "rotulo": "",
+        "material": "marmore"
+       },
+       {
+        "id": "it-5cdfcb99-186",
+        "catalogo": "box",
+        "x": 8425,
+        "y": 7825,
+        "rotacao": 0,
+        "largura": 900,
+        "profundidade": 1200,
+        "altura": 1900,
+        "cor": "#bfe0ea",
+        "rotulo": ""
+       },
+       {
+        "id": "it-49a06b9a-c68",
+        "catalogo": "carro-seda",
+        "x": 8600,
+        "y": 2000,
+        "rotacao": 0,
+        "largura": 1800,
+        "profundidade": 4600,
+        "altura": 1480,
+        "cor": "#2b4c7e",
+        "rotulo": ""
+       },
+       {
+        "id": "it-021e9b59-689",
+        "catalogo": "carro-suv",
+        "x": 11400,
+        "y": 2000,
+        "rotacao": 0,
+        "largura": 1900,
+        "profundidade": 4700,
+        "altura": 1700,
+        "cor": "#3a3d40",
+        "rotulo": ""
+       },
+       {
+        "id": "it-ab3cfb85-a03",
+        "catalogo": "arvore",
+        "x": -2500,
+        "y": 1500,
+        "rotacao": 0,
+        "largura": 3000,
+        "profundidade": 3000,
+        "altura": 5000,
+        "cor": "#4f7942",
+        "rotulo": ""
+       },
+       {
+        "id": "it-527703a3-6c5",
+        "catalogo": "planta",
+        "x": 6500,
+        "y": 500,
+        "rotacao": 0,
+        "largura": 600,
+        "profundidade": 600,
+        "altura": 1200,
+        "cor": "#5b8c51",
+        "rotulo": ""
+       }
+      ]
+     }
+    }
+   }
+  },
+  "/api/layouts/02d9cdb8-707b-426d-b61f-5a972f3a225b": {
+   "status": 200,
+   "body": {
+    "layout": {
+     "id": "02d9cdb8-707b-426d-b61f-5a972f3a225b",
+     "name": "Apartamento compacto",
+     "projectId": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+     "projectCode": "PRJ-017",
+     "projectName": "Apartamento Vista Parque",
+     "revision": 1,
+     "createdByName": "Ana Ribeiro (exemplo)",
+     "updatedByName": "Ana Ribeiro (exemplo)",
+     "createdAt": "2026-11-12T08:07:48.079Z",
+     "updatedAt": "2026-11-12T08:07:48.079Z",
+     "itens": 15,
+     "comodos": 4,
+     "areaM2": 43.2,
+     "content": {
+      "versao": 1,
+      "paredes": [
+       {
+        "id": "pa-3b296ff6-6df",
+        "a": {
+         "x": 0,
+         "y": 0
+        },
+        "b": {
+         "x": 6000,
+         "y": 0
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-7e39101e-291",
+        "a": {
+         "x": 6000,
+         "y": 0
+        },
+        "b": {
+         "x": 6000,
+         "y": 4000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-b4490c04-7fb",
+        "a": {
+         "x": 6000,
+         "y": 4000
+        },
+        "b": {
+         "x": 0,
+         "y": 4000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-cf3ee73a-65d",
+        "a": {
+         "x": 0,
+         "y": 4000
+        },
+        "b": {
+         "x": 0,
+         "y": 0
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-ca62bd1f-057",
+        "a": {
+         "x": 3500,
+         "y": 4000
+        },
+        "b": {
+         "x": 3500,
+         "y": 7200
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-721c8d62-2f7",
+        "a": {
+         "x": 3500,
+         "y": 7200
+        },
+        "b": {
+         "x": 0,
+         "y": 7200
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-db533044-128",
+        "a": {
+         "x": 0,
+         "y": 7200
+        },
+        "b": {
+         "x": 0,
+         "y": 4000
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-64f31727-e87",
+        "a": {
+         "x": 6000,
+         "y": 4000
+        },
+        "b": {
+         "x": 6000,
+         "y": 5800
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-d08746d9-cb4",
+        "a": {
+         "x": 6000,
+         "y": 5800
+        },
+        "b": {
+         "x": 3500,
+         "y": 5800
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-8eef6935-d43",
+        "a": {
+         "x": 6000,
+         "y": 5800
+        },
+        "b": {
+         "x": 6000,
+         "y": 7200
+        },
+        "espessura": 150,
+        "altura": 2800
+       },
+       {
+        "id": "pa-2f858dd0-1b3",
+        "a": {
+         "x": 6000,
+         "y": 7200
+        },
+        "b": {
+         "x": 3500,
+         "y": 7200
+        },
+        "espessura": 150,
+        "altura": 2800
+       }
+      ],
+      "aberturas": [
+       {
+        "id": "ab-a5912df2-6cc",
+        "paredeId": "pa-3b296ff6-6df",
+        "tipo": "porta",
+        "posicao": 3000,
+        "largura": 900,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-32a3b346-c49",
+        "paredeId": "pa-cf3ee73a-65d",
+        "tipo": "janela",
+        "posicao": 2000,
+        "largura": 2000,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-1f3ec23a-429",
+        "paredeId": "pa-b4490c04-7fb",
+        "tipo": "porta",
+        "posicao": 3200,
+        "largura": 800,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-ea463d78-726",
+        "paredeId": "pa-db533044-128",
+        "tipo": "janela",
+        "posicao": 1600,
+        "largura": 1500,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       },
+       {
+        "id": "ab-788c03bc-9a0",
+        "paredeId": "pa-b4490c04-7fb",
+        "tipo": "porta",
+        "posicao": 1600,
+        "largura": 700,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-663d6aa4-5a6",
+        "paredeId": "pa-ca62bd1f-057",
+        "tipo": "porta",
+        "posicao": 2500,
+        "largura": 700,
+        "altura": 2100,
+        "peitoril": 0,
+        "inverter": false
+       },
+       {
+        "id": "ab-06e2bb41-fdf",
+        "paredeId": "pa-8eef6935-d43",
+        "tipo": "janela",
+        "posicao": 700,
+        "largura": 800,
+        "altura": 1200,
+        "peitoril": 1000,
+        "inverter": false
+       }
+      ],
+      "comodos": [
+       {
+        "id": "co-9a482cd4-dd7",
+        "nome": "Sala e cozinha",
+        "pontos": [
+         {
+          "x": 0,
+          "y": 0
+         },
+         {
+          "x": 6000,
+          "y": 0
+         },
+         {
+          "x": 6000,
+          "y": 4000
+         },
+         {
+          "x": 0,
+          "y": 4000
+         }
+        ],
+        "piso": "porcelanato"
+       },
+       {
+        "id": "co-3e5a7f87-a38",
+        "nome": "Quarto",
+        "pontos": [
+         {
+          "x": 0,
+          "y": 4000
+         },
+         {
+          "x": 3500,
+          "y": 4000
+         },
+         {
+          "x": 3500,
+          "y": 7200
+         },
+         {
+          "x": 0,
+          "y": 7200
+         }
+        ],
+        "piso": "madeira"
+       },
+       {
+        "id": "co-ee307a4b-010",
+        "nome": "Banheiro",
+        "pontos": [
+         {
+          "x": 3500,
+          "y": 4000
+         },
+         {
+          "x": 6000,
+          "y": 4000
+         },
+         {
+          "x": 6000,
+          "y": 5800
+         },
+         {
+          "x": 3500,
+          "y": 5800
+         }
+        ],
+        "piso": "ceramica"
+       },
+       {
+        "id": "co-2bd2da8e-595",
+        "nome": "Área de serviço",
+        "pontos": [
+         {
+          "x": 3500,
+          "y": 5800
+         },
+         {
+          "x": 6000,
+          "y": 5800
+         },
+         {
+          "x": 6000,
+          "y": 7200
+         },
+         {
+          "x": 3500,
+          "y": 7200
+         }
+        ],
+        "piso": "ceramica"
+       }
+      ],
+      "itens": [
+       {
+        "id": "it-9335e663-6b9",
+        "catalogo": "sofa-2",
+        "x": 1500,
+        "y": 1100,
+        "rotacao": 0,
+        "largura": 1600,
+        "profundidade": 900,
+        "altura": 850,
+        "cor": "#8c7b6b",
+        "rotulo": ""
+       },
+       {
+        "id": "it-3c19f178-617",
+        "catalogo": "rack-tv",
+        "x": 1500,
+        "y": 3700,
+        "rotacao": 180,
+        "largura": 1800,
+        "profundidade": 450,
+        "altura": 1300,
+        "cor": "#5a4636",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-b257c7a7-5ff",
+        "catalogo": "poltrona",
+        "x": 550,
+        "y": 2300,
+        "rotacao": 270,
+        "largura": 800,
+        "profundidade": 800,
+        "altura": 850,
+        "cor": "#b5835a",
+        "rotulo": ""
+       },
+       {
+        "id": "it-59fe101c-723",
+        "catalogo": "bancada-pia",
+        "x": 4800,
+        "y": 375,
+        "rotacao": 0,
+        "largura": 1500,
+        "profundidade": 600,
+        "altura": 900,
+        "cor": "#e9e4dc",
+        "rotulo": "",
+        "material": "granito"
+       },
+       {
+        "id": "it-28a4ebf1-b1f",
+        "catalogo": "geladeira",
+        "x": 5550,
+        "y": 1400,
+        "rotacao": 90,
+        "largura": 700,
+        "profundidade": 750,
+        "altura": 1800,
+        "cor": "#d5d7d8",
+        "rotulo": ""
+       },
+       {
+        "id": "it-21ef2a60-aea",
+        "catalogo": "cooktop",
+        "x": 4700,
+        "y": 1700,
+        "rotacao": 180,
+        "largura": 1200,
+        "profundidade": 600,
+        "altura": 900,
+        "cor": "#e9e4dc",
+        "rotulo": "",
+        "material": "granito"
+       },
+       {
+        "id": "it-611f9caf-526",
+        "catalogo": "mesa-redonda",
+        "x": 4200,
+        "y": 3000,
+        "rotacao": 0,
+        "largura": 1100,
+        "profundidade": 1100,
+        "altura": 750,
+        "cor": "#7a5c43",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-e9e84e88-948",
+        "catalogo": "cama-casal",
+        "x": 1750,
+        "y": 5100,
+        "rotacao": 0,
+        "largura": 1380,
+        "profundidade": 1880,
+        "altura": 550,
+        "cor": "#e8e1d4",
+        "rotulo": ""
+       },
+       {
+        "id": "it-31de9f33-255",
+        "catalogo": "criado",
+        "x": 600,
+        "y": 4300,
+        "rotacao": 0,
+        "largura": 500,
+        "profundidade": 400,
+        "altura": 550,
+        "cor": "#7a5c43",
+        "rotulo": "",
+        "material": "madeira"
+       },
+       {
+        "id": "it-0753e3a1-ca8",
+        "catalogo": "guarda-roupa",
+        "x": 1750,
+        "y": 6825,
+        "rotacao": 180,
+        "largura": 2000,
+        "profundidade": 600,
+        "altura": 2300,
+        "cor": "#d9d2c5",
+        "rotulo": "",
+        "material": "laca"
+       },
+       {
+        "id": "it-78880e1f-0a6",
+        "catalogo": "vaso",
+        "x": 5600,
+        "y": 4350,
+        "rotacao": 90,
+        "largura": 380,
+        "profundidade": 650,
+        "altura": 780,
+        "cor": "#f7f7f5",
+        "rotulo": ""
+       },
+       {
+        "id": "it-82ad02c2-96d",
+        "catalogo": "lavatorio",
+        "x": 3800,
+        "y": 5300,
+        "rotacao": 270,
+        "largura": 800,
+        "profundidade": 450,
+        "altura": 850,
+        "cor": "#8a6a4f",
+        "rotulo": "",
+        "material": "marmore"
+       },
+       {
+        "id": "it-10fe33a2-ea9",
+        "catalogo": "box",
+        "x": 5425,
+        "y": 5150,
+        "rotacao": 0,
+        "largura": 900,
+        "profundidade": 1200,
+        "altura": 1900,
+        "cor": "#bfe0ea",
+        "rotulo": ""
+       },
+       {
+        "id": "it-c5d13acd-4e9",
+        "catalogo": "maquina-lavar",
+        "x": 5575,
+        "y": 6800,
+        "rotacao": 180,
+        "largura": 600,
+        "profundidade": 650,
+        "altura": 1000,
+        "cor": "#f1f1f1",
+        "rotulo": ""
+       },
+       {
+        "id": "it-5e9f1cc5-eb6",
+        "catalogo": "tanque",
+        "x": 4800,
+        "y": 6825,
+        "rotacao": 180,
+        "largura": 600,
+        "profundidade": 550,
+        "altura": 900,
+        "cor": "#e9e9e6",
+        "rotulo": ""
+       }
+      ]
+     }
+    }
+   }
+  },
+  "/api/conversas": {
+   "status": 200,
+   "body": {
+    "me": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+    "conversations": [
+     {
+      "id": "d3a406c6-4d64-425a-b452-6f647712846e",
+      "kind": "canal",
+      "name": "Geral",
+      "otherMemberId": null,
+      "lastMessageAt": "2026-11-12T08:07:49.897Z",
+      "lastPreview": "Ana Ribeiro (exemplo): A prancha de layout da Loja Conceito fica pronta amanhã cedo.",
+      "unread": 0,
+      "canDelete": false
+     }
+    ],
+    "members": [
+     {
+      "id": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+      "name": "Bruno Tavares (exemplo)"
+     },
+     {
+      "id": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+      "name": "Carla Nunes (exemplo)"
+     },
+     {
+      "id": "434058c4-8f74-4c7c-b0d4-954a2f9e72ae",
+      "name": "Diego Prado (exemplo)"
+     }
+    ],
+    "unreadTotal": 0
+   }
+  },
+  "/api/conversas/d3a406c6-4d64-425a-b452-6f647712846e/mensagens": {
+   "status": 200,
+   "body": {
+    "messages": [
+     {
+      "id": "53a66321-5cc9-4398-8334-539bc0edf7bc",
+      "channelId": "d3a406c6-4d64-425a-b452-6f647712846e",
+      "authorMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "authorName": "Ana Ribeiro (exemplo)",
+      "clientKey": "85769d40-cf73-4837-85ad-a441001f14ba",
+      "body": "Bom dia! A medição da alvenaria da Casa Jardim das Acácias fecha hoje.",
+      "kind": "mensagem",
+      "createdAt": "2026-11-12T08:07:49.813Z",
+      "editedAt": null,
+      "deleted": false,
+      "mine": true,
+      "canEdit": true,
+      "canDelete": true,
+      "files": [],
+      "reminder": null
+     },
+     {
+      "id": "b104ca06-c3f8-44ae-99a0-d7804ca77896",
+      "channelId": "d3a406c6-4d64-425a-b452-6f647712846e",
+      "authorMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "authorName": "Ana Ribeiro (exemplo)",
+      "clientKey": "15580289-9a2c-49f3-84d1-07b9194d634c",
+      "body": "A prancha de layout da Loja Conceito fica pronta amanhã cedo.",
+      "kind": "mensagem",
+      "createdAt": "2026-11-12T08:07:49.897Z",
+      "editedAt": null,
+      "deleted": false,
+      "mine": true,
+      "canEdit": true,
+      "canDelete": true,
+      "files": [],
+      "reminder": null
+     }
+    ],
+    "cursor": "2026-11-12T08:07:49.738Z",
+    "hasMore": false
+   }
+  },
+  "/api/diary": {
+   "status": 200,
+   "body": {
+    "entries": [
+     {
+      "id": "b6025583-dfd0-4ec7-a9a2-406a95e5651c",
+      "projectId": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "projectName": "Casa Jardim das Acácias",
+      "projectCode": "OBR-014",
+      "entryDate": "2026-11-11",
+      "weather": "clear",
+      "workforceCount": 9,
+      "summary": "Alvenaria do térreo concluída no eixo B. Início das tubulações elétricas embutidas.",
+      "blockers": "",
+      "occurrenceType": "none",
+      "authorName": "Ana Ribeiro (exemplo)",
+      "revision": 1,
+      "createdAt": "2026-11-12 08:07:50",
+      "updatedAt": "2026-11-12 08:07:50",
+      "photoCount": 0
+     },
+     {
+      "id": "a8dab7b6-72e2-4736-aee9-87bcafcddca1",
+      "projectId": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "projectName": "Consultório Bem Viver",
+      "projectCode": "OBR-019",
+      "entryDate": "2026-11-10",
+      "weather": "rain",
+      "workforceCount": 5,
+      "summary": "Assentamento do porcelanato na recepção. Pintura interrompida à tarde.",
+      "blockers": "Chuva forte impediu a pintura externa.",
+      "occurrenceType": "weather",
+      "authorName": "Ana Ribeiro (exemplo)",
+      "revision": 1,
+      "createdAt": "2026-11-12 08:07:50",
+      "updatedAt": "2026-11-12 08:07:50",
+      "photoCount": 0
+     }
+    ],
+    "total": 2,
+    "page": 1,
+    "pageSize": 20
+   }
+  },
+  "/api/diary/projects": {
+   "status": 200,
+   "body": {
+    "projects": [
+     {
+      "id": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "name": "Apartamento Vista Parque",
+      "code": "PRJ-017"
+     },
+     {
+      "id": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "name": "Casa Jardim das Acácias",
+      "code": "OBR-014"
+     },
+     {
+      "id": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "name": "Consultório Bem Viver",
+      "code": "OBR-019"
+     },
+     {
+      "id": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "name": "Loja Conceito Centro",
+      "code": "PRJ-021"
+     }
+    ],
+    "timezone": "America/Sao_Paulo"
+   }
+  },
+  "/api/files": {
+   "status": 200,
+   "body": {
+    "files": []
+   }
+  },
+  "/api/arquivos": {
+   "status": 200,
+   "body": {
+    "files": []
+   }
+  },
+  "/api/usage": {
+   "status": 200,
+   "body": {
+    "range": {
+     "from": "2026-10-14",
+     "to": "2026-11-12",
+     "startedAt": 1791946800000,
+     "endedAt": 1794538799999
+    },
+    "beatMs": 30000,
+    "gapLimitMs": 90000,
+    "days": [],
+    "actions": [],
+    "today": "2026-11-12",
+    "scope": "organization",
+    "viewer": {
+     "subjectId": "demo-ana",
+     "role": "owner",
+     "displayName": "Ana Ribeiro (exemplo)"
+    }
+   }
+  },
+  "/api/worksheets": {
+   "status": 200,
+   "body": {
+    "worksheets": [
+     {
+      "id": "c079bf35-858d-4cce-bd0a-021825eeb69f",
+      "kind": "sheet",
+      "name": "Orçamento de obra — exemplo",
+      "columns": 9,
+      "rows": 64,
+      "createdByMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+      "createdByName": "Ana Ribeiro (exemplo)",
+      "visibility": "organization",
+      "revision": 1,
+      "createdAt": 1794470870636,
+      "updatedAt": 1794470870636,
+      "access": "empresa"
+     }
+    ],
+    "canGovern": false
+   }
+  },
+  "/api/worksheets/c079bf35-858d-4cce-bd0a-021825eeb69f": {
+   "status": 200,
+   "body": {
+    "worksheet": {
+     "id": "c079bf35-858d-4cce-bd0a-021825eeb69f",
+     "kind": "sheet",
+     "name": "Orçamento de obra — exemplo",
+     "columns": 9,
+     "rows": 64,
+     "createdByMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+     "createdByName": "Ana Ribeiro (exemplo)",
+     "visibility": "organization",
+     "revision": 1,
+     "createdAt": 1794470870636,
+     "updatedAt": 1794470870636,
+     "content": {
+      "cells": {
+       "A1": "Etapa",
+       "B1": "Item",
+       "C1": "Unidade",
+       "D1": "Quantidade",
+       "E1": "Custo unitário",
+       "F1": "Custo total",
+       "G1": "BDI %",
+       "H1": "Preço de venda",
+       "I1": "Margem",
+       "F2": "=SE(D2=\"\";\"\";D2*E2)",
+       "H2": "=SE(F2=\"\";\"\";ARRED(F2*(1+G2/100);2))",
+       "I2": "=SE(H2=\"\";\"\";H2-F2)",
+       "F3": "=SE(D3=\"\";\"\";D3*E3)",
+       "H3": "=SE(F3=\"\";\"\";ARRED(F3*(1+G3/100);2))",
+       "I3": "=SE(H3=\"\";\"\";H3-F3)",
+       "F4": "=SE(D4=\"\";\"\";D4*E4)",
+       "H4": "=SE(F4=\"\";\"\";ARRED(F4*(1+G4/100);2))",
+       "I4": "=SE(H4=\"\";\"\";H4-F4)",
+       "F5": "=SE(D5=\"\";\"\";D5*E5)",
+       "H5": "=SE(F5=\"\";\"\";ARRED(F5*(1+G5/100);2))",
+       "I5": "=SE(H5=\"\";\"\";H5-F5)",
+       "F6": "=SE(D6=\"\";\"\";D6*E6)",
+       "H6": "=SE(F6=\"\";\"\";ARRED(F6*(1+G6/100);2))",
+       "I6": "=SE(H6=\"\";\"\";H6-F6)",
+       "F7": "=SE(D7=\"\";\"\";D7*E7)",
+       "H7": "=SE(F7=\"\";\"\";ARRED(F7*(1+G7/100);2))",
+       "I7": "=SE(H7=\"\";\"\";H7-F7)",
+       "F8": "=SE(D8=\"\";\"\";D8*E8)",
+       "H8": "=SE(F8=\"\";\"\";ARRED(F8*(1+G8/100);2))",
+       "I8": "=SE(H8=\"\";\"\";H8-F8)",
+       "F9": "=SE(D9=\"\";\"\";D9*E9)",
+       "H9": "=SE(F9=\"\";\"\";ARRED(F9*(1+G9/100);2))",
+       "I9": "=SE(H9=\"\";\"\";H9-F9)",
+       "F10": "=SE(D10=\"\";\"\";D10*E10)",
+       "H10": "=SE(F10=\"\";\"\";ARRED(F10*(1+G10/100);2))",
+       "I10": "=SE(H10=\"\";\"\";H10-F10)",
+       "F11": "=SE(D11=\"\";\"\";D11*E11)",
+       "H11": "=SE(F11=\"\";\"\";ARRED(F11*(1+G11/100);2))",
+       "I11": "=SE(H11=\"\";\"\";H11-F11)",
+       "F12": "=SE(D12=\"\";\"\";D12*E12)",
+       "H12": "=SE(F12=\"\";\"\";ARRED(F12*(1+G12/100);2))",
+       "I12": "=SE(H12=\"\";\"\";H12-F12)",
+       "F13": "=SE(D13=\"\";\"\";D13*E13)",
+       "H13": "=SE(F13=\"\";\"\";ARRED(F13*(1+G13/100);2))",
+       "I13": "=SE(H13=\"\";\"\";H13-F13)",
+       "F14": "=SE(D14=\"\";\"\";D14*E14)",
+       "H14": "=SE(F14=\"\";\"\";ARRED(F14*(1+G14/100);2))",
+       "I14": "=SE(H14=\"\";\"\";H14-F14)",
+       "F15": "=SE(D15=\"\";\"\";D15*E15)",
+       "H15": "=SE(F15=\"\";\"\";ARRED(F15*(1+G15/100);2))",
+       "I15": "=SE(H15=\"\";\"\";H15-F15)",
+       "F16": "=SE(D16=\"\";\"\";D16*E16)",
+       "H16": "=SE(F16=\"\";\"\";ARRED(F16*(1+G16/100);2))",
+       "I16": "=SE(H16=\"\";\"\";H16-F16)",
+       "F17": "=SE(D17=\"\";\"\";D17*E17)",
+       "H17": "=SE(F17=\"\";\"\";ARRED(F17*(1+G17/100);2))",
+       "I17": "=SE(H17=\"\";\"\";H17-F17)",
+       "F18": "=SE(D18=\"\";\"\";D18*E18)",
+       "H18": "=SE(F18=\"\";\"\";ARRED(F18*(1+G18/100);2))",
+       "I18": "=SE(H18=\"\";\"\";H18-F18)",
+       "F19": "=SE(D19=\"\";\"\";D19*E19)",
+       "H19": "=SE(F19=\"\";\"\";ARRED(F19*(1+G19/100);2))",
+       "I19": "=SE(H19=\"\";\"\";H19-F19)",
+       "F20": "=SE(D20=\"\";\"\";D20*E20)",
+       "H20": "=SE(F20=\"\";\"\";ARRED(F20*(1+G20/100);2))",
+       "I20": "=SE(H20=\"\";\"\";H20-F20)",
+       "F21": "=SE(D21=\"\";\"\";D21*E21)",
+       "H21": "=SE(F21=\"\";\"\";ARRED(F21*(1+G21/100);2))",
+       "I21": "=SE(H21=\"\";\"\";H21-F21)",
+       "F22": "=SE(D22=\"\";\"\";D22*E22)",
+       "H22": "=SE(F22=\"\";\"\";ARRED(F22*(1+G22/100);2))",
+       "I22": "=SE(H22=\"\";\"\";H22-F22)",
+       "F23": "=SE(D23=\"\";\"\";D23*E23)",
+       "H23": "=SE(F23=\"\";\"\";ARRED(F23*(1+G23/100);2))",
+       "I23": "=SE(H23=\"\";\"\";H23-F23)",
+       "F24": "=SE(D24=\"\";\"\";D24*E24)",
+       "H24": "=SE(F24=\"\";\"\";ARRED(F24*(1+G24/100);2))",
+       "I24": "=SE(H24=\"\";\"\";H24-F24)",
+       "F25": "=SE(D25=\"\";\"\";D25*E25)",
+       "H25": "=SE(F25=\"\";\"\";ARRED(F25*(1+G25/100);2))",
+       "I25": "=SE(H25=\"\";\"\";H25-F25)",
+       "F26": "=SE(D26=\"\";\"\";D26*E26)",
+       "H26": "=SE(F26=\"\";\"\";ARRED(F26*(1+G26/100);2))",
+       "I26": "=SE(H26=\"\";\"\";H26-F26)",
+       "F27": "=SE(D27=\"\";\"\";D27*E27)",
+       "H27": "=SE(F27=\"\";\"\";ARRED(F27*(1+G27/100);2))",
+       "I27": "=SE(H27=\"\";\"\";H27-F27)",
+       "F28": "=SE(D28=\"\";\"\";D28*E28)",
+       "H28": "=SE(F28=\"\";\"\";ARRED(F28*(1+G28/100);2))",
+       "I28": "=SE(H28=\"\";\"\";H28-F28)",
+       "F29": "=SE(D29=\"\";\"\";D29*E29)",
+       "H29": "=SE(F29=\"\";\"\";ARRED(F29*(1+G29/100);2))",
+       "I29": "=SE(H29=\"\";\"\";H29-F29)",
+       "F30": "=SE(D30=\"\";\"\";D30*E30)",
+       "H30": "=SE(F30=\"\";\"\";ARRED(F30*(1+G30/100);2))",
+       "I30": "=SE(H30=\"\";\"\";H30-F30)",
+       "F31": "=SE(D31=\"\";\"\";D31*E31)",
+       "H31": "=SE(F31=\"\";\"\";ARRED(F31*(1+G31/100);2))",
+       "I31": "=SE(H31=\"\";\"\";H31-F31)",
+       "F32": "=SE(D32=\"\";\"\";D32*E32)",
+       "H32": "=SE(F32=\"\";\"\";ARRED(F32*(1+G32/100);2))",
+       "I32": "=SE(H32=\"\";\"\";H32-F32)",
+       "F33": "=SE(D33=\"\";\"\";D33*E33)",
+       "H33": "=SE(F33=\"\";\"\";ARRED(F33*(1+G33/100);2))",
+       "I33": "=SE(H33=\"\";\"\";H33-F33)",
+       "F34": "=SE(D34=\"\";\"\";D34*E34)",
+       "H34": "=SE(F34=\"\";\"\";ARRED(F34*(1+G34/100);2))",
+       "I34": "=SE(H34=\"\";\"\";H34-F34)",
+       "F35": "=SE(D35=\"\";\"\";D35*E35)",
+       "H35": "=SE(F35=\"\";\"\";ARRED(F35*(1+G35/100);2))",
+       "I35": "=SE(H35=\"\";\"\";H35-F35)",
+       "F36": "=SE(D36=\"\";\"\";D36*E36)",
+       "H36": "=SE(F36=\"\";\"\";ARRED(F36*(1+G36/100);2))",
+       "I36": "=SE(H36=\"\";\"\";H36-F36)",
+       "F37": "=SE(D37=\"\";\"\";D37*E37)",
+       "H37": "=SE(F37=\"\";\"\";ARRED(F37*(1+G37/100);2))",
+       "I37": "=SE(H37=\"\";\"\";H37-F37)",
+       "F38": "=SE(D38=\"\";\"\";D38*E38)",
+       "H38": "=SE(F38=\"\";\"\";ARRED(F38*(1+G38/100);2))",
+       "I38": "=SE(H38=\"\";\"\";H38-F38)",
+       "F39": "=SE(D39=\"\";\"\";D39*E39)",
+       "H39": "=SE(F39=\"\";\"\";ARRED(F39*(1+G39/100);2))",
+       "I39": "=SE(H39=\"\";\"\";H39-F39)",
+       "F40": "=SE(D40=\"\";\"\";D40*E40)",
+       "H40": "=SE(F40=\"\";\"\";ARRED(F40*(1+G40/100);2))",
+       "I40": "=SE(H40=\"\";\"\";H40-F40)",
+       "F41": "=SE(D41=\"\";\"\";D41*E41)",
+       "H41": "=SE(F41=\"\";\"\";ARRED(F41*(1+G41/100);2))",
+       "I41": "=SE(H41=\"\";\"\";H41-F41)",
+       "F42": "=SE(D42=\"\";\"\";D42*E42)",
+       "H42": "=SE(F42=\"\";\"\";ARRED(F42*(1+G42/100);2))",
+       "I42": "=SE(H42=\"\";\"\";H42-F42)",
+       "F43": "=SE(D43=\"\";\"\";D43*E43)",
+       "H43": "=SE(F43=\"\";\"\";ARRED(F43*(1+G43/100);2))",
+       "I43": "=SE(H43=\"\";\"\";H43-F43)",
+       "F44": "=SE(D44=\"\";\"\";D44*E44)",
+       "H44": "=SE(F44=\"\";\"\";ARRED(F44*(1+G44/100);2))",
+       "I44": "=SE(H44=\"\";\"\";H44-F44)",
+       "F45": "=SE(D45=\"\";\"\";D45*E45)",
+       "H45": "=SE(F45=\"\";\"\";ARRED(F45*(1+G45/100);2))",
+       "I45": "=SE(H45=\"\";\"\";H45-F45)",
+       "F46": "=SE(D46=\"\";\"\";D46*E46)",
+       "H46": "=SE(F46=\"\";\"\";ARRED(F46*(1+G46/100);2))",
+       "I46": "=SE(H46=\"\";\"\";H46-F46)",
+       "F47": "=SE(D47=\"\";\"\";D47*E47)",
+       "H47": "=SE(F47=\"\";\"\";ARRED(F47*(1+G47/100);2))",
+       "I47": "=SE(H47=\"\";\"\";H47-F47)",
+       "F48": "=SE(D48=\"\";\"\";D48*E48)",
+       "H48": "=SE(F48=\"\";\"\";ARRED(F48*(1+G48/100);2))",
+       "I48": "=SE(H48=\"\";\"\";H48-F48)",
+       "F49": "=SE(D49=\"\";\"\";D49*E49)",
+       "H49": "=SE(F49=\"\";\"\";ARRED(F49*(1+G49/100);2))",
+       "I49": "=SE(H49=\"\";\"\";H49-F49)",
+       "F50": "=SE(D50=\"\";\"\";D50*E50)",
+       "H50": "=SE(F50=\"\";\"\";ARRED(F50*(1+G50/100);2))",
+       "I50": "=SE(H50=\"\";\"\";H50-F50)",
+       "F51": "=SE(D51=\"\";\"\";D51*E51)",
+       "H51": "=SE(F51=\"\";\"\";ARRED(F51*(1+G51/100);2))",
+       "I51": "=SE(H51=\"\";\"\";H51-F51)",
+       "F52": "=SE(D52=\"\";\"\";D52*E52)",
+       "H52": "=SE(F52=\"\";\"\";ARRED(F52*(1+G52/100);2))",
+       "I52": "=SE(H52=\"\";\"\";H52-F52)",
+       "F53": "=SE(D53=\"\";\"\";D53*E53)",
+       "H53": "=SE(F53=\"\";\"\";ARRED(F53*(1+G53/100);2))",
+       "I53": "=SE(H53=\"\";\"\";H53-F53)",
+       "F54": "=SE(D54=\"\";\"\";D54*E54)",
+       "H54": "=SE(F54=\"\";\"\";ARRED(F54*(1+G54/100);2))",
+       "I54": "=SE(H54=\"\";\"\";H54-F54)",
+       "F55": "=SE(D55=\"\";\"\";D55*E55)",
+       "H55": "=SE(F55=\"\";\"\";ARRED(F55*(1+G55/100);2))",
+       "I55": "=SE(H55=\"\";\"\";H55-F55)",
+       "F56": "=SE(D56=\"\";\"\";D56*E56)",
+       "H56": "=SE(F56=\"\";\"\";ARRED(F56*(1+G56/100);2))",
+       "I56": "=SE(H56=\"\";\"\";H56-F56)",
+       "F57": "=SE(D57=\"\";\"\";D57*E57)",
+       "H57": "=SE(F57=\"\";\"\";ARRED(F57*(1+G57/100);2))",
+       "I57": "=SE(H57=\"\";\"\";H57-F57)",
+       "F58": "=SE(D58=\"\";\"\";D58*E58)",
+       "H58": "=SE(F58=\"\";\"\";ARRED(F58*(1+G58/100);2))",
+       "I58": "=SE(H58=\"\";\"\";H58-F58)",
+       "F59": "=SE(D59=\"\";\"\";D59*E59)",
+       "H59": "=SE(F59=\"\";\"\";ARRED(F59*(1+G59/100);2))",
+       "I59": "=SE(H59=\"\";\"\";H59-F59)",
+       "F60": "=SE(D60=\"\";\"\";D60*E60)",
+       "H60": "=SE(F60=\"\";\"\";ARRED(F60*(1+G60/100);2))",
+       "I60": "=SE(H60=\"\";\"\";H60-F60)",
+       "F61": "=SE(D61=\"\";\"\";D61*E61)",
+       "H61": "=SE(F61=\"\";\"\";ARRED(F61*(1+G61/100);2))",
+       "I61": "=SE(H61=\"\";\"\";H61-F61)",
+       "A62": "Total do orçamento",
+       "F62": "=SOMA(F2:F61)",
+       "H62": "=SOMA(H2:H61)",
+       "I62": "=SOMA(I2:I61)"
+      },
+      "body": "",
+      "widths": {
+       "B": 240,
+       "A": 160
+      },
+      "formats": {},
+      "bold": [
+       "A1",
+       "B1",
+       "C1",
+       "D1",
+       "E1",
+       "F1",
+       "G1",
+       "H1",
+       "I1",
+       "A62",
+       "F62",
+       "H62",
+       "I62"
+      ],
+      "analysis": {
+       "headerRow": 0,
+       "roles": {
+        "A": "setor",
+        "B": "descricao",
+        "C": "descricao",
+        "D": "quantidade",
+        "F": "custo",
+        "H": "receita"
+       },
+       "targetMarginPercent": 25,
+       "ignoreRows": [
+        61
+       ]
+      },
+      "recipes": [],
+      "frozenColumns": 0,
+      "styles": {},
+      "merges": [],
+      "notes": {},
+      "hiddenRows": [],
+      "hiddenColumns": []
+     }
+    },
+    "access": {
+     "canView": true,
+     "canEdit": true,
+     "canGovern": false,
+     "canDelete": true,
+     "level": "empresa"
+    }
+   }
+  },
+  "/api/worksheets/data": {
+   "status": 200,
+   "body": {
+    "sources": [
+     {
+      "id": "budget",
+      "label": "Itens de orçamento",
+      "headers": [
+       "Código",
+       "Descrição",
+       "Unidade",
+       "Quantidade",
+       "Custo unitário",
+       "Preço unitário",
+       "Total"
+      ]
+     },
+     {
+      "id": "projects",
+      "label": "Projetos e obras",
+      "headers": [
+       "Código",
+       "Nome",
+       "Tipo",
+       "Situação",
+       "Fase",
+       "Avanço %",
+       "Orçamento"
+      ]
+     },
+     {
+      "id": "clients",
+      "label": "Clientes",
+      "headers": [
+       "Nome",
+       "Documento",
+       "E-mail",
+       "Telefone"
+      ]
+     },
+     {
+      "id": "tasks",
+      "label": "Tarefas",
+      "headers": [
+       "Tarefa",
+       "Projeto",
+       "Situação",
+       "Prioridade",
+       "Prazo"
+      ]
+     }
+    ]
+   }
+  },
+  "/api/portal-management/access": {
+   "status": 200,
+   "body": {
+    "accesses": [],
+    "projects": [
+     {
+      "id": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+      "name": "Apartamento Vista Parque",
+      "code": "PRJ-017"
+     },
+     {
+      "id": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+      "name": "Casa Jardim das Acácias",
+      "code": "OBR-014"
+     },
+     {
+      "id": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+      "name": "Consultório Bem Viver",
+      "code": "OBR-019"
+     },
+     {
+      "id": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+      "name": "Loja Conceito Centro",
+      "code": "PRJ-021"
+     }
+    ]
+   }
+  },
+  "/api/portal-management/items": {
+   "status": 404,
+   "body": {
+    "error": "Registro não encontrado.",
+    "code": "not_found"
+   }
+  },
+  "/api/organization-invitations": {
+   "status": 200,
+   "body": {
+    "invitations": []
+   }
+  },
+  "/api/integrations/drap/connection": {
+   "status": 200,
+   "body": {
+    "connection": null,
+    "capabilities": {
+     "summary": false,
+     "transactions": false,
+     "charges": false,
+     "notas": false
+    }
+   }
+  },
+  "/api/integrations/drap/summary": {
+   "status": 503,
+   "body": {
+    "error": "A integração financeira ainda não foi configurada.",
+    "code": "integration_not_configured"
+   }
+  },
+  "/api/integrations/drap/capabilities": {
+   "status": 409,
+   "body": {
+    "error": "Conecte a empresa à Drap para continuar.",
+    "code": "drap_connection_required"
+   }
+  },
+  "/api/integrations/drap/charges": {
+   "status": 200,
+   "body": {
+    "charges": []
+   }
+  },
+  "/api/integrations/drap/lancamentos": {
+   "status": 409,
+   "body": {
+    "error": "Conecte a empresa à Drap para continuar.",
+    "code": "drap_connection_required"
+   }
+  },
+  "/api/integrations/drap/readiness": {
+   "status": 200,
+   "body": {
+    "checkedAt": "2026-11-12T08:07:59.045Z",
+    "checks": [
+     {
+      "id": "api",
+      "label": "Endereço HTTPS da API Drap",
+      "ready": false,
+      "next": "A operadora deve configurar o endereço oficial fornecido pela Drap."
+     },
+     {
+      "id": "partner",
+      "label": "Provisionamento por parceiro",
+      "ready": false,
+      "next": "Aguardar a configuração de parceria pela Drap e pela operadora do DRAP Backoffice."
+     },
+     {
+      "id": "encryption",
+      "label": "Proteção das credenciais",
+      "ready": false,
+      "next": "A operadora deve configurar a chave de criptografia no servidor."
+     },
+     {
+      "id": "callback",
+      "label": "Endereço de recebimento de eventos",
+      "ready": false,
+      "next": "Configurar o domínio público HTTPS definitivo do DRAP Backoffice."
+     },
+     {
+      "id": "tenant",
+      "label": "Empresa vinculada com credencial",
+      "ready": false,
+      "next": "Criar ou vincular a conta desta empresa e validar a credencial."
+     },
+     {
+      "id": "webhook",
+      "label": "Credencial de webhook desta empresa",
+      "ready": false,
+      "next": "Registrar o webhook em Conexão Drap e confirmar uma entrega válida."
+     },
+     {
+      "id": "checkout",
+      "label": "Configuração da contratação integrada",
+      "ready": false,
+      "next": "Aguardar o contrato de contratação e a configuração final da Drap."
+     },
+     {
+      "id": "subscription",
+      "label": "Assinatura confirmada pela Drap",
+      "ready": false,
+      "next": "Aguardar confirmação da assinatura, quando houver serviço pago contratado."
+     }
+    ],
+    "resources": null,
+    "events": [],
+    "canVerifyApi": false,
+    "operationallyValidated": false,
+    "notice": "Configuração e consulta não comprovam contratação, pagamento, cancelamento ou emissão fiscal. A homologação conjunta com a Drap continua necessária."
+   }
+  },
+  "/api/integrations/drap/catalog": {
+   "status": 200,
+   "body": {
+    "catalog": [
+     {
+      "id": "gratis",
+      "name": "Plano grátis",
+      "kind": "free",
+      "monthlyCents": 0,
+      "description": "Até 30 lançamentos por mês, categorias customizadas, filtros, 1 usuário, importação Excel/CSV e backup diário."
+     },
+     {
+      "id": "dashboards-pro",
+      "name": "Dashboards Pro",
+      "kind": "module",
+      "monthlyCents": 5900,
+      "trialDays": 14,
+      "description": "Comparação entre meses, drill-down por categoria e KPIs do negócio."
+     },
+     {
+      "id": "integracoes",
+      "name": "Integrações",
+      "kind": "module",
+      "monthlyCents": 2900,
+      "trialDays": 14,
+      "description": "Google Sheets, API REST /api/v1 e webhooks assinados."
+     },
+     {
+      "id": "multi-usuario",
+      "name": "Multi-usuário",
+      "kind": "module",
+      "monthlyCents": 3900,
+      "trialDays": 14,
+      "description": "Equipe e contador com papel e permissões por empresa."
+     },
+     {
+      "id": "contabilidade-basica",
+      "name": "Contabilidade Básica",
+      "kind": "module",
+      "monthlyCents": 6900,
+      "trialDays": 14,
+      "description": "DRE, Balanço Patrimonial e pacote de fechamento em Excel."
+     },
+     {
+      "id": "banco-conciliacao",
+      "name": "Banco & Conciliação",
+      "kind": "module",
+      "monthlyCents": 4900,
+      "trialDays": 14,
+      "description": "Extrato OFX, sugestão de conciliação e baixa de lançamento."
+     },
+     {
+      "id": "fluxo-caixa-tesouraria",
+      "name": "Fluxo de Caixa & Tesouraria",
+      "kind": "module",
+      "monthlyCents": 6900,
+      "trialDays": 14,
+      "description": "Projeção diária, contas a pagar/receber e orçamento."
+     },
+     {
+      "id": "emissao-nota-fiscal",
+      "name": "Emissão de Nota Fiscal",
+      "kind": "module",
+      "monthlyCents": 7900,
+      "trialDays": 14,
+      "description": "NFS-e e NF-e de produto direto pela DRAP."
+     },
+     {
+      "id": "cobrancas",
+      "name": "Cobranças",
+      "kind": "module",
+      "monthlyCents": 5900,
+      "trialDays": 14,
+      "description": "Boleto, PIX e cartão com conciliação do lançamento pago."
+     },
+     {
+      "id": "ia-assistente",
+      "name": "IA Assistente",
+      "kind": "module",
+      "monthlyCents": 4900,
+      "trialDays": 14,
+      "description": "Categoriza lançamento, lê comprovante e auxilia no plano de contas."
+     },
+     {
+      "id": "assistente-whatsapp",
+      "name": "Assistente WhatsApp",
+      "kind": "module",
+      "monthlyCents": 2900,
+      "trialDays": 14,
+      "description": "Consulta saldo, contas e resumo pelo WhatsApp por regras da DRAP."
+     },
+     {
+      "id": "pacote-essencial",
+      "name": "Pacote Essencial",
+      "kind": "bundle",
+      "monthlyCents": 13900,
+      "trialDays": 14,
+      "modules": [
+       "dashboards-pro",
+       "banco-conciliacao",
+       "ia-assistente"
+      ],
+      "description": "Dashboards Pro, Banco & Conciliação e IA Assistente."
+     },
+     {
+      "id": "pacote-fiscal",
+      "name": "Pacote Fiscal",
+      "kind": "bundle",
+      "monthlyCents": 15900,
+      "trialDays": 14,
+      "modules": [
+       "emissao-nota-fiscal",
+       "contabilidade-basica",
+       "cobrancas"
+      ],
+      "description": "Emissão de Nota Fiscal, Contabilidade Básica e Cobranças."
+     },
+     {
+      "id": "pacote-profissional",
+      "name": "Pacote Profissional",
+      "kind": "bundle",
+      "monthlyCents": 32900,
+      "trialDays": 14,
+      "description": "Pacote de 8 módulos conforme o catálogo vigente da DRAP."
+     },
+     {
+      "id": "pacote-completo",
+      "name": "Pacote Completo",
+      "kind": "bundle",
+      "monthlyCents": 34900,
+      "trialDays": 14,
+      "modules": [
+       "dashboards-pro",
+       "integracoes",
+       "multi-usuario",
+       "contabilidade-basica",
+       "banco-conciliacao",
+       "fluxo-caixa-tesouraria",
+       "emissao-nota-fiscal",
+       "cobrancas",
+       "ia-assistente",
+       "assistente-whatsapp"
+      ],
+      "description": "Os 10 módulos vendáveis do catálogo DRAP."
+     },
+     {
+      "id": "retaguarda-mensal",
+      "name": "DRAP Retaguarda",
+      "kind": "plan",
+      "monthlyCents": 99000,
+      "description": "Plano Retaguarda por empresa, com módulos, IA de análise, implantação e atendimento publicados pela DRAP.",
+      "annualCents": 990000
+     }
+    ],
+    "source": "https://empresa.drap.app.br/precos",
+    "checkedAt": "2026-09-16",
+    "pricing": "company_offer",
+    "canManage": true,
+    "provisioningAvailable": false,
+    "selection": [],
+    "embeddedExperience": true,
+    "requiresRedirect": true,
+    "signupAvailable": true,
+    "checkoutAvailable": false,
+    "tenantProvisioned": false,
+    "connectionStatus": null,
+    "subscription": null
+   }
+  },
+  "/api/integrations/drap/activation": {
+   "status": 405,
+   "body": {}
+  },
+  "/api/integrations/sinapi/reference": {
+   "status": 404,
+   "body": {
+    "error": "Nenhum pacote completo importado ainda."
+   }
+  },
+  "/api/projects/0b298aa8-3fe3-4a77-b8ae-c40e26f6f760": {
+   "status": 200,
+   "body": {
+    "project": {
+     "id": "0b298aa8-3fe3-4a77-b8ae-c40e26f6f760",
+     "clientId": "c8fe6531-ff18-4811-8796-441b2326ea0d",
+     "clientName": "Família Andrade (exemplo)",
+     "code": "OBR-014",
+     "name": "Casa Jardim das Acácias",
+     "kind": "work",
+     "status": "active",
+     "phase": "Alvenaria e instalações",
+     "progressPercent": 46,
+     "ownerMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+     "ownerName": "Carla Nunes (exemplo)",
+     "startDate": "2026-07-15",
+     "targetDate": "2027-03-22",
+     "budgetCents": 68400000,
+     "externalFinancialCostCenterId": null,
+     "createdAt": "2026-11-12 08:07:45",
+     "updatedAt": "2026-11-12 08:07:45"
+    }
+   }
+  },
+  "/api/projects/097aa7a3-5d61-498f-8e3b-2f55f5482b2a": {
+   "status": 200,
+   "body": {
+    "project": {
+     "id": "097aa7a3-5d61-498f-8e3b-2f55f5482b2a",
+     "clientId": "43495257-7045-46a1-852a-614cd2f9c7c5",
+     "clientName": "Marina Moreira (exemplo)",
+     "code": "PRJ-017",
+     "name": "Apartamento Vista Parque",
+     "kind": "project",
+     "status": "active",
+     "phase": "Projeto executivo",
+     "progressPercent": 72,
+     "ownerMemberId": "88d4c43a-2406-4514-a9b8-f28e337e3262",
+     "ownerName": "Bruno Tavares (exemplo)",
+     "startDate": "2026-09-13",
+     "targetDate": "2026-12-18",
+     "budgetCents": 4200000,
+     "externalFinancialCostCenterId": null,
+     "createdAt": "2026-11-12 08:07:45",
+     "updatedAt": "2026-11-12 08:07:45"
+    }
+   }
+  },
+  "/api/projects/bae3424d-2d17-412a-a871-d7e63b8d11ad": {
+   "status": 200,
+   "body": {
+    "project": {
+     "id": "bae3424d-2d17-412a-a871-d7e63b8d11ad",
+     "clientId": "dfce747e-abf8-4537-a960-506971f2a4a0",
+     "clientName": "Clínica Bem Viver Ltda. (exemplo)",
+     "code": "OBR-019",
+     "name": "Consultório Bem Viver",
+     "kind": "work",
+     "status": "active",
+     "phase": "Acabamentos",
+     "progressPercent": 88,
+     "ownerMemberId": "009077b2-7ebf-4f91-82b4-00bda0ec9ea2",
+     "ownerName": "Carla Nunes (exemplo)",
+     "startDate": "2026-06-15",
+     "targetDate": "2026-11-30",
+     "budgetCents": 21900000,
+     "externalFinancialCostCenterId": null,
+     "createdAt": "2026-11-12 08:07:45",
+     "updatedAt": "2026-11-12 08:07:45"
+    }
+   }
+  },
+  "/api/projects/60a16e51-f277-49bd-bb50-ec10a88a7cc8": {
+   "status": 200,
+   "body": {
+    "project": {
+     "id": "60a16e51-f277-49bd-bb50-ec10a88a7cc8",
+     "clientId": "2877fb6a-6083-4272-927d-48507e9817df",
+     "clientName": "Loja Conceito Centro Ltda. (exemplo)",
+     "code": "PRJ-021",
+     "name": "Loja Conceito Centro",
+     "kind": "project",
+     "status": "active",
+     "phase": "Estudo preliminar",
+     "progressPercent": 18,
+     "ownerMemberId": "7db365ca-8ba6-456f-a20b-1cd308f80d0f",
+     "ownerName": "Ana Ribeiro (exemplo)",
+     "startDate": "2026-10-31",
+     "targetDate": "2027-01-29",
+     "budgetCents": 3600000,
+     "externalFinancialCostCenterId": null,
+     "createdAt": "2026-11-12 08:07:45",
+     "updatedAt": "2026-11-12 08:07:45"
+    }
+   }
+  }
+ }
+}

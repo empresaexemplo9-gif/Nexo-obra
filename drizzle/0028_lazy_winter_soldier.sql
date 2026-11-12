@@ -1,0 +1,1 @@
+ALTER TABLE `meeting_requests` ADD `kind` text DEFAULT 'meeting' NOT NULL;

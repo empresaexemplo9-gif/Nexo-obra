@@ -11,15 +11,15 @@ import { Button } from "@/components/ui/button";
 // topo, que abre o mesmo formulário de sempre.
 
 const testes: { href: string; icone: LucideIcon; titulo: string; texto: string; acao: string }[] = [
-  { href: "/demonstracao?area=painel", icone: LayoutDashboard, titulo: "Escritório de exemplo", texto: "Projetos, tarefas, funil de vendas e orçamento de uma empresa fictícia. Conclua tarefas, avance negócios e mude o BDI.", acao: "Abrir o escritório" },
-  { href: "/demonstracao?area=cad", icone: DraftingCompass, titulo: "Editor CAD", texto: "Uma planta pronta em camadas. Desenhe paredes, use a linha de comando e exporte em DXF ou SVG.", acao: "Desenhar no CAD" },
-  { href: "/demonstracao?area=layout", icone: Sofa, titulo: "Criador de layout", texto: "Uma casa mobiliada com prévia 3D. Mova os móveis, troque acabamentos e baixe a prancha em PDF.", acao: "Montar um layout" },
-  { href: "/demonstracao?area=documentos", icone: FileText, titulo: "Documentos e PDF", texto: "Escreva um memorial, junte e divida PDFs ou converta imagens. Tudo roda no seu navegador.", acao: "Abrir documentos" },
+  { href: "/demonstracao", icone: LayoutDashboard, titulo: "A plataforma inteira", texto: "A mesma área de trabalho dos clientes, com uma empresa fictícia: projetos, obras, tarefas, funil, orçamentos e propostas.", acao: "Abrir a plataforma" },
+  { href: "/demonstracao?module=studio", icone: DraftingCompass, titulo: "Editor CAD", texto: "Uma planta pronta em camadas. Desenhe paredes, use a linha de comando e exporte em DXF ou SVG.", acao: "Desenhar no CAD" },
+  { href: "/demonstracao?module=layout", icone: Sofa, titulo: "Criador de layout", texto: "Uma casa mobiliada com prévia 3D. Mova os móveis, troque acabamentos e baixe a prancha em PDF.", acao: "Montar um layout" },
+  { href: "/demonstracao?module=documentos", icone: FileText, titulo: "Documentos e PDF", texto: "Escreva um memorial, junte e divida PDFs ou converta imagens. Tudo roda no seu navegador.", acao: "Abrir documentos" },
 ];
 
 const passos = [
-  { titulo: "Teste sem cadastro", texto: "Use as ferramentas com dados de exemplo. Nada do que você fizer é salvo." },
-  { titulo: "Agende a reunião", texto: "Conte o tamanho da equipe e escolha um dia. Confirmamos o horário por e-mail ou WhatsApp." },
+  { titulo: "Teste sem cadastro", texto: "Use a plataforma inteira com dados de exemplo. Nada do que você fizer é salvo." },
+  { titulo: "Peça reunião ou proposta", texto: "Escolha um dia para conversar ou peça a proposta por e-mail. Respondemos por e-mail ou WhatsApp." },
   { titulo: "Implante na sua empresa", texto: "Sua empresa entra com os dados reais, os acessos da equipe e as permissões por módulo." },
 ];
 

@@ -25,6 +25,7 @@
     "media:key": "node scripts/media-key.mjs",
     "segredos:key": "node scripts/segredos-key.mjs",
     "homologar:drap": "node scripts/homologar-drap.mjs",
+    "demo:gerar": "node scripts/gerar-demonstracao.mjs",
     "vendor": "node scripts/copy-vendor-assets.mjs"
   },
   "dependencies": {

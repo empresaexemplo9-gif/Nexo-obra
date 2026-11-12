@@ -1,116 +1,132 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowRight, CalendarClock, DraftingCompass, FileText, FlaskConical, LayoutDashboard, LoaderCircle, Sofa, type LucideIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { CalendarClock, FileText, FlaskConical, LoaderCircle, RotateCcw } from "lucide-react";
 
-import { BrandLogo } from "@/components/brand-logo";
-import { SemBibliotecaContext } from "@/components/documentos/comum";
-import type { LayoutAberto } from "@/components/layout/layout-workspace";
-import type { Prancha } from "@/components/prancheta-editor";
-import { PainelExemplo } from "@/components/visitante/painel-exemplo";
+import { NexoApp } from "@/components/nexo-app";
+import { PranchetaEditor, type Prancha } from "@/components/prancheta-editor";
+import { ProjectHub } from "@/components/project-hub";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { AreaDemo } from "@/lib/demonstracao/areas";
-import { EMPRESA_EXEMPLO, plantaDeExemplo } from "@/lib/demonstracao/dados";
-import { areaM2, layoutDoModelo } from "@/lib/layout";
-import type { OrigemReuniao } from "@/lib/reunioes";
+import { ServidorDemo } from "@/lib/demonstracao/servidor";
 
-// Demonstração pública. Tudo aqui vive na memória desta aba: nenhuma chamada ao
-// servidor, nenhum dado de empresa real, nada gravado. As ferramentas são as mesmas da
-// plataforma, abertas em modo de demonstração; quando a pessoa tenta salvar, a tela
-// explica que ali não se salva e oferece a reunião de implantação.
+// Demonstração pública: as telas REAIS da plataforma, sobre dados fictícios.
+//
+// Enquanto esta moldura está montada, todo pedido `/api/...` da página é respondido pelo
+// servidor da demonstração, que vive nesta aba do navegador. Nada chega ao servidor de
+// verdade: o que o visitante cria ou edita vale só aqui e some ao fechar a aba. A faixa
+// fixa no rodapé diz isso o tempo todo e oferece a reunião e o pedido de proposta.
 
-const areasDemo: { id: AreaDemo; nome: string; icone: LucideIcon }[] = [
-  { id: "painel", nome: "Escritório de exemplo", icone: LayoutDashboard },
-  { id: "cad", nome: "Editor CAD", icone: DraftingCompass },
-  { id: "layout", nome: "Criador de layout", icone: Sofa },
-  { id: "documentos", nome: "Documentos e PDF", icone: FileText },
-];
+/** Pedidos que precisam chegar ao servidor de verdade mesmo dentro da demonstração. */
+const REAIS = ["/api/reunioes"];
 
-const Carregando = () => <div role="status" aria-label="Carregando ferramenta" className="grid min-h-80 place-items-center"><LoaderCircle className="size-7 animate-spin text-drap-600" /></div>;
+function instalar() {
+  const servidor = new ServidorDemo();
+  const original = window.fetch;
+  const abrirOriginal = window.open;
 
-// Os editores são pesados (desenho, 3D, PDF): só baixam quando a aba deles é aberta.
-const PranchetaEditor = dynamic(() => import("@/components/prancheta-editor").then((modulo) => modulo.PranchetaEditor), { ssr: false, loading: Carregando });
-const LayoutEditor = dynamic(() => import("@/components/layout/layout-workspace").then((modulo) => modulo.LayoutEditor), { ssr: false, loading: Carregando });
-const DocumentosWorkspace = dynamic(() => import("@/components/documentos/documentos-workspace").then((modulo) => modulo.DocumentosWorkspace), { ssr: false, loading: Carregando });
+  window.fetch = async (entrada: RequestInfo | URL, opcoes?: RequestInit) => {
+    const url = typeof entrada === "string" ? entrada : entrada instanceof URL ? entrada.href : entrada.url;
+    const endereco = new URL(url, window.location.origin);
+    if (endereco.origin !== window.location.origin || !endereco.pathname.startsWith("/api/") || REAIS.includes(endereco.pathname)) return original(entrada, opcoes);
+    const metodo = (opcoes?.method ?? (entrada instanceof Request ? entrada.method : "GET")).toUpperCase();
+    let corpo: unknown = null;
+    if (typeof opcoes?.body === "string") { try { corpo = JSON.parse(opcoes.body); } catch { corpo = null; } }
+    const resposta = servidor.responder(metodo, endereco.pathname + endereco.search, corpo);
+    return new Response(JSON.stringify(resposta.body), { status: resposta.status, headers: { "Content-Type": "application/json" } });
+  };
 
-const avisoDeSalvar: Record<"cad" | "layout", string> = {
-  cad: "Na conta da sua empresa, este desenho ficaria gravado com histórico de revisões, ligado ao projeto e aberto para a equipe.",
-  layout: "Na conta da sua empresa, este layout ficaria salvo, ligado ao projeto, e a prancha iria direto para a biblioteca de arquivos.",
-};
+  // Na plataforma, projeto e prancha abrem em páginas próprias (a prancha, em outra aba).
+  // Aqui tudo fica na mesma aba e sob /demonstracao, onde o estado de exemplo existe.
+  const destino = (href: string) => {
+    if (href === "/" || href.startsWith("/?")) return `/demonstracao${href.slice(1)}`;
+    if (/^\/(projetos|prancheta)\//.test(href)) return `/demonstracao${href}`;
+    return null;
+  };
+  const aoClicar = (evento: MouseEvent) => {
+    const ancora = (evento.target as Element | null)?.closest?.("a[href]");
+    const para = ancora ? destino(ancora.getAttribute("href") ?? "") : null;
+    if (!para || evento.defaultPrevented) return;
+    evento.preventDefault(); evento.stopPropagation();
+    window.location.assign(para);
+  };
+  document.addEventListener("click", aoClicar, true);
+  window.open = ((url?: string | URL, alvo?: string, recursos?: string) => {
+    const texto = url ? String(url) : "";
+    const para = destino(texto);
+    if (para) { window.location.assign(para); return null; }
+    if (texto) return abrirOriginal.call(window, url, alvo, recursos);
+    // "Abrir em outra aba" com o endereço definido depois: devolve um alvo que navega nesta aba.
+    return { opener: null, close() { /* nada a fechar */ }, location: { set href(valor: string) { window.location.assign(destino(valor) ?? valor); } } } as unknown as Window;
+  }) as typeof window.open;
 
-export function DemonstracaoApp({ areaInicial }: { areaInicial: AreaDemo }) {
-  const [area, setArea] = useState<AreaDemo>(areaInicial);
-  const [aviso, setAviso] = useState<"cad" | "layout" | null>(null);
+  document.body.classList.add("modo-demonstracao");
+  return () => {
+    window.fetch = original; window.open = abrirOriginal;
+    document.removeEventListener("click", aoClicar, true);
+    document.body.classList.remove("modo-demonstracao");
+  };
+}
 
-  const prancha = useMemo<Prancha>(() => ({
-    id: "demonstracao", nome: "Planta de exemplo", especie: "planta", revisao: 1, projectId: null, projectName: null,
-    documento: plantaDeExemplo(), atualizadoEm: "", autor: null,
-  }), []);
-  const layout = useMemo<LayoutAberto>(() => {
-    const content = layoutDoModelo("casa-garagem");
-    return {
-      id: "demonstracao", name: "Casa térrea de exemplo", projectId: null, projectCode: null, projectName: null, revision: 1,
-      updatedByName: "", updatedAt: "", itens: content.itens.length, comodos: content.comodos.length,
-      areaM2: content.comodos.reduce((soma, comodo) => soma + areaM2(comodo.pontos), 0), content,
-    };
-  }, []);
+const assinarNada = () => () => undefined;
 
-  function abrir(proxima: AreaDemo) {
-    setArea(proxima);
-    window.history.replaceState(null, "", `/demonstracao?area=${proxima}`);
+function Moldura({ children }: { children: React.ReactNode }) {
+  // No servidor não há o que interceptar: as telas só entram no navegador.
+  const pronto = useSyncExternalStore(assinarNada, () => true, () => false);
+  // Antes de qualquer tela pedir dados: os efeitos de layout rodam antes dos demais.
+  useLayoutEffect(() => instalar(), []);
+
+  function recomecar() {
+    ServidorDemo.recomecar();
+    window.location.assign("/demonstracao");
   }
-  const agendar = (origem: OrigemReuniao) => `/agendar?origem=${origem}`;
 
-  return <div className="min-h-svh bg-drap-50 text-drap-950">
-    <header className="sticky top-0 z-30 bg-drap-deep text-white">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2.5 sm:px-5">
-        <Link href="/" aria-label="Voltar à página inicial" className="shrink-0"><BrandLogo variant="symbol" dark className="w-7" /></Link>
-        <p role="status" className="order-last flex min-w-0 basis-full items-center gap-2 text-sm leading-5 text-drap-300 sm:order-none sm:flex-1 sm:basis-0">
-          <FlaskConical aria-hidden="true" className="size-4 shrink-0" />
-          <span><strong className="font-medium text-white">Demonstração.</strong> Dados fictícios; nada é salvo.</span>
-        </p>
-        <Button asChild className="ml-auto h-10 bg-white text-drap-950 hover:bg-drap-100"><Link href={agendar(area)}><CalendarClock />Agendar reunião</Link></Button>
-      </div>
-      <nav aria-label="Áreas da demonstração" className="flex gap-1 overflow-x-auto border-t border-white/10 px-2 py-1.5 sm:px-4">
-        {areasDemo.map(({ id, nome, icone: Icone }) => <button key={id} type="button" onClick={() => abrir(id)} aria-current={area === id ? "page" : undefined}
-          className="flex h-10 shrink-0 items-center gap-2 rounded-md px-3 text-sm text-drap-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white aria-[current=page]:bg-white aria-[current=page]:text-drap-950">
-          <Icone aria-hidden="true" className="size-4" />{nome}
-        </button>)}
-      </nav>
-    </header>
+  return <>
+    {pronto ? children : <main role="status" aria-label="Abrindo a demonstração" className="grid min-h-svh place-items-center bg-drap-deep"><LoaderCircle className="size-7 animate-spin text-drap-300" /></main>}
+    <aside aria-label="Demonstração" className="barra-demonstracao fixed inset-x-0 bottom-0 z-50 flex items-center gap-2 border-t border-white/15 bg-drap-deep px-3 text-white sm:gap-3 sm:px-5">
+      <p role="status" className="flex min-w-0 flex-1 items-center gap-2 text-sm leading-5">
+        <FlaskConical aria-hidden="true" className="size-4 shrink-0 text-drap-300" />
+        <span className="truncate"><strong className="font-medium"><span className="sm:hidden">Teste</span><span className="hidden sm:inline">Demonstração.</span></strong><span className="hidden text-drap-300 md:inline"> Dados fictícios. O que você editar vale só nesta aba e não é salvo.</span></span>
+      </p>
+      <Button variant="ghost" size="sm" onClick={recomecar} className="hidden text-drap-300 hover:bg-white/10 hover:text-white sm:inline-flex"><RotateCcw />Recomeçar</Button>
+      <Button asChild size="sm" variant="outline" className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"><Link href="/agendar?tipo=proposta&origem=demonstracao"><FileText /><span><span className="hidden sm:inline">Pedir </span>proposta</span></Link></Button>
+      <Button asChild size="sm" className="bg-white text-drap-950 hover:bg-drap-100"><Link href="/agendar?origem=demonstracao"><CalendarClock /><span><span className="hidden sm:inline">Agendar </span>reunião</span></Link></Button>
+    </aside>
+  </>;
+}
 
-    <main className="p-3 sm:p-5">
-      <h1 className="sr-only">Demonstração do DRAP Backoffice</h1>
-      {area === "painel" ? <PainelExemplo abrir={abrir} /> : null}
-      {area === "cad" ? <div className="prancheta-autonoma">
-        <PranchetaEditor prancha={prancha} canEdit onVoltar={() => abrir("painel")} onSalvo={() => undefined} fullPage demonstracao={{ aoGravar: () => setAviso("cad") }} />
-      </div> : null}
-      {area === "layout" ? <LayoutEditor inicial={layout} projects={[]} canEdit empresa={EMPRESA_EXEMPLO} fechar={() => abrir("painel")} demonstracao={{ aoSalvar: () => setAviso("layout") }} /> : null}
-      {area === "documentos" ? <div className="space-y-4">
-        <p className="rounded-md border border-drap-200 bg-white p-4 text-sm leading-6 text-drap-700">Os arquivos são processados neste navegador e baixados para o seu computador. Na conta da empresa, o resultado também pode ser guardado na biblioteca, ligado ao projeto.</p>
-        <SemBibliotecaContext.Provider value><DocumentosWorkspace projects={[]} canEdit={false} /></SemBibliotecaContext.Provider>
-      </div> : null}
+/** Área de trabalho inteira da plataforma, com a empresa fictícia. */
+export function DemonstracaoApp() {
+  return <Moldura><NexoApp /></Moldura>;
+}
 
-      <aside aria-label="Próximo passo" className="mt-6 flex flex-col gap-3 rounded-lg border border-drap-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm leading-6 text-drap-700"><strong className="font-semibold text-drap-950">Terminou de testar?</strong> Agende uma reunião para implantar a plataforma na sua empresa, com os seus dados e a sua equipe.</p>
-        <Button asChild className="h-11 shrink-0"><Link href={agendar(area)}>Agendar reunião<ArrowRight /></Link></Button>
-      </aside>
-    </main>
+/** Central do projeto ou da obra, dentro da demonstração. */
+export function DemonstracaoProjeto({ projectId }: { projectId: string }) {
+  return <Moldura><ProjectHub projectId={projectId} /></Moldura>;
+}
 
-    <Dialog open={aviso !== null} onOpenChange={(aberto) => { if (!aberto) setAviso(null); }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Na demonstração nada é salvo</DialogTitle>
-          <DialogDescription>{aviso ? avisoDeSalvar[aviso] : ""} Seu teste continua na tela enquanto esta aba estiver aberta.</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setAviso(null)}>Continuar testando</Button>
-          <Button asChild><Link href={agendar(aviso ?? area)}><CalendarClock />Agendar reunião</Link></Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </div>;
+/** Editor CAD em página inteira, como na plataforma, sem sair da demonstração. */
+export function DemonstracaoPrancha({ drawingId }: { drawingId: string }) {
+  return <Moldura><PranchaAberta drawingId={drawingId} /></Moldura>;
+}
+
+function PranchaAberta({ drawingId }: { drawingId: string }) {
+  const [prancha, setPrancha] = useState<Prancha | null>(null);
+  const [erro, setErro] = useState("");
+  const voltar = () => window.location.assign("/demonstracao?module=studio");
+  useEffect(() => {
+    let ativa = true;
+    void (async () => {
+      const resposta = await fetch(`/api/studio/${drawingId}`, { cache: "no-store" });
+      const corpo = await resposta.json().catch(() => ({})) as { prancha?: Prancha; error?: string };
+      if (!ativa) return;
+      if (resposta.ok && corpo.prancha) setPrancha(corpo.prancha); else setErro(corpo.error ?? "Não foi possível abrir a prancha.");
+    })();
+    return () => { ativa = false; };
+  }, [drawingId]);
+  if (erro) return <main className="grid min-h-svh place-items-center p-6"><div className="space-y-4 text-center"><p role="alert">{erro}</p><Button variant="outline" onClick={voltar}>Voltar à demonstração</Button></div></main>;
+  if (!prancha) return <main role="status" aria-label="Carregando prancha" className="grid min-h-svh place-items-center"><LoaderCircle className="size-7 animate-spin" /></main>;
+  return <main className="prancheta-autonoma min-h-svh bg-drap-50 p-3 sm:p-4">
+    <PranchetaEditor prancha={prancha} canEdit onVoltar={voltar} onSalvo={setPrancha} fullPage />
+  </main>;
 }

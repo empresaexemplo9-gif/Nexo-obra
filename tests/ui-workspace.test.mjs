@@ -228,7 +228,7 @@ test("visitante sem conta vê a página de apresentação, com teste e reunião 
   assert.equal(container.querySelector("#account-email"), null, "o formulário de entrada não é a primeira tela");
   assert.match(texto, /Testar com dados de exemplo/);
   const links = [...container.querySelectorAll("a")].map((node) => node.getAttribute("href"));
-  for (const destino of ["/demonstracao", "/demonstracao?area=cad", "/demonstracao?area=layout", "/agendar"]) {
+  for (const destino of ["/demonstracao", "/demonstracao?module=studio", "/demonstracao?module=layout", "/agendar"]) {
     assert.ok(links.includes(destino), `leva a ${destino}`);
   }
   assert.deepEqual([...new Set(calls.map((call) => call.path))], ["/api/session"], "a página do visitante não consulta dado de empresa");

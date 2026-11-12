@@ -13,10 +13,15 @@ export const periodoLabels: Record<typeof PERIODOS[number], string> = {
   manha: "Manhã (9h às 12h)", tarde: "Tarde (13h às 17h)", "fim-de-tarde": "Fim de tarde (17h às 19h)",
 };
 
-export const ORIGENS = ["home", "painel", "cad", "layout", "documentos"] as const;
+export const TIPOS_PEDIDO = ["meeting", "proposal"] as const;
+export type TipoPedido = typeof TIPOS_PEDIDO[number];
+export const tipoPedidoLabels: Record<TipoPedido, string> = { meeting: "Reunião", proposal: "Proposta" };
+export const tipoValido = (valor: string | null | undefined): TipoPedido => valor === "proposta" || valor === "proposal" ? "proposal" : "meeting";
+
+export const ORIGENS = ["home", "demonstracao", "painel", "cad", "layout", "documentos"] as const;
 export type OrigemReuniao = typeof ORIGENS[number];
 export const origemLabels: Record<OrigemReuniao, string> = {
-  home: "Página inicial", painel: "Escritório de exemplo", cad: "Editor CAD", layout: "Criador de layout", documentos: "Documentos e PDF",
+  home: "Página inicial", demonstracao: "Demonstração", painel: "Escritório de exemplo", cad: "Editor CAD", layout: "Criador de layout", documentos: "Documentos e PDF",
 };
 export const origemValida = (valor: string | null | undefined): OrigemReuniao =>
   (ORIGENS as readonly string[]).includes(valor ?? "") ? valor as OrigemReuniao : "home";
@@ -47,13 +52,19 @@ export const pedidoReuniaoSchema = z.object({
   email: z.string().trim().toLowerCase().email("Informe um e-mail válido.").max(160),
   phone: z.string().trim().max(30).refine((valor) => valor.replace(/\D/g, "").length >= 10, "Informe o telefone com DDD."),
   teamSize: z.enum(TAMANHOS_EQUIPE, { message: "Escolha o tamanho da equipe." }),
-  preferredDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Escolha um dia."),
-  preferredPeriod: z.enum(PERIODOS, { message: "Escolha um período." }),
+  kind: z.enum(TIPOS_PEDIDO).optional().default("meeting"),
+  // Dia e período só existem no pedido de reunião; a proposta segue por e-mail.
+  preferredDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Escolha um dia.").optional(),
+  preferredPeriod: z.enum(PERIODOS, { message: "Escolha um período." }).optional(),
   message: z.string().trim().max(1000).optional().transform((valor) => valor || null),
   origin: z.enum(ORIGENS).optional().default("home"),
   // Campo-isca: fica fora da tela e de leitores de tela. Preenchido, é robô.
   website: z.string().max(200).optional(),
-}).strict();
+}).strict().superRefine((pedido, contexto) => {
+  if (pedido.kind !== "meeting") return;
+  if (!pedido.preferredDay) contexto.addIssue({ code: "custom", path: ["preferredDay"], message: "Escolha um dia." });
+  if (!pedido.preferredPeriod) contexto.addIssue({ code: "custom", path: ["preferredPeriod"], message: "Escolha um período." });
+});
 export type PedidoReuniao = z.infer<typeof pedidoReuniaoSchema>;
 
 /** Erro do dia preferido, ou `null`. Depende de "hoje", por isso fica fora do esquema. */

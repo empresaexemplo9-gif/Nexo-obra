@@ -525,3 +525,10 @@ body {
     transform: none !important;
   }
 }
+
+/* Demonstração pública: a faixa fixa do rodapé ocupa uma linha; o conteúdo e o menu
+   lateral param acima dela, e os avisos sobem para não ficar por baixo. */
+.barra-demonstracao { height: 3.25rem; }
+body.modo-demonstracao { padding-bottom: 3.25rem; }
+body.modo-demonstracao [data-slot="sidebar-container"] { bottom: 3.25rem; height: calc(100svh - 3.25rem); }
+body.modo-demonstracao [data-sonner-toaster][data-y-position="bottom"] { bottom: 4.25rem; }
