@@ -37,6 +37,7 @@ Cada tela precisa ter:
 - a informação mínima para executá-la;
 - estados de carregamento, vazio, erro e sucesso;
 - boa leitura em 320 px e em desktop;
+- a largura toda da página: nunca uma coluna estreita centralizada (`mx-auto max-w-*`) com as laterais vazias. Distribua o conteúdo em colunas na horizontal e continue na vertical só quando o espaço acabar; não estique um bloco único para preencher — acrescente colunas;
 - controles com label acessível e navegação por teclado;
 - números monetários em centavos no banco e formatados apenas na borda da interface.
 

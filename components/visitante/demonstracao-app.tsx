@@ -89,12 +89,12 @@ export function DemonstracaoApp({ areaInicial }: { areaInicial: AreaDemo }) {
         <PranchetaEditor prancha={prancha} canEdit onVoltar={() => abrir("painel")} onSalvo={() => undefined} fullPage demonstracao={{ aoGravar: () => setAviso("cad") }} />
       </div> : null}
       {area === "layout" ? <LayoutEditor inicial={layout} projects={[]} canEdit empresa={EMPRESA_EXEMPLO} fechar={() => abrir("painel")} demonstracao={{ aoSalvar: () => setAviso("layout") }} /> : null}
-      {area === "documentos" ? <div className="mx-auto max-w-6xl space-y-4">
+      {area === "documentos" ? <div className="space-y-4">
         <p className="rounded-md border border-drap-200 bg-white p-4 text-sm leading-6 text-drap-700">Os arquivos são processados neste navegador e baixados para o seu computador. Na conta da empresa, o resultado também pode ser guardado na biblioteca, ligado ao projeto.</p>
         <SemBibliotecaContext.Provider value><DocumentosWorkspace projects={[]} canEdit={false} /></SemBibliotecaContext.Provider>
       </div> : null}
 
-      <aside aria-label="Próximo passo" className="mx-auto mt-8 flex max-w-6xl flex-col gap-3 rounded-lg border border-drap-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+      <aside aria-label="Próximo passo" className="mt-6 flex flex-col gap-3 rounded-lg border border-drap-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm leading-6 text-drap-700"><strong className="font-semibold text-drap-950">Terminou de testar?</strong> Agende uma reunião para implantar a plataforma na sua empresa, com os seus dados e a sua equipe.</p>
         <Button asChild className="h-11 shrink-0"><Link href={agendar(area)}>Agendar reunião<ArrowRight /></Link></Button>
       </aside>

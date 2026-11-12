@@ -24,31 +24,47 @@ const passos = [
 ];
 
 export function HomeVisitante({ onEntrar }: { onEntrar: () => void }) {
-  return <div className="min-h-svh bg-drap-50 text-drap-950">
+  // Largura toda da página: o conteúdo se distribui em colunas e desce quando o espaço
+  // acaba. Nada de coluna estreita centralizada com as laterais vazias.
+  const margem = "px-4 sm:px-6 lg:px-10";
+  return <div className="flex min-h-svh flex-col bg-drap-50 text-drap-950">
     <header className="bg-drap-deep">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+      <div className={`flex items-center justify-between gap-3 py-4 ${margem}`}>
         <BrandLogo variant="lockup" dark className="w-[140px]" />
         <Button variant="outline" onClick={onEntrar} className="h-10 border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"><LogIn />Entrar</Button>
       </div>
     </header>
 
-    <main>
+    <main className="flex-1">
       <section className="bg-drap-deep text-white">
-        <div className="mx-auto max-w-6xl px-4 pb-14 pt-10 sm:px-6 sm:pb-20 sm:pt-16">
-          <p className="text-sm font-medium text-drap-300">Para escritórios de arquitetura, engenharia e construção</p>
-          <h1 className="display-heading mt-4 max-w-3xl text-4xl leading-tight sm:text-6xl">Do primeiro contato à entrega da obra, em um só lugar.</h1>
-          <p className="mt-5 max-w-2xl text-base leading-7 text-drap-300 sm:text-lg">Clientes, propostas, orçamentos, projetos, obra e desenho técnico no mesmo fluxo. Teste agora com dados de exemplo — sem cadastro e sem salvar nada.</p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <Button asChild className="h-12 bg-drap-400 px-6 text-base text-drap-950 hover:bg-drap-200"><Link href="/demonstracao">Testar com dados de exemplo<ArrowRight /></Link></Button>
-            <Button asChild variant="outline" className="h-12 border-white/25 bg-transparent px-6 text-base text-white hover:bg-white/10 hover:text-white"><Link href="/agendar"><CalendarClock />Agendar reunião</Link></Button>
+        <div className={`grid gap-10 pb-12 pt-8 sm:pb-16 sm:pt-12 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-end lg:gap-14 ${margem}`}>
+          <div>
+            <p className="text-sm font-medium text-drap-300">Para escritórios de arquitetura, engenharia e construção</p>
+            <h1 className="display-heading mt-4 text-4xl leading-tight sm:text-6xl 2xl:text-7xl">Do primeiro contato à entrega da obra, em um só lugar.</h1>
+            <p className="mt-5 text-base leading-7 text-drap-300 sm:text-lg">Clientes, propostas, orçamentos, projetos, obra e desenho técnico no mesmo fluxo. Teste agora com dados de exemplo — sem cadastro e sem salvar nada.</p>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button asChild className="h-12 bg-drap-400 px-6 text-base text-drap-950 hover:bg-drap-200"><Link href="/demonstracao">Testar com dados de exemplo<ArrowRight /></Link></Button>
+              <Button asChild variant="outline" className="h-12 border-white/25 bg-transparent px-6 text-base text-white hover:bg-white/10 hover:text-white"><Link href="/agendar"><CalendarClock />Agendar reunião</Link></Button>
+            </div>
+          </div>
+          <div aria-labelledby="titulo-passos">
+            <h2 id="titulo-passos" className="text-sm font-medium text-drap-300">Como a plataforma chega à sua empresa</h2>
+            <ol className="mt-4 divide-y divide-white/10 border-y border-white/10">
+              {passos.map((passo, indice) => <li key={passo.titulo} className="flex gap-4 py-4">
+                <span aria-hidden="true" className="metric-number w-6 shrink-0 text-2xl text-drap-300">{indice + 1}</span>
+                <div><h3 className="text-base font-semibold">{passo.titulo}</h3><p className="mt-1 text-sm leading-6 text-drap-300">{passo.texto}</p></div>
+              </li>)}
+            </ol>
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="titulo-testes" className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-        <h2 id="titulo-testes" className="display-heading text-3xl sm:text-4xl">O que você pode testar agora</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-drap-500">Cada teste abre a ferramenta de verdade, com dados fictícios. Ao fechar a aba, tudo é descartado.</p>
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2">
+      <section aria-labelledby="titulo-testes" className={`py-10 sm:py-12 ${margem}`}>
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+          <h2 id="titulo-testes" className="display-heading text-3xl sm:text-4xl">O que você pode testar agora</h2>
+          <p className="text-sm leading-6 text-drap-500">Cada teste abre a ferramenta de verdade, com dados fictícios. Ao fechar a aba, tudo é descartado.</p>
+        </div>
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {testes.map(({ href, icone: Icone, titulo, texto, acao }) => <li key={href}>
             <Link href={href} className="group flex h-full flex-col rounded-lg border border-drap-200 bg-white p-5 transition-colors hover:border-drap-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-drap-600 sm:p-6">
               <span className="grid size-11 place-items-center rounded-md bg-drap-50 text-drap-700"><Icone aria-hidden="true" className="size-5" /></span>
@@ -60,25 +76,15 @@ export function HomeVisitante({ onEntrar }: { onEntrar: () => void }) {
         </ul>
       </section>
 
-      <section aria-labelledby="titulo-passos" className="border-y border-drap-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-          <h2 id="titulo-passos" className="display-heading text-3xl sm:text-4xl">Como a plataforma chega à sua empresa</h2>
-          <ol className="mt-8 grid gap-6 sm:grid-cols-3">
-            {passos.map((passo, indice) => <li key={passo.titulo}>
-              <span aria-hidden="true" className="metric-number text-3xl text-drap-600">{indice + 1}</span>
-              <h3 className="mt-2 text-lg font-semibold">{passo.titulo}</h3>
-              <p className="mt-2 text-sm leading-6 text-drap-500">{passo.texto}</p>
-            </li>)}
-          </ol>
-          <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Button asChild className="h-11 px-5"><Link href="/agendar"><CalendarClock />Agendar reunião de implantação</Link></Button>
-            <p className="text-sm text-drap-500">Sem compromisso. A conversa define plano, equipe e prazo.</p>
-          </div>
+      <section aria-label="Reunião de implantação" className="border-y border-drap-200 bg-white">
+        <div className={`flex flex-col gap-4 py-6 lg:flex-row lg:items-center lg:justify-between ${margem}`}>
+          <p className="text-base leading-7"><strong className="font-semibold">Gostou do que testou?</strong> <span className="text-drap-500">A reunião define plano, equipe e prazo para a plataforma entrar em uso na sua empresa. Sem compromisso.</span></p>
+          <Button asChild className="h-11 shrink-0 px-5"><Link href="/agendar"><CalendarClock />Agendar reunião de implantação</Link></Button>
         </div>
       </section>
     </main>
 
-    <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-drap-500 sm:px-6">
+    <footer className={`flex flex-wrap items-center justify-between gap-3 py-5 text-sm text-drap-500 ${margem}`}>
       <span>DRAP · Backoffice para arquitetos</span>
       <Link href="/termos" className="underline underline-offset-2 hover:text-drap-950">Termos de Uso e Privacidade</Link>
     </footer>

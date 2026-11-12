@@ -43,10 +43,11 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
     }));
   }
 
-  return <div className="mx-auto max-w-6xl space-y-5">
-    <div>
+  // Página inteira: três faixas que usam a largura toda e se reorganizam em colunas.
+  return <div className="space-y-5">
+    <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
       <h2 className="display-heading text-3xl sm:text-4xl">{EMPRESA_EXEMPLO}</h2>
-      <p className="mt-2 max-w-2xl text-sm leading-6 text-drap-500">Empresa, pessoas e valores inventados para a demonstração. Mexa à vontade: conclua tarefas, avance negócios e ajuste o orçamento.</p>
+      <p className="text-sm leading-6 text-drap-500">Empresa, pessoas e valores inventados para a demonstração. Mexa à vontade: conclua tarefas, avance negócios e ajuste o orçamento.</p>
     </div>
 
     <dl className="grid gap-3 sm:grid-cols-3">
@@ -61,7 +62,7 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
       </div>)}
     </dl>
 
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <Card className="workspace-card">
         <CardHeader><CardTitle className="text-lg">O que fazer hoje</CardTitle></CardHeader>
         <CardContent>
@@ -81,7 +82,7 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
 
       <Card className="workspace-card">
         <CardHeader><CardTitle className="text-lg">Funil de vendas</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
           {etapasFunil.map((etapa) => {
             const itens = oportunidades.filter((item) => item.etapa === etapa.id);
             return <section key={etapa.id} aria-label={etapa.nome}>
@@ -98,6 +99,7 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
       </Card>
     </div>
 
+    <div className="grid gap-5 2xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
     <Card className="overflow-hidden workspace-card">
       <CardHeader><CardTitle className="text-lg">Projetos e obras</CardTitle></CardHeader>
       <div className="overflow-x-auto">
@@ -140,6 +142,7 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
         <p role="status">Preço de venda com BDI de {bdiValido.toLocaleString("pt-BR")}% <span className="metric-number ml-2 text-base font-semibold">{reais(orcamento.venda)}</span></p>
       </CardContent>
     </Card>
+    </div>
 
     <div className="grid gap-3 sm:grid-cols-2">
       <Button variant="outline" className="h-auto min-h-12 justify-between whitespace-normal bg-white py-2 text-left" onClick={() => abrir("cad")}><span className="flex items-center gap-2"><DraftingCompass />Desenhar a planta no Editor CAD</span><ArrowRight /></Button>
