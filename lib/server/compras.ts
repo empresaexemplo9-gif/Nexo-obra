@@ -7,6 +7,7 @@ import {
 import { rotuloRegimeGoinfra, rotuloTabelaGoinfra, type TabelaGoinfra } from "@/lib/integrations/goinfra-planilha";
 import { DEFAULT_SINAPI_UF } from "@/lib/integrations/sinapi-contract";
 import { preparadorDeSugestoes } from "@/lib/server/estoque";
+import { buscarMaterialPadrao, materialPadrao } from "@/lib/catalogo-materiais";
 
 // Leitura do módulo Compras. Toda consulta filtra a empresa resolvida pela sessão; o id
 // que vem do navegador só escolhe entre registros que já são da empresa.
@@ -153,9 +154,10 @@ export async function detalharPedido(context: OrganizationContext, id: string) {
   // Outros fornecedores possíveis: para pedir cotação enquanto orça, ou para trocar
   // quando a entrega atrasou ou ficou sem previsão. Exclui quem já cotou.
   const sugerir = await preparadorDeSugestoes(context);
-  const alternativas = encerradaOuNao(pedido.status) ? [] : sugerir({
+  const alternativas = encerradaOuNao(pedido.status) ? [] : await sugerir({
     productIds: itens.map((i) => i.product_id).filter((id): id is string => Boolean(id)),
     termos: [pedido.title, ...itens.map((i) => i.description)],
+    nomes: itens.map((i) => i.description),
     excluir: cotacoes.map((q) => q.supplier_id),
   });
   return {
@@ -204,13 +206,16 @@ export async function exigirProjetoDaEmpresa(context: OrganizationContext, proje
 
 // ── Catálogo: GOINFRA, SINAPI e a biblioteca da empresa ───────────────────────────────
 
-export const FONTES_CATALOGO = ["goinfra", "sinapi", "biblioteca"] as const;
+export const FONTES_CATALOGO = ["padrao", "fornecedor", "goinfra", "sinapi", "biblioteca"] as const;
 export type FonteCatalogo = typeof FONTES_CATALOGO[number];
 
 export type ItemDeCatalogo = {
   source: FonteCatalogo; reference: string; code: string; description: string; unit: string;
-  unitCostCents: number; label: string; category: string;
+  unitCostCents: number | null; label: string; category: string; specification?: string;
 };
+
+const dataBr = (dia: string) => dia.split("-").reverse().join("/");
+const rotuloLista = (fornecedor: string, validade: string) => `Lista de preços de ${fornecedor} · ${dataBr(validade)}`;
 
 const escaparLike = (texto: string) => `%${texto.replace(/[\\%_]/g, "\\$&")}%`;
 
@@ -226,6 +231,28 @@ const rotuloGoinfra = (t: { tabela: TabelaGoinfra; regime: "Desonerado" | "NaoDe
 
 export async function buscarNoCatalogo(context: OrganizationContext, fonte: FonteCatalogo, busca: string, opcoes: { tabelaId?: string; uf?: string; regime?: string } = {}): Promise<{ items: ItemDeCatalogo[]; emptyReason: string | null }> {
   const termo = busca.trim();
+  if (fonte === "padrao") {
+    const achados = buscarMaterialPadrao(termo);
+    return {
+      items: achados.map((m) => ({ source: "padrao" as const, reference: `PADRAO:${m.codigo}`, code: m.codigo, description: m.nome, unit: m.unidade, unitCostCents: null, label: m.norma, category: m.categoria, specification: m.especificacao })),
+      emptyReason: achados.length ? null : "Nenhum material padrão corresponde à busca. Tente o nome comum (cimento, vergalhão, bloco, cabo) ou a norma (NBR 7480).",
+    };
+  }
+  if (fonte === "fornecedor") {
+    const { results } = await context.db.prepare(
+      `SELECT i.id, i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on
+       FROM supplier_price_items i
+       JOIN supplier_price_lists l ON l.id = i.list_id AND l.organization_id = i.organization_id
+       JOIN suppliers s ON s.id = i.supplier_id AND s.organization_id = i.organization_id AND s.active = 1
+       WHERE i.organization_id = ?1 AND (i.code = ?2 OR i.description LIKE ?3 ESCAPE '\\')
+       ORDER BY i.description, i.price_cents LIMIT 60`,
+    ).bind(context.organization.id, termo, escaparLike(termo)).all<{ id: string; code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>();
+    const listas = await context.db.prepare("SELECT COUNT(*) AS n FROM supplier_price_lists WHERE organization_id = ?1").bind(context.organization.id).first<{ n: number }>();
+    return {
+      items: results.map((i) => ({ source: "fornecedor" as const, reference: `FORNECEDOR:${i.id}`, code: i.code, description: i.description, unit: i.unit, unitCostCents: Number(i.price_cents), label: rotuloLista(i.supplier_name, i.valid_on), category: "Lista de fornecedor" })),
+      emptyReason: results.length ? null : Number(listas?.n ?? 0) ? "Nenhum item das listas de preços dos fornecedores corresponde à busca." : "Nenhum fornecedor enviou lista de preços ainda. Importe a planilha da loja em Fornecedores.",
+    };
+  }
   if (fonte === "goinfra") {
     const tabelas = await tabelasGoinfra(context);
     if (!tabelas.length) return { items: [], emptyReason: "Nenhuma tabela GOINFRA importada ainda. O superadministrador envia a planilha oficial no painel da plataforma." };
@@ -304,6 +331,21 @@ export async function resolverReferencia(context: OrganizationContext, referenci
     ).bind(uf, competencia, regime, tipo, codigo).first<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number }>();
     if (!item) throw new ApiError(404, "catalog_item_not_found", "Item SINAPI não encontrado na referência aprovada.");
     return { source: "sinapi", reference: referencia, code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: Number(item.custo_unitario_centavos), label: `SINAPI ${uf} · ${competencia.slice(5)}/${competencia.slice(0, 4)} · ${tipo === "insumo" ? "insumo" : "composição"}`, category: tipo === "insumo" ? "Insumo SINAPI" : "Composição SINAPI" };
+  }
+  if (partes[0] === "PADRAO" && partes.length === 2) {
+    const m = materialPadrao(partes[1]);
+    if (!m) throw new ApiError(404, "catalog_item_not_found", "Material padrão não encontrado.");
+    return { source: "padrao", reference: referencia, code: m.codigo, description: m.nome, unit: m.unidade, unitCostCents: null, label: m.norma, category: m.categoria, specification: m.especificacao };
+  }
+  if (partes[0] === "FORNECEDOR" && partes.length === 2) {
+    const i = await context.db.prepare(
+      `SELECT i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on FROM supplier_price_items i
+       JOIN supplier_price_lists l ON l.id = i.list_id AND l.organization_id = i.organization_id
+       JOIN suppliers s ON s.id = i.supplier_id AND s.organization_id = i.organization_id
+       WHERE i.id = ?1 AND i.organization_id = ?2`,
+    ).bind(partes[1], context.organization.id).first<{ code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>();
+    if (!i) throw new ApiError(409, "catalog_reference_replaced", "Este item saiu da lista de preços do fornecedor. Busque de novo.");
+    return { source: "fornecedor", reference: referencia, code: i.code, description: i.description, unit: i.unit, unitCostCents: Number(i.price_cents), label: rotuloLista(i.supplier_name, i.valid_on), category: "Lista de fornecedor" };
   }
   if (partes[0] === "BIBLIOTECA" && partes.length === 2) {
     const item = await context.db.prepare("SELECT id, code, description, category, unit, unit_cost_cents FROM budget_catalog_items WHERE id = ?1 AND organization_id = ?2 AND active = 1")

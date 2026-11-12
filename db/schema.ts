@@ -1076,6 +1076,11 @@ export const suppliers = sqliteTable("suppliers", {
   negotiationScore: integer("negotiation_score"),
   notes: text("notes").notNull().default(""),
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Conferência do CNPJ na Receita Federal, feita pelo servidor. Nulo até alguém pedir.
+  registryName: text("registry_name"),
+  registryStatus: text("registry_status"),
+  registryActivity: text("registry_activity"),
+  registryCheckedAt: text("registry_checked_at"),
   ...timestamps,
 }, (table) => [
   index("idx_suppliers_org_name").on(table.organizationId, table.name),
@@ -1262,3 +1267,34 @@ export const stockMinimums = sqliteTable("stock_minimums", {
   minimum: real("minimum").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [uniqueIndex("uidx_stock_minimums_product_location").on(table.organizationId, table.productId, table.location)]);
+
+// Lista de preços enviada pela própria loja (planilha). É o que põe item e preço reais de
+// um fornecedor existente no catálogo da empresa. Uma lista vigente por fornecedor: a nova
+// substitui a anterior inteira.
+export const supplierPriceLists = sqliteTable("supplier_price_lists", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  supplierId: text("supplier_id").notNull().references(() => suppliers.id),
+  fileName: text("file_name").notNull(),
+  sha256: text("sha256").notNull(),
+  // Data que a loja deu à lista; preço de lista antiga é sinalizado na busca.
+  validOn: text("valid_on").notNull(),
+  totalItems: integer("total_items").notNull(),
+  ignored: integer("ignored").notNull().default(0),
+  importedByName: text("imported_by_name").notNull(),
+  importedAt: text("imported_at").notNull(),
+}, (table) => [uniqueIndex("uidx_supplier_price_lists_supplier").on(table.organizationId, table.supplierId)]);
+
+export const supplierPriceItems = sqliteTable("supplier_price_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  listId: text("list_id").notNull().references(() => supplierPriceLists.id),
+  supplierId: text("supplier_id").notNull().references(() => suppliers.id),
+  code: text("code").notNull().default(""),
+  description: text("description").notNull(),
+  unit: text("unit").notNull(),
+  priceCents: integer("price_cents").notNull(),
+}, (table) => [
+  index("idx_supplier_price_items_org_description").on(table.organizationId, table.description),
+  index("idx_supplier_price_items_list").on(table.listId),
+]);

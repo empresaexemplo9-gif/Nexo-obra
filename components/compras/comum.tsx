@@ -27,6 +27,8 @@ export type Fornecedor = {
   id: string; name: string; document: string; contactName: string; email: string; phone: string; city: string; uf: string;
   categories: string; paymentTerms: string; leadTimeDays: number | null; negotiationScore: number | null; notes: string; active: boolean;
   stats: { quotes: number; won: number; delivered: number; onTime: number; averageLeadDays: number | null; purchasedCents: number };
+  registry: { name: string; status: string; activity: string; checkedAt: string } | null;
+  priceList: { validOn: string; items: number; fileName: string } | null;
 };
 
 export type Produto = {

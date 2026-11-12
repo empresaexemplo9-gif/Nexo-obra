@@ -28,10 +28,18 @@ A linha do tempo do pedido registra cada passo com autor e hora; toda escrita ta
 
 Cadastro com CNPJ/CPF (único por empresa), contato, cidade/UF, o que fornece, condição de pagamento e prazo usuais e abertura para negociar — os três últimos viram sugestão ao lançar cotação. O cartão mostra o histórico real: cotações, compras ganhas, entregas no prazo, prazo real médio entre pedido e entrega e total comprado. Fornecedor é desativado, nunca apagado.
 
+## Fornecedores reais: Receita Federal e lista de preços da loja
+
+- **CNPJ na Receita**: no cadastro, o botão **Receita** consulta o CNPJ (dados abertos da Receita Federal, pela BrasilAPI) e preenche nome, cidade, UF, telefone, e-mail e atividade para a pessoa conferir. Depois de salvo, **Conferir CNPJ na Receita** grava razão social, situação cadastral e data da conferência — consulta feita pelo servidor, nunca vinda do navegador. CNPJ baixado, suspenso ou inapto aparece em vermelho no cartão. Dígito verificador errado nem chega a consultar; consulta indisponível, CNPJ inexistente ou resposta de outro CNPJ voltam como erro, sem preencher nada.
+- **Lista de preços da loja**: a planilha que o fornecedor envia (XLSX ou CSV, colunas achadas pelo nome — descrição ou produto, unidade e preço; código opcional), com a data dos preços. Até 3.000 itens por fornecedor; a nova substitui a anterior inteira, num lote só. Os itens aparecem no catálogo (aba **Listas das lojas**), viram produto com o preço da loja e entram nas sugestões de fornecedor com o preço e a data da lista.
+
+**Pendente:** a consulta de CNPJ foi testada com a resposta da BrasilAPI simulada; o ambiente de desenvolvimento não alcança o serviço. Conferir ao vivo na primeira consulta em produção.
+
 ## Produtos
 
 - **Manual**: nome, código, categoria, unidade, marca, especificação e custo de referência opcional.
-- **Do catálogo**: busca na GOINFRA, na SINAPI (referência aprovada da UF) ou na biblioteca de orçamentos da empresa. A tela envia só a referência; descrição, unidade e custo são lidos no servidor. Importar de novo devolve o mesmo produto.
+- **Materiais padrão**: 59 materiais de mercado (cimentos, cal, agregados, concreto usinado, vergalhões CA-50/CA-60 com massa nominal, tela soldada, blocos cerâmicos e de concreto, argamassas, revestimento, telhas, manta, tubos de PVC, caixa d'água, louça, cabos, eletroduto, disjuntor, tomadas, drywall e tinta), cada um com a norma ABNT que o define e a especificação a pedir. **Não têm preço**: preço muda por mês, praça e loja, e vem da SINAPI, da GOINFRA ou da lista da loja. A edição vigente de cada norma deve ser conferida no catálogo da ABNT, como os parâmetros normativos do CAD. Lista em `lib/catalogo-materiais.ts`.
+- **Do catálogo**: busca nos materiais padrão, nas listas de preços das lojas, na GOINFRA, na SINAPI (referência aprovada da UF) ou na biblioteca de orçamentos da empresa. A tela envia só a referência; descrição, unidade e custo são lidos no servidor. Importar de novo devolve o mesmo produto.
 - O histórico de preços mostra o que cada fornecedor cotou para o produto.
 
 ## Estoque
@@ -59,7 +67,8 @@ Os pedidos sem previsão também aparecem marcados no quadro e nas entregas.
 Cada item de atenção e o detalhe do pedido (em “A orçar”, ou com entrega atrasada, sem previsão ou depois da necessidade) mostram até quatro fornecedores, com telefone e e-mail:
 
 1. quem já cotou o mesmo produto para a empresa, com o último preço e prazo que deu — ordenado por entregas no prazo e depois por preço;
-2. quem declara no cadastro que fornece aquela categoria ou material (comparação pelas palavras da categoria e da descrição).
+2. quem tem item parecido na lista de preços que enviou (as duas palavras mais longas do material, sem diferença de acento), com o preço e a data da lista;
+3. quem declara no cadastro que fornece aquele material ou a categoria inteira do produto.
 
 O fornecedor atual e quem já cotou o pedido ficam de fora. Sem histórico nem categoria parecida, a lista vem vazia e a tela diz isso — nenhuma indicação é inventada.
 
@@ -100,3 +109,4 @@ Contas com permissões já personalizadas não ganham o módulo sozinhas: o admi
 - Transferência direta entre locais (hoje: baixa num local e entrada no outro).
 - Inventário com contagem física e ajuste.
 - Download automático da tabela GOINFRA.
+- Fornecedores e preços pré-cadastrados: a plataforma não semeia lojas nem preços. Cada empresa cadastra as lojas com que trabalha (com a conferência da Receita) e importa as listas que elas enviam.

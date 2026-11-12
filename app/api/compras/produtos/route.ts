@@ -16,8 +16,8 @@ export async function GET(request: Request) {
   });
 }
 
-// Dois caminhos: cadastro manual, ou cópia de um item de catálogo (GOINFRA, SINAPI ou a
-// biblioteca da empresa). No segundo, a tela manda só a referência; descrição, unidade e
+// Dois caminhos: cadastro manual, ou cópia de um item de catálogo (materiais padrão ABNT,
+// lista de preços de um fornecedor, GOINFRA, SINAPI ou a biblioteca da empresa). No segundo, a tela manda só a referência; descrição, unidade e
 // custo são lidos aqui, da fonte.
 export async function POST(request: Request) {
   return apiRoute(async () => {
@@ -39,8 +39,9 @@ export async function POST(request: Request) {
       }
       instrucao = context.db.prepare(
         `INSERT INTO purchase_products (id, organization_id, code, name, category, unit, brand, specification, source, source_reference, reference_cost_cents, reference_label, active, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '', '', ?7, ?8, ?9, ?10, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      ).bind(id, context.organization.id, item.code.slice(0, 40), item.description.slice(0, 200), item.category.slice(0, 80), item.unit.slice(0, 16), item.source, item.reference, item.unitCostCents, item.label);
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, '', ?7, ?8, ?9, ?10, ?11, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      ).bind(id, context.organization.id, item.code.slice(0, 40), item.description.slice(0, 200), item.category.slice(0, 80), item.unit.slice(0, 16),
+        (item.specification ?? "").slice(0, 1000), item.source, item.reference, item.unitCostCents, item.label);
     } else {
       const parsed = produtoManual.safeParse(corpo);
       if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);

@@ -8,12 +8,16 @@ type FornecedorRow = {
   categories: string; payment_terms: string; lead_time_days: number | null; negotiation_score: number | null; notes: string;
   active: number; created_at: string; updated_at: string;
   quotes: number; won: number; delivered: number; on_time: number; avg_lead: number | null; purchased_cents: number | null;
+  registry_name: string | null; registry_status: string | null; registry_activity: string | null; registry_checked_at: string | null;
+  list_valid_on: string | null; list_items: number | null; list_file: string | null;
 };
 
 export async function listarFornecedores(context: OrganizationContext, incluirInativos = false) {
   const { results } = await context.db.prepare(
     `SELECT s.id, s.name, s.document, s.contact_name, s.email, s.phone, s.city, s.uf, s.categories, s.payment_terms,
        s.lead_time_days, s.negotiation_score, s.notes, s.active, s.created_at, s.updated_at,
+       s.registry_name, s.registry_status, s.registry_activity, s.registry_checked_at,
+       l.valid_on AS list_valid_on, l.total_items AS list_items, l.file_name AS list_file,
        (SELECT COUNT(*) FROM purchase_quotes q WHERE q.organization_id = s.organization_id AND q.supplier_id = s.id) AS quotes,
        (SELECT COUNT(*) FROM purchase_requests r JOIN purchase_quotes q ON q.id = r.selected_quote_id AND q.organization_id = r.organization_id
           WHERE r.organization_id = s.organization_id AND q.supplier_id = s.id AND r.status IN ('comprado', 'em_entrega', 'entregue')) AS won,
@@ -26,13 +30,17 @@ export async function listarFornecedores(context: OrganizationContext, incluirIn
           WHERE r.organization_id = s.organization_id AND q.supplier_id = s.id AND r.status = 'entregue' AND r.ordered_at IS NOT NULL) AS avg_lead,
        (SELECT SUM(r.purchased_total_cents) FROM purchase_requests r JOIN purchase_quotes q ON q.id = r.selected_quote_id AND q.organization_id = r.organization_id
           WHERE r.organization_id = s.organization_id AND q.supplier_id = s.id AND r.status IN ('comprado', 'em_entrega', 'entregue')) AS purchased_cents
-     FROM suppliers s WHERE s.organization_id = ?1 AND (?2 = 1 OR s.active = 1)
+     FROM suppliers s
+     LEFT JOIN supplier_price_lists l ON l.supplier_id = s.id AND l.organization_id = s.organization_id
+     WHERE s.organization_id = ?1 AND (?2 = 1 OR s.active = 1)
      ORDER BY s.active DESC, s.name LIMIT 500`,
   ).bind(context.organization.id, incluirInativos ? 1 : 0).all<FornecedorRow>();
   return results.map((s) => ({
     id: s.id, name: s.name, document: s.document ?? "", contactName: s.contact_name, email: s.email, phone: s.phone, city: s.city, uf: s.uf,
     categories: s.categories, paymentTerms: s.payment_terms, leadTimeDays: s.lead_time_days, negotiationScore: s.negotiation_score,
     notes: s.notes, active: Boolean(s.active), createdAt: s.created_at, updatedAt: s.updated_at,
+    registry: s.registry_checked_at ? { name: s.registry_name ?? "", status: s.registry_status ?? "", activity: s.registry_activity ?? "", checkedAt: s.registry_checked_at } : null,
+    priceList: s.list_valid_on ? { validOn: s.list_valid_on, items: Number(s.list_items ?? 0), fileName: s.list_file ?? "" } : null,
     stats: {
       quotes: Number(s.quotes), won: Number(s.won), delivered: Number(s.delivered), onTime: Number(s.on_time),
       averageLeadDays: s.avg_lead === null ? null : Math.round(Number(s.avg_lead) * 10) / 10,

@@ -65,7 +65,43 @@ export async function preparadorDeSugestoes(context: OrganizationContext) {
      WHERE qi.organization_id = ?1 AND i.product_id IS NOT NULL ORDER BY q.updated_at DESC`,
   ).bind(context.organization.id).all<{ product_id: string; supplier_id: string; unit_price_cents: number; delivery_days: number }>();
 
-  return (alvo: { productIds: string[]; termos: string[]; excluir: string[] }): Sugestao[] => {
+  // Item parecido na lista de preços que a loja enviou: as duas palavras mais longas do
+  // nome do material precisam aparecer na descrição do item da lista. O SQLite não ignora
+  // acento, então o banco pré-filtra pelo maior trecho sem acento da palavra mais longa e a
+  // comparação final é feita aqui, sem acento dos dois lados.
+  async function porLista(nomes: string[], fora: Set<string>, ja: Set<string>): Promise<Sugestao[]> {
+    const lista: Sugestao[] = [];
+    for (const nome of nomes.slice(0, 6)) {
+      const originais = nome.split(/[^\p{L}\p{N}]+/u).filter((p) => {
+        const n = normalizar(p);
+        return n.length >= 4 && !/^\d+$/.test(n) && !PALAVRAS_VAZIAS.has(n);
+      }).sort((a, b) => b.length - a.length).slice(0, 2);
+      if (!originais.length) continue;
+      const trecho = originais[0].split(/[^A-Za-z0-9]+/).sort((a, b) => b.length - a.length)[0] ?? "";
+      if (trecho.length < 4) continue;
+      const exigidas = originais.map(normalizar);
+      const { results } = await context.db.prepare(
+        `SELECT i.supplier_id, i.description, i.unit, i.price_cents, l.valid_on FROM supplier_price_items i
+         JOIN supplier_price_lists l ON l.id = i.list_id AND l.organization_id = i.organization_id
+         WHERE i.organization_id = ?1 AND i.description LIKE ?2 ORDER BY i.price_cents LIMIT 200`,
+      ).bind(context.organization.id, `%${trecho}%`).all<{ supplier_id: string; description: string; unit: string; price_cents: number; valid_on: string }>();
+      for (const linha of results) {
+        if (fora.has(linha.supplier_id) || ja.has(linha.supplier_id) || lista.some((l) => l.supplierId === linha.supplier_id)) continue;
+        const descricao = normalizar(linha.description);
+        if (!exigidas.every((palavra) => descricao.includes(palavra))) continue;
+        const f = fornecedores.find((x) => x.id === linha.supplier_id);
+        if (!f) continue;
+        lista.push({
+          supplierId: f.id, name: f.name, phone: f.phone, email: f.email,
+          reason: `Lista de preços de ${linha.valid_on.split("-").reverse().join("/")}: ${linha.description} a ${(Number(linha.price_cents) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}/${linha.unit}`,
+          lastPriceCents: Number(linha.price_cents), deliveryDays: f.leadTimeDays, onTime: f.stats.onTime, delivered: f.stats.delivered,
+        });
+      }
+    }
+    return lista;
+  }
+
+  return async (alvo: { productIds: string[]; termos: string[]; nomes?: string[]; categoria?: string; excluir: string[] }): Promise<Sugestao[]> => {
     const fora = new Set(alvo.excluir);
     const escolhidos = new Map<string, Sugestao>();
     const taxa = (s: Sugestao) => s.delivered ? s.onTime / s.delivered : 0.5;
@@ -81,13 +117,17 @@ export async function preparadorDeSugestoes(context: OrganizationContext) {
       });
     }
     const porHistorico = [...escolhidos.values()].sort((a, b) => taxa(b) - taxa(a) || (a.lastPriceCents ?? 0) - (b.lastPriceCents ?? 0));
+    const daLista = await porLista(alvo.nomes ?? alvo.termos, fora, new Set(escolhidos.keys()));
+    for (const s of daLista) escolhidos.set(s.supplierId, s);
 
     const termos = [...new Set(alvo.termos.flatMap((t) => normalizar(t).split(/[^a-z0-9]+/)).filter((p) => p.length >= 4 && !PALAVRAS_VAZIAS.has(p)))];
     const porCategoria: Sugestao[] = [];
     if (termos.length) for (const f of fornecedores) {
       if (fora.has(f.id) || escolhidos.has(f.id) || !f.categories) continue;
       const categorias = normalizar(f.categories);
-      const casou = termos.find((t) => categorias.includes(t) || (t.length > 5 && categorias.includes(t.slice(0, -1))));
+      // Palavra do material no cadastro do fornecedor, ou a categoria do produto inteira.
+      const categoriaInteira = alvo.categoria && normalizar(alvo.categoria) !== "geral" && categorias.includes(normalizar(alvo.categoria));
+      const casou = categoriaInteira || termos.find((t) => categorias.includes(t) || (t.length > 5 && categorias.includes(t.slice(0, -1))));
       if (!casou) continue;
       porCategoria.push({
         supplierId: f.id, name: f.name, phone: f.phone, email: f.email, reason: `Fornece ${f.categories}`,
@@ -95,7 +135,7 @@ export async function preparadorDeSugestoes(context: OrganizationContext) {
       });
     }
     porCategoria.sort((a, b) => taxa(b) - taxa(a));
-    return [...porHistorico, ...porCategoria].slice(0, 4);
+    return [...porHistorico, ...daLista, ...porCategoria].slice(0, 4);
   };
 }
 
@@ -153,7 +193,7 @@ export async function itensDeAtencao(context: OrganizationContext) {
       title: produto.name, locationName: nomeDoLocal(falta.location, projetos),
       detail: `Saldo ${fmt(falta.balance)} ${produto.unit} de mínimo ${fmt(falta.minimum)} · ${situacao}`,
       productId: produto.id, location: falta.location, requestId: compra?.id ?? null, requestCode: compra ? numeroDoPedido(compra.number) : null,
-      suggestions: sugerir({ productIds: [produto.id], termos: [produto.category, produto.name], excluir: compra?.supplier_id ? [compra.supplier_id] : [] }),
+      suggestions: await sugerir({ productIds: [produto.id], termos: [produto.name], categoria: produto.category, nomes: [produto.name], excluir: compra?.supplier_id ? [compra.supplier_id] : [] }),
       suggestedQuantity: compra ? null : Math.max(0, Math.round((falta.minimum - falta.balance) * 1000) / 1000), unit: produto.unit,
     });
   }
@@ -177,7 +217,7 @@ export async function itensDeAtencao(context: OrganizationContext) {
         key: `entrega:${id}`, kind: sem ? "sem_previsao" : "atrasada", title: titulo, locationName: nomeDoLocal(base.location, projetos),
         detail: `${numeroDoPedido(base.number)} · ${linhas.length} ${linhas.length === 1 ? "item pendente" : "itens pendentes"} · ${sem ? "fornecedor não deu previsão" : `previsão era ${base.expected_delivery_date!.split("-").reverse().join("/")}`}${base.needed_by ? ` · obra precisa em ${base.needed_by.split("-").reverse().join("/")}` : ""}`,
         productId: null, location: base.location, requestId: id, requestCode: numeroDoPedido(base.number),
-        suggestions: sugerir({ productIds: linhas.map((l) => l.product_id).filter((p): p is string => Boolean(p)), termos: descricoes.filter((d) => d.id === id).map((d) => d.description), excluir: base.supplier_id ? [base.supplier_id] : [] }),
+        suggestions: await sugerir({ productIds: linhas.map((l) => l.product_id).filter((p): p is string => Boolean(p)), termos: descricoes.filter((d) => d.id === id).map((d) => d.description), excluir: base.supplier_id ? [base.supplier_id] : [] }),
         suggestedQuantity: null, unit: null,
       });
     }

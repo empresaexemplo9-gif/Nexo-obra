@@ -11,6 +11,7 @@
 import capturado from "@/lib/demonstracao/respostas.json";
 import { comprasDeExemplo, plantaDeExemplo } from "@/lib/demonstracao/dados";
 import { permissionModules, permissionsForRole } from "@/lib/permissions";
+import { buscarMaterialPadrao } from "@/lib/catalogo-materiais";
 import { areaM2, layoutDoModelo, layoutVazio, type LayoutConteudo } from "@/lib/layout";
 import { documentoVazio } from "@/lib/prancheta";
 
@@ -154,6 +155,13 @@ export class ServidorDemo {
       return ok({ ...this.corpo<Json>("/api/files"), files: this.lista("/api/files", "files").filter((f) => !projeto || f.projectId === projeto) });
     }
     if (caminho === "/api/integrations/sinapi/items") return ok({ items: [] });
+    // O catálogo de materiais padrão é o mesmo da plataforma (código, não dado fictício).
+    if (caminho === "/api/compras/catalogo" && (busca.get("fonte") ?? "padrao") === "padrao") {
+      const termo = (busca.get("q") ?? "").trim();
+      const itens = termo.length >= 2 ? buscarMaterialPadrao(termo) : [];
+      return ok({ items: itens.map((m) => ({ source: "padrao", reference: `PADRAO:${m.codigo}`, code: m.codigo, description: m.nome, unit: m.unidade, unitCostCents: null, label: m.norma, category: m.categoria, specification: m.especificacao })),
+        emptyReason: termo.length < 2 ? "Digite pelo menos 2 letras ou o código." : itens.length ? null : "Nenhum material padrão corresponde à busca.", goinfraTables: [] });
+    }
     if (caminho === "/api/conversas") {
       const conversas = this.corpo<Json>("/api/conversas");
       return ok({ ...conversas, unreadTotal: 0 });

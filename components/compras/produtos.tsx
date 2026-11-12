@@ -13,10 +13,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api, CampoArea, CampoTexto, dataCurta, dinheiro, Escolha, lerCentavos, mensagem, type Produto } from "@/components/compras/comum";
 
-type ItemCatalogo = { source: string; reference: string; code: string; description: string; unit: string; unitCostCents: number; label: string; category: string };
+type ItemCatalogo = { source: string; reference: string; code: string; description: string; unit: string; unitCostCents: number | null; label: string; category: string; specification?: string };
 type Historico = { unitPriceCents: number; deliveryDays: number; quotedAt: string; supplierName: string; requestNumber: number; bought: boolean };
 
-const rotuloFonte: Record<string, string> = { manual: "Manual", goinfra: "GOINFRA", sinapi: "SINAPI", biblioteca: "Biblioteca" };
+const rotuloFonte: Record<string, string> = { manual: "Manual", padrao: "Padrão ABNT", fornecedor: "Lista da loja", goinfra: "GOINFRA", sinapi: "SINAPI", biblioteca: "Biblioteca" };
 
 export function Produtos({ produtos, canEdit, canBiblioteca, busca, onAlterado }: {
   produtos: Produto[]; canEdit: boolean; canBiblioteca: boolean; busca: string; onAlterado: () => Promise<void>;
@@ -59,7 +59,7 @@ export function Produtos({ produtos, canEdit, canBiblioteca, busca, onAlterado }
           : <div className="overflow-x-auto"><Table>
             <TableHeader><TableRow><TableHead>Produto</TableHead><TableHead>Origem</TableHead><TableHead className="text-right">Referência</TableHead><TableHead className="text-right">Última cotação</TableHead><TableHead className="w-10"><span className="sr-only">Histórico</span></TableHead></TableRow></TableHeader>
             <TableBody>{visiveis.map((p) => <TableRow key={p.id}>
-              <TableCell className="whitespace-normal"><span className="block font-medium text-drap-900">{p.name}</span><span className="text-xs text-drap-500">{[p.code, p.category, p.brand, p.unit].filter(Boolean).join(" · ")}</span></TableCell>
+              <TableCell className="whitespace-normal"><span className="block font-medium text-drap-900">{p.name}</span><span className="text-xs text-drap-500">{[p.code, p.category, p.brand, p.unit].filter(Boolean).join(" · ")}</span>{p.specification ? <span className="mt-0.5 line-clamp-2 block text-xs text-drap-600" title={p.specification}>{p.specification}</span> : null}</TableCell>
               <TableCell><Badge variant="outline">{rotuloFonte[p.source] ?? p.source}</Badge></TableCell>
               <TableCell className="text-right tabular-nums" title={p.referenceLabel || undefined}>{dinheiro(p.referenceCostCents)}</TableCell>
               <TableCell className="text-right tabular-nums">{dinheiro(p.lastQuotedCents)}</TableCell>
@@ -100,7 +100,7 @@ export function Produtos({ produtos, canEdit, canBiblioteca, busca, onAlterado }
 }
 
 function Catalogo({ canEdit, canBiblioteca, onAdicionado }: { canEdit: boolean; canBiblioteca: boolean; onAdicionado: () => Promise<void> }) {
-  const [fonte, setFonte] = useState("goinfra");
+  const [fonte, setFonte] = useState("padrao");
   const [termo, setTermo] = useState("");
   const [tabela, setTabela] = useState("");
   const [uf, setUf] = useState("GO");
@@ -131,18 +131,18 @@ function Catalogo({ canEdit, canBiblioteca, onAdicionado }: { canEdit: boolean; 
   }
 
   return <Card className="min-w-0 xl:col-span-2">
-    <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">Adicionar do catálogo</CardTitle><p className="mt-1 text-xs text-drap-500">Descrição, unidade e custo vêm da tabela oficial; o produto guarda de qual referência saiu.</p></CardHeader>
+    <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">Adicionar do catálogo</CardTitle><p className="mt-1 text-xs text-drap-500">{fonte === "padrao" ? "Materiais de mercado com a norma ABNT e a especificação a pedir. Sem preço: o custo vem da SINAPI, da GOINFRA ou da lista da loja." : fonte === "fornecedor" ? "Itens e preços das planilhas que os fornecedores enviaram, com a data da lista." : "Descrição, unidade e custo vêm da tabela oficial; o produto guarda de qual referência saiu."}</p></CardHeader>
     <CardContent className="space-y-3 p-4">
       <Tabs value={fonte} onValueChange={(valor) => { setFonte(valor); setResultado(null); }}>
-        <TabsList className="w-full"><TabsTrigger value="goinfra">GOINFRA</TabsTrigger><TabsTrigger value="sinapi">SINAPI</TabsTrigger>{canBiblioteca ? <TabsTrigger value="biblioteca">Biblioteca</TabsTrigger> : null}</TabsList>
+        <TabsList className="h-auto w-full flex-wrap"><TabsTrigger value="padrao">Materiais padrão</TabsTrigger><TabsTrigger value="fornecedor">Listas das lojas</TabsTrigger><TabsTrigger value="goinfra">GOINFRA</TabsTrigger><TabsTrigger value="sinapi">SINAPI</TabsTrigger>{canBiblioteca ? <TabsTrigger value="biblioteca">Biblioteca</TabsTrigger> : null}</TabsList>
       </Tabs>
       <form onSubmit={(e) => void buscar(e)} className="space-y-3">
         {fonte === "goinfra" && resultado?.goinfraTables.length ? <Escolha id="catalogo-tabela" label="Tabela" value={tabela} onChange={setTabela} options={[{ value: "", label: "Todas as tabelas importadas" }, ...resultado.goinfraTables.map((t) => ({ value: t.id, label: t.label }))]} /> : null}
         {fonte === "sinapi" ? <CampoTexto id="catalogo-uf" label="UF" value={uf} maxLength={2} onChange={(e) => setUf(e.target.value.toUpperCase())} /> : null}
-        <div className="flex gap-2"><label htmlFor="catalogo-busca" className="sr-only">Buscar no catálogo</label><Input id="catalogo-busca" value={termo} onChange={(e) => setTermo(e.target.value)} placeholder="Ex.: cimento, 020001" /><Button type="submit" disabled={buscando}>{buscando ? <LoaderCircle className="animate-spin" /> : <Search />}Buscar</Button></div>
+        <div className="flex gap-2"><label htmlFor="catalogo-busca" className="sr-only">Buscar no catálogo</label><Input id="catalogo-busca" value={termo} onChange={(e) => setTermo(e.target.value)} placeholder={fonte === "padrao" ? "Ex.: cimento, vergalhão 10, NBR 7480" : "Ex.: cimento, 020001"} /><Button type="submit" disabled={buscando}>{buscando ? <LoaderCircle className="animate-spin" /> : <Search />}Buscar</Button></div>
       </form>
       {resultado ? !resultado.items.length ? <p className="text-sm text-drap-600">{resultado.emptyReason}</p> : <ul className="divide-y divide-drap-100 rounded-md border border-drap-200">{resultado.items.map((item) => <li key={item.reference} className="flex items-start gap-3 p-3">
-        <div className="min-w-0 flex-1"><p className="text-sm text-drap-900">{item.description}</p><p className="mt-0.5 text-xs text-drap-500">{item.code} · {item.unit} · <span className="tabular-nums">{dinheiro(item.unitCostCents)}</span> · {item.label}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-sm text-drap-900">{item.description}</p><p className="mt-0.5 text-xs text-drap-500">{[item.code, item.unit].filter(Boolean).join(" · ")} · <span className="tabular-nums">{item.unitCostCents === null ? "sem preço" : dinheiro(item.unitCostCents)}</span> · {item.label}</p>{item.specification ? <p className="mt-1 text-xs text-drap-600">{item.specification}</p> : null}</div>
         {canEdit ? <Button size="sm" variant="outline" disabled={adicionando !== null} onClick={() => void adicionar(item)} aria-label={`Adicionar ${item.description}`}>{adicionando === item.reference ? <LoaderCircle className="animate-spin" /> : <PackagePlus />}</Button> : null}
       </li>)}</ul> : null}
     </CardContent>
