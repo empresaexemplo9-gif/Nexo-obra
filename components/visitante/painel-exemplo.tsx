@@ -50,15 +50,15 @@ export function PainelExemplo({ abrir }: { abrir: (area: AreaDemo) => void }) {
       <p className="text-sm leading-6 text-drap-500">Empresa, pessoas e valores inventados para a demonstração. Mexa à vontade: conclua tarefas, avance negócios e ajuste o orçamento.</p>
     </div>
 
-    <dl className="grid gap-3 sm:grid-cols-3">
+    <dl className="grid divide-y divide-drap-200 rounded-lg border border-drap-200 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       {[
         { rotulo: "Tarefas abertas", valor: String(abertas.length), detalhe: atrasadas ? `${atrasadas} atrasada${atrasadas > 1 ? "s" : ""}` : "Nenhuma atrasada" },
         { rotulo: "Em negociação", valor: reais(emNegociacao.reduce((soma, item) => soma + item.valorCentavos, 0)), detalhe: `${emNegociacao.length} oportunidade${emNegociacao.length === 1 ? "" : "s"}` },
         { rotulo: "Fechado no teste", valor: reais(fechado), detalhe: "Avance um negócio até “Fechado”" },
-      ].map((item) => <div key={item.rotulo} className="rounded-lg border border-drap-200 bg-white p-5">
+      ].map((item) => <div key={item.rotulo} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 py-3">
         <dt className="text-sm text-drap-500">{item.rotulo}</dt>
-        <dd className="metric-number mt-2 text-3xl">{item.valor}</dd>
-        <dd className="mt-1 text-xs text-drap-500">{item.detalhe}</dd>
+        <dd className="metric-number text-2xl">{item.valor}</dd>
+        <dd className="text-xs text-drap-500">{item.detalhe}</dd>
       </div>)}
     </dl>
 

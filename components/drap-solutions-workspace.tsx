@@ -120,14 +120,14 @@ export function DrapSolutionsWorkspace() {
 
   if (!data || error) {
     return (
-      <div className="mx-auto max-w-5xl p-6">
+      <div className="p-6">
         <Card><Empty className="min-h-72 border-0"><EmptyHeader><EmptyMedia variant="icon"><ShieldCheck /></EmptyMedia><EmptyTitle>Soluções DRAP indisponíveis</EmptyTitle><EmptyDescription>{error || "Não foi possível consultar o catálogo."}</EmptyDescription></EmptyHeader></Empty></Card>
       </div>
     );
   }
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
+    <main className="space-y-6 p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="eyebrow text-drap-600">DRAP Backoffice · Financeiro</p>

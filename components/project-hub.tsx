@@ -211,7 +211,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
   return (
     <main className="min-h-svh bg-background">
       <header className="border-b border-white/10 bg-drap-deep text-white shadow-none">
-        <div className="mx-auto flex max-w-[1500px] items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/" aria-label="Voltar para a plataforma" className="grid size-10 place-items-center rounded-md border border-white/10 bg-white/[0.06] text-drap-300 transition hover:bg-white/10 hover:text-white"><ArrowLeft className="size-4" /></Link>
           <BrandLogo variant="lockup" dark className="w-[170px] sm:w-[200px]" />
           <div className="ml-auto min-w-0 text-right"><p className="truncate text-sm font-medium text-white">{session.organization?.name}</p><p className="text-xs text-drap-500">Central da obra</p></div>
@@ -220,7 +220,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
 
       <section className="relative overflow-hidden bg-drap-deep px-4 pb-20 pt-10 text-white sm:px-6 lg:px-8">
 
-        <div className="relative mx-auto max-w-[1500px]">
+        <div className="relative">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-3xl">
               <div className="flex flex-wrap items-center gap-2"><Badge className="border-drap-300/20 bg-drap-300/10 text-drap-100">{project.kind === "work" ? <HardHat /> : <BriefcaseBusiness />}{project.kind === "work" ? "Obra" : "Projeto"}</Badge><StateBadge status={project.status} /><span className="text-xs font-semibold uppercase tracking-[0.18em] text-drap-500">{project.code}</span></div>
@@ -233,7 +233,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
         </div>
       </section>
 
-      <div className="relative mx-auto -mt-10 max-w-[1500px] px-4 pb-14 sm:px-6 lg:px-8">
+      <div className="relative -mt-10 px-4 pb-14 sm:px-6 lg:px-8">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Fase atual" value={project.phase} note="Etapa registrada no projeto" icon={Boxes} />
           <MetricCard label="Prazo" value={formatDate(project.targetDate)} note={project.startDate ? `Início em ${formatDate(project.startDate)}` : "Data inicial não informada"} icon={CalendarDays} />

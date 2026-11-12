@@ -424,14 +424,14 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
   return (
     <main className="min-h-svh bg-drap-100">
       <header className="border-b border-drap-800 bg-drap-deep text-white shadow-none">
-        <div className="mx-auto flex max-w-[1480px] items-center gap-4 px-5 py-4 sm:px-8">
+        <div className="flex items-center gap-4 px-5 py-4 sm:px-8">
           <BrandLogo dark className="h-auto w-[180px]" />
           <Badge className="ml-2 border-drap-300/20 bg-drap-300/10 text-drap-200">Superadmin</Badge>
           <div className="ml-auto hidden text-right sm:block"><p className="text-sm font-medium">{session.email}</p><p className="text-xs text-drap-500">Sessão protegida</p></div>
           <Button variant="ghost" size="sm" onClick={onLogout} className="text-drap-300 hover:bg-white/10 hover:text-white"><LogOut />Sair</Button>
         </div>
       </header>
-      <div className=" mx-auto max-w-[1480px] px-5 py-7 sm:px-8 sm:py-10">
+      <div className=" px-5 py-7 sm:px-8 sm:py-10">
         <div className="mb-7"><div className="flex items-center gap-2 text-sm font-medium text-drap-700"><ShieldCheck className="size-4" />Visão global protegida</div><h1 className="display-heading mt-2 text-4xl text-drap-950 sm:text-5xl">Controle da plataforma</h1><p className="mt-2 text-drap-600">Acompanhe os indicadores da plataforma e abra qualquer empresa com leitura e edição totais. Cada entrada fica registrada na auditoria da empresa.</p></div>
         <div className="mb-4"><BuildPanel /></div>
         {database ? <div className="mb-6"><DatabasePanel status={database} onApplied={reload} /></div> : null}
