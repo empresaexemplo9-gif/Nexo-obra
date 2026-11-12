@@ -199,6 +199,24 @@ test("o que não é emulado é recusado, nunca dado como feito", () => {
   assert.equal(servidor.responder("GET", "/api/integrations/drap/summary", null).body.source, "drap");
 });
 
+test("Compras abre na demonstração com o comparativo real e recusa compra, cotação e cadastro", () => {
+  navegadorDeTeste();
+  const servidor = new demo.ServidorDemo();
+  const sessao = servidor.responder("GET", "/api/session", null).body;
+  assert.equal(sessao.member.permissions.purchases.view, true, "a sessão capturada ganha o módulo novo pelo perfil");
+  const { requests } = servidor.responder("GET", "/api/compras", null).body;
+  assert.deepEqual(requests.map((p) => p.status).sort(), ["a_comprar", "a_orcar", "em_entrega", "entregue"]);
+  const cotando = servidor.responder("GET", `/api/compras/${requests.find((p) => p.status === "a_orcar").id}`, null).body;
+  assert.equal(cotando.comparison.linhas.length, 2);
+  assert.equal(cotando.comparison.linhas.filter((l) => l.recomendada).length, 1);
+  assert.ok(servidor.responder("GET", "/api/compras/fornecedores?inativos=1", null).body.suppliers.length >= 2);
+  for (const [metodo, caminho] of [["POST", "/api/compras"], ["POST", `/api/compras/${cotando.request.id}/acoes`], ["POST", `/api/compras/${cotando.request.id}/cotacoes`], ["POST", "/api/compras/fornecedores"], ["POST", "/api/compras/produtos"]]) {
+    const resposta = servidor.responder(metodo, caminho, { action: "comprar", revision: 1 });
+    assert.equal(resposta.status, 403, `${metodo} ${caminho}`);
+    assert.equal(resposta.body.code, "demonstracao");
+  }
+});
+
 test("a planta de exemplo é válida pelas regras reais", () => {
   const planta = dados.plantaDeExemplo();
   assert.equal(prancheta.documentoSchema.safeParse(planta).success, true);

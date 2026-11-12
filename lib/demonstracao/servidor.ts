@@ -9,7 +9,8 @@
 // O que não é emulado é recusado com uma mensagem clara — nunca com sucesso fabricado.
 
 import capturado from "@/lib/demonstracao/respostas.json";
-import { plantaDeExemplo } from "@/lib/demonstracao/dados";
+import { comprasDeExemplo, plantaDeExemplo } from "@/lib/demonstracao/dados";
+import { permissionModules, permissionsForRole } from "@/lib/permissions";
 import { areaM2, layoutDoModelo, layoutVazio, type LayoutConteudo } from "@/lib/layout";
 import { documentoVazio } from "@/lib/prancheta";
 
@@ -17,7 +18,7 @@ type Json = Record<string, unknown>;
 type Linha = Json & { id: string };
 export type RespostaDemo = { status: number; body: unknown };
 
-const CHAVE = "drap-demonstracao-estado-v1";
+const CHAVE = "drap-demonstracao-estado-v2";
 export const RECUSA_DEMO = "Na demonstração esta ação não é executada. Ela funciona na conta da sua empresa.";
 const recusa = (): RespostaDemo => ({ status: 403, body: { error: RECUSA_DEMO, code: "demonstracao" } });
 const naoAchou = (): RespostaDemo => ({ status: 404, body: { error: "Registro não encontrado na demonstração.", code: "not_found" } });
@@ -52,7 +53,25 @@ function estadoInicial(): Record<string, RespostaDemo> {
     if (/^\/api\/studio\/[0-9a-f-]{36}$/.test(caminho)) (resposta.body as { prancha: Json }).prancha.documento = plantaDeExemplo();
   }
   Object.assign(estado, financeiroDeExemplo(estado));
+  completarPermissoes(estado);
+  const projetos = ((estado["/api/projects"]?.body as { projects?: Array<{ id: string; code: string; name: string; kind: string }> })?.projects ?? []);
+  for (const [caminho, body] of Object.entries(comprasDeExemplo(projetos))) estado[caminho] = ok(body);
   return estado;
+}
+
+/**
+ * As respostas capturadas são anteriores aos módulos mais novos (Compras): a matriz de
+ * permissões delas não tem a chave. Completa com o padrão do perfil, como o servidor
+ * real faz ao ler a sessão.
+ */
+function completarPermissoes(estado: Record<string, RespostaDemo>) {
+  const completar = (alvo: { role?: string; permissions?: Record<string, unknown> } | undefined) => {
+    if (!alvo?.permissions) return;
+    const padrao = permissionsForRole(alvo.role ?? "member");
+    for (const modulo of permissionModules) if (!alvo.permissions[modulo]) alvo.permissions[modulo] = padrao[modulo];
+  };
+  completar((estado["/api/session"]?.body as { member?: { role?: string; permissions?: Record<string, unknown> } })?.member);
+  for (const membro of ((estado["/api/members"]?.body as { members?: Array<{ role?: string; permissions?: Record<string, unknown> }> })?.members ?? [])) completar(membro);
 }
 
 /**

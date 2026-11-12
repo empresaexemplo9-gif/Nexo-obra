@@ -1049,3 +1049,172 @@ export const layouts = sqliteTable("layouts", {
 }, (table) => [
   index("idx_layouts_org_updated").on(table.organizationId, table.updatedAt),
 ]);
+
+// ## Compras
+//
+// O ciclo inteiro de suprimento de uma obra: o que precisa ser orçado, as cotações dos
+// fornecedores, a escolha, o pedido e a entrega. Dinheiro sempre em centavos; o total
+// comprado é congelado no momento do pedido para que mexer numa cotação depois não
+// reescreva o que foi combinado com o fornecedor.
+//
+// O financeiro oficial continua na Drap: nada aqui é saldo nem lançamento.
+export const suppliers = sqliteTable("suppliers", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  name: text("name").notNull(),
+  document: text("document"),
+  contactName: text("contact_name").notNull().default(""),
+  email: text("email").notNull().default(""),
+  phone: text("phone").notNull().default(""),
+  city: text("city").notNull().default(""),
+  uf: text("uf").notNull().default(""),
+  categories: text("categories").notNull().default(""),
+  // Condição que o fornecedor costuma oferecer — sugestão ao lançar a cotação.
+  paymentTerms: text("payment_terms").notNull().default(""),
+  leadTimeDays: integer("lead_time_days"),
+  // 1 a 5: quanto o fornecedor aceita negociar (preço, parcelamento, troca, prazo).
+  negotiationScore: integer("negotiation_score"),
+  notes: text("notes").notNull().default(""),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  ...timestamps,
+}, (table) => [
+  index("idx_suppliers_org_name").on(table.organizationId, table.name),
+  uniqueIndex("uidx_suppliers_org_document").on(table.organizationId, table.document),
+]);
+
+export const purchaseProducts = sqliteTable("purchase_products", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  code: text("code").notNull().default(""),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("Geral"),
+  unit: text("unit").notNull().default("un"),
+  brand: text("brand").notNull().default(""),
+  specification: text("specification").notNull().default(""),
+  // manual | goinfra | sinapi | biblioteca
+  source: text("source").notNull().default("manual"),
+  // Identificador do item na fonte (tabela, referência e código). Nulo no cadastro manual.
+  sourceReference: text("source_reference"),
+  referenceCostCents: integer("reference_cost_cents"),
+  referenceLabel: text("reference_label").notNull().default(""),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  ...timestamps,
+}, (table) => [
+  index("idx_purchase_products_org_name").on(table.organizationId, table.name),
+  uniqueIndex("uidx_purchase_products_org_reference").on(table.organizationId, table.sourceReference),
+]);
+
+export const purchaseRequests = sqliteTable("purchase_requests", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  number: integer("number").notNull(),
+  projectId: text("project_id").references(() => projects.id),
+  title: text("title").notNull(),
+  // a_orcar | a_comprar | comprado | em_entrega | entregue | cancelado
+  status: text("status").notNull().default("a_orcar"),
+  priority: text("priority").notNull().default("normal"),
+  neededBy: text("needed_by"),
+  deliveryAddress: text("delivery_address").notNull().default(""),
+  notes: text("notes").notNull().default(""),
+  selectedQuoteId: text("selected_quote_id"),
+  orderNumber: text("order_number").notNull().default(""),
+  orderedAt: text("ordered_at"),
+  purchasedTotalCents: integer("purchased_total_cents"),
+  expectedDeliveryDate: text("expected_delivery_date"),
+  carrier: text("carrier").notNull().default(""),
+  trackingCode: text("tracking_code").notNull().default(""),
+  dispatchedAt: text("dispatched_at"),
+  deliveredAt: text("delivered_at"),
+  cancelReason: text("cancel_reason").notNull().default(""),
+  revision: integer("revision").notNull().default(1),
+  createdByName: text("created_by_name").notNull(),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex("uidx_purchase_requests_org_number").on(table.organizationId, table.number),
+  index("idx_purchase_requests_org_status").on(table.organizationId, table.status),
+  index("idx_purchase_requests_org_project").on(table.organizationId, table.projectId),
+]);
+
+export const purchaseRequestItems = sqliteTable("purchase_request_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  requestId: text("request_id").notNull().references(() => purchaseRequests.id),
+  productId: text("product_id").references(() => purchaseProducts.id),
+  position: integer("position").notNull().default(0),
+  description: text("description").notNull(),
+  unit: text("unit").notNull().default("un"),
+  quantity: real("quantity").notNull(),
+  receivedQuantity: real("received_quantity").notNull().default(0),
+  // Custo de referência copiado do produto quando o item entrou: base da comparação.
+  referenceCostCents: integer("reference_cost_cents"),
+}, (table) => [index("idx_purchase_request_items_request").on(table.requestId, table.position)]);
+
+export const purchaseQuotes = sqliteTable("purchase_quotes", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  requestId: text("request_id").notNull().references(() => purchaseRequests.id),
+  supplierId: text("supplier_id").notNull().references(() => suppliers.id),
+  deliveryDays: integer("delivery_days").notNull(),
+  paymentTerms: text("payment_terms").notNull().default(""),
+  paymentDays: integer("payment_days").notNull().default(0),
+  freightCents: integer("freight_cents").notNull().default(0),
+  discountCents: integer("discount_cents").notNull().default(0),
+  validUntil: text("valid_until"),
+  negotiationScore: integer("negotiation_score").notNull().default(3),
+  notes: text("notes").notNull().default(""),
+  createdByName: text("created_by_name").notNull(),
+  ...timestamps,
+}, (table) => [uniqueIndex("uidx_purchase_quotes_request_supplier").on(table.requestId, table.supplierId)]);
+
+export const purchaseQuoteItems = sqliteTable("purchase_quote_items", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  quoteId: text("quote_id").notNull().references(() => purchaseQuotes.id),
+  requestItemId: text("request_item_id").notNull().references(() => purchaseRequestItems.id),
+  unitPriceCents: integer("unit_price_cents").notNull(),
+}, (table) => [uniqueIndex("uidx_purchase_quote_items_quote_item").on(table.quoteId, table.requestItemId)]);
+
+// Linha do tempo do pedido: quem escolheu, comprou, despachou e recebeu, e quando.
+export const purchaseEvents = sqliteTable("purchase_events", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  requestId: text("request_id").notNull().references(() => purchaseRequests.id),
+  kind: text("kind").notNull(),
+  detail: text("detail").notNull().default(""),
+  authorName: text("author_name").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("idx_purchase_events_request").on(table.requestId, table.createdAt)]);
+
+// ## Referência GOINFRA
+//
+// Tabela de preços da Agência Goiana de Infraestrutura e Transportes. Global, como a
+// SINAPI: o preço oficial é o mesmo para todas as empresas e só o superadministrador
+// importa. Uma tabela ativa por tipo e regime; a anterior sai junto com os itens.
+export const goinfraTabelas = sqliteTable("goinfra_tabelas", {
+  id: text("id").primaryKey(),
+  referencia: text("referencia").notNull(),
+  // obras-civis | rodoviaria
+  tabela: text("tabela").notNull(),
+  // Desonerado | NaoDesonerado
+  regime: text("regime").notNull(),
+  arquivoNome: text("arquivo_nome").notNull(),
+  arquivoSha256: text("arquivo_sha256").notNull(),
+  arquivoBytes: integer("arquivo_bytes").notNull(),
+  aba: text("aba").notNull().default(""),
+  totalItens: integer("total_itens").notNull(),
+  ignoradas: integer("ignoradas").notNull().default(0),
+  importadoPor: text("importado_por").notNull(),
+  importadoEm: integer("importado_em").notNull(),
+}, (t) => [uniqueIndex("uidx_goinfra_tabela_regime").on(t.tabela, t.regime)]);
+
+export const goinfraItens = sqliteTable("goinfra_itens", {
+  id: text("id").primaryKey(),
+  tabelaId: text("tabela_id").notNull().references(() => goinfraTabelas.id),
+  codigo: text("codigo").notNull(),
+  descricao: text("descricao").notNull(),
+  unidade: text("unidade").notNull(),
+  custoUnitarioCentavos: integer("custo_unitario_centavos").notNull(),
+}, (t) => [
+  uniqueIndex("uidx_goinfra_itens_tabela_codigo").on(t.tabelaId, t.codigo),
+  index("idx_goinfra_itens_descricao").on(t.tabelaId, t.descricao),
+]);

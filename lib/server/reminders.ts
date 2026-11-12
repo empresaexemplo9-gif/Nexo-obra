@@ -6,7 +6,7 @@ import { usageDayKey, usageDayStart } from "@/lib/server/usage";
 // e some sozinho quando o registro deixa de estar pendente. Dispensar vale só para o dia.
 
 export type ReminderSeverity = "atrasado" | "hoje" | "proximo";
-export type ReminderGroup = "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado";
+export type ReminderGroup = "cobranca" | "boleto" | "followup" | "proposta" | "tarefa" | "meta" | "recado" | "compra" | "entrega";
 
 export type Reminder = {
   key: string;
@@ -249,6 +249,39 @@ export async function dailyReminders(context: OrganizationContext, now = Date.no
       detail: `${task.project_name ?? "Sem projeto"} · ${dayLabel(due)}${task.assignee_member_id === context.member.id ? " · atribuída a você" : ""}`,
       amountCents: null, dueDay: due, module: "tasks", entityId: task.id,
     });
+  }
+
+  // Compras: material que precisa chegar e ainda não foi pedido, e entrega prevista ou
+  // atrasada. Some sozinho quando o pedido sai, chega ou é cancelado.
+  if (may(context, "purchases")) {
+    const pedidos = await db.prepare(
+      `SELECT r.id, r.number, r.title, r.status, r.needed_by, r.expected_delivery_date, p.name AS project_name
+       FROM purchase_requests r
+       LEFT JOIN projects p ON p.id = r.project_id AND p.organization_id = r.organization_id
+       WHERE r.organization_id = ?1 AND (
+         (r.status IN ('a_orcar', 'a_comprar') AND r.needed_by IS NOT NULL AND r.needed_by <= ?2)
+         OR (r.status IN ('comprado', 'em_entrega') AND r.expected_delivery_date IS NOT NULL AND r.expected_delivery_date <= ?2))
+       ORDER BY COALESCE(r.expected_delivery_date, r.needed_by) LIMIT 200`,
+    ).bind(organization.id, horizon).all<{ id: string; number: number; title: string; status: string; needed_by: string | null; expected_delivery_date: string | null; project_name: string | null }>();
+    for (const pedido of pedidos.results) {
+      const codigo = `PC-${String(pedido.number).padStart(4, "0")}`;
+      if (pedido.status === "a_orcar" || pedido.status === "a_comprar") {
+        reminders.push({
+          key: `compra:${pedido.id}`, group: "compra", severity: severityFor(pedido.needed_by, today),
+          title: `${pedido.status === "a_orcar" ? "Cotar e comprar" : "Fazer o pedido"}: ${pedido.title}`,
+          detail: `${codigo} · ${pedido.project_name ?? "Sem obra"} · necessário em ${dayLabel(pedido.needed_by!)}`,
+          amountCents: null, dueDay: pedido.needed_by, module: "purchases", entityId: pedido.id,
+        });
+      } else {
+        const due = pedido.expected_delivery_date!;
+        reminders.push({
+          key: `entrega:${pedido.id}`, group: "entrega", severity: severityFor(due, today),
+          title: due < today ? `Entrega atrasada: ${pedido.title}` : `Entrega prevista: ${pedido.title}`,
+          detail: `${codigo} · ${pedido.project_name ?? "Sem obra"} · previsão ${dayLabel(due)}`,
+          amountCents: null, dueDay: due, module: "purchases", entityId: pedido.id,
+        });
+      }
+    }
   }
 
   // Recado com data, criado na Comunicação para esta pessoa ou para todos da conversa.
