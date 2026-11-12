@@ -58,6 +58,7 @@ import { FilesWorkspace } from "@/components/files-workspace";
 import { PranchetaWorkspace } from "@/components/prancheta/prancheta-workspace";
 import { DocumentosWorkspace } from "@/components/documentos/documentos-workspace";
 import { PranchetaWorkspace as EditorCadWorkspace } from "@/components/prancheta-workspace";
+import { HomeVisitante } from "@/components/visitante/home-visitante";
 import { ComunicacaoWorkspace } from "@/components/comunicacao/comunicacao-workspace";
 import { LayoutWorkspace } from "@/components/layout/layout-workspace";
 import { Button } from "@/components/ui/button";
@@ -530,6 +531,7 @@ function OrganizationChoice({ organizations, onSelected }: { organizations: Orga
 
 export function NexoApp() {
   const [session, setSession] = useState<SessionData | null>(null);
+  const [entrando, setEntrando] = useState(false);
   const [loading, setLoading] = useState(true);
   const loadSession = useCallback(async () => { await Promise.resolve(); setLoading(true); try { setSession(await requestJson<SessionData>("/api/session")); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível abrir sua conta."); } finally { setLoading(false); } }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void loadSession(); }, 0); return () => window.clearTimeout(timer); }, [loadSession]);
@@ -544,7 +546,9 @@ export function NexoApp() {
   }, []);
   useUsageHeartbeat(Boolean(session?.authenticated && session.organization && !session.portalOnly), undefined, signedOut);
   if (loading || !session) return <LoadingScreen />;
-  if (!session.authenticated) return <AccessScreen expired={expired} />;
+  // Visitante sem conta vê a página de apresentação; o formulário de entrada abre pelo
+  // botão dela. Sessão que venceu no meio do trabalho vai direto ao formulário.
+  if (!session.authenticated) return expired || entrando ? <AccessScreen expired={expired} /> : <HomeVisitante onEntrar={() => setEntrando(true)} />;
   if (session.organizationSelectionRequired) return <OrganizationChoice organizations={session.organizations} onSelected={loadSession} />;
   if (session.portalOnly) return <ClientPortalApp />;
   if (session.platformEmpty) return <PlatformEmptyScreen />;

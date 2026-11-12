@@ -363,12 +363,15 @@ function marcadorDoEncaixe(tipo: TipoEncaixe, p: { x: number; y: number }, m: nu
   }
 }
 
-export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false, importarDaBiblioteca = null }: {
+export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage = false, importarDaBiblioteca = null, demonstracao = null }: {
   prancha: Prancha; canEdit: boolean; onVoltar: () => void;
   onSalvo: (atualizada: Prancha) => void;
   fullPage?: boolean;
   /** Arquivo DWG/DXF da biblioteca da Prancheta para importar assim que o editor abre. */
   importarDaBiblioteca?: { id: string; nome: string } | null;
+  /** Demonstração pública: o editor não fala com o servidor. Gravar não grava — avisa
+   *  `aoGravar` —, a biblioteca de imagens fica vazia e DWG/DXF não é lido. */
+  demonstracao?: { aoGravar: () => void } | null;
 }) {
   const [documento, definirDocumento] = useState<Documento>(prancha.documento);
   // Cópia síncrona do documento: um comando aplica várias alterações seguidas (LINHA
@@ -607,6 +610,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   useEffect(() => {
     let vivo = true;
+    if (demonstracao) return;
     void (async () => {
       const resposta = await fetch("/api/studio/assets", { cache: "no-store" }).catch(() => null);
       if (!vivo || !resposta?.ok) return;
@@ -614,16 +618,16 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
       definirBiblioteca(corpo.itens.filter((item) => item.desenhavel));
     })();
     return () => { vivo = false; };
-  }, []);
+  }, [demonstracao]);
 
   // Sair com desenho não gravado é perda de trabalho, não de rascunho. O aviso do
   // navegador é o único que funciona quando a pessoa fecha a aba.
   useEffect(() => {
-    if (!sujo) return;
+    if (!sujo || demonstracao) return;
     const aviso = (evento: BeforeUnloadEvent) => { evento.preventDefault(); };
     window.addEventListener("beforeunload", aviso);
     return () => window.removeEventListener("beforeunload", aviso);
-  }, [sujo]);
+  }, [sujo, demonstracao]);
 
   const paraMilimetros = useCallback((evento: { clientX: number; clientY: number }) => {
     const svg = svgRef.current;
@@ -1204,6 +1208,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
    *  antes para a biblioteca da Prancheta, em partes, e é lido de lá — o corpo de uma
    *  função não comporta um DWG inteiro. A resposta volta comprimida. */
   async function importar(arquivo: File | null, unidade: string, aplicarDireto = false) {
+    if (demonstracao) { toast.info("A leitura de DWG e DXF acontece no servidor e fica disponível na conta da empresa."); return; }
     definirImportando(true);
     definirErroImportacao(null);
     definirLendo(arquivo?.name ?? arquivoDaBiblioteca.current?.nome ?? "arquivo");
@@ -1299,6 +1304,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   async function salvar() {
     if (!canEdit || salvamentoEmCurso.current) return;
+    if (demonstracao) { demonstracao.aoGravar(); return; }
     salvamentoEmCurso.current = true;
     definirSalvando(true); definirConflito(false);
     try {
@@ -1458,7 +1464,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
   useEffect(() => {
     function tecla(evento: KeyboardEvent) {
       // Ctrl+S grava de qualquer lugar, inclusive com o cursor num campo.
-      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") { evento.preventDefault(); if (canEdit && sujo) void salvar(); return; }
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === "s") { evento.preventDefault(); if (canEdit && (sujo || demonstracao)) void salvar(); return; }
       if (evento.key === "F2") { evento.preventDefault(); definirRegistroAberto((aberto) => !aberto); return; }
       if (/^F(3|7|8|9|10|12)$/.test(evento.key)) { evento.preventDefault(); alternarChave(evento.key); return; }
       const alvo = evento.target as HTMLElement | null;
@@ -1532,10 +1538,10 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
 
   return <div className={`prancheta space-y-4 ${fullPage ? "prancheta-ampla" : ""}`}>
     <header className="prancheta-barra flex flex-wrap items-center gap-2">
-      <Button variant="ghost" size="sm" onClick={onVoltar}><ArrowLeft />Pranchas</Button>
+      <Button variant="ghost" size="sm" onClick={onVoltar}><ArrowLeft />{demonstracao ? "Voltar" : "Pranchas"}</Button>
       <Input value={nome} onChange={(evento) => { definirNome(evento.target.value); definirSujo(true); }}
         disabled={!canEdit} aria-label="Nome da prancha" className="h-10 w-full max-w-72" />
-      <span className="text-xs text-drap-500">Revisão {revisao}{sujo ? " · alterações não gravadas" : ""}</span>
+      <span className="text-xs text-drap-500">{demonstracao ? "Demonstração · nada é gravado" : `Revisão ${revisao}${sujo ? " · alterações não gravadas" : ""}`}</span>
       <div className="ml-auto flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={desfazer} disabled={!canEdit || !historico.length} aria-label="Desfazer"><Undo2 />Desfazer</Button>
         <Button variant="outline" size="sm" onClick={refazer} disabled={!canEdit || !refeitos.length} aria-label="Refazer"><Redo2 />Refazer</Button>
@@ -1561,7 +1567,7 @@ export function PranchetaEditor({ prancha, canEdit, onVoltar, onSalvo, fullPage 
         <a href="/formatos" target="_blank" rel="noreferrer" className="self-center text-xs underline">Formatos aceitos</a>
         <Button variant="outline" size="sm" onClick={exportar}><Download />SVG</Button>
         <Button variant="outline" size="sm" onClick={() => void exportarPng()}><Download />PNG</Button>
-        {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || !sujo}>
+        {canEdit && <Button size="sm" onClick={() => void salvar()} disabled={salvando || (!sujo && !demonstracao)}>
           {salvando ? <LoaderCircle className="animate-spin" /> : <Save />}Gravar
         </Button>}
       </div>

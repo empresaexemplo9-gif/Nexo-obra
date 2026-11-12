@@ -92,6 +92,38 @@ export const platformDeletions = sqliteTable("platform_deletions", {
   createdAt: integer("created_at").notNull(),
 }, (t) => [index("idx_platform_deletions_created").on(t.createdAt)]);
 
+/**
+ * Pedido de reunião feito por visitante, depois de testar a demonstração pública.
+ *
+ * É dado da plataforma, não de uma empresa: quem pede ainda não é cliente, então não há
+ * `organization_id`. IP e navegador entram só como hash, para limitar repetição sem
+ * guardar o dado bruto.
+ */
+export const meetingRequests = sqliteTable("meeting_requests", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  company: text("company").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  /** Faixa de tamanho da equipe, das opções de `lib/reunioes.ts`. */
+  teamSize: text("team_size").notNull(),
+  /** Dia preferido (AAAA-MM-DD) e período; a reunião só existe depois da confirmação humana. */
+  preferredDay: text("preferred_day").notNull(),
+  preferredPeriod: text("preferred_period").notNull(),
+  message: text("message"),
+  /** De onde a pessoa veio na demonstração: 'home', 'painel', 'cad', 'layout' ou 'documentos'. */
+  origin: text("origin").notNull().default("home"),
+  /** 'new', 'contacted' ou 'closed'. */
+  status: text("status").notNull().default("new"),
+  ipHash: text("ip_hash").notNull(),
+  userAgentHash: text("user_agent_hash").notNull(),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (t) => [
+  index("idx_meeting_requests_created").on(t.createdAt),
+  index("idx_meeting_requests_ip").on(t.ipHash, t.createdAt),
+]);
+
 export const members = sqliteTable("members", {
   id: text("id").primaryKey(),
   organizationId: text("organization_id").notNull().references(() => organizations.id),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Archive, Download, FolderOpen, HardDriveUpload, LoaderCircle, Save } from "lucide-react";
 import { toast } from "sonner";
 
@@ -32,6 +32,10 @@ export function mensagemDe(causa: unknown, padrao: string) {
 
 export const blobDe = (bytes: Uint8Array, tipo: string) => new Blob([bytes.slice().buffer], { type: tipo });
 
+/** Verdadeiro onde não existe biblioteca da empresa para abrir — a demonstração pública.
+ *  O seletor oferece só o computador, em vez de um botão que responderia erro. */
+export const SemBibliotecaContext = createContext(false);
+
 /**
  * Escolha de arquivo do computador (botão ou arrastar) ou da biblioteca da Prancheta.
  * A extensão é conferida aqui; o conteúdo é conferido por quem abre o arquivo.
@@ -42,6 +46,7 @@ export function SeletorArquivos({ extensoes, multiplo, rotulo, onAdicionar, desa
   const campo = useRef<HTMLInputElement>(null);
   const [arrastando, setArrastando] = useState(false);
   const [biblioteca, setBiblioteca] = useState(false);
+  const semBiblioteca = useContext(SemBibliotecaContext);
   const aceitos = extensoes.map((e) => `.${e}`).join(",");
 
   async function lerLocais(lista: FileList | File[]) {
@@ -70,7 +75,7 @@ export function SeletorArquivos({ extensoes, multiplo, rotulo, onAdicionar, desa
     <div className="mt-3 flex flex-wrap justify-center gap-2">
       <input ref={campo} type="file" className="sr-only" tabIndex={-1} aria-hidden="true" accept={aceitos} multiple={multiplo} onChange={(evento) => { if (evento.target.files) void lerLocais(evento.target.files); evento.target.value = ""; }} />
       <Button type="button" variant="outline" disabled={desabilitado} onClick={() => campo.current?.click()}><HardDriveUpload />Do computador</Button>
-      <Button type="button" variant="outline" disabled={desabilitado} onClick={() => setBiblioteca(true)}><FolderOpen />Da biblioteca</Button>
+      {semBiblioteca ? null : <Button type="button" variant="outline" disabled={desabilitado} onClick={() => setBiblioteca(true)}><FolderOpen />Da biblioteca</Button>}
     </div>
     <EscolherDaBiblioteca aberto={biblioteca} onFechar={() => setBiblioteca(false)} extensoes={extensoes} multiplo={multiplo} onEscolher={onAdicionar} />
   </div>;

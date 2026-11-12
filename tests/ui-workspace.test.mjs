@@ -71,6 +71,17 @@ async function abrir(session, extra) {
   }
   return calls;
 }
+// Sem sessão a primeira tela é a página do visitante; o formulário abre pelo "Entrar" dela.
+async function abrirEntrada(session, extra) {
+  const calls = await abrir(session, extra);
+  const entrar = findByText(container, /^Entrar$/, "button");
+  assert.ok(entrar, "a página do visitante oferece Entrar");
+  await act(async () => entrar.click());
+  for (let ciclo = 0; ciclo < 5; ciclo += 1) {
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+  }
+  return calls;
+}
 const menu = () => [...container.querySelectorAll('[data-sidebar="menu-button"], nav a, nav button')]
   .map((node) => (node.textContent ?? "").replace(/\s+/g, " ").trim()).filter(Boolean);
 
@@ -192,7 +203,7 @@ test("plataforma sem empresa manda para o painel em vez de mostrar tela vazia", 
 });
 
 test("a tela de acesso mostra o que falta na instalação, em vez de deixar o botão falhar", async () => {
-  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+  await abrirEntrada({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: false, banco: "nao_configurado", sessao: "ok", superadmin: "ok", armazenamento: "nao_configurado" },
   });
   const texto = textOf(container);
@@ -200,19 +211,31 @@ test("a tela de acesso mostra o que falta na instalação, em vez de deixar o bo
   assert.match(texto, /Banco de dados não configurado/);
   assert.match(texto, /Armazenamento de arquivos não configurado/);
   assert.doesNotMatch(texto, /SESSION_SECRET/, "área saudável não vira ruído");
-  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+  await abrirEntrada({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: false, banco: "falta_migrar", sessao: "ok", superadmin: "ok", armazenamento: "ok",
       migracoes: { aplicadas: 0, pendentes: 16 } },
   });
   assert.match(textOf(container), /sem as tabelas.*Atualizar banco de dados/s);
-  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+  await abrirEntrada({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
   });
   assert.doesNotMatch(textOf(container), /Instalação incompleta/);
 });
 
+test("visitante sem conta vê a página de apresentação, com teste e reunião a um clique", async () => {
+  const calls = await abrir({ authenticated: false, needsOrganization: false, organizations: [] });
+  const texto = textOf(container);
+  assert.equal(container.querySelector("#account-email"), null, "o formulário de entrada não é a primeira tela");
+  assert.match(texto, /Testar com dados de exemplo/);
+  const links = [...container.querySelectorAll("a")].map((node) => node.getAttribute("href"));
+  for (const destino of ["/demonstracao", "/demonstracao?area=cad", "/demonstracao?area=layout", "/agendar"]) {
+    assert.ok(links.includes(destino), `leva a ${destino}`);
+  }
+  assert.deepEqual([...new Set(calls.map((call) => call.path))], ["/api/session"], "a página do visitante não consulta dado de empresa");
+});
+
 test("sem sessão, a tela pede e-mail e senha e não vaza nada da empresa", async () => {
-  await abrir({ authenticated: false, needsOrganization: false, organizations: [] }, {
+  await abrirEntrada({ authenticated: false, needsOrganization: false, organizations: [] }, {
     "/api/health": { pronto: true, banco: "ok", sessao: "ok", superadmin: "ok", armazenamento: "ok" },
   });
   const texto = textOf(container);

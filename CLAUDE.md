@@ -19,6 +19,7 @@ Construir um SaaS simples e confiável para arquitetura e construção civil. O 
 9. Texto visível deve ser português do Brasil, curto e específico.
 10. Não crie card, menu, gráfico ou filtro sem uma pergunta real que ele responda.
 11. Runtime de produção usa somente persistência e integrações reais. Mock, demo, fixture, seed fictício e fallback demonstrativo ficam restritos a testes automatizados e nunca alimentam API ou interface de produção.
+12. Única exceção à regra 11, pedida pelo dono do produto: a demonstração pública em `/demonstracao`. O dado fictício mora só em `lib/demonstracao/dados.ts`, é importado só pelas telas de `components/visitante/`, vive na memória do navegador do visitante e nunca chega a API, banco ou tela de empresa. A tela diz o tempo todo que é demonstração e que nada é salvo. Não amplie a exceção para outra rota; `tests/demonstracao.test.mjs` falha se outro módulo importar esses dados.
 
 ## Repositório
 

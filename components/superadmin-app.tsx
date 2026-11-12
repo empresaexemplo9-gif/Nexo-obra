@@ -1,5 +1,6 @@
 "use client";
 
+import { ReunioesPanel } from "@/components/superadmin-reunioes";
 import { BrandLogo } from "@/components/brand-logo";
 import { PlatformControl } from "@/components/platform-control";
 import { SinapiControl } from "@/components/sinapi-control";
@@ -439,6 +440,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           : !overview ? <Card className="grid min-h-60 place-items-center"><LoaderCircle className="size-6 animate-spin text-drap-600" /></Card> : <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"><Metric icon={Building2} label="Empresas" value={overview.totals.organizations} /><Metric icon={Users} label="Membros ativos" value={overview.totals.members} /><Metric icon={Target} label="Clientes" value={overview.totals.clients} /><Metric icon={FolderKanban} label="Projetos e obras" value={overview.totals.projects} /><Metric icon={ListChecks} label="Tarefas abertas" value={overview.totals.open_tasks} /></div>
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.4fr]"><NewCompanyPanel onCreated={loadOverview} /><div className="grid gap-6"><Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><DoorOpen className="size-5 text-drap-600" />Operar uma empresa</CardTitle><p className="text-sm leading-6 text-drap-500">Abra a empresa pelo botão da tabela abaixo. Você entra com permissão total em todos os módulos, sem depender de convite ou de assinatura confirmada.</p></CardHeader></Card><MaintenancePanel maintenance={overview.maintenance} /></div></div>
+          <ReunioesPanel />
           <InvitationsPanel organizations={overview.organizations} />
           <PlatformControl organizations={overview.organizations} maintenanceId={overview.maintenance.ready ? overview.maintenance.id : undefined} />
           <SinapiControl />
