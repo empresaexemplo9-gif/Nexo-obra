@@ -1,8 +1,10 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { TableHead } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
@@ -123,3 +125,63 @@ export function Escolha({ id, label, value, onChange, options, name, defaultValu
     </NativeSelect>
   </Campo>;
 }
+
+// ## Tabelas
+//
+// Toda tabela de Compras ordena pela coluna clicada (de novo inverte) e anuncia a ordem com
+// aria-sort. Vazio (null) vai sempre para o fim, em qualquer direção: "sem preço" no topo
+// de uma lista ordenada por preço esconde o que se procura.
+
+type Valor = string | number | null | undefined;
+export type Ordem<C extends string> = { coluna: C; direcao: "asc" | "desc" };
+
+export function useOrdenacao<T, C extends string>(linhas: T[], chaves: Record<C, (linha: T) => Valor>, inicial: Ordem<NoInfer<C>>) {
+  const [ordem, setOrdem] = useState<Ordem<C>>(inicial);
+  const ordenadas = useMemo(() => {
+    const valor = chaves[ordem.coluna];
+    const sinal = ordem.direcao === "asc" ? 1 : -1;
+    return [...linhas].sort((a, b) => {
+      const x = valor(a); const y = valor(b);
+      const vx = x === null || x === undefined || x === ""; const vy = y === null || y === undefined || y === "";
+      if (vx || vy) return vx === vy ? 0 : vx ? 1 : -1;
+      return sinal * (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "pt-BR", { numeric: true, sensitivity: "base" }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- as chaves são declaradas no render e só a ordem e as linhas mudam o resultado
+  }, [linhas, ordem]);
+  const alternar = (coluna: C) => setOrdem((atual) => atual.coluna === coluna ? { coluna, direcao: atual.direcao === "asc" ? "desc" : "asc" } : { coluna, direcao: "asc" });
+  return { ordenadas, ordem, alternar };
+}
+
+export function Coluna<C extends string>({ coluna, ordem, alternar, children, direita, className = "" }: {
+  coluna: C; ordem: Ordem<C>; alternar: (coluna: C) => void; children: ReactNode; direita?: boolean; className?: string;
+}) {
+  const ativa = ordem.coluna === coluna;
+  const Icone = !ativa ? ArrowUpDown : ordem.direcao === "asc" ? ArrowUp : ArrowDown;
+  return <TableHead aria-sort={ativa ? (ordem.direcao === "asc" ? "ascending" : "descending") : "none"} className={`${direita ? "text-right" : ""} ${className}`}>
+    <button type="button" onClick={() => alternar(coluna)} className={`inline-flex items-center gap-1 rounded-sm font-medium hover:text-drap-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-drap-400 ${direita ? "flex-row-reverse" : ""} ${ativa ? "text-drap-950" : ""}`}>
+      {children}<Icone aria-hidden="true" className={`size-3.5 ${ativa ? "" : "opacity-40"}`} />
+    </button>
+  </TableHead>;
+}
+
+/** Botões de filtro com contagem; o ativo fica marcado e é anunciado. */
+export function Filtros<V extends string>({ rotulo, valor, onChange, opcoes }: { rotulo: string; valor: V; onChange: (v: V) => void; opcoes: { value: V; label: string; total?: number }[] }) {
+  return <div role="group" aria-label={rotulo} className="flex flex-wrap gap-1">{opcoes.map((o) => <button key={o.value} type="button" aria-pressed={valor === o.value} onClick={() => onChange(o.value)}
+    className={`rounded-full border px-3 py-1 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-drap-400 ${valor === o.value ? "border-drap-700 bg-drap-700 text-white" : "border-drap-200 bg-white text-drap-700 hover:border-drap-400"}`}>
+    {o.label}{o.total !== undefined ? <span className="ml-1 tabular-nums opacity-75">{o.total}</span> : null}
+  </button>)}</div>;
+}
+
+/** Diferença percentual de um preço para a referência, já arredondada. */
+export function variacao(preco: number | null | undefined, referencia: number | null | undefined) {
+  if (preco === null || preco === undefined || !referencia) return null;
+  return Math.round(((preco - referencia) / referencia) * 1000) / 10;
+}
+
+export function SeloVariacao({ valor }: { valor: number | null }) {
+  if (valor === null) return null;
+  const tom = valor > 10 ? "text-destructive" : valor < 0 ? "text-drap-700" : "text-drap-500";
+  return <span className={`block text-xs ${tom}`}>{valor > 0 ? "+" : ""}{valor.toLocaleString("pt-BR")}% da referência</span>;
+}
+
+export const classeCabecalhoFixo = "max-h-[36rem] overflow-auto [&_[data-slot=table-container]]:overflow-visible [&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-white";

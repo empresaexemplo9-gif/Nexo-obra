@@ -72,6 +72,16 @@ Cada item de atenção e o detalhe do pedido (em “A orçar”, ou com entrega 
 
 O fornecedor atual e quem já cotou o pedido ficam de fora. Sem histórico nem categoria parecida, a lista vem vazia e a tela diz isso — nenhuma indicação é inventada.
 
+## Tabelas
+
+Toda tabela de Compras ordena pela coluna clicada (clicar de novo inverte; vazio fica sempre no fim) e mantém o cabeçalho fixo ao rolar.
+
+- **Pedidos**: além do quadro por etapa, uma lista ordenável com todos os pedidos (inclusive entregues e cancelados), filtro por etapa, valor com a diferença para a referência e a data que importa na etapa (obra precisa, previsão ou entrega).
+- **Estoque**: saldo filtrado por situação (falta, zerado ou abaixo do mínimo) e cobertura do mínimo (saldo ÷ mínimo); movimentos filtrados por entrada ou baixa e pelo local escolhido.
+- **Fornecedores**: tabela comparativa — prazo prometido contra o real, entregas no prazo, cotações ganhas, negociação, comprado e lista de preços — e os cartões com contato; filtro de ativos e desativados.
+- **Produtos**: filtro por origem e "sem preço", unidade em coluna própria e última cotação com a diferença para a referência. Histórico de preços com menor, maior e média; resultado do catálogo em tabela ordenável por custo.
+- **Pedido**: itens numerados com subtotal e total de referência e quanto falta receber; no comparativo, a coluna de itens fica fixa ao rolar os fornecedores.
+
 ## GOINFRA
 
 A Agência Goiana de Infraestrutura e Transportes publica as tabelas de preços no portal do Governo de Goiás, em planilha, sem API. Cinco tabelas, cada uma com e sem desoneração: obras civis, rodoviária e insumos (materiais, mão de obra e equipamentos).

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, CampoArea, CampoTexto, dataCurta, dinheiro, Escolha, lerCentavos, lerQuantidade, mensagem, numero, type Produto, type Projeto } from "@/components/compras/comum";
+import { api, CampoArea, CampoTexto, classeCabecalhoFixo, Coluna, dataCurta, dinheiro, Escolha, Filtros, lerCentavos, lerQuantidade, mensagem, numero, useOrdenacao, type Produto, type Projeto } from "@/components/compras/comum";
 
 export type Sugestao = { supplierId: string; name: string; phone: string; email: string; reason: string; lastPriceCents: number | null; deliveryDays: number | null; onTime: number; delivered: number };
 export type ItemAtencao = {
@@ -18,7 +18,7 @@ export type ItemAtencao = {
   suggestedQuantity: number | null; unit: string | null;
 };
 type Saldo = { productId: string; productName: string; unit: string; category: string; location: string; locationName: string; balance: number; minimum: number | null; lastMovementOn: string | null; state: "falta" | "abaixo" | "zerado" | "ok" };
-type Movimento = { id: string; productName: string; unit: string; locationName: string; kind: "entrada" | "baixa"; quantity: number; unitCostCents: number | null; source: string; requestId: string | null; requestCode: string | null; note: string; occurredOn: string; authorName: string };
+type Movimento = { id: string; productName: string; unit: string; location: string; locationName: string; kind: "entrada" | "baixa"; quantity: number; unitCostCents: number | null; source: string; requestId: string | null; requestCode: string | null; note: string; occurredOn: string; authorName: string };
 export type DadosEstoque = { balances: Saldo[]; attention: ItemAtencao[]; movements: Movimento[] };
 
 const rotuloAtencao: Record<ItemAtencao["kind"], string> = { falta: "Em falta", abaixo: "Abaixo do mínimo", sem_previsao: "Sem previsão de entrega", atrasada: "Entrega atrasada" };
@@ -46,7 +46,21 @@ export function Estoque({ dados, produtos, projetos, canEdit, busca, onAlterado,
   const [chave, setChave] = useState(() => crypto.randomUUID());
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const locais = [{ value: "central", label: "Depósito central" }, ...projetos.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))];
-  const saldos = dados.balances.filter((b) => (!local || b.location === local) && (!termo || `${b.productName} ${b.category}`.toLocaleLowerCase("pt-BR").includes(termo)));
+  const [situacao, setSituacao] = useState<"todos" | "atencao" | "ok">("todos");
+  const [tipo, setTipo] = useState<"todos" | "entrada" | "baixa">("todos");
+  const doLocal = dados.balances.filter((b) => (!local || b.location === local) && (!termo || `${b.productName} ${b.category}`.toLocaleLowerCase("pt-BR").includes(termo)));
+  const precisa = (b: Saldo) => b.state === "falta" || b.state === "abaixo" || b.state === "zerado";
+  const saldos = doLocal.filter((b) => situacao === "todos" || (situacao === "atencao" ? precisa(b) : !precisa(b)));
+  const pesoSituacao: Record<Saldo["state"], number> = { falta: 0, abaixo: 1, zerado: 2, ok: 3 };
+  const { ordenadas, ordem, alternar } = useOrdenacao(saldos, {
+    material: (b) => b.productName, local: (b) => b.locationName, saldo: (b) => b.balance, minimo: (b) => b.minimum,
+    cobertura: (b) => b.minimum ? b.balance / b.minimum : null, situacao: (b) => pesoSituacao[b.state], movimento: (b) => b.lastMovementOn,
+  }, { coluna: "situacao", direcao: "asc" });
+  const movimentosBuscados = dados.movements.filter((m) => (!local || m.location === local) && (!termo || m.productName.toLocaleLowerCase("pt-BR").includes(termo)));
+  const movimentos = movimentosBuscados.filter((m) => tipo === "todos" || m.kind === tipo);
+  const mov = useOrdenacao(movimentos, {
+    data: (m) => m.occurredOn, material: (m) => m.productName, local: (m) => m.locationName, quantidade: (m) => m.quantity,
+  }, { coluna: "data", direcao: "desc" });
 
   async function registrar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -118,14 +132,27 @@ export function Estoque({ dados, produtos, projetos, canEdit, busca, onAlterado,
       </CardHeader>
       <CardContent className="p-0">
         {!produtos.length ? <p className="p-6 text-sm text-drap-500">Cadastre os produtos na aba Produtos. Só material cadastrado entra no estoque.</p>
-          : !saldos.length ? <p className="p-6 text-sm text-drap-500">{dados.balances.length ? "Nada neste filtro." : "Nenhum movimento ainda. O recebimento de compras com produto cadastrado entra aqui sozinho; use Entrada para o que já está na obra."}</p>
-          : <div className="overflow-x-auto"><Table>
-            <TableHeader><TableRow><TableHead>Material</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Saldo</TableHead><TableHead className="text-right">Mínimo</TableHead><TableHead>Situação</TableHead>{canEdit ? <TableHead><span className="sr-only">Ações</span></TableHead> : null}</TableRow></TableHeader>
-            <TableBody>{saldos.map((s) => <TableRow key={`${s.productId}|${s.location}`}>
-              <TableCell className="whitespace-normal"><span className="block font-medium text-drap-900">{s.productName}</span><span className="text-xs text-drap-500">{s.category}{s.lastMovementOn ? ` · último movimento ${dataCurta(s.lastMovementOn)}` : ""}</span></TableCell>
-              <TableCell className="whitespace-normal text-sm">{s.locationName}</TableCell>
-              <TableCell className="text-right tabular-nums font-medium">{numero(s.balance)} {s.unit}</TableCell>
-              <TableCell className="text-right tabular-nums text-drap-600">{s.minimum ? `${numero(s.minimum)} ${s.unit}` : "—"}</TableCell>
+          : <>
+            {doLocal.length ? <div className="border-b border-drap-100 px-4 py-2"><Filtros rotulo="Situação do saldo" valor={situacao} onChange={setSituacao} opcoes={[
+              { value: "todos", label: "Todos", total: doLocal.length }, { value: "atencao", label: "Falta, zerado ou abaixo do mínimo", total: doLocal.filter(precisa).length }, { value: "ok", label: "Ok", total: doLocal.filter((b) => !precisa(b)).length },
+            ]} /></div> : null}
+            {!saldos.length ? <p className="p-6 text-sm text-drap-500">{dados.balances.length ? "Nada neste filtro." : "Nenhum movimento ainda. O recebimento de compras com produto cadastrado entra aqui sozinho; use Entrada para o que já está na obra."}</p>
+          : <div className={classeCabecalhoFixo}><Table>
+            <TableHeader><TableRow>
+              <Coluna coluna="material" ordem={ordem} alternar={alternar} className="min-w-40">Material</Coluna>
+              {local ? null : <Coluna coluna="local" ordem={ordem} alternar={alternar} className="hidden sm:table-cell">Local</Coluna>}
+              <Coluna coluna="saldo" ordem={ordem} alternar={alternar} direita>Saldo</Coluna>
+              <Coluna coluna="minimo" ordem={ordem} alternar={alternar} direita className="hidden sm:table-cell">Mínimo</Coluna>
+              <Coluna coluna="cobertura" ordem={ordem} alternar={alternar} direita className="hidden md:table-cell">Cobertura do mínimo</Coluna>
+              <Coluna coluna="situacao" ordem={ordem} alternar={alternar}>Situação</Coluna>
+              {canEdit ? <TableHead><span className="sr-only">Ações</span></TableHead> : null}
+            </TableRow></TableHeader>
+            <TableBody>{ordenadas.map((s) => <TableRow key={`${s.productId}|${s.location}`} className={s.state === "falta" ? "bg-destructive/5" : undefined}>
+              <TableCell className="whitespace-normal"><span className="block font-medium text-drap-900">{s.productName}</span><span className="text-xs text-drap-500">{s.category}{s.lastMovementOn ? ` · último movimento ${dataCurta(s.lastMovementOn)}` : ""}{local ? "" : <span className="sm:hidden"> · {s.locationName}</span>}</span></TableCell>
+              {local ? null : <TableCell className="hidden whitespace-normal text-sm sm:table-cell">{s.locationName}</TableCell>}
+              <TableCell className="text-right tabular-nums font-medium">{numero(s.balance)} {s.unit}<span className="block text-xs font-normal text-drap-500 sm:hidden">{s.minimum ? `mín. ${numero(s.minimum)}` : ""}</span></TableCell>
+              <TableCell className="hidden text-right tabular-nums text-drap-600 sm:table-cell">{s.minimum ? `${numero(s.minimum)} ${s.unit}` : "—"}</TableCell>
+              <TableCell className="hidden text-right md:table-cell">{s.minimum ? <Cobertura saldo={s.balance} minimo={s.minimum} /> : <span className="text-xs text-drap-500">sem mínimo</span>}</TableCell>
               <TableCell>{s.state === "ok" ? <span className="text-xs text-drap-500">Ok</span> : <Badge variant={s.state === "abaixo" || s.state === "zerado" ? "outline" : "destructive"}>{rotuloSaldo[s.state]}</Badge>}</TableCell>
               {canEdit ? <TableCell><div className="flex justify-end gap-1">
                 <Button size="sm" variant="ghost" aria-label={`Entrada de ${s.productName} em ${s.locationName}`} onClick={() => setMovimento({ kind: "entrada", productId: s.productId, location: s.location })}><ArrowDownToLine /></Button>
@@ -134,19 +161,27 @@ export function Estoque({ dados, produtos, projetos, canEdit, busca, onAlterado,
               </div></TableCell> : null}
             </TableRow>)}</TableBody>
           </Table></div>}
+          </>}
       </CardContent>
     </Card>
 
     <Card>
-      <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">Últimos movimentos</CardTitle></CardHeader>
-      <CardContent className="p-0">{!dados.movements.length ? <p className="p-6 text-sm text-drap-500">Nenhum movimento registrado.</p> : <div className="max-h-[28rem] overflow-auto"><Table>
-        <TableHeader><TableRow><TableHead>Data</TableHead><TableHead>Material</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Quantidade</TableHead><TableHead>Origem</TableHead></TableRow></TableHeader>
-        <TableBody>{dados.movements.filter((m) => !termo || m.productName.toLocaleLowerCase("pt-BR").includes(termo)).map((m) => <TableRow key={m.id}>
+      <CardHeader className="flex flex-col gap-2 border-b py-3 sm:flex-row sm:items-center sm:justify-between"><CardTitle className="text-sm font-semibold">Últimos movimentos{local ? " do local" : ""}</CardTitle>
+        {dados.movements.length ? <Filtros rotulo="Tipo de movimento" valor={tipo} onChange={setTipo} opcoes={[{ value: "todos", label: "Todos", total: movimentosBuscados.length }, { value: "entrada", label: "Entradas", total: movimentosBuscados.filter((m) => m.kind === "entrada").length }, { value: "baixa", label: "Baixas", total: movimentosBuscados.filter((m) => m.kind === "baixa").length }]} /> : null}</CardHeader>
+      <CardContent className="p-0">{!dados.movements.length ? <p className="p-6 text-sm text-drap-500">Nenhum movimento registrado.</p> : !movimentos.length ? <p className="p-6 text-sm text-drap-500">Nada neste filtro.</p> : <div className={classeCabecalhoFixo.replace("max-h-[36rem]", "max-h-[28rem]")}><Table>
+        <TableHeader><TableRow>
+          <Coluna coluna="data" ordem={mov.ordem} alternar={mov.alternar}>Data</Coluna>
+          <Coluna coluna="material" ordem={mov.ordem} alternar={mov.alternar}>Material</Coluna>
+          {local ? null : <Coluna coluna="local" ordem={mov.ordem} alternar={mov.alternar} className="hidden sm:table-cell">Local</Coluna>}
+          <Coluna coluna="quantidade" ordem={mov.ordem} alternar={mov.alternar} direita>Quantidade</Coluna>
+          <TableHead className="hidden md:table-cell">Origem</TableHead>
+        </TableRow></TableHeader>
+        <TableBody>{mov.ordenadas.map((m) => <TableRow key={m.id}>
           <TableCell className="whitespace-nowrap">{dataCurta(m.occurredOn)}</TableCell>
-          <TableCell className="whitespace-normal">{m.productName}</TableCell>
-          <TableCell className="whitespace-normal text-sm">{m.locationName}</TableCell>
+          <TableCell className="whitespace-normal">{m.productName}{local ? null : <span className="block text-xs text-drap-500 sm:hidden">{m.locationName}</span>}<span className="block text-xs text-drap-500 md:hidden">{m.requestCode ?? (m.kind === "entrada" ? "Entrada manual" : "Baixa")}{m.note ? ` · ${m.note}` : ""}</span></TableCell>
+          {local ? null : <TableCell className="hidden whitespace-normal text-sm sm:table-cell">{m.locationName}</TableCell>}
           <TableCell className={`text-right tabular-nums ${m.kind === "baixa" ? "text-drap-700" : "font-medium text-drap-950"}`}>{m.kind === "entrada" ? "+" : "−"}{numero(Math.abs(m.quantity))} {m.unit}{m.unitCostCents !== null ? <span className="block text-xs text-drap-500">{dinheiro(m.unitCostCents)}/{m.unit}</span> : null}</TableCell>
-          <TableCell className="whitespace-normal text-xs text-drap-600">{m.requestId ? <button type="button" className="underline underline-offset-2" onClick={() => onAbrirPedido(m.requestId!)}>{m.requestCode}</button> : m.kind === "entrada" ? "Entrada manual" : "Baixa"}{m.note ? ` · ${m.note}` : ""}<span className="block text-drap-500">{m.authorName}</span></TableCell>
+          <TableCell className="hidden whitespace-normal text-xs text-drap-600 md:table-cell">{m.requestId ? <button type="button" className="underline underline-offset-2" onClick={() => onAbrirPedido(m.requestId!)}>{m.requestCode}</button> : m.kind === "entrada" ? "Entrada manual" : "Baixa"}{m.note ? ` · ${m.note}` : ""}<span className="block text-drap-500">{m.authorName}</span></TableCell>
         </TableRow>)}</TableBody>
       </Table></div>}</CardContent>
     </Card>
@@ -178,4 +213,14 @@ export function Estoque({ dados, produtos, projetos, canEdit, busca, onAlterado,
       </DialogContent>
     </Dialog>
   </div>;
+}
+
+/** Quanto do mínimo o saldo cobre: barra curta com o número, para achar o que acaba primeiro. */
+function Cobertura({ saldo, minimo }: { saldo: number; minimo: number }) {
+  const razao = saldo / minimo;
+  const largura = Math.max(0, Math.min(100, (razao / 2) * 100));
+  return <span className="inline-flex items-center gap-2" title={`${numero(Math.round(razao * 100))}% do mínimo`}>
+    <span aria-hidden="true" className="h-1.5 w-16 overflow-hidden rounded-full bg-drap-100"><span className={`block h-full rounded-full ${razao < 1 ? "bg-destructive" : "bg-drap-600"}`} style={{ width: `${largura}%` }} /></span>
+    <span className="tabular-nums text-xs text-drap-700">{numero(Math.round(razao * 10) / 10)}×</span>
+  </span>;
 }
