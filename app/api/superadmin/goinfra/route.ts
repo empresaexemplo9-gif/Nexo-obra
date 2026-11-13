@@ -6,6 +6,7 @@ import { getDatabase } from "@/db";
 import { envioGoinfraSchema, rotuloRegimeGoinfra, rotuloTabelaGoinfra } from "@/lib/integrations/goinfra-planilha";
 import { importarGoinfra, limparImportacoesInterrompidas } from "@/lib/server/goinfra-import";
 import { tabelasGoinfra } from "@/lib/server/compras";
+import { buscarGoinfra, situacaoBuscaGoinfra } from "@/lib/server/goinfra-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ const json = (value: unknown, status = 200) => Response.json(value, { status, he
 async function situacao() {
   const tabelas = await tabelasGoinfra({ db: getDatabase() });
   return {
+    sync: await situacaoBuscaGoinfra(),
     tables: tabelas.filter((t) => !t.tabela.startsWith("importando-")).map((t) => ({
       id: t.id, referencia: t.referencia, tabela: t.tabela, regime: t.regime,
       label: `${rotuloTabelaGoinfra[t.tabela] ?? t.tabela} · ${rotuloRegimeGoinfra[t.regime] ?? t.regime}`,
@@ -28,6 +30,16 @@ async function situacao() {
 
 export async function GET(request: Request) {
   return apiRoute(async () => { await requireSuperAdmin(request); return json(await situacao()); });
+}
+
+// "Buscar agora": a mesma busca do agendamento diário, disparada pelo superadministrador.
+export async function POST(request: Request) {
+  return apiRoute(async () => {
+    checkPortalOrigin(request);
+    const admin = await requireSuperAdmin(request);
+    const resultado = await buscarGoinfra(admin.email);
+    return json({ result: resultado, ...(await situacao()) });
+  });
 }
 
 // A GOINFRA publica a tabela como arquivo no site, sem API. O superadministrador baixa a
@@ -48,7 +60,7 @@ export async function PUT(request: Request) {
       const resultado = await importarGoinfra({ nome: arquivo.name, bytes: Buffer.from(await arquivo.arrayBuffer()) }, parsed.data, admin.email);
       return json({
         imported: !resultado.repetido, repeated: resultado.repetido,
-        report: { aba: resultado.interpretacao.aba, linhaDoCabecalho: resultado.interpretacao.linhaDoCabecalho + 1, itens: resultado.interpretacao.itens.length, ignoradas: resultado.interpretacao.ignoradas },
+        report: { aba: resultado.interpretacao.aba, abas: resultado.interpretacao.abas, linhaDoCabecalho: resultado.interpretacao.linhaDoCabecalho + 1, itens: resultado.interpretacao.itens.length, ignoradas: resultado.interpretacao.ignoradas },
         ...(await situacao()),
       });
     } catch (error) {

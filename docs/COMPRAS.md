@@ -74,14 +74,19 @@ O fornecedor atual e quem já cotou o pedido ficam de fora. Sem histórico nem c
 
 ## GOINFRA
 
-A Agência Goiana de Infraestrutura e Transportes publica a tabela de preços no próprio site, em planilha, sem API. O superadministrador baixa a planilha oficial e envia em **Painel da plataforma → Referência GOINFRA** (XLSX ou CSV, até 30 MB), escolhendo tabela (obras civis ou rodoviária), regime (desonerada ou não) e referência (mês).
+A Agência Goiana de Infraestrutura e Transportes publica as tabelas de preços no portal do Governo de Goiás, em planilha, sem API. Cinco tabelas, cada uma com e sem desoneração: obras civis, rodoviária e insumos (materiais, mão de obra e equipamentos).
 
+**Busca automática.** O cron diário `/api/cron/goinfra` (7h43, Brasília; exige `CRON_SECRET`) lê a página de tabelas configurada em `GOINFRA_INDICE_URL` e as páginas de tabela que ela liga, acha as planilhas XLSX/CSV e classifica cada uma pelo nome do arquivo (tabela, mês e regime, como em “OBRAS CIVIS - TABELA 291 - FEVEREIRO-2025 - COM DESONERAÇÃO”). Para cada tabela e regime importa só a referência mais nova que a ativa; nos outros dias não baixa nada. Só o portal (`goias.gov.br`, `goinfra.go.gov.br`) é acessado, sem seguir redirect. Uma tabela que falha não impede as outras e a ativa continua valendo; a falha aparece no painel. Arquivo cujo nome não diz tabela, mês e regime é deixado de fora, nunca adivinhado. **Buscar agora** no painel roda a mesma busca.
+
+**Envio manual.** Continua em **Painel da plataforma → Referência GOINFRA** (XLSX ou CSV, até 30 MB), escolhendo tabela, regime e referência (mês). XLS antigo (Excel 97-2003) é recusado com aviso: salve como XLSX.
+
+- **Todas as abas** da planilha são lidas e somadas; aba sem cabeçalho reconhecido (capa, notas) entra no registro com zero itens. O mesmo código em duas abas fica com a primeira ocorrência e conta como ignorado.
 - As colunas são achadas pelo **nome** do cabeçalho (código, descrição, unidade e preço unitário), nas 30 primeiras linhas de cada aba; título de grupo, subtotal e rodapé são ignorados e contados.
 - Uma tabela ativa por tipo e regime. A nova entra em separado e só troca de lugar com a anterior no fim, num único lote: quem busca durante a importação vê a tabela antiga inteira. Referência mais antiga que a ativa é recusada.
 - O registro guarda arquivo, SHA-256, aba, contagens, quem importou e quando.
 - Produto criado de uma tabela que depois foi substituída mantém o custo e o rótulo de onde veio; buscar de novo traz o preço vigente.
 
-**Pendente:** homologar com a planilha real da GOINFRA. O ambiente de desenvolvimento não alcança o site da agência, então o leitor foi construído pelo layout usual (código, descrição, unidade, preço) e testado com uma planilha de teste. Se a planilha oficial não for reconhecida, a importação é recusada com o motivo e as abas encontradas — nunca grava preço lido da coluna errada.
+**Pendente:** homologar com a planilha real da GOINFRA e configurar `GOINFRA_INDICE_URL` com a página de tabelas do portal. O ambiente de desenvolvimento não alcança o site da agência, então o leitor foi construído pelo layout usual (código, descrição, unidade, preço) e testado com uma planilha de teste. Se a planilha oficial não for reconhecida, a importação é recusada com o motivo e as abas encontradas — nunca grava preço lido da coluna errada.
 
 ## Integração com o resto da plataforma
 
@@ -108,5 +113,4 @@ Contas com permissões já personalizadas não ganham o módulo sozinhas: o admi
 - Lançamento da compra como conta a pagar na Drap.
 - Transferência direta entre locais (hoje: baixa num local e entrada no outro).
 - Inventário com contagem física e ajuste.
-- Download automático da tabela GOINFRA.
 - Fornecedores e preços pré-cadastrados: a plataforma não semeia lojas nem preços. Cada empresa cadastra as lojas com que trabalha (com a conferência da Receita) e importa as listas que elas enviam.

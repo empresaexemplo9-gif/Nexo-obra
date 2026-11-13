@@ -21,6 +21,10 @@ const { interpretarGoinfra } = await h.load("/lib/integrations/goinfra-planilha.
 const { compararCotacoes } = await h.load("/lib/compras.ts");
 const superadmin = await h.load("/lib/server/superadmin.ts");
 const goinfraRota = await h.load("/app/api/superadmin/goinfra/route.ts");
+const goinfraCron = await h.load("/app/api/cron/goinfra/route.ts");
+const goinfraBusca = await h.load("/lib/server/goinfra-sync.ts");
+const { classificarArquivoGoinfra } = await h.load("/lib/integrations/goinfra-planilha.ts");
+const ExcelJS = (await import("exceljs")).default;
 
 beforeEach(() => h.reset());
 after(() => h.close());
@@ -275,6 +279,89 @@ test("GOINFRA: lê a planilha pelo cabeçalho, ativa a tabela e alimenta o cadas
   const velho = await json(await post(produtos, "owner", "/api/compras/produtos", { reference: "GOINFRA:obras-civis:Desonerado:2026-09:010010" }));
   assert.equal(velho.status, 409);
   assert.equal(h.db.sqlite.prepare("SELECT COUNT(*) n FROM goinfra_itens").get().n, 13, "os itens da tabela anterior saíram");
+});
+
+async function planilhaComAbas(abas) {
+  const livro = new ExcelJS.Workbook();
+  for (const [nome, linhas] of Object.entries(abas)) livro.addWorksheet(nome).addRows(linhas);
+  return Buffer.from(await livro.xlsx.writeBuffer());
+}
+const itensDe = (prefixo, n) => Array.from({ length: n }, (_, i) => [`${prefixo}${String(i + 1).padStart(3, "0")}`, `Serviço ${prefixo} ${i + 1}`, "m²", (i + 1) * 3.25]);
+
+test("GOINFRA: todas as abas da planilha entram, sem item faltando nem repetido", async () => {
+  const bytes = await planilhaComAbas({
+    "Capa": [["AGÊNCIA GOIANA DE INFRAESTRUTURA E TRANSPORTES"], ["Tabela 291"]],
+    "Preliminares": [["TABELA 291"], [], ["CÓDIGO", "DESCRIÇÃO", "UNID.", "PREÇO UNITÁRIO (R$)"], ...itensDe("01", 8)],
+    "Estrutura": [["Código", "Descrição do serviço", "Unidade", "Custo unitário"], ...itensDe("02", 7), ["01001", "repetido em outra aba", "m²", 1]],
+  });
+  const lido = interpretarGoinfra(bytes, "goinfra.xlsx");
+  assert.equal(lido.itens.length, 15, "8 da primeira aba + 7 da segunda");
+  assert.equal(lido.aba, "Preliminares, Estrutura");
+  assert.deepEqual(lido.abas.map((a) => [a.aba, a.itens]), [["Capa", 0], ["Preliminares", 8], ["Estrutura", 7]]);
+  assert.equal(lido.ignoradas, 1, "código repetido entre abas conta como ignorado");
+  assert.throws(() => interpretarGoinfra(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 0]), "velho.xls"), /XLS antigo/);
+});
+
+test("GOINFRA: o nome do arquivo diz tabela, mês e regime; o que não diz fica de fora", () => {
+  assert.deepEqual(classificarArquivoGoinfra("OBRAS CIVIS - TABELA 291 - FEVEREIRO-2025 - COM DESONERAÇÃO - Publicada em 05-05-2025.xlsx"), { tabela: "obras-civis", regime: "Desonerado", referencia: "2025-02" });
+  assert.deepEqual(classificarArquivoGoinfra("Tabela de Insumos Mão de Obra - MAIO-2023 - SEM DESONERAÇÃO.xlsx"), { tabela: "insumos-mao-de-obra", regime: "NaoDesonerado", referencia: "2023-05" });
+  assert.deepEqual(classificarArquivoGoinfra("Tabela%20de%20Insumos%20Materiais%20-%20ABRIL-2025%20-%20COM%20DESONERA%C3%87%C3%83O.xlsx"), { tabela: "insumos-materiais", regime: "Desonerado", referencia: "2025-04" });
+  assert.equal(classificarArquivoGoinfra("OBRAS CIVIS - TABELA 291 - COM DESONERAÇÃO.xlsx"), null, "sem mês não se adivinha");
+  assert.equal(classificarArquivoGoinfra("relatorio-anual-2025.xlsx"), null);
+});
+
+test("GOINFRA: busca automática importa a referência mais nova de cada tabela e preserva a ativa na falha", async () => {
+  const site = "https://goias.gov.br/goinfra";
+  const obras = await planilhaComAbas({ "Grupo 1": [["CÓDIGO", "DESCRIÇÃO", "UNID.", "PREÇO UNITÁRIO"], ...itensDe("01", 10)], "Grupo 2": [["CÓDIGO", "DESCRIÇÃO", "UNID.", "PREÇO UNITÁRIO"], ...itensDe("02", 6)] });
+  const materiais = await planilhaComAbas({ Materiais: [["CÓDIGO", "DESCRIÇÃO DO INSUMO", "UNIDADE", "PREÇO"], ...itensDe("M", 12)] });
+  const arquivo = (nome) => `${site}/wp-content/uploads/sites/77/tabela-de-composicao/118/arquivos/${encodeURIComponent(nome)}`;
+  const paginas = {
+    [`${site}/tabelas/`]: `<a href="${site}/tabela-de-composicao/118/">Obras civis</a> <a href="https://example.com/fora.xlsx">fora</a>`,
+    [`${site}/tabela-de-composicao/118/`]: [
+      `<a href="${arquivo("OBRAS CIVIS - TABELA 290 - JANEIRO-2025 - COM DESONERAÇÃO.xlsx")}">antiga</a>`,
+      `<a href="${arquivo("OBRAS CIVIS - TABELA 291 - FEVEREIRO-2025 - COM DESONERAÇÃO.xlsx")}">nova</a>`,
+      `<a href="${arquivo("Tabela de Insumos Materiais - ABRIL-2025 - SEM DESONERAÇÃO.xlsx")}">insumos</a>`,
+      `<a href="${arquivo("OBRAS CIVIS - TABELA 291 - FEVEREIRO-2025 - SEM DESONERAÇÃO.xlsx")}">quebrada</a>`,
+      `<a href="${arquivo("OBRAS CIVIS - TABELA 291 - FEVEREIRO-2025 - SEM DESONERAÇÃO.xls")}">xls</a>`,
+    ].join("\n"),
+  };
+  const pedidos = [];
+  const io = { async buscar(url) {
+    pedidos.push(url);
+    if (paginas[url]) return { bytes: Buffer.from(paginas[url]), tipo: "text/html" };
+    if (url.includes("FEVEREIRO-2025%20-%20COM")) return { bytes: obras, tipo: "" };
+    if (url.includes("Materiais")) return { bytes: materiais, tipo: "" };
+    throw new Error("o portal respondeu HTTP 404");
+  } };
+
+  await assert.rejects(goinfraBusca.buscarGoinfra("teste", io), (e) => e.status === 503, "sem página configurada não busca");
+  Object.assign(h.runtime, { GOINFRA_INDICE_URL: "https://example.com/tabelas/" });
+  await assert.rejects(goinfraBusca.buscarGoinfra("teste", io), (e) => e.status === 503, "host fora do portal é recusado");
+  Object.assign(h.runtime, { GOINFRA_INDICE_URL: `${site}/tabelas/`, CRON_SECRET: "segredo-de-teste-com-mais-de-32-caracteres" });
+
+  const r = await goinfraBusca.buscarGoinfra("teste", io);
+  assert.ok(!pedidos.some((u) => u.startsWith("https://example.com")), "nunca sai do portal");
+  assert.ok(!pedidos.some((u) => u.includes("JANEIRO")), "a referência antiga nem é baixada");
+  assert.equal(r.xlsIgnorados, 1);
+  const por = Object.fromEntries(r.tabelas.map((t) => [`${t.tabela}|${t.regime}`, t]));
+  assert.equal(por["obras-civis|Desonerado"].situacao, "importada");
+  assert.equal(por["obras-civis|Desonerado"].itens, 16, "as duas abas entram");
+  assert.equal(por["obras-civis|Desonerado"].abas, 2);
+  assert.equal(por["insumos-materiais|NaoDesonerado"].itens, 12);
+  assert.equal(por["obras-civis|NaoDesonerado"].situacao, "falhou");
+  const ativas = h.db.sqlite.prepare("SELECT tabela, regime, referencia, total_itens FROM goinfra_tabelas ORDER BY tabela").all();
+  assert.deepEqual(ativas.map((t) => [t.tabela, t.regime, t.referencia, t.total_itens]), [["insumos-materiais", "NaoDesonerado", "2025-04", 12], ["obras-civis", "Desonerado", "2025-02", 16]]);
+  assert.equal(h.db.sqlite.prepare("SELECT COUNT(*) n FROM goinfra_itens").get().n, 28);
+  assert.match(h.db.sqlite.prepare("SELECT last_error FROM goinfra_sync").get().last_error, /404/, "a falha fica registrada");
+
+  // Cron: sem o segredo é recusado; com ele, nada novo → tudo "atual", sem baixar planilha.
+  assert.equal((await goinfraCron.GET(new Request("https://platform.test/api/cron/goinfra"))).status, 401);
+  pedidos.length = 0;
+  const segunda = await goinfraBusca.buscarGoinfra("teste", io);
+  assert.equal(segunda.tabelas.find((t) => t.tabela === "obras-civis" && t.regime === "Desonerado").situacao, "atual");
+  assert.ok(!pedidos.some((u) => u.includes("Materiais")), "tabela já ativa não é baixada de novo");
+  const catalogoGoinfra = await json(await catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=goinfra&q=Serviço M 12")));
+  assert.equal(catalogoGoinfra.status, 200);
 });
 
 test("comparativo: pesos, empate e item a item", () => {

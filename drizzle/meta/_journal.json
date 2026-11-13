@@ -225,6 +225,13 @@
       "when": 1794526102928,
       "tag": "0031_hesitant_cassandra_nova",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1794540529732,
+      "tag": "0032_dear_dazzler",
+      "breakpoints": true
     }
   ]
 }

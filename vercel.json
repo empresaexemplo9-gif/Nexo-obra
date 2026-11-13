@@ -6,6 +6,7 @@
   "regions": ["gru1"],
   "crons": [
     { "path": "/api/cron/sinapi", "schedule": "0 9 * * *" },
-    { "path": "/api/cron/banco", "schedule": "17 6 * * *" }
+    { "path": "/api/cron/banco", "schedule": "17 6 * * *" },
+    { "path": "/api/cron/goinfra", "schedule": "43 10 * * *" }
   ]
 }
