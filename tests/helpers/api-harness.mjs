@@ -9,7 +9,7 @@ export const root = fileURLToPath(new URL("../..", import.meta.url));
 export const orgA = "11111111-1111-4111-8111-111111111111";
 export const orgB = "22222222-2222-4222-8222-222222222222";
 
-const areas = ["overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio"];
+const areas = ["overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio", "purchases"];
 export function permissions(overrides = {}, base = true) {
   return JSON.stringify({ ...Object.fromEntries(areas.map((area) => [area, { view: base, edit: base }])), ...overrides });
 }

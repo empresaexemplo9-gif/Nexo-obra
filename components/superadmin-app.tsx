@@ -4,6 +4,7 @@ import { ReunioesPanel } from "@/components/superadmin-reunioes";
 import { BrandLogo } from "@/components/brand-logo";
 import { PlatformControl } from "@/components/platform-control";
 import { SinapiControl } from "@/components/sinapi-control";
+import { GoinfraControl } from "@/components/goinfra-control";
 import { UsageWorkspace } from "@/components/usage-workspace";
 import { PLATFORM_BUILD, PLATFORM_BUILT_AT } from "@/lib/build-info";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -203,7 +204,7 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
   return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-drap-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-drap-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-drap-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-drap-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
 }
 
-type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number };
+type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number; needsReview?: string[]; automatic?: { at: number; origin: string; result: string; error: string | null } | null };
 
 // Qual versão está servindo. O domínio público reescreve as rotas para outro alvo de
 // publicação, então uma versão antiga no ar não tem sintoma nenhum além de "não mudou
@@ -257,6 +258,12 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
     } finally { setApplying(false); }
   }
 
+  // Quando e o que a atualização automática (de hora em hora) fez pela última vez.
+  const automatico = <p className="w-full text-xs text-drap-600">
+    Atualização automática de hora em hora: {status.automatic ? <>última em {new Date(status.automatic.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} ({status.automatic.origin}) — {status.automatic.result}</> : "ainda não rodou. Confira o secret CRON_SECRET no GitHub e na Vercel."}
+    {status.automatic?.error && !status.needsReview?.length ? <span className="mt-1 block font-medium text-drap-800">Erro: {status.automatic.error}</span> : null}
+  </p>;
+
   if (!status.pending.length) {
     return <Card className="workspace-card"><CardContent className="flex flex-wrap items-center gap-3 p-4">
       <Database className="size-5 text-drap-600" />
@@ -264,6 +271,7 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
         Banco de dados em dia: {status.applied.length} de {status.total} atualizações aplicadas.
         {done ? ` ${done} aplicada(s) agora.` : ""}
       </p>
+      {automatico}
     </CardContent></Card>;
   }
 
@@ -278,6 +286,9 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
     </CardHeader>
     <CardContent className="space-y-3">
       <p className="break-all text-xs text-drap-600">{status.pending.join(", ")}</p>
+      {status.needsReview?.length ? <div role="note" className="rounded-md border border-drap-400 bg-white p-3 text-sm text-drap-800"><p className="font-medium">Precisa de revisão — a atualização automática não aplica:</p><ul className="mt-1 list-disc pl-5 text-xs">{status.needsReview.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>
+        : <p className="text-xs text-drap-600">Estas são aditivas: a atualização automática aplica na próxima hora, ou aplique agora.</p>}
+      {automatico}
       {error ? <p role="alert" className="text-sm font-medium text-drap-800">{error}</p> : null}
       <Button onClick={() => void apply()} disabled={applying} className="h-11 w-full sm:w-auto">
         {applying ? <LoaderCircle className="animate-spin" /> : <Database />}Atualizar banco de dados
@@ -444,6 +455,7 @@ function Dashboard({ session, onLogout }: { session: Session; onLogout: () => vo
           <InvitationsPanel organizations={overview.organizations} />
           <PlatformControl organizations={overview.organizations} maintenanceId={overview.maintenance.ready ? overview.maintenance.id : undefined} />
           <SinapiControl />
+          <GoinfraControl />
           {overview.organizations.length ? <section className="mt-6 space-y-4"><h2 className="text-xl font-semibold">Tempo online de todos os acessos</h2><UsageWorkspace /></section> : null}
           <Card className="mt-6 overflow-hidden workspace-card"><CardHeader className="border-b bg-white"><CardTitle className="text-lg">Empresas cadastradas</CardTitle></CardHeader><div className="overflow-x-auto"><Table><TableHeader><TableRow className="bg-drap-50"><TableHead className="pl-6">Empresa</TableHead><TableHead>Membros</TableHead><TableHead>Clientes</TableHead><TableHead>Projetos</TableHead><TableHead>Tarefas abertas</TableHead><TableHead>Criada em</TableHead><TableHead className="text-right pr-5">Ação</TableHead></TableRow></TableHeader><TableBody>{overview.organizations.length ? overview.organizations.map((organization) => <TableRow key={organization.id}><TableCell className="pl-6"><p className="font-medium text-drap-900">{organization.name}</p><p className="text-xs text-drap-500">{organization.slug}</p></TableCell><TableCell>{organization.members}</TableCell><TableCell>{organization.clients}</TableCell><TableCell>{organization.projects}</TableCell><TableCell>{organization.openTasks}</TableCell><TableCell>{new Date(organization.createdAt).toLocaleDateString("pt-BR")}</TableCell><TableCell className="pr-5 text-right"><div className="flex justify-end gap-2"><Button type="button" size="sm" variant="outline" disabled={Boolean(entering)} onClick={() => void openCompany(organization.id)}>{entering === organization.id ? <LoaderCircle className="animate-spin" /> : <DoorOpen />}Abrir empresa</Button><Button type="button" size="sm" variant="ghost" className="text-drap-600 hover:text-drap-700" onClick={() => setApagandoEmpresa(apagandoEmpresa === organization.id ? "" : organization.id)} aria-label={`Apagar ${organization.name}`}><Trash2 /></Button></div>{apagandoEmpresa === organization.id ? <div className="text-left"><ConfirmarExclusao rotulo={organization.name} aviso={`Apaga a empresa e tudo que pendura nela: ${organization.clients} cliente(s), ${organization.projects} projeto(s), orçamentos, diários e histórico. Quem só pertencia a ela perde o login. Não há desfazer.`} acao={() => apagarEmpresa(organization.id)} onPronto={async () => { setApagandoEmpresa(""); await reload(); }} onCancelar={() => setApagandoEmpresa("")} /></div> : null}</TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="h-32 text-center text-drap-500">Nenhuma empresa cadastrada. Use “Cadastrar empresa” para começar.</TableCell></TableRow>}</TableBody></Table></div></Card>
           <ContasPanel session={session} />

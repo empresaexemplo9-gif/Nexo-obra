@@ -1,0 +1,49 @@
+name: Atualizar banco de dados
+
+# De hora em hora, a plataforma publicada aplica as migrações pendentes que só acrescentam
+# tabela, índice ou coluna. O cron da Vercel (plano Hobby) só roda uma vez por dia, então
+# o intervalo de uma hora vem daqui. Migração que altera dado existente não é aplicada:
+# fica no painel do superadministrador para revisão.
+#
+# Configuração no GitHub (Settings → Secrets and variables → Actions):
+#   secret   CRON_SECRET     o mesmo valor de CRON_SECRET na Vercel
+#   variável PLATAFORMA_URL  opcional; padrão https://nexo-obra-jet.vercel.app
+#
+# O GitHub só executa agendamentos do arquivo que está na branch padrão (main).
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: banco-de-dados
+  cancel-in-progress: false
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Aplicar migrações pendentes
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PLATAFORMA_URL: ${{ vars.PLATAFORMA_URL || 'https://nexo-obra-jet.vercel.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::Defina o secret CRON_SECRET do repositório com o mesmo valor configurado na Vercel."
+            exit 1
+          fi
+          status=$(curl -sS -o resposta.json -w '%{http_code}' --max-time 280 \
+            -H "Authorization: Bearer $CRON_SECRET" "$PLATAFORMA_URL/api/cron/banco")
+          cat resposta.json; echo
+          if [ "$status" != "200" ]; then
+            echo "::error::A atualização do banco respondeu HTTP $status."
+            exit 1
+          fi
+          if grep -q '"needsReview":"' resposta.json; then
+            echo "::warning::Há migração que altera dado existente esperando revisão no painel do superadministrador."
+          fi

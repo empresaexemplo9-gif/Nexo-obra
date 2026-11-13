@@ -1,5 +1,5 @@
 export const permissionModules = [
-  "overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio",
+  "overview", "projects", "budgets", "schedule", "diary", "portal", "crm", "finance", "team", "tasks", "files", "studio", "purchases",
 ] as const;
 
 export type PermissionModule = typeof permissionModules[number];
@@ -20,6 +20,7 @@ export const permissionModuleLabels: Record<PermissionModule, string> = {
   tasks: "Tarefas",
   files: "Arquivos",
   studio: "Prancheta e projeto",
+  purchases: "Compras e suprimentos",
 };
 
 // Perfil da plataforma, fora da matriz das empresas: leitura e edição total em todos os módulos.
@@ -71,11 +72,11 @@ export function permissionsForRole(role: string): PermissionSet {
     permissions[area] = { view: view || edit, edit };
   };
   if (role === "manager") {
-    for (const area of ["overview", "projects", "budgets", "schedule", "crm", "tasks", "files", "studio"] as PermissionModule[]) set(area, true, true);
+    for (const area of ["overview", "projects", "budgets", "schedule", "crm", "tasks", "files", "studio", "purchases"] as PermissionModule[]) set(area, true, true);
     set("finance", true); set("team", true);
   } else if (role === "member") {
     for (const area of ["overview", "projects", "schedule", "files"] as PermissionModule[]) set(area, true);
-    set("tasks", true, true); set("studio", true, true);
+    set("tasks", true, true); set("studio", true, true); set("purchases", true);
   } else if (role === "partner") {
     for (const area of ["overview", "projects", "schedule", "tasks", "files", "studio"] as PermissionModule[]) set(area, true);
   } else if (role === "service_provider") {
@@ -83,11 +84,11 @@ export function permissionsForRole(role: string): PermissionSet {
     set("tasks", true, true); set("files", true, true);
   } else if (role === "finance") {
     for (const area of ["overview", "budgets", "finance", "files"] as PermissionModule[]) set(area, true, true);
-    set("projects", true);
+    set("projects", true); set("purchases", true);
   } else if (role === "hr") {
     for (const area of ["overview", "team"] as PermissionModule[]) set(area, true);
   } else if (role === "accounting") {
-    for (const area of ["overview", "budgets", "finance", "files"] as PermissionModule[]) set(area, true);
+    for (const area of ["overview", "budgets", "finance", "files", "purchases"] as PermissionModule[]) set(area, true);
   }
   return permissions;
 }
@@ -102,7 +103,7 @@ export function normalizePermissions(value: unknown, role: string): PermissionSe
     const grant = input[area];
     if (!grant || typeof grant !== "object" || Array.isArray(grant)) {
       // New modules must not expand an already customized secondary account's access.
-      normalized[area] = ["diary", "portal", "studio"].includes(area) && Object.keys(input).length > 0 ? { view: false, edit: false } : defaults[area];
+      normalized[area] = ["diary", "portal", "studio", "purchases"].includes(area) && Object.keys(input).length > 0 ? { view: false, edit: false } : defaults[area];
       continue;
     }
     const candidate = grant as Record<string, unknown>;

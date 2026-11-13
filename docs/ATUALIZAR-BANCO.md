@@ -9,7 +9,30 @@ falha aparecia como um erro genérico, sem dizer o motivo.
 
 Agora a própria plataforma aplica o que falta.
 
-## Como usar
+## Atualização automática, de hora em hora
+
+O banco é atualizado sozinho:
+
+- **De hora em hora**, pelo GitHub Actions (`.github/workflows/banco-de-dados.yml`), que chama `GET /api/cron/banco` na plataforma publicada aos 7 minutos de cada hora.
+- **Uma vez por dia**, pelo cron da Vercel (`vercel.json`, 06:17 UTC), como reserva. O plano Hobby da Vercel só aceita agendamento diário — um intervalo de uma hora ali faria o deploy falhar —, por isso a hora em hora vem do GitHub.
+
+A rota só responde com `Authorization: Bearer <CRON_SECRET>`. A Vercel envia esse cabeçalho sozinha; no GitHub, configure em **Settings → Secrets and variables → Actions**:
+
+| Tipo | Nome | Valor |
+| --- | --- | --- |
+| Secret | `CRON_SECRET` | o mesmo valor de `CRON_SECRET` nas variáveis da Vercel |
+| Variável (opcional) | `PLATAFORMA_URL` | endereço publicado; padrão `https://nexo-obra-jet.vercel.app` |
+
+O GitHub só executa o agendamento do arquivo que está na `main`. Para testar sem esperar a hora, use **Actions → Atualizar banco de dados → Run workflow**.
+
+### O que o automático aplica, e o que não
+
+- Aplica, em ordem, migração que **só acrescenta**: tabela nova, índice novo, coluna nova (e `PRAGMA optimize`). Isso não toca em dado existente.
+- **Não aplica** migração que apaga, renomeia, reconstrói tabela ou mexe em linhas (`DROP`, `RENAME`, `INSERT`, `UPDATE`, `DELETE`, tabela `__new_`). Ela para a fila — as seguintes podem depender dela —, aparece no painel em **Precisa de revisão** com o motivo, e o workflow do GitHub sai com aviso. A aplicação é feita pelo botão do painel depois de alguém ler o SQL.
+- Uma trava no banco impede que o agendamento e o botão do painel apliquem ao mesmo tempo; quem chega com a trava ocupada espera a próxima rodada.
+- O painel mostra quando foi a última execução automática, de onde veio e o resultado (ou o erro).
+
+## Aplicação manual
 
 1. Entre em `/superadmin`.
 2. No topo do painel aparece **Banco de dados**:
@@ -41,13 +64,14 @@ anterior.
 | Método | Rota | Uso |
 | --- | --- | --- |
 | `GET` | `/api/superadmin/migrations` | Aplicadas, pendentes e total |
-| `POST` | `/api/superadmin/migrations` | Aplica as pendentes, em ordem |
+| `POST` | `/api/superadmin/migrations` | Aplica as pendentes, em ordem (manual, inclusive as que precisam de revisão) |
+| `GET` | `/api/cron/banco` | Atualização automática; só com `CRON_SECRET` |
 
 ## Ao criar uma migração nova
 
-Rode `npm run db:generate` e faça o commit do arquivo em `drizzle/`. Não há lista para
-atualizar: o módulo embute o diretório inteiro com `import.meta.glob`, então o arquivo novo
-entra sozinho e aparece como pendente no painel após o deploy.
+Rode `npm run db:generate` e faça o commit do arquivo em `drizzle/` e do `drizzle/manifest.ts`.
+Depois do deploy, a migração aditiva é aplicada na próxima hora sem ninguém clicar; a que
+altera dado existente aparece no painel para revisão.
 
 ## Verificação antes de publicar
 

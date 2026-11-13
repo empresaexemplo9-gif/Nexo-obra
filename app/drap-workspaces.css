@@ -1,6 +1,6 @@
 /* Operational surfaces: the same visual hierarchy across every workspace. */
 .nexo-canvas { background: var(--drap-stone); }
-.drap-workspace-content { max-width: 1680px; }
+.drap-workspace-content { width: 100%; max-width: none; }
 .drap-module-heading {
   position: relative;
   padding: clamp(1.25rem, 2.5vw, 2.5rem);
@@ -81,7 +81,7 @@
 
 /* Architectural identity: drawing-board framing, editorial scale and material layers. */
 .nexo-canvas { background: var(--drap-stone); }
-.drap-workspace-content { max-width: 1600px; }
+.drap-workspace-content { width: 100%; max-width: none; }
 .drap-module-heading, .drap-focus {
   isolation: isolate; position: relative; overflow: hidden;
   min-height: 250px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--drap-support) 30%, var(--drap-paper));
