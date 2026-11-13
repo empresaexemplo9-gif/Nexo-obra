@@ -204,7 +204,7 @@ function NewCompanyPanel({ onCreated }: { onCreated: () => Promise<void> }) {
   return <Card className="workspace-card"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Building2 className="size-5 text-drap-600" />Cadastrar empresa</CardTitle><p className="text-sm leading-6 text-drap-500">A empresa nasce vazia. Você já pode operá-la e o convite principal define o contratante proprietário.</p></CardHeader><CardContent><form onSubmit={submit} className="space-y-4"><div><label className="mb-2 block text-sm font-medium" htmlFor="new-company">Nome da empresa</label><Input id="new-company" value={name} onChange={(event) => setName(event.target.value)} required minLength={2} maxLength={120} className="h-11" placeholder="Escritório Exemplo" /></div>{error ? <p role="alert" className="text-sm text-drap-600">{error}</p> : null}{created ? <p className="flex items-center gap-2 text-sm text-drap-800"><Check className="size-4" />{created} cadastrada.</p> : null}<Button type="submit" disabled={saving} className="h-11 w-full">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}Cadastrar empresa</Button></form></CardContent></Card>;
 }
 
-type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number };
+type MigrationStatus = { applied: Array<{ id: string; appliedAt: number }>; pending: string[]; total: number; needsReview?: string[]; automatic?: { at: number; origin: string; result: string; error: string | null } | null };
 
 // Qual versão está servindo. O domínio público reescreve as rotas para outro alvo de
 // publicação, então uma versão antiga no ar não tem sintoma nenhum além de "não mudou
@@ -258,6 +258,12 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
     } finally { setApplying(false); }
   }
 
+  // Quando e o que a atualização automática (de hora em hora) fez pela última vez.
+  const automatico = <p className="w-full text-xs text-drap-600">
+    Atualização automática de hora em hora: {status.automatic ? <>última em {new Date(status.automatic.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} ({status.automatic.origin}) — {status.automatic.result}</> : "ainda não rodou. Confira o secret CRON_SECRET no GitHub e na Vercel."}
+    {status.automatic?.error && !status.needsReview?.length ? <span className="mt-1 block font-medium text-drap-800">Erro: {status.automatic.error}</span> : null}
+  </p>;
+
   if (!status.pending.length) {
     return <Card className="workspace-card"><CardContent className="flex flex-wrap items-center gap-3 p-4">
       <Database className="size-5 text-drap-600" />
@@ -265,6 +271,7 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
         Banco de dados em dia: {status.applied.length} de {status.total} atualizações aplicadas.
         {done ? ` ${done} aplicada(s) agora.` : ""}
       </p>
+      {automatico}
     </CardContent></Card>;
   }
 
@@ -279,6 +286,9 @@ function DatabasePanel({ status, onApplied }: { status: MigrationStatus; onAppli
     </CardHeader>
     <CardContent className="space-y-3">
       <p className="break-all text-xs text-drap-600">{status.pending.join(", ")}</p>
+      {status.needsReview?.length ? <div role="note" className="rounded-md border border-drap-400 bg-white p-3 text-sm text-drap-800"><p className="font-medium">Precisa de revisão — a atualização automática não aplica:</p><ul className="mt-1 list-disc pl-5 text-xs">{status.needsReview.map((motivo) => <li key={motivo}>{motivo}</li>)}</ul></div>
+        : <p className="text-xs text-drap-600">Estas são aditivas: a atualização automática aplica na próxima hora, ou aplique agora.</p>}
+      {automatico}
       {error ? <p role="alert" className="text-sm font-medium text-drap-800">{error}</p> : null}
       <Button onClick={() => void apply()} disabled={applying} className="h-11 w-full sm:w-auto">
         {applying ? <LoaderCircle className="animate-spin" /> : <Database />}Atualizar banco de dados

@@ -156,8 +156,10 @@ Os testes cobrem regra de negócio, autorização, cálculo e interface. Consult
 
 ## Primeiro acesso e atualização do banco
 
-O `db:generate` apenas escreve as migrações em `drizzle/`; **nada no deploy as aplica**. Ao
-publicar uma versão com migração nova, entre em `/superadmin` e use **Atualizar banco de
+O `db:generate` apenas escreve as migrações em `drizzle/`. **De hora em hora** o GitHub Actions
+chama a plataforma publicada, que aplica sozinha as migrações que só acrescentam tabela, índice
+ou coluna (e o cron diário da Vercel faz o mesmo, como reserva). Migração que altera dado
+existente espera revisão: entre em `/superadmin` e use **Atualizar banco de
 dados** — o aviso aparece no topo do painel, com o que falta aplicar, e continua visível
 mesmo quando o resto do painel falha por causa das tabelas ausentes. Consulte
 [Atualizar o banco de dados](docs/ATUALIZAR-BANCO.md).
