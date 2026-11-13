@@ -1298,3 +1298,15 @@ export const supplierPriceItems = sqliteTable("supplier_price_items", {
   index("idx_supplier_price_items_org_description").on(table.organizationId, table.description),
   index("idx_supplier_price_items_list").on(table.listId),
 ]);
+
+// Busca automática no site da GOINFRA: quando foi a última conferência, o que encontrou e
+// a trava que impede duas buscas ao mesmo tempo. Global, como as próprias tabelas.
+export const goinfraSync = sqliteTable("goinfra_sync", {
+  id: integer("id").primaryKey(),
+  lockToken: text("lock_token"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+  lastCheckedAt: integer("last_checked_at"),
+  lastOrigin: text("last_origin"),
+  lastResult: text("last_result"),
+  lastError: text("last_error"),
+});

@@ -31,6 +31,7 @@ O GitHub só executa o agendamento do arquivo que está na `main`. Para testar s
 - **Não aplica** migração que apaga, renomeia, reconstrói tabela ou mexe em linhas (`DROP`, `RENAME`, `INSERT`, `UPDATE`, `DELETE`, tabela `__new_`). Ela para a fila — as seguintes podem depender dela —, aparece no painel em **Precisa de revisão** com o motivo, e o workflow do GitHub sai com aviso. A aplicação é feita pelo botão do painel depois de alguém ler o SQL.
 - Uma trava no banco impede que o agendamento e o botão do painel apliquem ao mesmo tempo; quem chega com a trava ocupada espera a próxima rodada.
 - O painel mostra quando foi a última execução automática, de onde veio e o resultado (ou o erro).
+- Com o esquema em dia, a mesma chamada confere as tabelas oficiais da GOINFRA (no máximo uma vez a cada 20 horas). Falha lá não derruba a atualização do banco. Consulte [Compras → GOINFRA](COMPRAS.md#goinfra).
 
 ## Aplicação manual
 

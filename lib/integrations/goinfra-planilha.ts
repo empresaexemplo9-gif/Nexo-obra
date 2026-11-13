@@ -1,37 +1,46 @@
 import { z } from "zod";
 
-import { abrirPlanilha } from "./planilha-xlsx";
+import { abrirPlanilha, type Planilha } from "./planilha-xlsx";
+import { abrirPlanilhaXls, ehXls } from "./planilha-xls";
 import { paraCentavos } from "./sinapi-planilha";
 
 // Interpretação da tabela de preços da GOINFRA (Agência Goiana de Infraestrutura e
 // Transportes).
 //
-// A agência publica a tabela no próprio site, em planilha, por referência mensal e com
-// versões com e sem desoneração. Não há API: o superadministrador baixa o arquivo oficial
-// e envia aqui. Pela mesma razão da SINAPI, as colunas são achadas pelo NOME no
+// A agência publica as tabelas em goias.gov.br/goinfra, em XLS (Excel 97), por data-base
+// bimestral e com versões com e sem desoneração: custo referencial de materiais, de mão de
+// obra e o relatório sintético de serviços de obras civis. Não há API: a plataforma lê a
+// página de cada tabela e baixa o arquivo (lib/server/goinfra-fonte.ts), ou o
+// superadministrador envia o arquivo oficial. Pela mesma razão da SINAPI, as colunas são achadas pelo NOME no
 // cabeçalho, nunca pela posição — uma coluna lida no lugar errado vira preço errado em
 // silêncio, e isso é pior do que recusar o arquivo.
 
-export const TABELAS_GOINFRA = ["obras-civis", "rodoviaria"] as const;
+export const TABELAS_GOINFRA = ["materiais", "obras-civis", "mao-de-obra", "rodoviaria"] as const;
 export type TabelaGoinfra = typeof TABELAS_GOINFRA[number];
-export const rotuloTabelaGoinfra: Record<TabelaGoinfra, string> = { "obras-civis": "Obras civis", rodoviaria: "Rodoviária" };
+export const rotuloTabelaGoinfra: Record<TabelaGoinfra, string> = {
+  materiais: "Materiais (insumos)", "obras-civis": "Serviços de obras civis", "mao-de-obra": "Mão de obra (insumos)", rodoviaria: "Rodoviária",
+};
 export const REGIMES_GOINFRA = ["Desonerado", "NaoDesonerado"] as const;
 export const rotuloRegimeGoinfra: Record<typeof REGIMES_GOINFRA[number], string> = { Desonerado: "Desonerada", NaoDesonerado: "Não desonerada" };
 
+// Referência e regime são opcionais: a planilha oficial traz os dois no cabeçalho. Quando
+// informados, precisam bater com ela.
 export const envioGoinfraSchema = z.object({
-  referencia: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use a referência no formato AAAA-MM."),
+  referencia: z.union([z.literal(""), z.null(), z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use a referência no formato AAAA-MM.")]).transform((v) => v || undefined),
   tabela: z.enum(TABELAS_GOINFRA),
-  regime: z.enum(REGIMES_GOINFRA),
+  regime: z.union([z.literal(""), z.null(), z.enum(REGIMES_GOINFRA)]).transform((v) => v || undefined),
 });
 
 export type ItemGoinfra = { codigo: string; descricao: string; unidade: string; custoUnitarioCentavos: number };
-export type InterpretacaoGoinfra = { itens: ItemGoinfra[]; aba: string; linhaDoCabecalho: number; ignoradas: number };
+/** O que a própria planilha diz sobre si: data-base, regime e número da tabela. */
+export type CabecalhoGoinfra = { dataBase: string | null; regime: "Desonerado" | "NaoDesonerado" | null; numero: string | null; titulo: string };
+export type InterpretacaoGoinfra = { itens: ItemGoinfra[]; aba: string; linhaDoCabecalho: number; ignoradas: number; cabecalho: CabecalhoGoinfra };
 
 const SINONIMOS: Record<"codigo" | "descricao" | "unidade" | "preco", string[]> = {
-  codigo: ["codigo", "cod", "item", "codigo goinfra", "codigo do servico", "codigo do insumo"],
-  descricao: ["descricao", "descricao do servico", "descricao do insumo", "descricao do produto", "discriminacao", "servico", "especificacao", "produto", "material", "nome do produto"],
+  codigo: ["codigo", "codigo auxiliar", "cod", "item", "codigo goinfra", "codigo do servico", "codigo do insumo"],
+  descricao: ["descricao", "descricao do material", "descricao da mao de obra", "descricao do servico", "descricao do insumo", "descricao do produto", "discriminacao", "servico", "especificacao", "produto", "material", "nome do produto"],
   unidade: ["unidade", "und", "un", "unid"],
-  preco: ["preco unitario", "custo unitario", "valor unitario", "preco a vista", "preco de venda", "preco total", "custo total", "preco", "custo", "valor"],
+  preco: ["preco unitario", "custo unitario", "valor com encargos", "valor unitario", "preco a vista", "preco de venda", "preco total", "custo total", "preco", "custo", "valor", "total"],
 };
 
 // Acento, caixa, pontuação e espaço repetido não podem decidir se a coluna é achada:
@@ -96,14 +105,28 @@ function interpretarLinhas(aba: string, linhas: string[][], codigoObrigatorio: b
     const custo = paraCentavos(linha[colunas.preco] ?? "");
     // Sem código, descrição, unidade ou preço legível é título de grupo, subtotal ou
     // rodapé. A contagem entra no registro da importação.
-    if ((codigoObrigatorio && !codigo) || !descricao || !unidade || custo === null) { if (linha.some((c) => c.trim())) ignoradas += 1; continue; }
+    // "S/U" (sem unidade) é a linha de título de grupo da GOINFRA, com custo zero.
+    if ((codigoObrigatorio && !codigo) || !descricao || !unidade || /^s\/u$/i.test(unidade) || custo === null) { if (linha.some((c) => c.trim())) ignoradas += 1; continue; }
     // Sem código, o item é identificado pela descrição e unidade.
     const chave = codigo || `${descricao.toLowerCase()}|${unidade.toLowerCase()}`;
     if (vistos.has(chave)) { ignoradas += 1; continue; }
     vistos.add(chave);
     itens.push({ codigo: codigo.slice(0, 40), descricao: descricao.slice(0, 600), unidade: unidade.slice(0, 16), custoUnitarioCentavos: custo });
   }
-  return { itens, aba, linhaDoCabecalho, ignoradas };
+  return { itens, aba, linhaDoCabecalho, ignoradas, cabecalho: lerCabecalho(linhas.slice(0, linhaDoCabecalho)) };
+}
+
+function lerCabecalho(linhas: string[][]): CabecalhoGoinfra {
+  const texto = linhas.map((l) => l.filter((c) => c.trim()).join(" ")).join(" | ").replace(/\s+/g, " ");
+  const data = /data\s*base:?\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(texto);
+  const semAcento = texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  const tabela = linhas.flat().find((c) => /TABELA DE CUSTOS/i.test(c)) ?? "";
+  return {
+    dataBase: data ? `${data[3]}-${data[2]}` : null,
+    regime: /SEM DESONERA/.test(semAcento) ? "NaoDesonerado" : /COM DESONERA/.test(semAcento) ? "Desonerado" : null,
+    numero: /\bT(\d{3})\b/.exec(tabela)?.[1] ?? null,
+    titulo: tabela.trim().slice(0, 200),
+  };
 }
 
 export function interpretarGoinfra(dados: Buffer, nomeDoArquivo: string): InterpretacaoGoinfra {
@@ -116,15 +139,15 @@ export function interpretarGoinfra(dados: Buffer, nomeDoArquivo: string): Interp
  */
 export function lerTabelaDePrecos(dados: Buffer, nomeDoArquivo: string, codigoObrigatorio: boolean): InterpretacaoGoinfra {
   const ehZip = dados.length > 4 && dados[0] === 0x50 && dados[1] === 0x4b;
-  if (ehZip) {
-    const planilha = abrirPlanilha(dados);
+  if (ehZip || ehXls(dados)) {
+    const planilha: Planilha = ehZip ? abrirPlanilha(dados) : abrirPlanilhaXls(dados);
     for (const aba of planilha.abas) {
       const resultado = interpretarLinhas(aba, planilha.linhas(aba), codigoObrigatorio);
       if (resultado && resultado.itens.length) return resultado;
     }
     throw new Error(`nenhuma aba tem cabeçalho com ${codigoObrigatorio ? "código, " : ""}descrição, unidade e preço; abas: ${planilha.abas.map((a) => `"${a}"`).join(", ")}.`);
   }
-  if (!/\.csv$/i.test(nomeDoArquivo)) throw new Error("envie a planilha em XLSX ou CSV. XLS antigo e PDF não são lidos: abra no Excel e salve como XLSX.");
+  if (!/\.csv$/i.test(nomeDoArquivo)) throw new Error("envie a planilha em XLS, XLSX ou CSV. PDF não é lido.");
   const texto = new TextDecoder("utf-8").decode(dados).replace(/^﻿/, "");
   const resultado = interpretarLinhas(nomeDoArquivo, linhasDoCsv(texto), codigoObrigatorio);
   if (!resultado || !resultado.itens.length) throw new Error(`o CSV não tem cabeçalho com ${codigoObrigatorio ? "código, " : ""}descrição, unidade e preço.`);

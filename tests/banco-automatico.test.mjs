@@ -45,8 +45,10 @@ async function bancoAte(ultima) {
 }
 const chamar = (segredo = "segredo-de-teste", agente = "GitHub-Actions") => cron.GET(new Request("https://platform.test/api/cron/banco", { headers: { ...(segredo ? { authorization: `Bearer ${segredo}` } : {}), "user-agent": agente } }));
 
-beforeEach(() => { h.reset(); h.runtime.CRON_SECRET = "segredo-de-teste"; });
-after(() => h.close());
+// A rota também confere o site da GOINFRA; teste nunca vai à rede de verdade.
+const fetchOriginal = globalThis.fetch;
+beforeEach(() => { h.reset(); h.runtime.CRON_SECRET = "segredo-de-teste"; globalThis.fetch = async () => new Response("fora do ar", { status: 503 }); });
+after(() => { globalThis.fetch = fetchOriginal; return h.close(); });
 
 test("sem o segredo do agendamento, nada roda", async () => {
   await bancoAte("0028");

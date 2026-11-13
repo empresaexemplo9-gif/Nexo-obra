@@ -74,14 +74,24 @@ O fornecedor atual e quem já cotou o pedido ficam de fora. Sem histórico nem c
 
 ## GOINFRA
 
-A Agência Goiana de Infraestrutura e Transportes publica a tabela de preços no próprio site, em planilha, sem API. O superadministrador baixa a planilha oficial e envia em **Painel da plataforma → Referência GOINFRA** (XLSX ou CSV, até 30 MB), escolhendo tabela (obras civis ou rodoviária), regime (desonerada ou não) e referência (mês).
+Tabelas oficiais da Agência Goiana de Infraestrutura e Transportes, publicadas em [goias.gov.br/goinfra](https://goias.gov.br/goinfra/tabelas/) em XLS (Excel 97), por data-base bimestral, com e sem desoneração:
 
-- As colunas são achadas pelo **nome** do cabeçalho (código, descrição, unidade e preço unitário), nas 30 primeiras linhas de cada aba; título de grupo, subtotal e rodapé são ignorados e contados.
-- Uma tabela ativa por tipo e regime. A nova entra em separado e só troca de lugar com a anterior no fim, num único lote: quem busca durante a importação vê a tabela antiga inteira. Referência mais antiga que a ativa é recusada.
-- O registro guarda arquivo, SHA-256, aba, contagens, quem importou e quando.
-- Produto criado de uma tabela que depois foi substituída mantém o custo e o rótulo de onde veio; buscar de novo traz o preço vigente.
+| Tipo na plataforma | Publicação da GOINFRA | Preço usado |
+| --- | --- | --- |
+| Materiais (insumos) | Custo Referencial de Materiais | Custo Unitário |
+| Mão de obra (insumos) | Custo Referencial de Mão de Obra | Valor com encargos |
+| Serviços de obras civis | Relatório Sintético de Composições (Tabela 3xx) | Total (material + mão de obra) |
+| Rodoviária | — (só envio manual) | — |
 
-**Pendente:** homologar com a planilha real da GOINFRA. O ambiente de desenvolvimento não alcança o site da agência, então o leitor foi construído pelo layout usual (código, descrição, unidade, preço) e testado com uma planilha de teste. Se a planilha oficial não for reconhecida, a importação é recusada com o motivo e as abas encontradas — nunca grava preço lido da coluna errada.
+**Busca automática.** A atualização de hora em hora (`/api/cron/banco`, ver [Atualizar o banco](ATUALIZAR-BANCO.md)) confere o site no máximo uma vez a cada 20 horas, depois de o esquema estar em dia. Para cada tipo, acha a página pelo índice ("Tabela de Insumos", "Tabela de Preços"), lê a lista de arquivos, escolhe o mais recente de cada regime pelo nome ("FEVEREIRO-2026 - SEM DESONERAÇÃO") e baixa só se for mais novo que o ativo. Só baixa de `goias.gov.br/goinfra/wp-content/uploads/`; endereço de outro site na página é ignorado. Falha numa tabela não impede as outras e fica registrada no painel.
+
+**Conferência.** A data-base e o regime também vêm do cabeçalho da própria planilha ("T334 - FEVEREIRO/2026 - SEM DESONERAÇÃO", "Data base: 01/02/2026"). Arquivo que diz outra data-base ou outro regime é recusado. As colunas são achadas pelo nome do cabeçalho; linhas de título de grupo (sem unidade ou "S/U") e rodapé ficam de fora e são contadas.
+
+**Painel do superadministrador → Referência GOINFRA:** tabelas ativas (arquivo, SHA-256, itens, quem importou), **Buscar no site da GOINFRA agora**, a última conferência automática e o envio manual do arquivo oficial (XLS, XLSX ou CSV) para quando o site não responder à plataforma.
+
+**Homologação (13/11/2026).** Lidas e importadas do site real as seis tabelas de data-base fevereiro/2026 (publicadas em 05/05/2026): materiais T334/T333 com 1.817 itens cada, mão de obra com 29 itens cada e serviços de obras civis com 1.956 itens cada. O leitor de XLS foi comparado célula a célula com uma biblioteca de referência nas duas maiores planilhas (19.427 células, nenhuma diferença). A busca a partir da Vercel depende de o site da GOINFRA aceitar conexão do servidor publicado; se recusar, o painel mostra a falha e o envio manual continua valendo.
+
+Uma tabela ativa por tipo e regime; a nova entra em separado e troca de lugar com a anterior no fim, num lote só. Produto criado de uma tabela que depois foi substituída mantém o custo e o rótulo de onde veio; buscar de novo traz o preço vigente.
 
 ## Integração com o resto da plataforma
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { CircleAlert, FileSpreadsheet, LoaderCircle, Upload } from "lucide-react";
+import { CircleAlert, FileSpreadsheet, Globe, LoaderCircle, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,18 +19,34 @@ export function GoinfraControl() {
   const [tabelas, setTabelas] = useState<Tabela[] | null>(null);
   const [erro, setErro] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [buscando, setBuscando] = useState(false);
+  const [automatico, setAutomatico] = useState<{ at: number; origin: string; result: string; error: string | null } | null>(null);
   const [mesPassado] = useState(() => new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 7));
 
   const carregar = useCallback(async () => {
     setErro("");
     try {
       const resposta = await fetch("/api/superadmin/goinfra", { cache: "no-store" });
-      const corpo = await resposta.json() as { tables?: Tabela[]; error?: string };
+      const corpo = await resposta.json() as { tables?: Tabela[]; error?: string; automatic?: typeof automatico };
       if (!resposta.ok) throw new Error(corpo.error ?? "Não foi possível ler a referência GOINFRA.");
-      setTabelas(corpo.tables ?? []);
+      setTabelas(corpo.tables ?? []); setAutomatico(corpo.automatic ?? null);
     } catch (causa) { setErro(causa instanceof Error ? causa.message : "Não foi possível ler a referência GOINFRA."); }
   }, []);
   useEffect(() => { const t = window.setTimeout(() => { void carregar(); }, 0); return () => window.clearTimeout(t); }, [carregar]);
+
+  async function buscarNoSite() {
+    if (buscando) return;
+    setBuscando(true);
+    try {
+      const resposta = await fetch("/api/superadmin/goinfra", { method: "POST" });
+      const corpo = await resposta.json() as { error?: string; tables?: Tabela[]; automatic?: typeof automatico; sync?: { imported: string[]; failures: string[]; result: string } };
+      if (!resposta.ok) throw new Error(corpo.error ?? "A busca no site falhou.");
+      setTabelas(corpo.tables ?? []); setAutomatico(corpo.automatic ?? null);
+      if (corpo.sync?.failures.length) toast.error("Parte das tabelas não foi importada", { description: corpo.sync.failures.join(" · ") });
+      else toast.success(corpo.sync?.imported.length ? `${corpo.sync.imported.length} tabela(s) importada(s) do site` : "Tabelas já em dia com o site");
+    } catch (causa) { toast.error(causa instanceof Error ? causa.message : "A busca no site falhou."); }
+    finally { setBuscando(false); }
+  }
 
   async function enviar(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -49,15 +65,19 @@ export function GoinfraControl() {
   }
 
   return <Card className="mt-6 workspace-card">
-    <CardHeader className="border-b bg-white"><CardTitle className="flex items-center gap-2 text-lg"><FileSpreadsheet className="size-5 text-drap-600" />Referência GOINFRA</CardTitle><p className="text-sm text-drap-500">Tabela de preços da Agência Goiana de Infraestrutura e Transportes. Baixe a planilha oficial no site da GOINFRA e envie em XLSX ou CSV. As colunas são achadas pelo nome do cabeçalho (código, descrição, unidade e preço); uma tabela ativa por tipo e regime.</p></CardHeader>
+    <CardHeader className="border-b bg-white"><CardTitle className="flex items-center gap-2 text-lg"><FileSpreadsheet className="size-5 text-drap-600" />Referência GOINFRA</CardTitle><p className="text-sm text-drap-500">Tabelas oficiais da Agência Goiana de Infraestrutura e Transportes: custo de materiais, de mão de obra e de serviços de obras civis, com e sem desoneração. A plataforma confere o site da GOINFRA uma vez por dia (pela atualização de hora em hora) e importa a data-base nova assim que for publicada. Uma tabela ativa por tipo e regime.</p>
+      <div className="flex flex-wrap items-center gap-3 pt-2"><Button onClick={() => void buscarNoSite()} disabled={buscando}>{buscando ? <LoaderCircle className="animate-spin" /> : <Globe />}Buscar no site da GOINFRA agora</Button>
+        <p className="text-xs text-drap-600">{automatico ? <>Última conferência: {new Date(automatico.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} ({automatico.origin}) — {automatico.result}{automatico.error ? <span className="block text-drap-800">Falhas: {automatico.error}</span> : null}</> : "O site ainda não foi conferido."}</p></div></CardHeader>
     <CardContent className="grid gap-6 p-5 xl:grid-cols-2">
       <form onSubmit={(e) => void enviar(e)} className="space-y-3">
+        <p className="text-sm font-medium text-drap-800">Enviar o arquivo oficial manualmente</p>
+        <p className="text-xs text-drap-500">Para quando o site não responder à plataforma. Aceita o XLS publicado pela GOINFRA (ou XLSX/CSV); data-base e regime são lidos do cabeçalho da planilha e conferidos com o que for escolhido aqui.</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="text-sm font-medium">Tabela<NativeSelect name="tabela" className="mt-1 w-full">{TABELAS_GOINFRA.map((t) => <NativeSelectOption key={t} value={t}>{rotuloTabelaGoinfra[t]}</NativeSelectOption>)}</NativeSelect></label>
-          <label className="text-sm font-medium">Regime<NativeSelect name="regime" className="mt-1 w-full">{REGIMES_GOINFRA.map((r) => <NativeSelectOption key={r} value={r}>{rotuloRegimeGoinfra[r]}</NativeSelectOption>)}</NativeSelect></label>
-          <label className="text-sm font-medium">Referência<Input name="referencia" type="month" required defaultValue={mesPassado} className="mt-1" /></label>
+          <label className="text-sm font-medium">Regime<NativeSelect name="regime" className="mt-1 w-full"><NativeSelectOption value="">Ler da planilha</NativeSelectOption>{REGIMES_GOINFRA.map((r) => <NativeSelectOption key={r} value={r}>{rotuloRegimeGoinfra[r]}</NativeSelectOption>)}</NativeSelect></label>
+          <label className="text-sm font-medium">Data-base<Input name="referencia" type="month" placeholder={mesPassado} className="mt-1" /><span className="mt-1 block text-xs font-normal text-drap-500">Vazio: lida da planilha.</span></label>
         </div>
-        <label className="block text-sm font-medium">Planilha oficial<Input name="arquivo" type="file" required accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" className="mt-1" /></label>
+        <label className="block text-sm font-medium">Planilha oficial<Input name="arquivo" type="file" required accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" className="mt-1" /></label>
         <Button type="submit" disabled={enviando}>{enviando ? <LoaderCircle className="animate-spin" /> : <Upload />}Importar tabela</Button>
       </form>
       <div className="min-w-0">

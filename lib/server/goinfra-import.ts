@@ -13,7 +13,7 @@ const LOTE = 400;
 
 export async function importarGoinfra(
   arquivo: { nome: string; bytes: Buffer },
-  alvo: { referencia: string; tabela: string; regime: string },
+  pedido: { referencia?: string; tabela: string; regime?: string },
   autor: string,
 ) {
   let interpretacao: InterpretacaoGoinfra;
@@ -21,12 +21,24 @@ export async function importarGoinfra(
   catch (error) { throw new Error(`Não foi possível ler a planilha: ${error instanceof Error ? error.message : String(error)}`); }
   if (interpretacao.itens.length < 10) throw new Error(`A planilha tem só ${interpretacao.itens.length} itens com preço. Confira se é a tabela completa da GOINFRA.`);
 
+  // A planilha oficial diz a própria data-base e o regime. O que foi informado precisa
+  // bater com ela: importar a tabela "com desoneração" no lugar da "sem" deixa todo preço
+  // de mão de obra errado em silêncio.
+  const { cabecalho } = interpretacao;
+  const referencia = pedido.referencia ?? cabecalho.dataBase;
+  const regime = pedido.regime ?? cabecalho.regime;
+  if (!referencia) throw new Error("A planilha não traz a data-base. Informe a referência (mês e ano).");
+  if (!regime) throw new Error("A planilha não diz se é com ou sem desoneração. Informe o regime.");
+  if (cabecalho.dataBase && cabecalho.dataBase !== referencia) throw new Error(`A planilha é da data-base ${cabecalho.dataBase.slice(5)}/${cabecalho.dataBase.slice(0, 4)}, não ${referencia.slice(5)}/${referencia.slice(0, 4)}.`);
+  if (cabecalho.regime && cabecalho.regime !== regime) throw new Error(`A planilha é ${cabecalho.regime === "Desonerado" ? "com" : "sem"} desoneração, diferente do regime informado.`);
+  const alvo = { referencia, tabela: pedido.tabela, regime };
+
   const db = getDatabase();
   const sha = createHash("sha256").update(arquivo.bytes).digest("hex");
   const anterior = await db.prepare("SELECT id, referencia, arquivo_sha256 FROM goinfra_tabelas WHERE tabela = ?1 AND regime = ?2")
     .bind(alvo.tabela, alvo.regime).first<{ id: string; referencia: string; arquivo_sha256: string }>();
   if (anterior && anterior.referencia > alvo.referencia) throw new Error(`Já está ativa a referência ${anterior.referencia}, mais nova que ${alvo.referencia}.`);
-  if (anterior?.arquivo_sha256 === sha && anterior.referencia === alvo.referencia) return { id: anterior.id, repetido: true, interpretacao };
+  if (anterior?.arquivo_sha256 === sha && anterior.referencia === alvo.referencia) return { id: anterior.id, repetido: true, interpretacao, alvo };
 
   // Os itens novos nascem pendurados num id provisório; só a troca final os liga à tabela.
   const id = crypto.randomUUID();
@@ -55,7 +67,7 @@ export async function importarGoinfra(
     ]).catch(() => undefined);
     throw error;
   }
-  return { id, repetido: false, interpretacao };
+  return { id, repetido: false, interpretacao, alvo };
 }
 
 /** Importação interrompida (função encerrada no meio) deixa uma tabela provisória: some aqui. */
