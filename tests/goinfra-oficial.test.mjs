@@ -147,3 +147,27 @@ test("a atualização de hora em hora confere a GOINFRA depois do banco em dia",
     assert.equal(corpo.goinfra.failures.length, 3);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("sem tabela no banco, abrir a aba GOINFRA dispara a busca no site uma vez", async () => {
+  const sem = "Tabela de Insumos Materiais - FEVEREIRO-2026 - SEM DESONERAÇÃO - Publicada em 05-05-2026";
+  const { buscar, pedidos } = siteDaGoinfra({
+    "/goinfra/tabela-de-insumos/": `<a href="https://goias.gov.br/goinfra/custo-referencial-de-materiais120/">Materiais</a>`,
+    "/goinfra/custo-referencial-de-materiais120/": paginaDeMateriais([sem]),
+  }, { [sem]: tabelaDeMateriais() });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = buscar;
+  try {
+    // Banco sem a tabela de registro da busca: ela se cria sozinha.
+    h.db.sqlite.exec("DROP TABLE IF EXISTS goinfra_busca");
+    const abrir = async () => (await catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=goinfra"))).json();
+    const primeira = await abrir();
+    assert.equal(primeira.total, 0);
+    assert.match(primeira.emptyReason, /Buscando agora as tabelas oficiais no site da GOINFRA/);
+    for (let i = 0; i < 50 && !(await abrir()).total; i += 1) await new Promise((r) => setTimeout(r, 20));
+    const depois = await abrir();
+    assert.equal(depois.total, 12, "a tabela de materiais entrou");
+    const downloads = pedidos.filter((p) => p.endsWith(".xls")).length;
+    await abrir();
+    assert.equal(pedidos.filter((p) => p.endsWith(".xls")).length, downloads, "abrir de novo não baixa outra vez");
+  } finally { globalThis.fetch = originalFetch; }
+});

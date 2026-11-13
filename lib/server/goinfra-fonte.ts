@@ -96,8 +96,17 @@ async function baixar(url: string, buscar: Buscar): Promise<Buffer> {
 
 const INTERVALO = 20 * 60 * 60 * 1000;
 
+// A busca pode ser disparada pela primeira abertura do catálogo, antes de qualquer
+// atualização do banco rodar. Por isso ela garante o próprio registro, sem depender da
+// migração (mesma definição de drizzle/0033).
+const REGISTRO = `CREATE TABLE IF NOT EXISTS goinfra_busca (
+  id integer PRIMARY KEY NOT NULL, lock_token text, locked_until integer DEFAULT 0 NOT NULL,
+  last_checked_at integer, last_origin text, last_result text, last_error text
+)`;
+
 export async function situacaoDaBusca() {
-  const linha = await getDatabase().prepare("SELECT last_checked_at, last_origin, last_result, last_error FROM goinfra_sync WHERE id = 1")
+  await getDatabase().prepare(REGISTRO).run();
+  const linha = await getDatabase().prepare("SELECT last_checked_at, last_origin, last_result, last_error FROM goinfra_busca WHERE id = 1")
     .first<{ last_checked_at: number | null; last_origin: string | null; last_result: string | null; last_error: string | null }>();
   return linha?.last_checked_at ? { at: linha.last_checked_at, origin: linha.last_origin ?? "", result: linha.last_result ?? "", error: linha.last_error } : null;
 }
@@ -111,11 +120,12 @@ export async function sincronizarGoinfra(origem: string, opcoes: { forcar?: bool
   const db = getDatabase();
   const buscar = opcoes.buscar ?? fetch;
   const agora = Date.now();
-  await db.prepare("INSERT OR IGNORE INTO goinfra_sync (id, locked_until) VALUES (1, 0)").run();
-  const estado = await db.prepare("SELECT last_checked_at FROM goinfra_sync WHERE id = 1").first<{ last_checked_at: number | null }>();
+  await db.prepare(REGISTRO).run();
+  await db.prepare("INSERT OR IGNORE INTO goinfra_busca (id, locked_until) VALUES (1, 0)").run();
+  const estado = await db.prepare("SELECT last_checked_at FROM goinfra_busca WHERE id = 1").first<{ last_checked_at: number | null }>();
   if (!opcoes.forcar && estado?.last_checked_at && agora - estado.last_checked_at < INTERVALO) return { ran: false as const, reason: "conferido há menos de 20 horas" };
   const token = crypto.randomUUID();
-  const trava = await db.prepare("UPDATE goinfra_sync SET lock_token = ?1, locked_until = ?2 WHERE id = 1 AND locked_until < ?3").bind(token, agora + 10 * 60_000, agora).run();
+  const trava = await db.prepare("UPDATE goinfra_busca SET lock_token = ?1, locked_until = ?2 WHERE id = 1 AND locked_until < ?3").bind(token, agora + 10 * 60_000, agora).run();
   if (!trava.meta?.changes) return { ran: false as const, reason: "outra busca em andamento" };
 
   const feitos: string[] = [];
@@ -139,10 +149,10 @@ export async function sincronizarGoinfra(origem: string, opcoes: { forcar?: bool
       }
     }
     const resultado = feitos.length ? `Importadas: ${feitos.join("; ")}.` : falhas.length ? "Nenhuma tabela nova importada." : "Tabelas em dia com o site.";
-    await db.prepare("UPDATE goinfra_sync SET last_checked_at = ?1, last_origin = ?2, last_result = ?3, last_error = ?4 WHERE id = 1")
+    await db.prepare("UPDATE goinfra_busca SET last_checked_at = ?1, last_origin = ?2, last_result = ?3, last_error = ?4 WHERE id = 1")
       .bind(Date.now(), origem, resultado, falhas.length ? falhas.join(" | ").slice(0, 1000) : null).run();
     return { ran: true as const, imported: feitos, failures: falhas, result: resultado };
   } finally {
-    await db.prepare("UPDATE goinfra_sync SET locked_until = 0 WHERE id = 1 AND lock_token = ?1").bind(token).run();
+    await db.prepare("UPDATE goinfra_busca SET locked_until = 0 WHERE id = 1 AND lock_token = ?1").bind(token).run();
   }
 }

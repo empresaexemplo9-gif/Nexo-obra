@@ -232,6 +232,13 @@
       "when": 1794555429876,
       "tag": "0032_condemned_quentin_quire",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794560683538,
+      "tag": "0033_shallow_bastion",
+      "breakpoints": true
     }
   ]
 }

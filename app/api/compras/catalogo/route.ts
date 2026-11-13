@@ -1,4 +1,7 @@
+import { after } from "next/server";
+
 import { apiRoute, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { situacaoDaBusca, sincronizarGoinfra } from "@/lib/server/goinfra-fonte";
 import { buscarNoCatalogo, FONTES_CATALOGO, tabelasGoinfra, type FonteCatalogo } from "@/lib/server/compras";
 import { rotuloRegimeGoinfra, rotuloTabelaGoinfra } from "@/lib/integrations/goinfra-planilha";
 
@@ -26,6 +29,25 @@ export async function GET(request: Request) {
     const resultado = await buscarNoCatalogo(context, fonte as FonteCatalogo, busca, {
       pagina, tabelaId: url.searchParams.get("tabela") ?? undefined, uf: url.searchParams.get("uf")?.toUpperCase() ?? undefined, regime: url.searchParams.get("regime") ?? undefined,
     });
+    // Nenhuma tabela GOINFRA no banco: em vez de esperar o agendamento ou o painel, a
+    // primeira abertura da aba dispara a busca no site, depois de responder. A busca já se
+    // limita a uma vez a cada 20 horas e tem trava, então abrir a aba várias vezes não
+    // repete o download.
+    if (fonte === "goinfra" && !tabelas.length) {
+      const ultima = await situacaoDaBusca().catch(() => null);
+      const recente = ultima && Date.now() - ultima.at < 20 * 60 * 60 * 1000;
+      if (!recente) {
+        const buscar = async () => {
+          try { await sincronizarGoinfra("primeira abertura do catálogo"); }
+          catch (error) { console.error("DRAP Backoffice busca GOINFRA falhou", error); }
+        };
+        // `after` só existe dentro de um pedido do Next; fora dele (testes), roda solto.
+        try { after(buscar); } catch { void buscar(); }
+        resultado.emptyReason = "Buscando agora as tabelas oficiais no site da GOINFRA. Reabra esta aba em cerca de um minuto.";
+      } else if (ultima?.error) {
+        resultado.emptyReason = `A busca no site da GOINFRA falhou em ${new Date(ultima.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: context.organization.timezone })}: ${ultima.error.slice(0, 300)} O superadministrador pode enviar a planilha oficial no painel da plataforma.`;
+      }
+    }
     return Response.json({ ...resultado, goinfraTables: tabelas }, { headers: { "Cache-Control": "private, no-store" } });
   });
 }

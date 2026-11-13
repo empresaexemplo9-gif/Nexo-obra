@@ -85,6 +85,10 @@ Tabelas oficiais da Agência Goiana de Infraestrutura e Transportes, publicadas 
 
 **Busca automática.** A atualização de hora em hora (`/api/cron/banco`, ver [Atualizar o banco](ATUALIZAR-BANCO.md)) confere o site no máximo uma vez a cada 20 horas, depois de o esquema estar em dia. Para cada tipo, acha a página pelo índice ("Tabela de Insumos", "Tabela de Preços"), lê a lista de arquivos, escolhe o mais recente de cada regime pelo nome ("FEVEREIRO-2026 - SEM DESONERAÇÃO") e baixa só se for mais novo que o ativo. Só baixa de `goias.gov.br/goinfra/wp-content/uploads/`; endereço de outro site na página é ignorado. Falha numa tabela não impede as outras e fica registrada no painel.
 
+**Primeira abertura.** Se o banco ainda não tem nenhuma tabela GOINFRA, abrir a aba GOINFRA do catálogo dispara a busca no site logo depois de responder, sem esperar o agendamento nem o painel; a aba avisa "Buscando agora…" e mostra os itens ao ser reaberta. Se a última tentativa falhou há menos de 20 horas, a aba mostra o motivo em vez de tentar de novo.
+
+**Registro da busca.** Fica na tabela `goinfra_busca`. Outra versão desta função, de outra sessão de desenvolvimento, criou `goinfra_sync` com colunas diferentes; ela não é usada, e um banco que tenha qualquer uma das duas funciona.
+
 **Conferência.** A data-base e o regime também vêm do cabeçalho da própria planilha ("T334 - FEVEREIRO/2026 - SEM DESONERAÇÃO", "Data base: 01/02/2026"). Arquivo que diz outra data-base ou outro regime é recusado. As colunas são achadas pelo nome do cabeçalho; linhas de título de grupo (sem unidade ou "S/U") e rodapé ficam de fora e são contadas.
 
 **Painel do superadministrador → Referência GOINFRA:** tabelas ativas (arquivo, SHA-256, itens, quem importou), **Buscar no site da GOINFRA agora**, a última conferência automática e o envio manual do arquivo oficial (XLS, XLSX ou CSV) para quando o site não responder à plataforma.
