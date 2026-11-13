@@ -354,7 +354,7 @@ body {
   box-shadow: 0 3px 14px color-mix(in srgb, var(--drap-deep) 4%, transparent);
 }
 .nexo-canvas { padding: clamp(1.25rem, 3vw, 3rem); }
-.drap-workspace-content { max-width: 1440px; }
+.drap-workspace-content { width: 100%; max-width: none; }
 .nexo-sidebar [data-sidebar="header"] { padding: 1.5rem 1.1rem 1.25rem; gap: 1.5rem; }
 .nexo-sidebar [data-sidebar="sidebar"] { background: var(--drap-deep); }
 .nexo-sidebar [data-sidebar="content"] { gap: 0.5rem; scrollbar-width: thin; scrollbar-color: var(--drap-support) var(--drap-deep); }
