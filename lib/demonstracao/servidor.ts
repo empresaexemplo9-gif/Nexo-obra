@@ -157,6 +157,10 @@ export class ServidorDemo {
     if (caminho === "/api/integrations/sinapi/items") return ok({ items: [] });
     // O catálogo de materiais padrão é o mesmo da plataforma (código, não dado fictício):
     // sem termo abre inteiro, em páginas de 50, como na conta da empresa.
+    if (caminho === "/api/compras/catalogo" && busca.get("fonte") === "fornecedor") {
+      return ok({ items: [], total: 0, page: 1, pageSize: 50, emptyReason: "Na demonstração as listas de preços das lojas não são carregadas. Na conta da empresa, a planilha enviada pela loja aparece aqui.", goinfraTables: [] });
+    }
+    if (/^\/api\/compras\/fornecedores\/[^/]+\/produtos$/.test(caminho)) return ok({ quoted: [] });
     if (caminho === "/api/compras/catalogo" && (busca.get("fonte") ?? "padrao") === "padrao") {
       const termo = (busca.get("q") ?? "").trim();
       const pagina = Math.max(1, Number(busca.get("pagina") ?? 1) || 1);

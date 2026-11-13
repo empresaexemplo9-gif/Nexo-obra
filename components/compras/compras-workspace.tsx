@@ -89,7 +89,7 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
             <TabsTrigger value="entregas"><Truck />Entregas{atrasadas.length ? <Badge variant="destructive">{atrasadas.length}</Badge> : null}</TabsTrigger>
             <TabsTrigger value="estoque">Estoque{estoque?.attention.length ? <Badge variant="destructive" aria-label={`${estoque.attention.length} itens de atenção`}>{estoque.attention.length}</Badge> : null}</TabsTrigger>
             <TabsTrigger value="fornecedores">Fornecedores <Badge variant="secondary">{fornecedores.filter((f) => f.active).length}</Badge></TabsTrigger>
-            <TabsTrigger value="produtos">Produtos <Badge variant="secondary">{produtos.length}</Badge></TabsTrigger>
+            <TabsTrigger value="produtos">Parâmetros <Badge variant="secondary">{produtos.length}</Badge></TabsTrigger>
           </TabsList>
           {aba === "pedidos" || aba === "entregas" ? <div className="w-full lg:w-72"><Escolha id="compras-obra" label="Obra" value={obra} onChange={setObra} options={[{ value: "", label: "Todas as obras" }, ...projects.map((p) => ({ value: p.id, label: `${p.code} · ${p.name}` }))]} /></div> : null}
         </div>

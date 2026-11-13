@@ -117,7 +117,7 @@ export function Estoque({ dados, produtos, projetos, canEdit, busca, onAlterado,
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {!produtos.length ? <p className="p-6 text-sm text-drap-500">Cadastre os produtos na aba Produtos. Só material cadastrado entra no estoque.</p>
+        {!produtos.length ? <p className="p-6 text-sm text-drap-500">Cadastre os produtos na aba Parâmetros. Só material cadastrado entra no estoque.</p>
           : !saldos.length ? <p className="p-6 text-sm text-drap-500">{dados.balances.length ? "Nada neste filtro." : "Nenhum movimento ainda. O recebimento de compras com produto cadastrado entra aqui sozinho; use Entrada para o que já está na obra."}</p>
           : <div className="overflow-x-auto"><Table>
             <TableHeader><TableRow><TableHead>Material</TableHead><TableHead>Local</TableHead><TableHead className="text-right">Saldo</TableHead><TableHead className="text-right">Mínimo</TableHead><TableHead>Situação</TableHead>{canEdit ? <TableHead><span className="sr-only">Ações</span></TableHead> : null}</TableRow></TableHeader>

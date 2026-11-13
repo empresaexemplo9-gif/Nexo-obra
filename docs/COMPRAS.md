@@ -35,6 +35,14 @@ Cadastro com CNPJ/CPF (único por empresa), contato, cidade/UF, o que fornece, c
 
 **Pendente:** a consulta de CNPJ foi testada com a resposta da BrasilAPI simulada; o ambiente de desenvolvimento não alcança o serviço. Conferir ao vivo na primeira consulta em produção.
 
+### Produtos de cada fornecedor
+
+No cartão do fornecedor, **Produtos** abre o que a loja vende — os itens da lista de preços que ela enviou, com busca, páginas de 50 e botão para adicionar ao cadastro — e, ao lado, os produtos do cadastro que ela já cotou para a empresa, com o último preço, o prazo, quantas vezes cotou e se já foi comprado dela.
+
+## Parâmetros (aba)
+
+A aba que reúne o cadastro de produtos e o catálogo (materiais padrão, listas das lojas, GOINFRA, SINAPI e biblioteca) se chama **Parâmetros**. O conteúdo é o descrito abaixo.
+
 ## Produtos
 
 - **Manual**: nome, código, categoria, unidade, marca, especificação e custo de referência opcional.

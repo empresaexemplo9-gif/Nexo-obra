@@ -237,7 +237,7 @@ export type PaginaDoCatalogo = { items: ItemDeCatalogo[]; total: number; page: n
  * Busca ou, com o termo vazio, lista a fonte inteira — em páginas, com o total. A GOINFRA e a
  * SINAPI têm milhares de itens: devolver tudo de uma vez travaria a tela e o banco.
  */
-export async function buscarNoCatalogo(context: OrganizationContext, fonte: FonteCatalogo, busca: string, opcoes: { tabelaId?: string; uf?: string; regime?: string; pagina?: number } = {}): Promise<PaginaDoCatalogo> {
+export async function buscarNoCatalogo(context: OrganizationContext, fonte: FonteCatalogo, busca: string, opcoes: { tabelaId?: string; uf?: string; regime?: string; pagina?: number; fornecedorId?: string } = {}): Promise<PaginaDoCatalogo> {
   const termo = busca.trim();
   const pagina = Math.max(1, Math.floor(opcoes.pagina ?? 1));
   const deslocamento = (pagina - 1) * TAMANHO_DA_PAGINA;
@@ -254,14 +254,16 @@ export async function buscarNoCatalogo(context: OrganizationContext, fonte: Font
     const onde = `FROM supplier_price_items i
        JOIN supplier_price_lists l ON l.id = i.list_id AND l.organization_id = i.organization_id
        JOIN suppliers s ON s.id = i.supplier_id AND s.organization_id = i.organization_id AND s.active = 1
-       WHERE i.organization_id = ?1 AND (?2 = '' OR i.code = ?2 OR i.description LIKE ?3 ESCAPE '\\' OR s.name LIKE ?3 ESCAPE '\\')`;
+       WHERE i.organization_id = ?1 AND (?2 = '' OR i.code = ?2 OR i.description LIKE ?3 ESCAPE '\\' OR s.name LIKE ?3 ESCAPE '\\')
+         AND (?4 = '' OR i.supplier_id = ?4)`;
+    const fornecedor = opcoes.fornecedorId ?? "";
     const [{ results }, contagem] = await Promise.all([
-      context.db.prepare(`SELECT i.id, i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on ${onde} ORDER BY i.description, i.price_cents, s.name LIMIT ?4 OFFSET ?5`)
-        .bind(context.organization.id, termo, like, TAMANHO_DA_PAGINA, deslocamento).all<{ id: string; code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>(),
-      context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(context.organization.id, termo, like).first<{ n: number }>(),
+      context.db.prepare(`SELECT i.id, i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on ${onde} ORDER BY i.description, i.price_cents, s.name LIMIT ?5 OFFSET ?6`)
+        .bind(context.organization.id, termo, like, fornecedor, TAMANHO_DA_PAGINA, deslocamento).all<{ id: string; code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>(),
+      context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(context.organization.id, termo, like, fornecedor).first<{ n: number }>(),
     ]);
     return resposta(results.map((i) => ({ source: "fornecedor" as const, reference: `FORNECEDOR:${i.id}`, code: i.code, description: i.description, unit: i.unit, unitCostCents: Number(i.price_cents), label: rotuloLista(i.supplier_name, i.valid_on), category: "Lista de fornecedor" })),
-      Number(contagem?.n ?? 0), "Nenhum fornecedor enviou lista de preços ainda. Importe a planilha da loja em Fornecedores.", "Nenhum item das listas de preços dos fornecedores corresponde à busca.");
+      Number(contagem?.n ?? 0), fornecedor ? "Este fornecedor ainda não enviou lista de preços. Importe a planilha da loja no cartão dele." : "Nenhum fornecedor enviou lista de preços ainda. Importe a planilha da loja em Fornecedores.", "Nenhum item das listas de preços dos fornecedores corresponde à busca.");
   }
   if (fonte === "goinfra") {
     const tabelas = await tabelasGoinfra(context);

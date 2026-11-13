@@ -9,7 +9,7 @@ type FornecedorRow = {
   active: number; created_at: string; updated_at: string;
   quotes: number; won: number; delivered: number; on_time: number; avg_lead: number | null; purchased_cents: number | null;
   registry_name: string | null; registry_status: string | null; registry_activity: string | null; registry_checked_at: string | null;
-  list_valid_on: string | null; list_items: number | null; list_file: string | null;
+  list_valid_on: string | null; list_items: number | null; list_file: string | null; quoted_products: number;
 };
 
 export async function listarFornecedores(context: OrganizationContext, incluirInativos = false) {
@@ -18,6 +18,10 @@ export async function listarFornecedores(context: OrganizationContext, incluirIn
        s.lead_time_days, s.negotiation_score, s.notes, s.active, s.created_at, s.updated_at,
        s.registry_name, s.registry_status, s.registry_activity, s.registry_checked_at,
        l.valid_on AS list_valid_on, l.total_items AS list_items, l.file_name AS list_file,
+       (SELECT COUNT(DISTINCT i.product_id) FROM purchase_quote_items qi
+          JOIN purchase_quotes q ON q.id = qi.quote_id AND q.organization_id = qi.organization_id
+          JOIN purchase_request_items i ON i.id = qi.request_item_id AND i.organization_id = qi.organization_id
+          WHERE q.organization_id = s.organization_id AND q.supplier_id = s.id AND i.product_id IS NOT NULL) AS quoted_products,
        (SELECT COUNT(*) FROM purchase_quotes q WHERE q.organization_id = s.organization_id AND q.supplier_id = s.id) AS quotes,
        (SELECT COUNT(*) FROM purchase_requests r JOIN purchase_quotes q ON q.id = r.selected_quote_id AND q.organization_id = r.organization_id
           WHERE r.organization_id = s.organization_id AND q.supplier_id = s.id AND r.status IN ('comprado', 'em_entrega', 'entregue')) AS won,
@@ -45,6 +49,7 @@ export async function listarFornecedores(context: OrganizationContext, incluirIn
       quotes: Number(s.quotes), won: Number(s.won), delivered: Number(s.delivered), onTime: Number(s.on_time),
       averageLeadDays: s.avg_lead === null ? null : Math.round(Number(s.avg_lead) * 10) / 10,
       purchasedCents: Number(s.purchased_cents ?? 0),
+      quotedProducts: Number(s.quoted_products ?? 0),
     },
   }));
 }
@@ -102,4 +107,31 @@ export async function historicoDePrecos(context: OrganizationContext, productId:
     unitPriceCents: Number(h.unit_price_cents), deliveryDays: Number(h.delivery_days), quotedAt: h.updated_at,
     supplierName: h.supplier_name, requestNumber: Number(h.number), requestId: h.request_id, bought: Boolean(h.bought),
   }));
+}
+
+/** Produtos do cadastro que o fornecedor já cotou para a empresa, com o último preço. */
+export async function produtosCotadosPeloFornecedor(context: OrganizationContext, supplierId: string) {
+  const { results } = await context.db.prepare(
+    `SELECT p.id, p.name, p.unit, p.category, qi.unit_price_cents, q.delivery_days, q.updated_at,
+       r.number, r.id AS request_id,
+       CASE WHEN r.selected_quote_id = q.id AND r.status IN ('comprado', 'em_entrega', 'entregue') THEN 1 ELSE 0 END AS bought
+     FROM purchase_quote_items qi
+     JOIN purchase_quotes q ON q.id = qi.quote_id AND q.organization_id = qi.organization_id
+     JOIN purchase_request_items i ON i.id = qi.request_item_id AND i.organization_id = qi.organization_id
+     JOIN purchase_products p ON p.id = i.product_id AND p.organization_id = i.organization_id
+     JOIN purchase_requests r ON r.id = i.request_id AND r.organization_id = i.organization_id
+     WHERE qi.organization_id = ?1 AND q.supplier_id = ?2
+     ORDER BY q.updated_at DESC LIMIT 500`,
+  ).bind(context.organization.id, supplierId).all<{ id: string; name: string; unit: string; category: string; unit_price_cents: number; delivery_days: number; updated_at: string; number: number; request_id: string; bought: number }>();
+  // Uma linha por produto: a cotação mais recente, quantas vezes cotou e se já foi comprado dele.
+  const porProduto = new Map<string, { productId: string; name: string; unit: string; category: string; lastPriceCents: number; deliveryDays: number; quotedAt: string; requestNumber: number; requestId: string; times: number; bought: boolean }>();
+  for (const linha of results) {
+    const atual = porProduto.get(linha.id);
+    if (atual) { atual.times += 1; atual.bought ||= Boolean(linha.bought); continue; }
+    porProduto.set(linha.id, {
+      productId: linha.id, name: linha.name, unit: linha.unit, category: linha.category, lastPriceCents: Number(linha.unit_price_cents),
+      deliveryDays: Number(linha.delivery_days), quotedAt: linha.updated_at, requestNumber: Number(linha.number), requestId: linha.request_id, times: 1, bought: Boolean(linha.bought),
+    });
+  }
+  return [...porProduto.values()].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }

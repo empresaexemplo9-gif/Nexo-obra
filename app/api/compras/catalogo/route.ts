@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const pagina = Number(url.searchParams.get("pagina") ?? 1);
     if (!Number.isSafeInteger(pagina) || pagina < 1 || pagina > 10_000) throw validationError({ pagina: ["Página inválida."] });
     const resultado = await buscarNoCatalogo(context, fonte as FonteCatalogo, busca, {
-      pagina, tabelaId: url.searchParams.get("tabela") ?? undefined, uf: url.searchParams.get("uf")?.toUpperCase() ?? undefined, regime: url.searchParams.get("regime") ?? undefined,
+      pagina, tabelaId: url.searchParams.get("tabela") ?? undefined, fornecedorId: url.searchParams.get("fornecedor") ?? undefined, uf: url.searchParams.get("uf")?.toUpperCase() ?? undefined, regime: url.searchParams.get("regime") ?? undefined,
     });
     // Nenhuma tabela GOINFRA no banco: em vez de esperar o agendamento ou o painel, a
     // primeira abertura da aba dispara a busca no site, depois de responder. A busca já se

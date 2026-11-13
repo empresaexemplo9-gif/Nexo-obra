@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { BadgeCheck, Check, FileSpreadsheet, LoaderCircle, Mail, Pencil, Phone, Plus, Search, Store, TriangleAlert } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { BadgeCheck, Check, FileSpreadsheet, LoaderCircle, Mail, Package, PackagePlus, Pencil, Phone, Plus, Search, Store, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,7 @@ export function Fornecedores({ fornecedores, canEdit, busca, onAlterado }: {
   const [receita, setReceita] = useState<DadosReceita | null>(null);
   const [consultando, setConsultando] = useState<string | null>(null);
   const [lista, setLista] = useState<Fornecedor | null>(null);
+  const [vendo, setVendo] = useState<Fornecedor | null>(null);
   const [hoje] = useState(() => new Date().toISOString().slice(0, 10));
   const termo = busca.trim().toLocaleLowerCase("pt-BR");
   const visiveis = fornecedores.filter((f) => !termo || `${f.name} ${f.categories} ${f.city} ${f.contactName}`.toLocaleLowerCase("pt-BR").includes(termo));
@@ -116,7 +117,10 @@ export function Fornecedores({ fornecedores, canEdit, busca, onAlterado }: {
           <dt className="text-drap-500">Comprado</dt><dd className="text-right tabular-nums">{dinheiro(f.stats.purchasedCents)}</dd>
           <dt className="text-drap-500">Lista de preços</dt><dd className="text-right">{f.priceList ? `${f.priceList.items.toLocaleString("pt-BR")} itens · ${dataCurta(f.priceList.validOn)}` : "—"}</dd>
         </dl>
-        {canEdit && f.active ? <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setLista(f)}><FileSpreadsheet />{f.priceList ? "Atualizar lista de preços" : "Importar lista de preços"}</Button> : null}
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <Button size="sm" variant="outline" onClick={() => setVendo(f)}><Package />Produtos · {((f.priceList?.items ?? 0) + f.stats.quotedProducts).toLocaleString("pt-BR")}</Button>
+          {canEdit && f.active ? <Button size="sm" variant="outline" onClick={() => setLista(f)}><FileSpreadsheet />{f.priceList ? "Atualizar lista" : "Importar lista"}</Button> : null}
+        </div>
       </Card>)}</div>}
 
     <Dialog open={editando !== null} onOpenChange={(aberto) => { if (!aberto && !salvando) { setEditando(null); setReceita(null); } }}>
@@ -153,5 +157,83 @@ export function Fornecedores({ fornecedores, canEdit, busca, onAlterado }: {
         </form>
       </DialogContent>
     </Dialog>
+
+    <Dialog open={vendo !== null} onOpenChange={(aberto) => { if (!aberto) setVendo(null); }}>
+      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-5xl">
+        <DialogHeader><DialogTitle>Produtos · {vendo?.name}</DialogTitle><DialogDescription>O que a loja vende, pela lista de preços que ela enviou, e o que ela já cotou para a empresa.</DialogDescription></DialogHeader>
+        {vendo ? <ProdutosDoFornecedor key={vendo.id} fornecedor={vendo} canEdit={canEdit} onAdicionado={onAlterado} onImportar={() => { setLista(vendo); setVendo(null); }} /> : null}
+      </DialogContent>
+    </Dialog>
+  </div>;
+}
+
+type ItemDaLista = { reference: string; code: string; description: string; unit: string; unitCostCents: number | null; label: string };
+type PaginaDaLista = { items: ItemDaLista[]; total: number; page: number; pageSize: number; emptyReason: string | null };
+type Cotado = { productId: string; name: string; unit: string; category: string; lastPriceCents: number; deliveryDays: number; quotedAt: string; requestNumber: number; times: number; bought: boolean };
+
+function ProdutosDoFornecedor({ fornecedor, canEdit, onAdicionado, onImportar }: { fornecedor: Fornecedor; canEdit: boolean; onAdicionado: () => Promise<void>; onImportar: () => void }) {
+  const [termo, setTermo] = useState("");
+  const [pagina, setPagina] = useState<PaginaDaLista | null>(null);
+  const [cotados, setCotados] = useState<Cotado[] | null>(null);
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState("");
+  const [adicionando, setAdicionando] = useState<string | null>(null);
+  const pedido = useRef(0);
+  const [buscado, setBuscado] = useState("");
+
+  const carregar = useCallback(async (busca: string, numero = 1) => {
+    const meu = ++pedido.current;
+    setCarregando(true); setErro("");
+    try {
+      const r = await api<PaginaDaLista>(`/api/compras/catalogo?${new URLSearchParams({ fonte: "fornecedor", fornecedor: fornecedor.id, q: busca.trim(), pagina: String(numero) })}`);
+      if (meu !== pedido.current) return;
+      setBuscado(busca);
+      setPagina((anterior) => numero > 1 && anterior ? { ...r, items: [...anterior.items, ...r.items] } : r);
+    } catch (causa) { if (meu === pedido.current) setErro(mensagem(causa, "Não foi possível abrir a lista de preços.")); }
+    finally { if (meu === pedido.current) setCarregando(false); }
+  }, [fornecedor.id]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      void carregar("");
+      api<{ quoted: Cotado[] }>(`/api/compras/fornecedores/${fornecedor.id}/produtos`).then((r) => setCotados(r.quoted)).catch(() => setCotados([]));
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [carregar, fornecedor.id]);
+
+  async function adicionar(item: ItemDaLista) {
+    setAdicionando(item.reference);
+    try {
+      const r = await api<{ existing?: boolean }>("/api/compras/produtos", { method: "POST", body: JSON.stringify({ reference: item.reference }) });
+      toast.success(r.existing ? "Este item já estava no cadastro" : "Produto adicionado ao cadastro"); await onAdicionado();
+    } catch (causa) { toast.error(mensagem(causa, "Não foi possível adicionar o item.")); }
+    finally { setAdicionando(null); }
+  }
+
+  return <div className="grid gap-5 lg:grid-cols-5">
+    <section className="min-w-0 space-y-3 lg:col-span-3" aria-label="Lista de preços">
+      <div className="flex flex-wrap items-baseline justify-between gap-2"><h3 className="text-sm font-semibold text-drap-900">Lista de preços</h3><span className="text-xs text-drap-500">{fornecedor.priceList ? `${fornecedor.priceList.items.toLocaleString("pt-BR")} itens · preços de ${dataCurta(fornecedor.priceList.validOn)}` : "não enviada"}</span></div>
+      {fornecedor.priceList ? <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void carregar(termo); }}><label htmlFor="fornecedor-produtos-busca" className="sr-only">Buscar na lista do fornecedor</label><Input id="fornecedor-produtos-busca" type="search" value={termo} placeholder="Ex.: cimento, tubo 25" onChange={(e) => { setTermo(e.target.value); if (!e.target.value) void carregar(""); }} /><Button type="submit" disabled={carregando}>{carregando ? <LoaderCircle className="animate-spin" /> : <Search />}Buscar</Button></form> : null}
+      {erro ? <p role="alert" className="text-sm text-drap-700">{erro}</p> : null}
+      {!pagina && carregando ? <p className="text-sm text-drap-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" />Abrindo…</p> : null}
+      {pagina && !pagina.items.length ? <div className="space-y-2 text-sm text-drap-600"><p>{pagina.emptyReason}</p>{canEdit && fornecedor.active && !fornecedor.priceList ? <Button size="sm" variant="outline" onClick={onImportar}><FileSpreadsheet />Importar lista de preços</Button> : null}</div> : null}
+      {pagina?.items.length ? <>
+        <p className="text-xs text-drap-600" aria-live="polite">{pagina.items.length < pagina.total ? `Mostrando ${pagina.items.length.toLocaleString("pt-BR")} de ${pagina.total.toLocaleString("pt-BR")}` : `${pagina.total.toLocaleString("pt-BR")} ${pagina.total === 1 ? "item" : "itens"}`}{buscado.trim() ? ` para “${buscado.trim()}”` : ""}</p>
+        <ul className="max-h-[28rem] divide-y divide-drap-100 overflow-y-auto rounded-md border border-drap-200">{pagina.items.map((item) => <li key={item.reference} className="flex items-start gap-3 p-3">
+          <div className="min-w-0 flex-1"><p className="text-sm text-drap-900">{item.description}</p><p className="mt-0.5 text-xs text-drap-500">{[item.code, item.unit].filter(Boolean).join(" · ")} · <span className="tabular-nums">{dinheiro(item.unitCostCents)}</span></p></div>
+          {canEdit ? <Button size="sm" variant="outline" disabled={adicionando !== null} onClick={() => void adicionar(item)} aria-label={`Adicionar ${item.description} ao cadastro`}>{adicionando === item.reference ? <LoaderCircle className="animate-spin" /> : <PackagePlus />}</Button> : null}
+        </li>)}</ul>
+        {pagina.items.length < pagina.total ? <Button variant="outline" className="w-full" disabled={carregando} onClick={() => void carregar(buscado, pagina.page + 1)}>{carregando ? <LoaderCircle className="animate-spin" /> : null}Mostrar mais {Math.min(pagina.pageSize, pagina.total - pagina.items.length).toLocaleString("pt-BR")}</Button> : null}
+      </> : null}
+    </section>
+    <section className="min-w-0 space-y-3 lg:col-span-2" aria-label="Já cotados para a empresa">
+      <h3 className="text-sm font-semibold text-drap-900">Já cotados para a empresa</h3>
+      {cotados === null ? <p className="text-sm text-drap-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" />Abrindo…</p>
+        : !cotados.length ? <p className="text-sm text-drap-600">Este fornecedor ainda não cotou produto do cadastro. As cotações lançadas nos pedidos aparecem aqui.</p>
+        : <ul className="max-h-[28rem] divide-y divide-drap-100 overflow-y-auto rounded-md border border-drap-200">{cotados.map((c) => <li key={c.productId} className="p-3">
+          <div className="flex items-start justify-between gap-2"><p className="text-sm text-drap-900">{c.name}</p><span className="shrink-0 text-sm font-medium tabular-nums">{dinheiro(c.lastPriceCents)}/{c.unit}</span></div>
+          <p className="mt-0.5 text-xs text-drap-500">{c.category} · PC-{String(c.requestNumber).padStart(4, "0")} em {dataCurta(c.quotedAt)} · entrega em {c.deliveryDays} dias{c.times > 1 ? ` · cotado ${c.times} vezes` : ""}{c.bought ? " · já comprado dele" : ""}</p>
+        </li>)}</ul>}
+    </section>
   </div>;
 }

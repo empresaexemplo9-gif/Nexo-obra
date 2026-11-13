@@ -139,3 +139,33 @@ test("lista de preços da loja: vira catálogo, preço de produto e sugestão de
   assert.equal((await buscar("fornecedor", "vergalhão")).body.items.length, 0);
   assert.equal(h.db.sqlite.prepare("SELECT COUNT(*) n FROM supplier_price_items").get().n, 1);
 });
+
+test("produtos do fornecedor: só a lista dele e o que ele já cotou para a empresa", async () => {
+  const produtosRota = await h.load("/app/api/compras/fornecedores/[supplierId]/produtos/route.ts");
+  const lista = await h.load("/app/api/compras/route.ts");
+  const pedidoRota = await h.load("/app/api/compras/[requestId]/route.ts");
+  const cotacoes = await h.load("/app/api/compras/[requestId]/cotacoes/route.ts");
+  const criar = async (nome) => (await post(fornecedores, "/api/compras/fornecedores", { name: nome })).body.supplier;
+  const [um, dois] = [await criar("Loja Um"), await criar("Loja Dois")];
+  const importar = (loja, csv) => {
+    const form = new FormData(); form.set("validOn", "2026-11-01"); form.set("arquivo", new File([csv], "lista.csv", { type: "text/csv" }));
+    return listaRota.PUT(new Request(`https://platform.test/api/compras/fornecedores/${loja.id}/lista`, { method: "PUT", body: form, headers: { "oai-authenticated-user-id": "owner", "oai-authenticated-user-email": "owner@example.test", cookie: `__Host-nexo-organization=${orgA}` } }), params({ supplierId: loja.id }));
+  };
+  await importar(um, "Produto;Unid.;Preço\nCimento CP II 50 kg;sc;38,90\nAreia média;m³;145,00");
+  await importar(dois, "Produto;Unid.;Preço\nCimento CP II 50 kg;sc;36,50");
+  const daLoja = (loja, q = "") => json(catalogo.GET(h.request("owner", `/api/compras/catalogo?fonte=fornecedor&fornecedor=${loja.id}&q=${encodeURIComponent(q)}`)));
+  assert.deepEqual((await daLoja(um)).body.items.map((i) => [i.description, i.unitCostCents]), [["Areia média", 14_500], ["Cimento CP II 50 kg", 3_890]]);
+  assert.deepEqual((await daLoja(dois)).body.items.map((i) => i.unitCostCents), [3_650], "não mistura a lista de outra loja");
+  assert.equal((await daLoja(um, "areia")).body.total, 1);
+
+  const produto = (await post(produtos, "/api/compras/produtos", { reference: "PADRAO:MAT-001" })).body.product;
+  const pedido = (await post(lista, "/api/compras", { title: "Cimento", items: [{ productId: produto.id, description: "Cimento", quantity: 10 }] })).body;
+  const item = (await json(pedidoRota.GET(h.request("owner", `/api/compras/${pedido.id}`), params({ requestId: pedido.id })))).body.items[0];
+  await post(cotacoes, `/api/compras/${pedido.id}/cotacoes`, { supplierId: um.id, deliveryDays: 4, prices: [{ itemId: item.id, unitPriceCents: 3_800 }] }, params({ requestId: pedido.id }));
+  const cotados = await json(produtosRota.GET(h.request("owner", `/api/compras/fornecedores/${um.id}/produtos`), params({ supplierId: um.id })));
+  assert.deepEqual(cotados.body.quoted.map((c) => [c.name, c.lastPriceCents, c.deliveryDays, c.bought]), [[produto.name, 3_800, 4, false]]);
+  assert.deepEqual((await json(produtosRota.GET(h.request("owner", `/api/compras/fornecedores/${dois.id}/produtos`), params({ supplierId: dois.id })))).body.quoted, []);
+  assert.equal((await json(produtosRota.GET(h.request("owner-b", `/api/compras/fornecedores/${um.id}/produtos`, { org: orgB }), params({ supplierId: um.id })))).status, 404, "outra empresa não vê");
+  const cartao = (await json(fornecedores.GET(h.request("owner", "/api/compras/fornecedores")))).body.suppliers.find((f) => f.id === um.id);
+  assert.deepEqual([cartao.priceList.items, cartao.stats.quotedProducts], [2, 1]);
+});
