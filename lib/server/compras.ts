@@ -7,7 +7,7 @@ import {
 import { rotuloRegimeGoinfra, rotuloTabelaGoinfra, type TabelaGoinfra } from "@/lib/integrations/goinfra-planilha";
 import { DEFAULT_SINAPI_UF } from "@/lib/integrations/sinapi-contract";
 import { preparadorDeSugestoes } from "@/lib/server/estoque";
-import { buscarMaterialPadrao, materialPadrao } from "@/lib/catalogo-materiais";
+import { buscarMaterialPadrao, MATERIAIS_PADRAO, materialPadrao } from "@/lib/catalogo-materiais";
 
 // Leitura do módulo Compras. Toda consulta filtra a empresa resolvida pela sessão; o id
 // que vem do navegador só escolhe entre registros que já são da empresa.
@@ -229,80 +229,86 @@ export async function tabelasGoinfra(context: Pick<OrganizationContext, "db">) {
 const rotuloGoinfra = (t: { tabela: TabelaGoinfra; regime: "Desonerado" | "NaoDesonerado"; referencia: string }) =>
   `GOINFRA ${rotuloTabelaGoinfra[t.tabela] ?? t.tabela} · ${rotuloRegimeGoinfra[t.regime] ?? t.regime} · ${t.referencia.slice(5)}/${t.referencia.slice(0, 4)}`;
 
-export async function buscarNoCatalogo(context: OrganizationContext, fonte: FonteCatalogo, busca: string, opcoes: { tabelaId?: string; uf?: string; regime?: string } = {}): Promise<{ items: ItemDeCatalogo[]; emptyReason: string | null }> {
+export const TAMANHO_DA_PAGINA = 50;
+
+export type PaginaDoCatalogo = { items: ItemDeCatalogo[]; total: number; page: number; pageSize: number; emptyReason: string | null };
+
+/**
+ * Busca ou, com o termo vazio, lista a fonte inteira — em páginas, com o total. A GOINFRA e a
+ * SINAPI têm milhares de itens: devolver tudo de uma vez travaria a tela e o banco.
+ */
+export async function buscarNoCatalogo(context: OrganizationContext, fonte: FonteCatalogo, busca: string, opcoes: { tabelaId?: string; uf?: string; regime?: string; pagina?: number } = {}): Promise<PaginaDoCatalogo> {
   const termo = busca.trim();
+  const pagina = Math.max(1, Math.floor(opcoes.pagina ?? 1));
+  const deslocamento = (pagina - 1) * TAMANHO_DA_PAGINA;
+  const resposta = (items: ItemDeCatalogo[], total: number, vazio: string, semResultado: string): PaginaDoCatalogo =>
+    ({ items, total, page: pagina, pageSize: TAMANHO_DA_PAGINA, emptyReason: total ? null : termo ? semResultado : vazio });
+  const like = escaparLike(termo);
+
   if (fonte === "padrao") {
-    const achados = buscarMaterialPadrao(termo);
-    return {
-      items: achados.map((m) => ({ source: "padrao" as const, reference: `PADRAO:${m.codigo}`, code: m.codigo, description: m.nome, unit: m.unidade, unitCostCents: null, label: m.norma, category: m.categoria, specification: m.especificacao })),
-      emptyReason: achados.length ? null : "Nenhum material padrão corresponde à busca. Tente o nome comum (cimento, vergalhão, bloco, cabo) ou a norma (NBR 7480).",
-    };
+    const achados = termo ? buscarMaterialPadrao(termo, Number.MAX_SAFE_INTEGER) : MATERIAIS_PADRAO;
+    return resposta(achados.slice(deslocamento, deslocamento + TAMANHO_DA_PAGINA).map((m) => ({ source: "padrao" as const, reference: `PADRAO:${m.codigo}`, code: m.codigo, description: m.nome, unit: m.unidade, unitCostCents: null, label: m.norma, category: m.categoria, specification: m.especificacao })),
+      achados.length, "Catálogo de materiais padrão vazio.", "Nenhum material padrão corresponde à busca. Tente o nome comum (cimento, vergalhão, bloco, cabo) ou a norma (NBR 7480).");
   }
   if (fonte === "fornecedor") {
-    const { results } = await context.db.prepare(
-      `SELECT i.id, i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on
-       FROM supplier_price_items i
+    const onde = `FROM supplier_price_items i
        JOIN supplier_price_lists l ON l.id = i.list_id AND l.organization_id = i.organization_id
        JOIN suppliers s ON s.id = i.supplier_id AND s.organization_id = i.organization_id AND s.active = 1
-       WHERE i.organization_id = ?1 AND (i.code = ?2 OR i.description LIKE ?3 ESCAPE '\\')
-       ORDER BY i.description, i.price_cents LIMIT 60`,
-    ).bind(context.organization.id, termo, escaparLike(termo)).all<{ id: string; code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>();
-    const listas = await context.db.prepare("SELECT COUNT(*) AS n FROM supplier_price_lists WHERE organization_id = ?1").bind(context.organization.id).first<{ n: number }>();
-    return {
-      items: results.map((i) => ({ source: "fornecedor" as const, reference: `FORNECEDOR:${i.id}`, code: i.code, description: i.description, unit: i.unit, unitCostCents: Number(i.price_cents), label: rotuloLista(i.supplier_name, i.valid_on), category: "Lista de fornecedor" })),
-      emptyReason: results.length ? null : Number(listas?.n ?? 0) ? "Nenhum item das listas de preços dos fornecedores corresponde à busca." : "Nenhum fornecedor enviou lista de preços ainda. Importe a planilha da loja em Fornecedores.",
-    };
+       WHERE i.organization_id = ?1 AND (?2 = '' OR i.code = ?2 OR i.description LIKE ?3 ESCAPE '\\' OR s.name LIKE ?3 ESCAPE '\\')`;
+    const [{ results }, contagem] = await Promise.all([
+      context.db.prepare(`SELECT i.id, i.code, i.description, i.unit, i.price_cents, s.name AS supplier_name, l.valid_on ${onde} ORDER BY i.description, i.price_cents, s.name LIMIT ?4 OFFSET ?5`)
+        .bind(context.organization.id, termo, like, TAMANHO_DA_PAGINA, deslocamento).all<{ id: string; code: string; description: string; unit: string; price_cents: number; supplier_name: string; valid_on: string }>(),
+      context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(context.organization.id, termo, like).first<{ n: number }>(),
+    ]);
+    return resposta(results.map((i) => ({ source: "fornecedor" as const, reference: `FORNECEDOR:${i.id}`, code: i.code, description: i.description, unit: i.unit, unitCostCents: Number(i.price_cents), label: rotuloLista(i.supplier_name, i.valid_on), category: "Lista de fornecedor" })),
+      Number(contagem?.n ?? 0), "Nenhum fornecedor enviou lista de preços ainda. Importe a planilha da loja em Fornecedores.", "Nenhum item das listas de preços dos fornecedores corresponde à busca.");
   }
   if (fonte === "goinfra") {
     const tabelas = await tabelasGoinfra(context);
-    if (!tabelas.length) return { items: [], emptyReason: "Nenhuma tabela GOINFRA importada ainda. O superadministrador envia a planilha oficial no painel da plataforma." };
-    const alvo = tabelas.filter((t) => !opcoes.tabelaId || t.id === opcoes.tabelaId);
-    const items: ItemDeCatalogo[] = [];
-    for (const tabela of alvo) {
-      const { results } = await context.db.prepare(
-        `SELECT codigo, descricao, unidade, custo_unitario_centavos FROM goinfra_itens
-         WHERE tabela_id = ?1 AND (codigo = ?2 OR descricao LIKE ?3 ESCAPE '\\') ORDER BY descricao LIMIT 40`,
-      ).bind(tabela.id, termo, escaparLike(termo)).all<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number }>();
-      for (const item of results) items.push({
-        source: "goinfra", reference: `GOINFRA:${tabela.tabela}:${tabela.regime}:${tabela.referencia}:${item.codigo}`,
-        code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: Number(item.custo_unitario_centavos),
-        label: rotuloGoinfra(tabela), category: rotuloTabelaGoinfra[tabela.tabela] ?? "GOINFRA",
-      });
-    }
-    return { items: items.slice(0, 60), emptyReason: items.length ? null : "Nenhum item da GOINFRA corresponde à busca." };
+    if (!tabelas.length) return resposta([], 0, "Nenhuma tabela GOINFRA importada ainda. O superadministrador envia a planilha oficial no painel da plataforma.", "");
+    const onde = `FROM goinfra_itens i JOIN goinfra_tabelas t ON t.id = i.tabela_id
+       WHERE t.tabela NOT LIKE 'importando-%' AND (?1 = '' OR t.id = ?1) AND (?2 = '' OR i.codigo = ?2 OR i.descricao LIKE ?3 ESCAPE '\\')`;
+    const [{ results }, contagem] = await Promise.all([
+      context.db.prepare(`SELECT i.codigo, i.descricao, i.unidade, i.custo_unitario_centavos, t.tabela, t.regime, t.referencia ${onde} ORDER BY t.tabela, t.regime, i.descricao LIMIT ?4 OFFSET ?5`)
+        .bind(opcoes.tabelaId ?? "", termo, like, TAMANHO_DA_PAGINA, deslocamento).all<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number; tabela: TabelaGoinfra; regime: "Desonerado" | "NaoDesonerado"; referencia: string }>(),
+      context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(opcoes.tabelaId ?? "", termo, like).first<{ n: number }>(),
+    ]);
+    return resposta(results.map((item) => ({
+      source: "goinfra" as const, reference: `GOINFRA:${item.tabela}:${item.regime}:${item.referencia}:${item.codigo}`,
+      code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: Number(item.custo_unitario_centavos),
+      label: rotuloGoinfra(item), category: rotuloTabelaGoinfra[item.tabela] ?? "GOINFRA",
+    })), Number(contagem?.n ?? 0), "A tabela GOINFRA está vazia.", "Nenhum item da GOINFRA corresponde à busca.");
   }
   if (fonte === "sinapi") {
     const uf = opcoes.uf && /^[A-Z]{2}$/.test(opcoes.uf) ? opcoes.uf : DEFAULT_SINAPI_UF;
     const regime = opcoes.regime === "Desonerado" ? "Desonerado" : "NaoDesonerado";
     const ativa = await context.db.prepare("SELECT id, competencia FROM sinapi_competencias WHERE estado = 'aprovada' AND uf = ?1 AND regime = ?2 ORDER BY competencia DESC LIMIT 1")
       .bind(uf, regime).first<{ id: string; competencia: string }>();
-    if (!ativa) return { items: [], emptyReason: `Não há referência SINAPI aprovada para ${uf} (${regime === "Desonerado" ? "desonerada" : "não desonerada"}).` };
-    const { results } = await context.db.prepare(
-      `SELECT codigo, descricao, unidade, custo_unitario_centavos, tipo FROM sinapi_itens
-       WHERE competencia_id = ?1 AND (codigo = ?2 OR descricao LIKE ?3 ESCAPE '\\') ORDER BY tipo DESC, descricao LIMIT 50`,
-    ).bind(ativa.id, termo, escaparLike(termo)).all<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number; tipo: string }>();
-    return {
-      items: results.map((item) => ({
-        source: "sinapi" as const, reference: `SINAPI:${uf}:${ativa.competencia}:${regime}:${item.tipo}:${item.codigo}`,
-        code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: Number(item.custo_unitario_centavos),
-        label: `SINAPI ${uf} · ${ativa.competencia.slice(5)}/${ativa.competencia.slice(0, 4)} · ${item.tipo === "insumo" ? "insumo" : "composição"}`,
-        category: item.tipo === "insumo" ? "Insumo SINAPI" : "Composição SINAPI",
-      })),
-      emptyReason: results.length ? null : "Nenhum item da SINAPI corresponde à busca.",
-    };
+    if (!ativa) return resposta([], 0, `Não há referência SINAPI aprovada para ${uf} (${regime === "Desonerado" ? "desonerada" : "não desonerada"}).`, "");
+    const onde = `FROM sinapi_itens WHERE competencia_id = ?1 AND (?2 = '' OR codigo = ?2 OR descricao LIKE ?3 ESCAPE '\\')`;
+    const [{ results }, contagem] = await Promise.all([
+      context.db.prepare(`SELECT codigo, descricao, unidade, custo_unitario_centavos, tipo ${onde} ORDER BY tipo DESC, descricao LIMIT ?4 OFFSET ?5`)
+        .bind(ativa.id, termo, like, TAMANHO_DA_PAGINA, deslocamento).all<{ codigo: string; descricao: string; unidade: string; custo_unitario_centavos: number; tipo: string }>(),
+      context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(ativa.id, termo, like).first<{ n: number }>(),
+    ]);
+    return resposta(results.map((item) => ({
+      source: "sinapi" as const, reference: `SINAPI:${uf}:${ativa.competencia}:${regime}:${item.tipo}:${item.codigo}`,
+      code: item.codigo, description: item.descricao, unit: item.unidade, unitCostCents: Number(item.custo_unitario_centavos),
+      label: `SINAPI ${uf} · ${ativa.competencia.slice(5)}/${ativa.competencia.slice(0, 4)} · ${item.tipo === "insumo" ? "insumo" : "composição"}`,
+      category: item.tipo === "insumo" ? "Insumo SINAPI" : "Composição SINAPI",
+    })), Number(contagem?.n ?? 0), "A referência SINAPI aprovada está vazia.", "Nenhum item da SINAPI corresponde à busca.");
   }
-  const { results } = await context.db.prepare(
-    `SELECT id, code, description, category, unit, unit_cost_cents FROM budget_catalog_items
-     WHERE organization_id = ?1 AND active = 1 AND (code LIKE ?2 ESCAPE '\\' OR description LIKE ?2 ESCAPE '\\' OR category LIKE ?2 ESCAPE '\\')
-     ORDER BY category, description LIMIT 50`,
-  ).bind(context.organization.id, escaparLike(termo)).all<{ id: string; code: string; description: string; category: string; unit: string; unit_cost_cents: number }>();
-  return {
-    items: results.map((item) => ({
-      source: "biblioteca" as const, reference: `BIBLIOTECA:${item.id}`, code: item.code, description: item.description,
-      unit: item.unit, unitCostCents: Number(item.unit_cost_cents), label: "Biblioteca de orçamentos da empresa", category: item.category,
-    })),
-    emptyReason: results.length ? null : "Nenhum item da biblioteca de orçamentos corresponde à busca.",
-  };
+  const onde = `FROM budget_catalog_items WHERE organization_id = ?1 AND active = 1
+     AND (?2 = '' OR code LIKE ?3 ESCAPE '\\' OR description LIKE ?3 ESCAPE '\\' OR category LIKE ?3 ESCAPE '\\')`;
+  const [{ results }, contagem] = await Promise.all([
+    context.db.prepare(`SELECT id, code, description, category, unit, unit_cost_cents ${onde} ORDER BY category, description LIMIT ?4 OFFSET ?5`)
+      .bind(context.organization.id, termo, like, TAMANHO_DA_PAGINA, deslocamento).all<{ id: string; code: string; description: string; category: string; unit: string; unit_cost_cents: number }>(),
+    context.db.prepare(`SELECT COUNT(*) AS n ${onde}`).bind(context.organization.id, termo, like).first<{ n: number }>(),
+  ]);
+  return resposta(results.map((item) => ({
+    source: "biblioteca" as const, reference: `BIBLIOTECA:${item.id}`, code: item.code, description: item.description,
+    unit: item.unit, unitCostCents: Number(item.unit_cost_cents), label: "Biblioteca de orçamentos da empresa", category: item.category,
+  })), Number(contagem?.n ?? 0), "A biblioteca de orçamentos da empresa está vazia.", "Nenhum item da biblioteca de orçamentos corresponde à busca.");
 }
 
 /**

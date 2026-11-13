@@ -243,6 +243,8 @@ test("GOINFRA: lê a planilha pelo cabeçalho, ativa a tabela e alimenta o cadas
   assert.equal(importado.body.tables[0].totalItens, 13);
   assert.equal(importado.body.report.linhaDoCabecalho, 4);
 
+  const tabelaInteira = await json(await catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=goinfra")));
+  assert.deepEqual([tabelaInteira.body.total, tabelaInteira.body.items.length], [13, 13], "sem termo, a tabela GOINFRA abre inteira");
   const busca = await json(await catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=goinfra&q=cimento")));
   assert.equal(busca.body.items.length, 1);
   const item = busca.body.items[0];

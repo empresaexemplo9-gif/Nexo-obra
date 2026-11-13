@@ -151,6 +151,6 @@ export function comprasDeExemplo(projetos: { id: string; code: string; name: str
   respostas["/api/compras"] = { requests: resumos, today: hoje, canEdit: true, canImportBudget: true };
   respostas["/api/compras/fornecedores"] = { suppliers: fornecedores };
   respostas["/api/compras/produtos"] = { products: produtos };
-  respostas["/api/compras/catalogo"] = { items: [], emptyReason: "Na demonstração o catálogo GOINFRA e SINAPI não é consultado. Na conta da empresa a busca traz a tabela oficial importada.", goinfraTables: [] };
+  respostas["/api/compras/catalogo"] = { items: [], total: 0, page: 1, pageSize: 50, emptyReason: "Na demonstração o catálogo GOINFRA e SINAPI não é consultado. Na conta da empresa a busca traz a tabela oficial importada.", goinfraTables: [] };
   return respostas;
 }

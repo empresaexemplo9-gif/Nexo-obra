@@ -19,9 +19,12 @@ export async function GET(request: Request) {
       id: t.id, label: `${rotuloTabelaGoinfra[t.tabela] ?? t.tabela} · ${rotuloRegimeGoinfra[t.regime] ?? t.regime} · ${t.referencia.slice(5)}/${t.referencia.slice(0, 4)}`,
       totalItems: Number(t.total_itens),
     }));
-    if (busca.length < 2 || busca.length > 120) return Response.json({ items: [], emptyReason: "Digite pelo menos 2 letras ou o código.", goinfraTables: tabelas });
+    // Sem termo, a fonte abre inteira, em páginas.
+    if (busca.length > 120) throw validationError({ q: ["Busca longa demais."] });
+    const pagina = Number(url.searchParams.get("pagina") ?? 1);
+    if (!Number.isSafeInteger(pagina) || pagina < 1 || pagina > 10_000) throw validationError({ pagina: ["Página inválida."] });
     const resultado = await buscarNoCatalogo(context, fonte as FonteCatalogo, busca, {
-      tabelaId: url.searchParams.get("tabela") ?? undefined, uf: url.searchParams.get("uf")?.toUpperCase() ?? undefined, regime: url.searchParams.get("regime") ?? undefined,
+      pagina, tabelaId: url.searchParams.get("tabela") ?? undefined, uf: url.searchParams.get("uf")?.toUpperCase() ?? undefined, regime: url.searchParams.get("regime") ?? undefined,
     });
     return Response.json({ ...resultado, goinfraTables: tabelas }, { headers: { "Cache-Control": "private, no-store" } });
   });

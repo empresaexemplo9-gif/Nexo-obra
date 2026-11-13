@@ -46,6 +46,16 @@ test("materiais padrão: cada item tem norma, unidade e especificação, e entra
   assert.equal(barra.unitCostCents, null);
   assert.equal((await buscar("padrao", "NBR 16697")).body.items.length, 6, "busca pela norma");
 
+  // Sem termo, a aba abre inteira, em páginas de 50, com o total.
+  const primeira = await buscar("padrao", "");
+  assert.deepEqual([primeira.status, primeira.body.items.length, primeira.body.total, primeira.body.page], [200, 50, MATERIAIS_PADRAO.length, 1]);
+  const segunda = await json(catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=padrao&q=&pagina=2")));
+  assert.equal(segunda.body.items.length, MATERIAIS_PADRAO.length - 50);
+  assert.equal(new Set([...primeira.body.items, ...segunda.body.items].map((i) => i.code)).size, MATERIAIS_PADRAO.length, "as páginas não repetem nem pulam item");
+  assert.equal((await json(catalogo.GET(h.request("owner", "/api/compras/catalogo?fonte=padrao&pagina=0")))).status, 400);
+  const vazia = await buscar("biblioteca", "");
+  assert.deepEqual([vazia.body.total, vazia.body.emptyReason], [0, "A biblioteca de orçamentos da empresa está vazia."]);
+
   const criado = await post(produtos, "/api/compras/produtos", { reference: barra.reference });
   assert.equal(criado.status, 201, JSON.stringify(criado.body));
   assert.deepEqual([criado.body.product.source, criado.body.product.referenceCostCents, criado.body.product.referenceLabel, criado.body.product.unit], ["padrao", null, "ABNT NBR 7480", "br"]);
@@ -106,6 +116,9 @@ test("lista de preços da loja: vira catálogo, preço de produto e sugestão de
   assert.equal((await enviar(listaCsv, "2999-01-01")).status, 400, "data no futuro");
   assert.equal((await enviar(listaCsv, "2026-11-01", "owner-b", orgB)).status, 404, "outra empresa não importa");
 
+  const tudo = await buscar("fornecedor", "");
+  assert.deepEqual([tudo.body.total, tudo.body.items.map((i) => i.description)], [3, ["Areia média lavada", "Cimento CP II-E-32 50 kg", "Vergalhão CA-50 10 mm barra 12 m"]], "sem termo, todos os itens das listas");
+  assert.equal((await buscar("fornecedor", "Loja Teste")).body.total, 3, "busca também pelo nome da loja");
   const achado = await buscar("fornecedor", "vergalhão");
   assert.equal(achado.body.items.length, 1);
   assert.equal(achado.body.items[0].unitCostCents, 5_430);

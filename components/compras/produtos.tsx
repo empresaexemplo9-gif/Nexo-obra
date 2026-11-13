@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Check, History, LoaderCircle, PackagePlus, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -99,26 +99,47 @@ export function Produtos({ produtos, canEdit, canBiblioteca, busca, onAlterado }
   </div>;
 }
 
+type PaginaCatalogo = { items: ItemCatalogo[]; total: number; page: number; pageSize: number; emptyReason: string | null; goinfraTables: { id: string; label: string; totalItems: number }[] };
+
 function Catalogo({ canEdit, canBiblioteca, onAdicionado }: { canEdit: boolean; canBiblioteca: boolean; onAdicionado: () => Promise<void> }) {
   const [fonte, setFonte] = useState("padrao");
   const [termo, setTermo] = useState("");
   const [tabela, setTabela] = useState("");
   const [uf, setUf] = useState("GO");
-  const [resultado, setResultado] = useState<{ items: ItemCatalogo[]; emptyReason: string | null; goinfraTables: { id: string; label: string; totalItems: number }[] } | null>(null);
+  const [resultado, setResultado] = useState<PaginaCatalogo | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const [erro, setErro] = useState("");
   const [adicionando, setAdicionando] = useState<string | null>(null);
+  // Só a resposta do pedido mais recente vale: trocar de aba rápido não pode deixar a lista
+  // da aba anterior na tela.
+  const pedidoAtual = useRef(0);
+  const [carregado, setCarregado] = useState<{ fonte: string; termo: string; tabela: string; uf: string } | null>(null);
 
-  async function buscar(event?: FormEvent) {
-    event?.preventDefault();
-    if (termo.trim().length < 2) { toast.error("Digite pelo menos 2 letras ou o código."); return; }
-    setBuscando(true);
+  const carregar = useCallback(async (filtro: { fonte: string; termo: string; tabela: string; uf: string }, pagina = 1) => {
+    const numero = ++pedidoAtual.current;
+    setBuscando(true); setErro("");
     try {
-      const params = new URLSearchParams({ fonte, q: termo.trim() });
-      if (fonte === "goinfra" && tabela) params.set("tabela", tabela);
-      if (fonte === "sinapi") params.set("uf", uf);
-      setResultado(await api(`/api/compras/catalogo?${params}`));
-    } catch (causa) { toast.error(mensagem(causa, "Não foi possível buscar no catálogo.")); }
-    finally { setBuscando(false); }
+      const params = new URLSearchParams({ fonte: filtro.fonte, q: filtro.termo.trim(), pagina: String(pagina) });
+      if (filtro.fonte === "goinfra" && filtro.tabela) params.set("tabela", filtro.tabela);
+      if (filtro.fonte === "sinapi") params.set("uf", filtro.uf);
+      const pagina_ = await api<PaginaCatalogo>(`/api/compras/catalogo?${params}`);
+      if (numero !== pedidoAtual.current) return;
+      setResultado((anterior) => pagina > 1 && anterior ? { ...pagina_, items: [...anterior.items, ...pagina_.items] } : pagina_);
+      setCarregado(filtro);
+    } catch (causa) { if (numero === pedidoAtual.current) setErro(mensagem(causa, "Não foi possível abrir o catálogo.")); }
+    finally { if (numero === pedidoAtual.current) setBuscando(false); }
+  }, []);
+
+  // Abrir ou trocar de aba mostra a fonte inteira; a busca só filtra.
+  useEffect(() => {
+    const t = window.setTimeout(() => { void carregar({ fonte, termo: "", tabela, uf }); }, 0);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a busca digitada não recarrega sozinha; só a aba e os filtros
+  }, [fonte, tabela, carregar]);
+
+  function buscar(event?: FormEvent) {
+    event?.preventDefault();
+    void carregar({ fonte, termo, tabela, uf });
   }
 
   async function adicionar(item: ItemCatalogo) {
@@ -133,18 +154,22 @@ function Catalogo({ canEdit, canBiblioteca, onAdicionado }: { canEdit: boolean; 
   return <Card className="min-w-0 xl:col-span-2">
     <CardHeader className="border-b py-3"><CardTitle className="text-sm font-semibold">Adicionar do catálogo</CardTitle><p className="mt-1 text-xs text-drap-500">{fonte === "padrao" ? "Materiais de mercado com a norma ABNT e a especificação a pedir. Sem preço: o custo vem da SINAPI, da GOINFRA ou da lista da loja." : fonte === "fornecedor" ? "Itens e preços das planilhas que os fornecedores enviaram, com a data da lista." : "Descrição, unidade e custo vêm da tabela oficial; o produto guarda de qual referência saiu."}</p></CardHeader>
     <CardContent className="space-y-3 p-4">
-      <Tabs value={fonte} onValueChange={(valor) => { setFonte(valor); setResultado(null); }}>
+      <Tabs value={fonte} onValueChange={(valor) => { setFonte(valor); setTermo(""); setResultado(null); }}>
         <TabsList className="h-auto w-full flex-wrap"><TabsTrigger value="padrao">Materiais padrão</TabsTrigger><TabsTrigger value="fornecedor">Listas das lojas</TabsTrigger><TabsTrigger value="goinfra">GOINFRA</TabsTrigger><TabsTrigger value="sinapi">SINAPI</TabsTrigger>{canBiblioteca ? <TabsTrigger value="biblioteca">Biblioteca</TabsTrigger> : null}</TabsList>
       </Tabs>
       <form onSubmit={(e) => void buscar(e)} className="space-y-3">
         {fonte === "goinfra" && resultado?.goinfraTables.length ? <Escolha id="catalogo-tabela" label="Tabela" value={tabela} onChange={setTabela} options={[{ value: "", label: "Todas as tabelas importadas" }, ...resultado.goinfraTables.map((t) => ({ value: t.id, label: t.label }))]} /> : null}
-        {fonte === "sinapi" ? <CampoTexto id="catalogo-uf" label="UF" value={uf} maxLength={2} onChange={(e) => setUf(e.target.value.toUpperCase())} /> : null}
-        <div className="flex gap-2"><label htmlFor="catalogo-busca" className="sr-only">Buscar no catálogo</label><Input id="catalogo-busca" value={termo} onChange={(e) => setTermo(e.target.value)} placeholder={fonte === "padrao" ? "Ex.: cimento, vergalhão 10, NBR 7480" : "Ex.: cimento, 020001"} /><Button type="submit" disabled={buscando}>{buscando ? <LoaderCircle className="animate-spin" /> : <Search />}Buscar</Button></div>
+        {fonte === "sinapi" ? <CampoTexto id="catalogo-uf" label="UF" value={uf} maxLength={2} onChange={(e) => setUf(e.target.value.toUpperCase())} ajuda="Depois de trocar a UF, use Buscar." /> : null}
+        <div className="flex gap-2"><label htmlFor="catalogo-busca" className="sr-only">Buscar no catálogo</label><Input id="catalogo-busca" type="search" value={termo} onChange={(e) => { setTermo(e.target.value); if (!e.target.value) void carregar({ fonte, termo: "", tabela, uf }); }} placeholder={fonte === "padrao" ? "Ex.: cimento, vergalhão 10, NBR 7480" : "Ex.: cimento, 020001"} /><Button type="submit" disabled={buscando}>{buscando ? <LoaderCircle className="animate-spin" /> : <Search />}Buscar</Button></div>
       </form>
-      {resultado ? !resultado.items.length ? <p className="text-sm text-drap-600">{resultado.emptyReason}</p> : <ul className="divide-y divide-drap-100 rounded-md border border-drap-200">{resultado.items.map((item) => <li key={item.reference} className="flex items-start gap-3 p-3">
+      {erro ? <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-drap-700"><span>{erro}</span><Button size="sm" variant="outline" onClick={() => buscar()}>Tentar novamente</Button></div> : null}
+      {!resultado && buscando ? <p className="text-sm text-drap-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" />Abrindo o catálogo…</p> : null}
+      {resultado?.items.length ? <p className="text-xs text-drap-600" aria-live="polite">{resultado.items.length < resultado.total ? `Mostrando ${resultado.items.length.toLocaleString("pt-BR")} de ${resultado.total.toLocaleString("pt-BR")} itens` : `${resultado.total.toLocaleString("pt-BR")} ${resultado.total === 1 ? "item" : "itens"}`}{carregado?.termo.trim() ? ` para “${carregado.termo.trim()}”` : ""}</p> : null}
+      {resultado ? !resultado.items.length ? <p className="text-sm text-drap-600">{resultado.emptyReason}</p> : <ul className="max-h-[36rem] divide-y divide-drap-100 overflow-y-auto rounded-md border border-drap-200">{resultado.items.map((item) => <li key={item.reference} className="flex items-start gap-3 p-3">
         <div className="min-w-0 flex-1"><p className="text-sm text-drap-900">{item.description}</p><p className="mt-0.5 text-xs text-drap-500">{[item.code, item.unit].filter(Boolean).join(" · ")} · <span className="tabular-nums">{item.unitCostCents === null ? "sem preço" : dinheiro(item.unitCostCents)}</span> · {item.label}</p>{item.specification ? <p className="mt-1 text-xs text-drap-600">{item.specification}</p> : null}</div>
         {canEdit ? <Button size="sm" variant="outline" disabled={adicionando !== null} onClick={() => void adicionar(item)} aria-label={`Adicionar ${item.description}`}>{adicionando === item.reference ? <LoaderCircle className="animate-spin" /> : <PackagePlus />}</Button> : null}
       </li>)}</ul> : null}
+      {resultado && resultado.items.length < resultado.total ? <Button variant="outline" className="w-full" disabled={buscando} onClick={() => carregado && void carregar(carregado, resultado.page + 1)}>{buscando ? <LoaderCircle className="animate-spin" /> : null}Mostrar mais {Math.min(resultado.pageSize, resultado.total - resultado.items.length).toLocaleString("pt-BR")}</Button> : null}
     </CardContent>
   </Card>;
 }
