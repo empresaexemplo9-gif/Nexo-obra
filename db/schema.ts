@@ -1212,6 +1212,17 @@ export const goinfraTabelas = sqliteTable("goinfra_tabelas", {
   importadoEm: integer("importado_em").notNull(),
 }, (t) => [uniqueIndex("uidx_goinfra_tabela_regime").on(t.tabela, t.regime)]);
 
+// Busca automática da GOINFRA: uma linha só, com a última verificação e o lease que impede
+// o agendamento e o botão "Buscar agora" de importarem a mesma tabela ao mesmo tempo.
+export const goinfraSync = sqliteTable("goinfra_sync", {
+  id: integer("id").primaryKey(),
+  lockToken: text("lock_token"),
+  lockedUntil: integer("locked_until").notNull().default(0),
+  lastChecked: integer("last_checked"),
+  lastResultJson: text("last_result_json"),
+  lastError: text("last_error"),
+});
+
 export const goinfraItens = sqliteTable("goinfra_itens", {
   id: text("id").primaryKey(),
   tabelaId: text("tabela_id").notNull().references(() => goinfraTabelas.id),

@@ -172,13 +172,20 @@ function Itens({ detalhe, produtos, canEdit, salvando, onSalvar }: {
         </div>
         <div className="flex gap-2"><Button onClick={() => void salvar()} disabled={salvando}>{salvando ? <LoaderCircle className="animate-spin" /> : <Check />}Salvar itens</Button><Button variant="ghost" onClick={() => setEditando(false)}>Descartar</Button></div>
       </div> : !detalhe.items.length ? <p className="p-6 text-sm text-drap-500">Nenhum item. {canEdit ? "Use “Editar itens” para incluir o que precisa ser comprado." : ""}</p> : <div className="overflow-x-auto"><Table>
-        <TableHeader><TableRow><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead>{recebe ? <TableHead className="text-right">Recebido</TableHead> : null}<TableHead className="text-right">Referência</TableHead></TableRow></TableHeader>
-        <TableBody>{detalhe.items.map((item) => <TableRow key={item.id}>
+        <TableHeader><TableRow><TableHead className="w-10 text-right">#</TableHead><TableHead>Item</TableHead><TableHead className="text-right">Quantidade</TableHead>{recebe ? <TableHead className="text-right">Recebido</TableHead> : null}<TableHead className="text-right">Referência</TableHead><TableHead className="hidden text-right sm:table-cell">Subtotal ref.</TableHead></TableRow></TableHeader>
+        <TableBody>{detalhe.items.map((item, i) => { const falta = Math.max(0, item.quantity - item.receivedQuantity);
+          return <TableRow key={item.id}>
+          <TableCell className="text-right text-xs tabular-nums text-drap-500">{i + 1}</TableCell>
           <TableCell className="whitespace-normal">{item.description}</TableCell>
           <TableCell className="text-right tabular-nums">{numero(item.quantity)} {item.unit}</TableCell>
-          {recebe ? <TableCell className="text-right tabular-nums">{numero(item.receivedQuantity)} {item.unit}</TableCell> : null}
+          {recebe ? <TableCell className="text-right tabular-nums">{numero(item.receivedQuantity)} {item.unit}<span className={`block text-xs ${falta ? "text-drap-700" : "text-drap-500"}`}>{falta ? `faltam ${numero(falta)}` : "completo"}</span></TableCell> : null}
           <TableCell className="text-right tabular-nums text-drap-500">{item.referenceCostCents === null ? "—" : `${dinheiro(item.referenceCostCents)}/${item.unit}`}</TableCell>
-        </TableRow>)}</TableBody>
+          <TableCell className="hidden text-right tabular-nums text-drap-600 sm:table-cell">{item.referenceCostCents === null ? "—" : dinheiro(Math.round(item.referenceCostCents * item.quantity))}</TableCell>
+        </TableRow>; })}</TableBody>
+        {detalhe.items.some((item) => item.referenceCostCents !== null) ? <TableFooter><TableRow>
+          <TableCell colSpan={recebe ? 5 : 4} className="text-right text-xs font-medium text-drap-600">{detalhe.items.every((item) => item.referenceCostCents !== null) ? "Total de referência" : "Total de referência (itens com preço)"}</TableCell>
+          <TableCell className="text-right font-semibold tabular-nums">{dinheiro(detalhe.items.reduce((t, item) => t + Math.round((item.referenceCostCents ?? 0) * item.quantity), 0))}</TableCell>
+        </TableRow></TableFooter> : null}
       </Table></div>}
     </CardContent>
   </Card>;
@@ -201,12 +208,12 @@ function Comparativo({ detalhe, canEdit, salvando, semFornecedores, onNova, onEd
     <CardContent className="p-0">
       {!linhas.length ? <p className="p-6 text-sm text-drap-500">{!items.length ? "Inclua os itens antes de cotar." : semFornecedores ? "Cadastre fornecedores na aba Fornecedores para lançar cotações." : "Nenhuma cotação lançada. Peça preço a pelo menos dois fornecedores para comparar."}</p> : <>
         <div className="overflow-x-auto"><Table className="min-w-[36rem]">
-          <TableHeader><TableRow><TableHead className="min-w-44">Item</TableHead>{linhas.map((l) => <TableHead key={l.quoteId} className="min-w-40 text-right align-bottom whitespace-normal">
+          <TableHeader><TableRow><TableHead className="sticky left-0 z-10 min-w-44 bg-white">Item</TableHead>{linhas.map((l) => <TableHead key={l.quoteId} className="min-w-40 text-right align-bottom whitespace-normal">
             <span className="block font-semibold text-drap-900">{l.supplierName}</span>
             <span className="mt-1 flex flex-wrap justify-end gap-1">{l.quoteId === pedido.selectedQuoteId ? <Badge>Escolhida</Badge> : null}{l.recomendada ? <Badge variant="secondary">Recomendada</Badge> : null}{l.menorPreco ? <Badge variant="outline">Menor preço</Badge> : null}{l.menorPrazo ? <Badge variant="outline">Mais rápida</Badge> : null}{l.melhorNegociacao ? <Badge variant="outline">Mais flexível</Badge> : null}{!l.completa ? <Badge variant="destructive">Incompleta</Badge> : null}{l.vencida ? <Badge variant="destructive">Vencida</Badge> : null}</span>
           </TableHead>)}</TableRow></TableHeader>
           <TableBody>
-            {items.map((item) => <TableRow key={item.id}><TableCell className="whitespace-normal"><span className="block">{item.description}</span><span className="text-xs text-drap-500">{numero(item.quantity)} {item.unit}</span></TableCell>
+            {items.map((item) => <TableRow key={item.id}><TableCell className="sticky left-0 z-10 whitespace-normal bg-white"><span className="block">{item.description}</span><span className="text-xs text-drap-500">{numero(item.quantity)} {item.unit}</span></TableCell>
               {linhas.map((l) => { const preco = cotacaoPorId.get(l.quoteId)?.prices[item.id]; const melhor = comparison.melhorPorItem[item.id]?.quoteId === l.quoteId;
                 return <TableCell key={l.quoteId} className={`text-right tabular-nums ${melhor ? "font-semibold text-drap-900" : ""}`}>{preco === undefined ? <span className="text-drap-400">sem preço</span> : <><span className="block">{dinheiro(preco)}</span><span className="text-xs text-drap-500">{dinheiro(Math.round(preco * item.quantity))}</span></>}</TableCell>; })}
             </TableRow>)}
@@ -220,7 +227,7 @@ function Comparativo({ detalhe, canEdit, salvando, semFornecedores, onNova, onEd
             <Linha titulo="Negociação" valores={linhas.map((l) => `${l.negotiationScore}/5`)} />
             <Linha titulo="Validade" valores={linhas.map((l) => dataCurta(cotacaoPorId.get(l.quoteId)!.validUntil))} />
             <Linha titulo="Nota" forte valores={linhas.map((l) => l.nota === null ? "—" : String(l.nota))} />
-            {canEdit ? <TableRow><TableCell className="text-xs font-medium text-drap-600">Ações</TableCell>{linhas.map((l) => { const cotacao = cotacaoPorId.get(l.quoteId)!; const escolhida = l.quoteId === pedido.selectedQuoteId;
+            {canEdit ? <TableRow><TableCell className="sticky left-0 z-10 bg-drap-50 text-xs font-medium text-drap-600">Ações</TableCell>{linhas.map((l) => { const cotacao = cotacaoPorId.get(l.quoteId)!; const escolhida = l.quoteId === pedido.selectedQuoteId;
               return <TableCell key={l.quoteId} className="text-right"><div className="flex flex-wrap justify-end gap-1">
                 {editavel && !escolhida ? <Button size="sm" disabled={salvando || !l.completa || l.vencida} onClick={() => onEscolher(l.quoteId, l.supplierName)}><Check />Escolher</Button> : null}
                 {editavel ? <Button size="sm" variant="outline" aria-label={`Editar cotação de ${l.supplierName}`} onClick={() => onEditar(cotacao)}><Pencil /></Button> : null}
@@ -238,7 +245,7 @@ function Comparativo({ detalhe, canEdit, salvando, semFornecedores, onNova, onEd
 }
 
 function Linha({ titulo, valores, forte }: { titulo: string; valores: ReactNode[]; forte?: boolean }) {
-  return <TableRow><TableCell className={`text-xs ${forte ? "font-semibold text-drap-900" : "font-medium text-drap-600"}`}>{titulo}</TableCell>{valores.map((valor, i) => <TableCell key={i} className={`text-right tabular-nums whitespace-normal ${forte ? "font-semibold text-drap-950" : ""}`}>{valor}</TableCell>)}</TableRow>;
+  return <TableRow><TableCell className={`sticky left-0 z-10 bg-drap-50 text-xs ${forte ? "font-semibold text-drap-900" : "font-medium text-drap-600"}`}>{titulo}</TableCell>{valores.map((valor, i) => <TableCell key={i} className={`text-right tabular-nums whitespace-normal ${forte ? "font-semibold text-drap-950" : ""}`}>{valor}</TableCell>)}</TableRow>;
 }
 
 function DialogoCotacao({ aberto, cotacao, detalhe, fornecedores, salvando, onFechar, onSalvar }: {

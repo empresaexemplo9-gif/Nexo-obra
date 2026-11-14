@@ -12,8 +12,9 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PRIORIDADES, emAndamento, rotuloPrioridade, rotuloStatus, somarDias, type StatusCompra } from "@/lib/compras";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import {
-  api, CampoArea, CampoTexto, dataCurta, dinheiro, Escolha, lerQuantidade, mensagem, SeloEntrega,
+  api, CampoArea, CampoTexto, classeCabecalhoFixo, Coluna, dataCurta, dinheiro, Escolha, Filtros, lerQuantidade, mensagem, SeloEntrega, SeloStatus, SeloVariacao, useOrdenacao, variacao,
   type Fornecedor, type PedidoResumo, type Produto, type Projeto,
 } from "@/components/compras/comum";
 import { PedidoDetalhe } from "@/components/compras/pedido-detalhe";
@@ -37,6 +38,7 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
   const [novo, setNovo] = useState(false);
   const [obra, setObra] = useState("");
   const [mostrarCancelados, setMostrarCancelados] = useState(false);
+  const [visao, setVisao] = useState<"quadro" | "lista">("quadro");
   const [estoque, setEstoque] = useState<DadosEstoque | null>(null);
   const [inicial, setInicial] = useState<{ productId: string; quantity: number; location: string } | null>(null);
 
@@ -101,6 +103,8 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
               <Indicador titulo="Entregas atrasadas" valor={String(atrasadas.length)} detalhe={atrasadas.length ? "cobre o fornecedor ou ajuste a previsão" : "nenhuma passou da previsão"} alerta={atrasadas.length > 0} />
               <Indicador titulo="Comprado a receber" valor={dinheiro(comprometido)} detalhe={`${andamento.length} ${andamento.length === 1 ? "pedido" : "pedidos"} em andamento`} />
             </div>
+            <Filtros rotulo="Exibição dos pedidos" valor={visao} onChange={setVisao} opcoes={[{ value: "quadro", label: "Quadro por etapa" }, { value: "lista", label: "Lista ordenável" }]} />
+            {visao === "lista" ? <ListaPedidos pedidos={filtrados} hoje={hoje} onAbrir={setAberto} /> : <>
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">{COLUNAS.map((status) => {
               const doStatus = filtrados.filter((p) => p.status === status);
               const lista = status === "entregue" ? doStatus.slice(0, 8) : doStatus;
@@ -112,6 +116,7 @@ export function ComprasWorkspace({ projects, query, canEdit }: { projects: Proje
             })}</div>
             {filtrados.some((p) => p.status === "cancelado") ? <div><Button variant="ghost" size="sm" onClick={() => setMostrarCancelados((v) => !v)}>{mostrarCancelados ? "Ocultar cancelados" : `Ver cancelados (${filtrados.filter((p) => p.status === "cancelado").length})`}</Button>
               {mostrarCancelados ? <div className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-4">{filtrados.filter((p) => p.status === "cancelado").map((p) => <CartaoPedido key={p.id} pedido={p} hoje={hoje} onAbrir={() => setAberto(p.id)} />)}</div> : null}</div> : null}
+            </>}
           </>}
         </TabsContent>
 
@@ -153,6 +158,50 @@ function CartaoPedido({ pedido, hoje, onAbrir }: { pedido: PedidoResumo; hoje: s
         : pedido.neededBy ? <div className="flex justify-between gap-2"><dt>Obra precisa</dt><dd>{dataCurta(pedido.neededBy)}</dd></div> : null}
     </dl>
   </button>;
+}
+
+const ETAPAS: StatusCompra[] = ["a_orcar", "a_comprar", "comprado", "em_entrega", "entregue", "cancelado"];
+
+// Lista com todos os pedidos, inclusive entregues e cancelados, para achar e comparar:
+// o quadro mostra a etapa; a lista ordena por data, valor ou diferença para a referência.
+function ListaPedidos({ pedidos, hoje, onAbrir }: { pedidos: PedidoResumo[]; hoje: string; onAbrir: (id: string) => void }) {
+  const [etapa, setEtapa] = useState<"abertos" | StatusCompra | "todos">("abertos");
+  const visiveis = pedidos.filter((p) => etapa === "todos" || (etapa === "abertos" ? p.status !== "entregue" && p.status !== "cancelado" : p.status === etapa));
+  const valor = (p: PedidoResumo) => p.totalCents ?? p.bestQuoteCents;
+  const data = (p: PedidoResumo) => p.status === "entregue" ? p.deliveredAt : emAndamento(p.status) ? p.expectedDeliveryDate : p.neededBy;
+  const { ordenadas, ordem, alternar } = useOrdenacao(visiveis, {
+    codigo: (p) => p.number, titulo: (p) => p.title, obra: (p) => p.projectCode ?? p.projectName, etapa: (p) => ETAPAS.indexOf(p.status),
+    fornecedor: (p) => p.supplierName, valor, referencia: (p) => variacao(valor(p), p.referenceCents), data,
+  }, { coluna: "data", direcao: "asc" });
+  return <div className="space-y-2">
+    <Filtros rotulo="Etapa" valor={etapa} onChange={setEtapa} opcoes={[
+      { value: "abertos", label: "Em aberto", total: pedidos.filter((p) => p.status !== "entregue" && p.status !== "cancelado").length },
+      ...ETAPAS.map((s) => ({ value: s, label: rotuloStatus[s], total: pedidos.filter((p) => p.status === s).length })).filter((o) => o.total),
+      { value: "todos" as const, label: "Todos", total: pedidos.length },
+    ]} />
+    {!visiveis.length ? <Card className="p-6 text-sm text-drap-500">Nenhum pedido nesta etapa.</Card> : <Card className="p-0"><div className={classeCabecalhoFixo}><Table>
+      <TableHeader><TableRow>
+        <Coluna coluna="codigo" ordem={ordem} alternar={alternar} className="min-w-48">Pedido</Coluna>
+        <Coluna coluna="obra" ordem={ordem} alternar={alternar} className="hidden lg:table-cell">Obra</Coluna>
+        <Coluna coluna="etapa" ordem={ordem} alternar={alternar}>Etapa</Coluna>
+        <Coluna coluna="fornecedor" ordem={ordem} alternar={alternar} className="hidden md:table-cell">Fornecedor</Coluna>
+        <Coluna coluna="valor" ordem={ordem} alternar={alternar} direita>Valor</Coluna>
+        <Coluna coluna="data" ordem={ordem} alternar={alternar} direita className="hidden sm:table-cell">Data-chave</Coluna>
+      </TableRow></TableHeader>
+      <TableBody>{ordenadas.map((p) => { const v = valor(p); const d = data(p); const vencida = (p.status === "a_orcar" || p.status === "a_comprar") && p.neededBy && hoje && p.neededBy < hoje;
+        return <TableRow key={p.id} className="cursor-pointer" onClick={() => onAbrir(p.id)}>
+          <TableCell className="whitespace-normal"><button type="button" onClick={(e) => { e.stopPropagation(); onAbrir(p.id); }} className="text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-drap-400 rounded-sm">
+            <span className="block text-xs text-drap-500">{p.code}{p.priority === "urgente" || p.priority === "alta" ? ` · ${rotuloPrioridade[p.priority as keyof typeof rotuloPrioridade]}` : ""}</span>
+            <span className="block font-medium text-drap-950">{p.title}</span>
+            <span className="block text-xs text-drap-500 lg:hidden">{p.projectName ?? "sem obra"}</span></button></TableCell>
+          <TableCell className="hidden whitespace-normal text-sm lg:table-cell">{p.projectName ? <>{p.projectName}<span className="block text-xs text-drap-500">{p.projectCode}</span></> : <span className="text-drap-500">sem obra</span>}</TableCell>
+          <TableCell><div className="flex flex-col items-start gap-1"><SeloStatus status={p.status} />{vencida ? <Badge variant="destructive">Necessidade vencida</Badge> : <SeloEntrega situacao={p.delivery === "entregue" ? null : p.delivery} />}{p.partial ? <span className="text-xs text-drap-500">recebido em parte</span> : null}</div></TableCell>
+          <TableCell className="hidden whitespace-normal text-sm md:table-cell">{p.supplierName ?? (p.quoteCount ? <span className="text-xs text-drap-500">{p.quoteCount} {p.quoteCount === 1 ? "cotação" : "cotações"}</span> : "—")}</TableCell>
+          <TableCell className="text-right tabular-nums">{dinheiro(v)}{v !== null ? <span className="block text-xs text-drap-500">{p.orderedAt ? "comprado" : p.selectedQuoteId ? "escolhido" : "melhor cotação"}</span> : null}<SeloVariacao valor={variacao(v, p.referenceCents)} /></TableCell>
+          <TableCell className="hidden text-right sm:table-cell">{dataCurta(d)}<span className="block text-xs text-drap-500">{p.status === "entregue" ? "entregue" : emAndamento(p.status) ? "previsão" : p.neededBy ? "obra precisa" : ""}</span></TableCell>
+        </TableRow>; })}</TableBody>
+    </Table></div></Card>}
+  </div>;
 }
 
 function Entregas({ pedidos, hoje, onAbrir }: { pedidos: PedidoResumo[]; hoje: string; onAbrir: (id: string) => void }) {

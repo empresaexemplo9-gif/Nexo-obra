@@ -34,7 +34,7 @@ export async function importarGoinfra(
   await db.prepare(
     `INSERT INTO goinfra_tabelas (id, referencia, tabela, regime, arquivo_nome, arquivo_sha256, arquivo_bytes, aba, total_itens, ignoradas, importado_por, importado_em)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
-  ).bind(id, alvo.referencia, provisorio, alvo.regime, arquivo.nome.slice(0, 200), sha, arquivo.bytes.length, interpretacao.aba.slice(0, 120), interpretacao.itens.length, interpretacao.ignoradas, autor, Date.now()).run();
+  ).bind(id, alvo.referencia, provisorio, alvo.regime, arquivo.nome.slice(0, 200), sha, arquivo.bytes.length, interpretacao.aba.slice(0, 500), interpretacao.itens.length, interpretacao.ignoradas, autor, Date.now()).run();
   try {
     for (let inicio = 0; inicio < interpretacao.itens.length; inicio += LOTE) {
       await db.batch(interpretacao.itens.slice(inicio, inicio + LOTE).map((item) => db.prepare(
