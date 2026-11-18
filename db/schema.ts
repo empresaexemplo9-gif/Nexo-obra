@@ -1309,3 +1309,47 @@ export const supplierPriceItems = sqliteTable("supplier_price_items", {
   index("idx_supplier_price_items_org_description").on(table.organizationId, table.description),
   index("idx_supplier_price_items_list").on(table.listId),
 ]);
+
+// ─── Módulos contratados, identidade visual e delegação de cadastro ───
+//
+// Três tabelas novas em vez de colunas em `organizations` e `members`: a leitura delas é
+// tolerante à ausência (banco ainda sem a migração responde como hoje — todos os módulos,
+// marca padrão, ninguém com delegação). Uma coluna nova em `organizations` faria toda
+// requisição autenticada falhar no intervalo entre a publicação e a migração.
+
+// Módulos que o superadministrador liberou para a empresa. Sem linha, tudo liberado —
+// é o comportamento de antes desta tabela existir.
+export const organizationModules = sqliteTable("organization_modules", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id),
+  enabledJson: text("enabled_json").notNull(),
+  revision: integer("revision").notNull().default(1),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Identidade visual da empresa: cores já ajustadas para leitura e o logotipo em PNG,
+// JPEG ou WebP (o navegador converte PDF e SVG antes de enviar).
+export const organizationBranding = sqliteTable("organization_branding", {
+  organizationId: text("organization_id").primaryKey().references(() => organizations.id),
+  menuColor: text("menu_color"),
+  accentColor: text("accent_color"),
+  bandColor: text("band_color"),
+  logoMime: text("logo_mime"),
+  logoBase64: text("logo_base64"),
+  logoVersion: integer("logo_version").notNull().default(0),
+  revision: integer("revision").notNull().default(1),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+// Gestores a quem o contratante entregou a ferramenta de criar login e senha para quem
+// está abaixo do cargo deles.
+export const memberDelegations = sqliteTable("member_delegations", {
+  // Sem chave estrangeira para `members` de propósito: apagar uma conta remove os vínculos
+  // dela, e uma chave aqui faria essa exclusão ser recusada pelo SQLite.
+  memberId: text("member_id").primaryKey(),
+  organizationId: text("organization_id").notNull().references(() => organizations.id),
+  canCreateAccounts: integer("can_create_accounts", { mode: "boolean" }).notNull().default(false),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+}, (table) => [index("idx_member_delegations_org").on(table.organizationId)]);

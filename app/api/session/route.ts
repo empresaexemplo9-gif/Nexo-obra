@@ -3,6 +3,7 @@ import { CURRENT_TERMS_VERSION } from "@/lib/terms";
 import { readMaintenanceIdentity } from "@/lib/server/maintenance";
 import { portalAccessesForUser } from "@/lib/server/portal";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
+import { marcaDaEmpresa, membroPodeCriarContas } from "@/lib/server/empresa-config";
 
 import {
   ApiError,
@@ -55,13 +56,18 @@ export async function GET(request: Request) {
       if (!context) return Response.json({ authenticated: true, needsOrganization: false, organizationSelectionRequired: true,
         organizations: memberships.map(membership => ({ id: membership.organization_id, name: membership.organization_name, role: membership.role })) },
         { headers: { "Cache-Control": "private, no-store" } });
+      const [branding, canCreateAccounts] = await Promise.all([
+        marcaDaEmpresa(context.db, context.organization.id),
+        membroPodeCriarContas(context.db, context.organization.id, context.member.id),
+      ]);
       return Response.json({
         authenticated: true,
         authMethod: identity.scope === "superadmin" ? "superadmin" : maintenanceIdentity ? "maintenance" : "password",
         maintenanceEnvironment: isMaintenanceOrganization(context),
         needsOrganization: false,
         user: context.user,
-        member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions },
+        member: { id: context.member.id, role: context.member.role, permissions: context.member.permissions, canCreateAccounts },
+        branding,
         terms: { version: CURRENT_TERMS_VERSION, accepted: context.termsAccepted },
         organization: context.organization,
         organizations: memberships.map((membership) => ({

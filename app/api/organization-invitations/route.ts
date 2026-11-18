@@ -13,8 +13,9 @@ import {
 } from "@/lib/server/backend";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
 import {
-  normalizePermissions, parseStoredPermissions, permissionModuleLabels, permissionModules, permissionsBeyond,
+  normalizePermissions, parseStoredPermissions, permissionModuleLabels, permissionModules,
 } from "@/lib/permissions";
+import { excedeQuemConcede } from "@/lib/empresa-config";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
     }
     // O contratante e a plataforma já têm acesso total; qualquer outro só reparte o que tem.
     if (context.member.role !== "owner" && !isPlatformSuperAdmin(context)) {
-      const beyond = permissionsBeyond(permissions, context.member.permissions);
+      const beyond = excedeQuemConcede(permissions, context.member.permissions, context.organization.enabledModules);
       if (beyond.length) {
         throw new ApiError(403, "permission_beyond_grantor",
           `Você não pode liberar mais do que o seu próprio acesso: ${beyond.map((module) => permissionModuleLabels[module]).join(", ")}.`);

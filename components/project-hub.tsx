@@ -1,6 +1,8 @@
 "use client";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { LogoDaEmpresa, useCoresDaEmpresa } from "@/components/marca-empresa";
+import type { MarcaDaEmpresa } from "@/lib/empresa-config";
 import { ProjectEditor } from "@/components/project-editor";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -43,6 +45,7 @@ type SessionData = {
   member?: { role: string; permissions: PermissionSet };
   terms?: { accepted: boolean };
   organization?: { name: string };
+  branding?: MarcaDaEmpresa;
 };
 
 type Project = {
@@ -160,6 +163,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
   const [state, setState] = useState<HubState>({ session: null, project: null, tasks: [], financial: null, financialMessage: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  useCoresDaEmpresa(state.session?.branding);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,7 +217,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
       <header className="border-b border-white/10 bg-drap-deep text-white shadow-none">
         <div className="flex items-center gap-4 px-4 py-4 sm:px-6 lg:px-8">
           <Link href="/" aria-label="Voltar para a plataforma" className="grid size-10 place-items-center rounded-md border border-white/10 bg-white/[0.06] text-drap-300 transition hover:bg-white/10 hover:text-white"><ArrowLeft className="size-4" /></Link>
-          <BrandLogo variant="lockup" dark className="w-[170px] sm:w-[200px]" />
+          {session.branding?.hasLogo ? <div className="w-[150px] sm:w-[180px]"><LogoDaEmpresa marca={session.branding} empresa={session.organization?.name ?? ""} /></div> : <BrandLogo variant="lockup" dark className="w-[170px] sm:w-[200px]" />}
           <div className="ml-auto min-w-0 text-right"><p className="truncate text-sm font-medium text-white">{session.organization?.name}</p><p className="text-xs text-drap-500">Central da obra</p></div>
         </div>
       </header>

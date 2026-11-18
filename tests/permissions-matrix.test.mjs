@@ -210,16 +210,15 @@ test("cada perfil nasce com a matriz que o produto promete", () => {
   // Parceiro: só leitura, nada de dinheiro nem equipe.
   assert.equal(Object.values(permissions.permissionsForRole("partner")).every((g) => !g.edit), true);
   assert.equal(matrix("partner").finance, undefined);
-  // Financeiro edita dinheiro e orçamento, e só lê projeto.
-  const financeiro = matrix("finance");
-  assert.equal(financeiro.finance, "edita");
-  assert.equal(financeiro.budgets, "edita");
-  assert.equal(financeiro.projects, "vê");
+  // Financeiro nasce com todos os acessos liberados; o contratante ajusta depois.
+  assert.equal(Object.values(permissions.permissionsForRole("finance")).every((g) => g.view && g.edit), true);
   // Contabilidade: prestação de contas, somente leitura.
   assert.equal(Object.values(permissions.permissionsForRole("accounting")).every((g) => !g.edit), true);
   assert.equal(matrix("accounting").finance, "vê");
   // Nenhum perfil abaixo de administrador edita a equipe.
-  for (const role of ["manager", "member", "partner", "service_provider", "finance", "accounting"]) {
+  // (o Financeiro edita a matriz da Equipe, mas administrar acessos exige ser contratante
+  // ou administrador — a rota confere o papel, não só o módulo.)
+  for (const role of ["manager", "member", "partner", "service_provider", "accounting"]) {
     assert.equal(permissions.permissionsForRole(role).team.edit, false, role);
   }
 });

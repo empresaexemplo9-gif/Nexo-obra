@@ -66,7 +66,10 @@ const full = (): PermissionSet => Object.fromEntries(
 ) as PermissionSet;
 
 export function permissionsForRole(role: string): PermissionSet {
-  if (role === PLATFORM_SUPERADMIN_ROLE || role === "owner" || role === "admin") return full();
+  // O Financeiro nasce com tudo liberado, a pedido do dono do produto: quem cuida do
+  // dinheiro precisa enxergar a obra inteira. É só o ponto de partida — o contratante
+  // ajusta a matriz desse acesso como a de qualquer outro.
+  if (role === PLATFORM_SUPERADMIN_ROLE || role === "owner" || role === "admin" || role === "finance") return full();
   const permissions = none();
   const set = (area: PermissionModule, view: boolean, edit = false) => {
     permissions[area] = { view: view || edit, edit };
@@ -82,9 +85,6 @@ export function permissionsForRole(role: string): PermissionSet {
   } else if (role === "service_provider") {
     for (const area of ["overview", "projects", "schedule"] as PermissionModule[]) set(area, true);
     set("tasks", true, true); set("files", true, true);
-  } else if (role === "finance") {
-    for (const area of ["overview", "budgets", "finance", "files"] as PermissionModule[]) set(area, true, true);
-    set("projects", true); set("purchases", true);
   } else if (role === "hr") {
     for (const area of ["overview", "team"] as PermissionModule[]) set(area, true);
   } else if (role === "accounting") {

@@ -1,6 +1,7 @@
 "use client";
 
 import { DrapPricingControl } from "@/components/drap-pricing-control";
+import { ModulosEmpresaControl } from "@/components/modulos-empresa-control";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +81,7 @@ function CompanyControls({ organizationId, name, maintenance = false }: { organi
         {link && <div className="space-y-2"><label className="block text-sm">Link válido por sete dias<Input readOnly value={link} onFocus={(e) => e.target.select()} /></label><Button variant="outline" onClick={() => void navigator.clipboard.writeText(link).then(() => setMessage("Link copiado.")).catch(() => setError("Selecione e copie o link manualmente."))}>Copiar link</Button></div>}
       </CardContent></Card>
     </div>
+    {!maintenance && <ModulosEmpresaControl organizationId={organizationId} name={name} />}
     {!maintenance && <DrapPricingControl organizationId={organizationId} />}
     <Card><CardHeader><CardTitle>Controle de acessos</CardTitle></CardHeader><CardContent className="space-y-5">
       <p className="text-sm text-drap-600">Bloquear ou excluir um acesso não cancela a assinatura. Gerencie o cancelamento da cobrança no Drap Empresa.</p>
@@ -97,7 +99,7 @@ function CompanyControls({ organizationId, name, maintenance = false }: { organi
       })}</div>
       {data.rules.filter((r) => r.subject === "*").map((r) => <p key={r.subject} className="text-sm">Regra da empresa: {r.state === "suspended" && r.until && now > 0 && r.until <= now ? "Bloqueio temporário encerrado" : labels[r.state]}. Motivo: {r.reason}</p>)}
     </CardContent></Card>
-    <Card><CardHeader><CardTitle>Histórico administrativo</CardTitle></CardHeader><CardContent><div className="space-y-3">{!data.history.length && <p>Nenhuma alteração registrada.</p>}{data.history.map((event, i) => <div key={i} className="border-b pb-3 text-sm"><p className="font-medium">{({ "platform.access_changed": "Alteração de acesso", "platform.partner_invited": "Convite de parceiro", "drap.activation_enrolled": "Assinatura vinculada", "drap.activation_requested": "Ativação solicitada", "drap.activation_confirmed": "Assinatura confirmada pelo Empresa" } as Record<string, string>)[event.action] ?? event.action}</p><p className="break-all">{event.entity_id === "*" ? "Empresa inteira" : event.entity_id} · {event.actor_user_id}</p><p className="text-drap-500">{new Date(event.created_at).toLocaleString("pt-BR")}</p></div>)}</div></CardContent></Card>
+    <Card><CardHeader><CardTitle>Histórico administrativo</CardTitle></CardHeader><CardContent><div className="space-y-3">{!data.history.length && <p>Nenhuma alteração registrada.</p>}{data.history.map((event, i) => <div key={i} className="border-b pb-3 text-sm"><p className="font-medium">{({ "platform.access_changed": "Alteração de acesso", "platform.partner_invited": "Convite de parceiro", "drap.activation_enrolled": "Assinatura vinculada", "drap.activation_requested": "Ativação solicitada", "drap.activation_confirmed": "Assinatura confirmada pelo Empresa", "platform.modules_changed": "Módulos contratados alterados" } as Record<string, string>)[event.action] ?? event.action}</p><p className="break-all">{event.entity_id === "*" ? "Empresa inteira" : event.entity_id} · {event.actor_user_id}</p><p className="text-drap-500">{new Date(event.created_at).toLocaleString("pt-BR")}</p></div>)}</div></CardContent></Card>
     <AlertDialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) setConfirmation(null); }}><AlertDialogContent><AlertDialogTitle>Confirmar alteração</AlertDialogTitle><AlertDialogDescription>{confirmation?.text}</AlertDialogDescription><AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction disabled={busy} onClick={() => { if (confirmation) void save(confirmation.body, "Alteração registrada."); }}>Confirmar</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </div>;
 }

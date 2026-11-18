@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Clipboard, KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
+import { Check, Clipboard, Eye, EyeOff, KeyRound, Link2, LoaderCircle, Plus, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +19,9 @@ import {
   type PermissionModule,
   type PermissionSet,
 } from "@/lib/permissions";
+import { perfisAbaixoDe, perfisCriaveis, perfisQueRecebemDelegacao } from "@/lib/empresa-config";
 
-export type TeamMember = { id: string; name: string; email: string; role: string; permissions: PermissionSet; weeklyCapacityMinutes: number; active?: boolean; updatedAt?: string };
+export type TeamMember = { id: string; name: string; email: string; role: string; permissions: PermissionSet; weeklyCapacityMinutes: number; active?: boolean; canCreateAccounts?: boolean; updatedAt?: string };
 type Invitation = { id: string; email: string; role: string; permissions: PermissionSet; expiresAt: number; status: "pending" | "accepted" | "expired" | "revoked" };
 type Profile = "admin" | "manager" | "member" | "partner" | "service_provider" | "finance" | "hr" | "accounting";
 
@@ -38,7 +39,32 @@ function accessCount(permissions: PermissionSet) {
   return permissionModules.filter((module) => permissions[module].view).length;
 }
 
-export function TeamAccessManager({ members, canManage, currentMemberId, canResetOwner = false }: { members: TeamMember[]; canManage: boolean; currentMemberId?: string; canResetOwner?: boolean }) {
+type Modo = "convite" | "senha";
+
+export function TeamAccessManager({
+  members, canManage, currentMemberId, canResetOwner = false, currentRole = "", currentPermissions, canCreateAccounts = false, enabledModules, onMembersChanged,
+}: {
+  members: TeamMember[]; canManage: boolean; currentMemberId?: string; canResetOwner?: boolean;
+  /** Quem está usando a tela: limita cargos e áreas que pode entregar. */
+  currentRole?: string; currentPermissions?: PermissionSet;
+  /** O contratante entregou a esta pessoa a criação de login e senha. */
+  canCreateAccounts?: boolean;
+  /** Módulos contratados pela empresa; os demais aparecem como "não contratado". */
+  enabledModules?: PermissionModule[];
+  onMembersChanged?: () => Promise<void> | void;
+}) {
+  const acessoTotal = currentRole === "owner" || currentRole === "superadmin";
+  const podeCriarSenha = canManage || canCreateAccounts;
+  const cargosParaSenha: Profile[] = acessoTotal ? [...perfisCriaveis] : perfisAbaixoDe(currentRole);
+  const contratado = (module: PermissionModule) => !enabledModules || enabledModules.includes(module);
+  // Quem não tem acesso total só entrega o que ele mesmo tem; o servidor confere de novo.
+  const podeEntregar = (module: PermissionModule, action: "view" | "edit") => contratado(module) && (acessoTotal || !currentPermissions || currentPermissions[module][action]);
+  const [modo, setModo] = useState<Modo>("convite");
+  const [nome, setNome] = useState("");
+  const [senha, setSenha] = useState("");
+  const [verSenha, setVerSenha] = useState(false);
+  const [criada, setCriada] = useState<{ email: string; senha: string } | null>(null);
+  const [delegar, setDelegar] = useState(false);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -66,7 +92,7 @@ export function TeamAccessManager({ members, canManage, currentMemberId, canRese
 
   function chooseProfile(value: Profile) {
     setRole(value);
-    setPermissions(permissionsForRole(value));
+    setPermissions(editing ? permissionsForRole(value) : matrizInicial(value));
   }
 
   function setGrant(module: PermissionModule, action: "view" | "edit", checked: boolean) {
@@ -83,7 +109,19 @@ export function TeamAccessManager({ members, canManage, currentMemberId, canRese
     try {
       if (editing) {
         await requestJson("/api/members", { method: "PATCH", body: JSON.stringify({ id: editing.id, role, permissions, active, weeklyCapacityMinutes: editing.weeklyCapacityMinutes, updatedAt: editing.updatedAt }) });
+        const delegavel = (perfisQueRecebemDelegacao as readonly string[]).includes(role);
+        if (delegavel && delegar !== Boolean(editing.canCreateAccounts)) {
+          await requestJson(`/api/members/${editing.id}/delegacao`, { method: "PUT", body: JSON.stringify({ canCreateAccounts: delegar }) });
+        }
         toast.success("Acesso atualizado"); setOpen(false); await load(); return;
+      }
+      if (modo === "senha") {
+        await requestJson("/api/members/contas", { method: "POST", body: JSON.stringify({ name: nome, email, password: senha, role, permissions }) });
+        setCriada({ email: email.trim().toLowerCase(), senha });
+        toast.success("Acesso criado", { description: "Entregue o e-mail e a senha à pessoa. Ela pode trocar a senha no menu da conta." });
+        if (canManage) await load();
+        await onMembersChanged?.();
+        return;
       }
       const data = await requestJson<{ invitationPath: string }>("/api/organization-invitations", {
         method: "POST",
@@ -123,28 +161,62 @@ export function TeamAccessManager({ members, canManage, currentMemberId, canRese
     finally { setRevogando(null); }
   }
 
-  function newInvite() {
-    setEditing(null); setEmail(""); setRole("member"); setPermissions(permissionsForRole("member")); setLink(""); setOpen(true);
+  // Perfil inicial recortado pelo que a empresa contratou e pelo que quem cria pode entregar.
+  function matrizInicial(profile: Profile) {
+    const base = permissionsForRole(profile);
+    return Object.fromEntries(permissionModules.map((module) => [module, {
+      view: base[module].view && podeEntregar(module, "view"),
+      edit: base[module].edit && podeEntregar(module, "edit"),
+    }])) as PermissionSet;
+  }
+
+  function newInvite(novoModo: Modo = "convite") {
+    const inicial: Profile = novoModo === "senha" && !cargosParaSenha.includes("member") ? cargosParaSenha[0] ?? "member" : "member";
+    setEditing(null); setModo(novoModo); setEmail(""); setNome(""); setSenha(""); setVerSenha(false); setCriada(null);
+    setRole(inicial); setPermissions(matrizInicial(inicial)); setLink(""); setOpen(true);
   }
 
   function editMember(member: TeamMember) {
-    setEditing(member); setEmail(member.email); setRole(member.role as Profile); setPermissions(member.permissions); setActive(member.active !== false); setLink(""); setOpen(true);
+    setEditing(member); setModo("convite"); setCriada(null); setEmail(member.email); setRole(member.role as Profile); setPermissions(member.permissions); setActive(member.active !== false); setDelegar(Boolean(member.canCreateAccounts)); setLink(""); setOpen(true);
   }
 
   return <div className="space-y-5">
     <Card className="overflow-hidden border-border bg-card shadow-none">
       <CardHeader className="flex-col items-start justify-between gap-4 sm:flex-row">
         <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-drap-700">Controle da empresa</p><CardTitle className="mt-2">Pessoas e permissões</CardTitle><p className="mt-2 max-w-2xl text-sm leading-6 text-drap-500">O contratante pode criar outros administradores para sua empresa e definir os acessos da equipe. Os dados e convites pertencem somente a esta empresa.</p></div>
-        {canManage ? <Button onClick={newInvite} className="shrink-0 rounded-md"><UserPlus />Criar acesso</Button> : <Badge variant="outline" className="shrink-0"><ShieldCheck />Somente leitura</Badge>}
+        {podeCriarSenha ? <div className="flex shrink-0 flex-wrap gap-2">
+          {canManage ? <Button onClick={() => newInvite("convite")} className="rounded-md"><Link2 />Convidar por link</Button> : null}
+          <Button variant={canManage ? "outline" : "default"} onClick={() => newInvite("senha")} className="rounded-md"><UserPlus />Criar login e senha</Button>
+        </div> : <Badge variant="outline" className="shrink-0"><ShieldCheck />Somente leitura</Badge>}
       </CardHeader>
     </Card>
 
-    <div className="grid gap-3 md:grid-cols-2">{(managedMembers ?? members).map((member) => <Card key={member.id} className="p-5"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-md bg-drap-300 font-semibold text-drap-950 shadow-none">{member.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{member.name}</p><p className="truncate text-xs text-drap-500">{member.email}</p><p className="mt-1 text-xs text-drap-500">{accessCount(member.permissions)} de {permissionModules.length} áreas visíveis</p></div><Badge variant="outline" className="max-w-28 whitespace-normal">{accessProfileLabels[member.role] ?? member.role}</Badge></div>{member.active === false && <p className="mt-2 text-sm">Acesso desativado</p>}{canManage && member.id !== currentMemberId ? <div className="mt-3 flex flex-wrap gap-2">{member.role !== "owner" && member.updatedAt ? <Button variant="outline" onClick={() => editMember(member)}>Gerenciar acesso</Button> : null}{member.active !== false && (member.role !== "owner" || canResetOwner) ? <Button variant="outline" disabled={resetting === member.id} onClick={() => void passwordReset(member)}>{resetting === member.id ? <LoaderCircle className="animate-spin" /> : <KeyRound />}Link de nova senha</Button> : null}</div> : null}</Card>)}</div>
+    <div className="grid gap-3 md:grid-cols-2">{(managedMembers ?? members).map((member) => <Card key={member.id} className="p-5"><div className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-md bg-drap-300 font-semibold text-drap-950 shadow-none">{member.name.slice(0, 2).toUpperCase()}</span><div className="min-w-0 flex-1"><p className="truncate font-medium">{member.name}</p><p className="truncate text-xs text-drap-500">{member.email}</p><p className="mt-1 text-xs text-drap-500">{accessCount(member.permissions)} de {permissionModules.length} áreas visíveis</p></div><Badge variant="outline" className="max-w-28 whitespace-normal">{accessProfileLabels[member.role] ?? member.role}</Badge></div>{member.active === false && <p className="mt-2 text-sm">Acesso desativado</p>}{member.canCreateAccounts ? <p className="mt-2 flex items-center gap-1.5 text-xs text-drap-600"><UserPlus className="size-3.5" />Cria login e senha para cargos abaixo</p> : null}{canManage && member.id !== currentMemberId ? <div className="mt-3 flex flex-wrap gap-2">{member.role !== "owner" && member.updatedAt ? <Button variant="outline" onClick={() => editMember(member)}>Gerenciar acesso</Button> : null}{member.active !== false && (member.role !== "owner" || canResetOwner) ? <Button variant="outline" disabled={resetting === member.id} onClick={() => void passwordReset(member)}>{resetting === member.id ? <LoaderCircle className="animate-spin" /> : <KeyRound />}Link de nova senha</Button> : null}</div> : null}</Card>)}</div>
 
     <Dialog open={Boolean(resetLink)} onOpenChange={(value) => { if (!value) setResetLink(null); }}><DialogContent><DialogHeader><DialogTitle>Link de nova senha</DialogTitle><DialogDescription>Envie para {resetLink?.email}. Vale por 24 horas e só pode ser usado uma vez; gerar outro cancela este.</DialogDescription></DialogHeader><div className="rounded-md border border-drap-200 bg-drap-50 p-4"><p className="break-all text-sm text-drap-800">{resetLink?.link}</p></div><Button className="w-full" onClick={() => { if (resetLink) { void navigator.clipboard.writeText(resetLink.link); toast.success("Link copiado"); } }}><Clipboard />Copiar link</Button></DialogContent></Dialog>
 
     {canManage && <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><KeyRound className="size-4 text-drap-600" />Convites</CardTitle></CardHeader><CardContent className="space-y-2">{loading ? <LoaderCircle className="mx-auto my-8 animate-spin text-drap-600" /> : invitations.length ? invitations.map((invitation) => <div key={invitation.id} className="flex flex-col gap-3 rounded-md border border-drap-100 p-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{invitation.email}</p><p className="mt-1 text-xs text-drap-500">{accessProfileLabels[invitation.role] ?? invitation.role} · {accessCount(invitation.permissions)} áreas</p></div><Badge variant="outline">{statusLabels[invitation.status]}</Badge>{canManage && invitation.status === "pending" ? <Button variant="ghost" size="icon" aria-label={`Revogar convite de ${invitation.email}`} disabled={revogando === invitation.id} onClick={() => void revoke(invitation.id, invitation.email)}><Trash2 className="size-4 text-drap-500" /></Button> : null}</div>) : <p className="py-8 text-center text-sm text-drap-500">Nenhum convite criado ainda.</p>}</CardContent></Card>}
 
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>{editing ? "Gerenciar acesso à empresa" : "Novo acesso à empresa"}</DialogTitle><DialogDescription>Escolha um perfil inicial e ajuste as permissões. Editar sempre inclui visualizar.</DialogDescription></DialogHeader>{link ? <div className="space-y-4"><div className="rounded-md border border-drap-200 bg-drap-50 p-5"><p className="flex items-center gap-2 font-medium text-drap-900"><Check className="size-4" />Link pronto para envio</p><p className="mt-2 break-all text-sm text-drap-800">{link}</p></div><Button className="w-full" onClick={() => { void navigator.clipboard.writeText(link); toast.success("Link copiado"); }}><Clipboard />Copiar link</Button></div> : <div className="space-y-5"><div className="grid gap-4 sm:grid-cols-2"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do usuário</label><Input id="invite-email" readOnly={Boolean(editing)} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nome@empresa.com.br" /></div><div><label htmlFor="acesso-perfil" className="mb-2 block text-sm font-medium">Perfil</label><Select value={role} onValueChange={(value) => chooseProfile(value as Profile)}><SelectTrigger id="acesso-perfil"><SelectValue /></SelectTrigger><SelectContent>{profiles.map((profile) => <SelectItem key={profile} value={profile}>{accessProfileLabels[profile]}</SelectItem>)}</SelectContent></Select></div></div>{editing && <label className="flex items-center gap-3 text-sm"><Checkbox checked={active} onCheckedChange={value => setActive(value === true)} />Acesso ativo nesta empresa</label>}<div className="overflow-hidden rounded-md border border-drap-200"><div className="grid grid-cols-[1fr_52px_52px] sm:grid-cols-[1fr_88px_88px] bg-drap-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-drap-500"><span>Área</span><span className="text-center">Ver</span><span className="text-center">Editar</span></div>{permissionModules.map((module) => <div key={module} className="grid grid-cols-[1fr_52px_52px] sm:grid-cols-[1fr_88px_88px] items-center border-t border-drap-100 px-4 py-3"><span className="text-sm font-medium text-drap-700">{permissionModuleLabels[module]}</span><span className="flex justify-center"><Checkbox checked={permissions[module].view} onCheckedChange={(value) => setGrant(module, "view", value === true)} aria-label={`Visualizar ${permissionModuleLabels[module]}`} /></span><span className="flex justify-center"><Checkbox checked={permissions[module].edit} onCheckedChange={(value) => setGrant(module, "edit", value === true)} aria-label={`Editar ${permissionModuleLabels[module]}`} /></span></div>)}</div><Button onClick={() => void createInvite()} disabled={saving || !email.includes("@")} className="h-11 w-full rounded-md">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}{editing ? "Salvar acesso" : "Gerar link de acesso"}</Button></div>}</DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-3xl">
+      <DialogHeader>
+        <DialogTitle>{editing ? "Gerenciar acesso à empresa" : modo === "senha" ? "Criar login e senha" : "Convidar por link"}</DialogTitle>
+        <DialogDescription>{modo === "senha" && !editing
+          ? "Você define a senha inicial e entrega à pessoa. Ela entra direto, aceita os termos e pode trocar a senha no menu da conta."
+          : "Escolha um perfil inicial e ajuste as permissões. Editar sempre inclui visualizar."}</DialogDescription>
+      </DialogHeader>
+      {link ? <div className="space-y-4"><div className="rounded-md border border-drap-200 bg-drap-50 p-5"><p className="flex items-center gap-2 font-medium text-drap-900"><Check className="size-4" />Link pronto para envio</p><p className="mt-2 break-all text-sm text-drap-800">{link}</p></div><Button className="w-full" onClick={() => { void navigator.clipboard.writeText(link); toast.success("Link copiado"); }}><Clipboard />Copiar link</Button></div>
+      : criada ? <div className="space-y-4" role="status"><div className="rounded-md border border-drap-200 bg-drap-50 p-5"><p className="flex items-center gap-2 font-medium text-drap-900"><Check className="size-4" />Acesso criado</p><p className="mt-2 text-sm text-drap-700">Entregue estes dados à pessoa por um canal seguro. A senha não aparece de novo.</p><dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm"><dt className="text-drap-500">Endereço</dt><dd className="break-all">{typeof window === "undefined" ? "" : `${window.location.origin}/entrar`}</dd><dt className="text-drap-500">E-mail</dt><dd className="break-all">{criada.email}</dd><dt className="text-drap-500">Senha</dt><dd className="break-all font-mono">{criada.senha}</dd></dl></div><Button className="w-full" onClick={() => { void navigator.clipboard.writeText(`Acesso: ${window.location.origin}/entrar\nE-mail: ${criada.email}\nSenha: ${criada.senha}`); toast.success("Dados copiados"); }}><Clipboard />Copiar dados de acesso</Button></div>
+      : <div className="space-y-5">
+        {modo === "senha" && !editing ? <div className="grid gap-4 sm:grid-cols-2">
+          <div><label className="mb-2 block text-sm font-medium" htmlFor="conta-nome">Nome</label><Input id="conta-nome" value={nome} onChange={(event) => setNome(event.target.value)} autoComplete="off" maxLength={120} /></div>
+          <div><label className="mb-2 block text-sm font-medium" htmlFor="conta-senha">Senha inicial</label><div className="relative"><Input id="conta-senha" type={verSenha ? "text" : "password"} value={senha} onChange={(event) => setSenha(event.target.value)} autoComplete="new-password" minLength={10} maxLength={200} className="pr-10" /><Button type="button" variant="ghost" size="icon" className="absolute right-0.5 top-1/2 size-8 -translate-y-1/2" aria-label={verSenha ? "Ocultar senha" : "Mostrar senha"} onClick={() => setVerSenha((atual) => !atual)}>{verSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button></div><p className="mt-1 text-xs text-drap-500">Pelo menos 10 caracteres.</p></div>
+        </div> : null}
+        <div className="grid gap-4 sm:grid-cols-2"><div><label className="mb-2 block text-sm font-medium" htmlFor="invite-email">E-mail do usuário</label><Input id="invite-email" readOnly={Boolean(editing)} type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nome@empresa.com.br" /></div><div><label htmlFor="acesso-perfil" className="mb-2 block text-sm font-medium">Perfil</label><Select value={role} onValueChange={(value) => chooseProfile(value as Profile)}><SelectTrigger id="acesso-perfil"><SelectValue /></SelectTrigger><SelectContent>{(modo === "senha" && !editing ? cargosParaSenha : profiles).map((profile) => <SelectItem key={profile} value={profile}>{accessProfileLabels[profile]}</SelectItem>)}</SelectContent></Select></div></div>
+        {editing && <label className="flex items-center gap-3 text-sm"><Checkbox checked={active} onCheckedChange={value => setActive(value === true)} />Acesso ativo nesta empresa</label>}
+        {editing && (perfisQueRecebemDelegacao as readonly string[]).includes(role) && <label className="flex items-start gap-3 rounded-md border border-drap-200 p-3 text-sm"><Checkbox className="mt-0.5" checked={delegar} onCheckedChange={value => setDelegar(value === true)} /><span><span className="font-medium">Pode criar login e senha</span><span className="block text-xs text-drap-500">Cria acessos só para cargos abaixo do dela, com no máximo as áreas que ela mesma tem.</span></span></label>}
+        <div className="overflow-hidden rounded-md border border-drap-200"><div className="grid grid-cols-[1fr_52px_52px] sm:grid-cols-[1fr_88px_88px] bg-drap-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-drap-500"><span>Área</span><span className="text-center">Ver</span><span className="text-center">Editar</span></div>{permissionModules.map((module) => <div key={module} className="grid grid-cols-[1fr_52px_52px] sm:grid-cols-[1fr_88px_88px] items-center border-t border-drap-100 px-4 py-3"><span className="text-sm font-medium text-drap-700">{permissionModuleLabels[module]}{contratado(module) ? null : <span className="block text-xs font-normal text-drap-500">Não contratado pela empresa</span>}</span><span className="flex justify-center"><Checkbox checked={permissions[module].view} disabled={!editing && !podeEntregar(module, "view")} onCheckedChange={(value) => setGrant(module, "view", value === true)} aria-label={`Visualizar ${permissionModuleLabels[module]}`} /></span><span className="flex justify-center"><Checkbox checked={permissions[module].edit} disabled={!editing && !podeEntregar(module, "edit")} onCheckedChange={(value) => setGrant(module, "edit", value === true)} aria-label={`Editar ${permissionModuleLabels[module]}`} /></span></div>)}</div>
+        <Button onClick={() => void createInvite()} disabled={saving || !email.includes("@") || (modo === "senha" && !editing && (nome.trim().length < 2 || senha.length < 10))} className="h-11 w-full rounded-md">{saving ? <LoaderCircle className="animate-spin" /> : <Plus />}{editing ? "Salvar acesso" : modo === "senha" ? "Criar acesso" : "Gerar link de acesso"}</Button>
+      </div>}
+    </DialogContent></Dialog>
   </div>;
 }

@@ -84,6 +84,26 @@ test("leitor da equipe não consulta convites restritos", async () => {
   assert.equal(container.querySelector('.animate-spin'), null);
 });
 
+test("gestor com a ferramenta liberada cria login só para cargos abaixo, sem consultar convites", async () => {
+  let calls=0; globalThis.fetch=async()=>{ calls++; throw new Error("Não deveria consultar"); };
+  await mount(TeamAccessManager,{members:[],canManage:false,canCreateAccounts:true,currentRole:"manager"});
+  assert.equal(calls,0);
+  assert.doesNotMatch(textOf(container), /Convidar por link/);
+  const botao = findByText(container, "Criar login e senha", "button");
+  await act(async () => botao.click()); await settle();
+  const dialog = document.querySelector('[role="dialog"]');
+  assert.ok(dialog.querySelector("#conta-senha"), "pede a senha inicial");
+  assert.match(textOf(dialog), /Colaborador/);
+  assert.doesNotMatch(textOf(dialog.querySelector("#acesso-perfil")), /Gestor/);
+});
+
+test("sem a ferramenta, quem só lê a equipe não vê criação de acesso", async () => {
+  globalThis.fetch=async()=>{ throw new Error("Não deveria consultar"); };
+  await mount(TeamAccessManager,{members:[],canManage:false,currentRole:"manager"});
+  assert.doesNotMatch(textOf(container), /Criar login e senha/);
+  assert.match(textOf(container), /Somente leitura/);
+});
+
 test("minuta distingue desenvolvedora de operadora e não oferece aceite", async () => {
   await mount(ProposedTermsPage, {});
   assert.match(textOf(container), /sem vigência contratual/);

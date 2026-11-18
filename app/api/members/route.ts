@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ApiError, apiRoute, canManageOrganizationAccess, isPlatformSuperAdmin, jsonBody, validationError, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
-import { normalizePermissions, permissionsBeyond, permissionModules, parseStoredPermissions } from "@/lib/permissions";
+import { normalizePermissions, permissionModules, parseStoredPermissions } from "@/lib/permissions";
+import { excedeQuemConcede } from "@/lib/empresa-config";
+import { delegacoesDaEmpresa } from "@/lib/server/empresa-config";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +28,7 @@ export async function GET(request: Request) {
        WHERE organization_id = ?1 AND (active = 1 OR ?2 = 1) AND role != 'superadmin'
        ORDER BY name`,
     ).bind(context.organization.id, canManageOrganizationAccess(context) && new URL(request.url).searchParams.get("includeInactive") === "true" ? 1 : 0).all<MemberRow>();
+    const delegados = await delegacoesDaEmpresa(context.db, context.organization.id);
 
     return Response.json({
       members: result.results.map((member) => ({
@@ -36,6 +39,7 @@ export async function GET(request: Request) {
         permissions: parseStoredPermissions(member.permissions_json, member.role),
         weeklyCapacityMinutes: member.weekly_capacity_minutes,
         active: member.active === 1,
+        canCreateAccounts: delegados.has(member.id),
         updatedAt: member.updated_at,
       })),
     });
@@ -65,7 +69,7 @@ export async function PATCH(request: Request) {
     const permissions = normalizePermissions(data.permissions, data.role);
     if (!permissionModules.some(module => permissions[module].view)) throw new ApiError(400, "empty_permissions", "Selecione ao menos uma área visível.");
     if (context.member.role !== "owner" && !isPlatformSuperAdmin(context) &&
-      (permissionsBeyond(permissions, context.member.permissions).length || permissionsBeyond(parseStoredPermissions(target.permissions_json, target.role), context.member.permissions).length)) {
+      (excedeQuemConcede(permissions, context.member.permissions, context.organization.enabledModules).length || excedeQuemConcede(parseStoredPermissions(target.permissions_json, target.role), context.member.permissions, context.organization.enabledModules).length)) {
       throw new ApiError(403, "permission_beyond_grantor", "Você só pode gerenciar acessos e permissões dentro do seu próprio nível.");
     }
     const results = await context.db.batch([

@@ -2,7 +2,8 @@ import { getDatabase } from "@/db";
 import { ApiError, canManageOrganizationAccess, isPlatformSuperAdmin, type OrganizationContext } from "@/lib/server/backend";
 import { assertPasswordStrength, hashPassword } from "@/lib/server/auth";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
-import { parseStoredPermissions, permissionsBeyond } from "@/lib/permissions";
+import { parseStoredPermissions } from "@/lib/permissions";
+import { excedeQuemConcede } from "@/lib/empresa-config";
 
 // Nova senha por link de uso único.
 //
@@ -36,7 +37,7 @@ export async function createPasswordReset(context: OrganizationContext, memberId
       throw new ApiError(403, "owner_password_reset", "A senha do contratante só pode ser redefinida pelo superadministrador da plataforma.");
     }
     if (context.member.role !== "owner"
-      && permissionsBeyond(parseStoredPermissions(target.permissions_json, target.role), context.member.permissions).length) {
+      && excedeQuemConcede(parseStoredPermissions(target.permissions_json, target.role), context.member.permissions, context.organization.enabledModules).length) {
       throw new ApiError(403, "permission_beyond_grantor", "Você só pode gerar nova senha para acessos dentro do seu próprio nível.");
     }
     const elsewhere = await db.prepare(

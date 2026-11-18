@@ -14,6 +14,8 @@ import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMain
 import { readSuperAdminIdentity, rejectCrossSiteMutation, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
 import { readSessionUser, sessionPredatesPassword } from "@/lib/server/auth";
 import { runtimeEnv } from "@/lib/server/runtime";
+import { modulosDaEmpresa } from "@/lib/server/empresa-config";
+import { aplicarModulosDaEmpresa } from "@/lib/empresa-config";
 
 export { ApiError };
 
@@ -21,7 +23,8 @@ export type OrganizationContext = {
   db: D1Database;
   user: { id: string; email: string; displayName: string };
   member: { id: string; externalUserId: string; role: string; permissions: PermissionSet };
-  organization: { id: string; name: string; slug: string; timezone: string };
+  /** `enabledModules`: o que o superadministrador liberou para a empresa. */
+  organization: { id: string; name: string; slug: string; timezone: string; enabledModules: PermissionModule[] };
   termsAccepted: boolean;
 };
 
@@ -195,8 +198,11 @@ async function superAdminContext(
   identity: AuthenticatedIdentity,
   request: Request,
 ): Promise<OrganizationContext> {
-  const organization = await superAdminOrganization(db, request);
-  const member = await superAdminMember(db, organization.id, identity.email);
+  const found = await superAdminOrganization(db, request);
+  const member = await superAdminMember(db, found.id, identity.email);
+  // O superadministrador continua com tudo, inclusive módulo desligado: é ele quem
+  // configura e dá suporte. A lista vai junto para a tela mostrar o que a empresa tem.
+  const organization = { ...found, enabledModules: await modulosDaEmpresa(db, found.id) };
   return {
     db,
     user: { id: identity.id, email: identity.email, displayName: identity.displayName },
@@ -230,6 +236,10 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
     `SELECT id FROM terms_acceptances WHERE organization_id = ?1 AND terms_version = ?2
      AND (external_user_id = ?3 OR lower(email) = lower(?4)) LIMIT 1`,
   ).bind(membership.organization_id, CURRENT_TERMS_VERSION, identity.id, identity.email).first();
+  // Permissão efetiva = o que o membro recebeu ∩ o que a empresa contratou. Recortar aqui,
+  // no único ponto que monta o contexto, faz toda rota que já confere módulo respeitar o
+  // contrato sem mudar uma linha dela. Vale também para o contratante.
+  const enabledModules = await modulosDaEmpresa(db, membership.organization_id);
   return {
     db,
     user: { id: identity.id, email: identity.email, displayName: membership.member_name || identity.displayName },
@@ -237,13 +247,14 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
       id: membership.member_id,
       externalUserId: membership.external_user_id,
       role: membership.role,
-      permissions: parseStoredPermissions(membership.permissions_json, membership.role),
+      permissions: aplicarModulosDaEmpresa(parseStoredPermissions(membership.permissions_json, membership.role), enabledModules),
     },
     organization: {
       id: membership.organization_id,
       name: membership.organization_name,
       slug: membership.organization_slug,
       timezone: membership.timezone,
+      enabledModules,
     },
     termsAccepted: Boolean(acceptedTerms),
   };

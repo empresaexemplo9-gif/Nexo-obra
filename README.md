@@ -67,6 +67,7 @@ XLSX permite escolher uma aba e conferir a prévia antes de substituir os dados.
 - Superadmin com poder total: cadastra empresas, abre qualquer empresa com leitura e edição em todos os módulos e ignora bloqueio de acesso, assinatura pendente e aceite de termos. Consulte [Superadministrador](docs/SUPERADMIN.md).
 - Convite principal do superadmin para o contratante e convites secundários administrados dentro de cada empresa.
 - Perfis para administrador, gestor, colaborador, parceiro, prestador, financeiro e contabilidade, com matriz de leitura/edição por módulo.
+- Módulos ligados e desligados por empresa pelo superadmin, identidade visual própria de cada empresa (logotipo de imagem ou PDF e cores) e criação de login e senha delegada pelo contratante a gestores. Consulte [Módulos contratados, identidade visual e criação de acessos](#módulos-contratados-identidade-visual-e-criação-de-acessos).
 - Termos de Uso versionados e aceite eletrônico com evidência original preservada. Nova [minuta jurídica para a futura operadora](docs/TERMOS-DRAP-BACKOFFICE-2026-09-20.md) em `/termos/proposta`, sem vigência nem coleta de aceite. A Drap desenvolve para venda à adquirente; não foi identificada como operadora do DRAP Backoffice.
 - Painel do superadmin com indicadores agregados da plataforma e entrada direta em qualquer empresa, registrando a entrada e cada escrita na auditoria daquela empresa.
 - Acesso de administrador de manutenção em `/manutencao`, com credenciais próprias e ambiente empresarial vazio e isolado. O superadmin opera o mesmo ambiente pela sessão da plataforma, com recursos que a manutenção não tem.
@@ -384,6 +385,40 @@ ação mais destrutiva do produto seria a única sem rastro. Por isso existe
 `platform_deletions`, sem chave estrangeira nenhuma, guardando o nome legível de quem
 saiu e quem mandou apagar.
 
+## Módulos contratados, identidade visual e criação de acessos
+
+**Módulos por empresa (superadmin).** Em `/superadmin` → *Assinaturas, parceiros e acessos* →
+empresa → **Módulos contratados**, o superadministrador liga e desliga os módulos da empresa.
+Visão geral e Equipe ficam sempre ligados. A permissão efetiva de cada pessoa — contratante
+incluído — é o que ela recebeu **∩** o que a empresa contratou, calculada em
+`contextFromMembership` (`lib/server/backend.ts`): toda rota que já conferia módulo passa a
+respeitar o contrato sem mudar uma linha. Desligar esconde o módulo do menu e faz a API
+responder `403`; nenhum dado é apagado, e religar devolve tudo. Sem escolha registrada, a
+empresa tem todos os módulos, como antes. Cada alteração fica em `platform_audit_events`
+(`platform.modules_changed`). O superadmin continua enxergando tudo ao abrir a empresa.
+
+**Identidade visual (contratante e administradores).** Item **Identidade visual** no menu.
+A empresa envia o logotipo em PNG, JPEG, WebP, SVG ou o PDF do manual da marca: o navegador
+transforma a primeira página do PDF (e o SVG) em imagem, corta as margens brancas e sugere
+as cores a partir das cores dominantes. São três cores — principal (botões e links), menu e
+faixa de destaque —, aplicadas às variáveis de que toda a interface deriva. Como o texto
+sobre elas é branco, o servidor escurece no mesmo tom a cor clara demais até o contraste de
+4,5:1. O servidor aceita só PNG/JPEG/WebP de até 400 KB, conferidos pelos bytes; o logotipo é
+servido pela própria API, sempre da empresa da sessão.
+
+**Login e senha criados pela empresa.** Em Equipe há duas formas de dar acesso: **Convidar
+por link** (a pessoa escolhe a senha) e **Criar login e senha** (quem cria define a senha
+inicial e entrega). O contratante cria qualquer cargo. Ao gerenciar o acesso de um gestor,
+administrador, financeiro, RH ou contabilidade, o contratante pode marcar **Pode criar login
+e senha**: essa pessoa passa a criar acessos só para cargos abaixo do dela (gestor → colaborador,
+parceiro, prestador) e com no máximo as áreas que ela mesma tem. E-mail que já tem senha na
+plataforma não recebe outra — seria tomar a conta da pessoa; para ele, use o convite. A senha
+nunca entra no registro de auditoria (`member.account_created`).
+
+As três configurações moram em tabelas próprias (`organization_modules`,
+`organization_branding`, `member_delegations`), lidas de forma tolerante: enquanto a migração
+não é aplicada, a plataforma responde como antes delas.
+
 ## Modelo multiempresa
 
 Toda tabela operacional carrega `organization_id`. Nunca aceite o identificador de organização informado apenas pelo cliente. A API deve derivá-lo da sessão autenticada e verificar a associação do usuário no servidor.
@@ -403,7 +438,7 @@ Papéis mínimos recomendados:
 - `member`: itens atribuídos e módulos liberados;
 - `partner`: acesso limitado a projetos específicos;
 - `service_provider`: execução operacional com escopo definido pelo contratante;
-- `finance`: acesso financeiro configurável para a equipe responsável;
+- `finance`: nasce com todos os módulos liberados (leitura e edição); o contratante ajusta a matriz como a de qualquer acesso;
 - `accounting`: prestação de contas com leitura ou edição explicitamente liberada;
 - `client`: portal externo somente para leitura/aprovação/comentário.
 
