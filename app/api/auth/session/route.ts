@@ -3,11 +3,15 @@ import { z } from "zod";
 import { ApiError, apiRoute, jsonBody, validationError } from "@/lib/server/backend";
 import { clearSessionCookie, createSessionCookie, readSessionUser, sessionPredatesPassword, signIn } from "@/lib/server/auth";
 import { clearSuperAdminFailures, isSuperAdminEmail, rejectCrossSiteMutation, signInSuperAdmin } from "@/lib/server/superadmin";
+import { ensureOikosAccess, isOikosAdminLogin } from "@/lib/server/oikos";
+import { getDatabase } from "@/db";
 
 export const dynamic = "force-dynamic";
 
 const credentialsSchema = z.object({
-  email: z.string().trim().email().max(160),
+  // O login do espaço Oikos ("oikos@admin") não tem domínio com ponto; é o único aceito
+  // fora do formato de e-mail.
+  email: z.string().trim().max(160).refine((value) => isOikosAdminLogin(value) || z.string().email().safeParse(value).success, "E-mail inválido."),
   password: z.string().min(1).max(200),
 }).strict();
 
@@ -44,6 +48,8 @@ export async function POST(request: Request) {
         if (!(error instanceof ApiError && error.code === "invalid_superadmin_credentials")) throw error;
       }
     }
+    // A conta do espaço Oikos nasce na primeira tentativa; daí em diante é conta comum.
+    if (isOikosAdminLogin(email)) await ensureOikosAccess(getDatabase());
     const user = await signIn(request, email, password);
     if (superadmin) await clearSuperAdminFailures(request);
     const session = await createSessionCookie(user);

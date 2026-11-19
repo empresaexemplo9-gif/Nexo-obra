@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandLogo } from "@/components/brand-logo";
+import { aplicarMarca, type Marca } from "@/lib/marca";
 import { ProjectEditor } from "@/components/project-editor";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -39,6 +40,7 @@ import type { PermissionModule, PermissionSet } from "@/lib/permissions";
 
 type SessionData = {
   authenticated: boolean;
+  marca?: Marca;
   signInPath?: string;
   member?: { role: string; permissions: PermissionSet };
   terms?: { accepted: boolean };
@@ -166,6 +168,7 @@ export function ProjectHub({ projectId }: { projectId: string }) {
     setError("");
     try {
       const session = await readJson<SessionData>("/api/session");
+      aplicarMarca(session.authenticated ? session.marca ?? "drap" : "drap");
       if (!session.authenticated || !session.terms?.accepted || !can(session, "projects")) {
         setState((current) => ({ ...current, session }));
         return;
