@@ -1,0 +1,712 @@
+/*
+ * Tema do espaço Oikos — identidade H.OIKOS · Ecossistema para arquitetos.
+ *
+ * É a aparência que esta plataforma tinha antes de virar DRAP Backoffice, devolvida só à
+ * empresa que contratou com a marca própria dela. Vale apenas com `html[data-marca="oikos"]`,
+ * atributo que a interface aplica a partir da marca que o servidor devolve na sessão
+ * (lib/marca.ts). Sem o atributo, nada deste arquivo se aplica e a plataforma fica como é.
+ *
+ * Fonte: app/globals.css, app/hoikos-polish.css e app/hoikos-workspaces.css do commit
+ * anterior ao rebranding (4e0b7a1^), com as classes renomeadas para as atuais (drap-*).
+ * Ficaram de fora as larguras máximas da área de trabalho: a página continua ocupando a
+ * largura toda, como pede a regra de interface.
+ */
+
+/* Paleta do guia oficial (GUIA DA IDENTIDADE VISUAL - H.OIKOS). */
+:root[data-marca="oikos"] {
+  --hoikos-black: #000000;
+  --hoikos-white: #FFFFFF;
+  --hoikos-earth: #38301B;
+  --hoikos-stone: #B5B19E;
+  --hoikos-paper: #F7F7F0;
+  --hoikos-soil: #1C190F;
+  --hoikos-linen: #F4F2E9;
+  --hoikos-gold: #846100;
+
+  --background: var(--hoikos-white);
+  --foreground: var(--hoikos-black);
+  --card: var(--hoikos-white);
+  --card-foreground: var(--hoikos-earth);
+  --popover: var(--hoikos-white);
+  --popover-foreground: var(--hoikos-earth);
+  --primary: var(--hoikos-earth);
+  --primary-foreground: var(--hoikos-paper);
+  --secondary: color-mix(in srgb, var(--hoikos-stone) 25%, var(--hoikos-paper));
+  --secondary-foreground: var(--hoikos-earth);
+  --muted: var(--secondary);
+  --muted-foreground: color-mix(in srgb, var(--hoikos-earth) 75%, var(--hoikos-paper));
+  --accent: color-mix(in srgb, var(--hoikos-stone) 35%, var(--hoikos-paper));
+  --accent-foreground: var(--hoikos-earth);
+  --destructive: var(--hoikos-black);
+  --border: color-mix(in srgb, var(--hoikos-stone) 45%, var(--hoikos-paper));
+  --input: var(--hoikos-stone);
+  --ring: var(--hoikos-earth);
+  --chart-1: var(--hoikos-earth);
+  --chart-2: var(--hoikos-gold);
+  --chart-3: var(--hoikos-stone);
+  --chart-4: var(--muted-foreground);
+  --chart-5: var(--secondary);
+  --sidebar: var(--hoikos-soil);
+  --sidebar-foreground: color-mix(in srgb, var(--hoikos-paper) 88%, var(--hoikos-stone));
+  --sidebar-primary: var(--hoikos-earth);
+  --sidebar-primary-foreground: var(--hoikos-paper);
+  --sidebar-accent: color-mix(in srgb, var(--hoikos-earth) 70%, var(--hoikos-soil));
+  --sidebar-accent-foreground: var(--hoikos-paper);
+  --sidebar-border: color-mix(in srgb, var(--hoikos-stone) 22%, var(--hoikos-soil));
+  --sidebar-ring: var(--hoikos-paper);
+
+  /* As telas atuais usam as classes drap-*; elas leem estas cores. Trocar a cor de base
+     faz cada classe cair no tom equivalente da H.OIKOS sem tocar em componente. */
+  --drap-deep: var(--hoikos-soil);
+  --drap-band: var(--hoikos-earth);
+  --drap-accent: var(--hoikos-earth);
+  --drap-support: var(--hoikos-earth);
+  --drap-graphite: color-mix(in srgb, var(--hoikos-earth) 60%, var(--hoikos-stone));
+  --drap-mist: var(--hoikos-stone);
+  --drap-fog: color-mix(in srgb, var(--hoikos-stone) 70%, var(--hoikos-paper));
+  --drap-stone: var(--hoikos-linen);
+  --drap-paper: var(--hoikos-paper);
+  --drap-ink: var(--hoikos-black);
+  --drap-white: var(--hoikos-white);
+  --drap-warning: var(--hoikos-gold);
+  --drap-info: var(--hoikos-earth);
+}
+
+/* Logo: as duas artes vêm no HTML; aparece a da marca do documento. */
+:root:not([data-marca="oikos"]) .marca-oikos { display: none !important; }
+:root[data-marca="oikos"] .marca-drap { display: none !important; }
+:root[data-marca="oikos"] .drap-brand { object-fit: contain; }
+:root[data-marca="oikos"] :where(a, button, [role="button"], input, select, textarea):focus-visible { outline-color: var(--hoikos-gold); }
+
+/* --- globals.css (identidade H.OIKOS) --- */
+:root[data-marca="oikos"] ::selection { background: var(--hoikos-stone); color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-shell, :root[data-marca="oikos"] .nexo-canvas { background: var(--hoikos-linen); }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="sidebar"] { background: var(--hoikos-earth); box-shadow: none; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="group-label"] {
+  color: var(--hoikos-stone);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+:root[data-marca="oikos"] .nexo-header { background: var(--hoikos-paper); border-color: var(--border); box-shadow: none; }
+:root[data-marca="oikos"] .workspace-card {
+  border-color: var(--border);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+  transition: box-shadow 140ms ease, border-color 140ms ease;
+}
+:root[data-marca="oikos"] .workspace-card:hover {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 75%, var(--hoikos-paper));
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--hoikos-soil) 9%, transparent);
+}
+:root[data-marca="oikos"] :where(a, button, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid var(--hoikos-gold);
+  outline-offset: 2px;
+}
+:root[data-marca="oikos"] .bg-primary, :root[data-marca="oikos"] .nexo-sidebar, :root[data-marca="oikos"] main.bg-drap-950 {
+  --muted-foreground: var(--hoikos-stone);
+  --ring: var(--hoikos-paper);
+}
+/* --- hoikos-polish.css (identidade H.OIKOS) --- */
+:root[data-marca="oikos"] body {
+  background: var(--hoikos-white);
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="sidebar"] {
+  background: var(--hoikos-soil);
+  border-color: var(--sidebar-border);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--hoikos-stone) 10%, transparent);
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="header"], :root[data-marca="oikos"] .nexo-sidebar [data-sidebar="footer"] {
+  position: relative;
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="header"]::after, :root[data-marca="oikos"] .nexo-sidebar [data-sidebar="footer"]::before {
+  content: "";
+  position: absolute;
+  right: 0.75rem;
+  left: 0.75rem;
+  height: 1px;
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="header"]::after { bottom: 0; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="footer"]::before { top: 0; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"] {
+  border: 1px solid transparent;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: color-mix(in srgb, var(--hoikos-earth) 76%, var(--hoikos-soil));
+  border-color: color-mix(in srgb, var(--hoikos-gold) 46%, var(--hoikos-soil));
+  color: var(--hoikos-paper);
+  box-shadow:
+    inset 2px 0 0 var(--hoikos-gold),
+    0 1px 0 color-mix(in srgb, var(--hoikos-black) 18%, transparent);
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"][data-active="true"] svg {
+  color: color-mix(in srgb, var(--hoikos-gold) 74%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="group-label"] {
+  color: color-mix(in srgb, var(--hoikos-stone) 86%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="separator"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+}
+@media (hover: hover) {
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"]:not([data-active="true"]):hover {
+    background: color-mix(in srgb, var(--hoikos-earth) 46%, var(--hoikos-soil));
+    border-color: color-mix(in srgb, var(--hoikos-stone) 16%, transparent);
+    color: var(--hoikos-paper);
+    transform: translateX(1px);
+  }
+}
+:root[data-marca="oikos"] .nexo-header {
+  background: color-mix(in srgb, var(--hoikos-paper) 96%, var(--hoikos-linen));
+  border-color: color-mix(in srgb, var(--hoikos-stone) 34%, var(--hoikos-paper));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+  backdrop-filter: blur(14px);
+}
+:root[data-marca="oikos"] .nexo-canvas {
+  background: var(--hoikos-white);
+}
+:root[data-marca="oikos"] [data-slot="card"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 5%, transparent),
+    0 8px 24px color-mix(in srgb, var(--hoikos-soil) 3%, transparent);
+}
+:root[data-marca="oikos"] .workspace-card {
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 6%, transparent),
+    0 10px 28px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+@media (hover: hover) {
+:root[data-marca="oikos"] .workspace-card:hover {
+    border-color: color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper));
+    box-shadow:
+      0 2px 4px color-mix(in srgb, var(--hoikos-soil) 7%, transparent),
+      0 14px 34px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+  }
+}
+:root[data-marca="oikos"] [data-slot="input"], :root[data-marca="oikos"] [data-slot="textarea"], :root[data-marca="oikos"] [data-slot="select-trigger"], :root[data-marca="oikos"] [data-slot="native-select"], :root[data-marca="oikos"] [data-slot="input-group"] {
+  background: var(--hoikos-paper);
+  border-color: color-mix(in srgb, var(--hoikos-stone) 62%, var(--hoikos-paper));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--hoikos-paper) 74%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="input"]:hover:not(:disabled), :root[data-marca="oikos"] [data-slot="textarea"]:hover:not(:disabled), :root[data-marca="oikos"] [data-slot="select-trigger"]:hover:not(:disabled), :root[data-marca="oikos"] [data-slot="native-select"]:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 84%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="input"]:focus-visible, :root[data-marca="oikos"] [data-slot="textarea"]:focus-visible, :root[data-marca="oikos"] [data-slot="select-trigger"]:focus-visible, :root[data-marca="oikos"] [data-slot="native-select"]:focus-visible, :root[data-marca="oikos"] [data-slot="input-group"]:focus-within {
+  border-color: var(--hoikos-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--hoikos-gold) 12%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="label"], :root[data-marca="oikos"] [data-slot="field-label"] {
+  color: var(--hoikos-earth);
+  font-weight: 550;
+}
+:root[data-marca="oikos"] [data-slot="table-container"] {
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  border-radius: calc(var(--radius) + 6px);
+  background: var(--hoikos-paper);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="table"] {
+  background: var(--hoikos-paper);
+}
+:root[data-marca="oikos"] [data-slot="table-header"] {
+  background: color-mix(in srgb, var(--hoikos-linen) 80%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="table-head"] {
+  color: color-mix(in srgb, var(--hoikos-earth) 82%, var(--hoikos-stone));
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.085em;
+  text-transform: uppercase;
+}
+:root[data-marca="oikos"] [data-slot="table-row"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 32%, var(--hoikos-paper));
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+@media (hover: hover) {
+:root[data-marca="oikos"] [data-slot="table-body"] [data-slot="table-row"]:hover {
+    background: color-mix(in srgb, var(--hoikos-linen) 68%, var(--hoikos-paper));
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--hoikos-gold) 72%, var(--hoikos-paper));
+  }
+}
+:root[data-marca="oikos"] [data-slot="table-footer"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 16%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="tabs-list"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 42%, var(--hoikos-paper));
+  background: color-mix(in srgb, var(--hoikos-stone) 18%, var(--hoikos-paper));
+  box-shadow: inset 0 1px 1px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="tabs-trigger"] {
+  color: color-mix(in srgb, var(--hoikos-earth) 72%, var(--hoikos-stone));
+  transition: background-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+:root[data-marca="oikos"] [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--hoikos-paper);
+  color: var(--hoikos-soil);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--hoikos-soil) 8%, transparent),
+    inset 0 -2px 0 color-mix(in srgb, var(--hoikos-gold) 72%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="select-content"], :root[data-marca="oikos"] [data-slot="popover-content"], :root[data-marca="oikos"] [data-slot="dropdown-menu-content"], :root[data-marca="oikos"] [data-slot="context-menu-content"], :root[data-marca="oikos"] [data-slot="hover-card-content"], :root[data-marca="oikos"] [data-slot="command"], :root[data-marca="oikos"] [data-slot="dialog-content"], :root[data-marca="oikos"] [data-slot="alert-dialog-content"], :root[data-marca="oikos"] [data-slot="sheet-content"], :root[data-marca="oikos"] [data-slot="drawer-content"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 48%, var(--hoikos-paper));
+  background: var(--hoikos-paper);
+  box-shadow:
+    0 10px 34px color-mix(in srgb, var(--hoikos-soil) 10%, transparent),
+    0 2px 8px color-mix(in srgb, var(--hoikos-soil) 6%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="dropdown-menu-item"], :root[data-marca="oikos"] [data-slot="context-menu-item"], :root[data-marca="oikos"] [data-slot="select-item"], :root[data-marca="oikos"] [data-slot="command-item"] {
+  transition: background-color 100ms ease, color 100ms ease;
+}
+:root[data-marca="oikos"] [data-slot="dropdown-menu-item"]:focus, :root[data-marca="oikos"] [data-slot="context-menu-item"]:focus, :root[data-marca="oikos"] [data-slot="select-item"]:focus, :root[data-marca="oikos"] [data-slot="command-item"][data-selected="true"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 24%, var(--hoikos-paper));
+  color: var(--hoikos-soil);
+}
+:root[data-marca="oikos"] [data-slot="badge"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 54%, var(--hoikos-paper));
+  letter-spacing: 0.025em;
+  font-weight: 650;
+}
+:root[data-marca="oikos"] [data-slot="checkbox"], :root[data-marca="oikos"] [data-slot="radio-group-item"], :root[data-marca="oikos"] [data-slot="switch"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 68%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="checkbox"][data-state="checked"] {
+  border-color: var(--hoikos-gold);
+  background: var(--hoikos-gold);
+  color: var(--hoikos-paper);
+}
+:root[data-marca="oikos"] [data-slot="radio-group-item"][data-state="checked"] {
+  border-color: var(--hoikos-gold);
+  color: var(--hoikos-gold);
+}
+:root[data-marca="oikos"] [data-slot="switch"][data-state="checked"] {
+  background: var(--hoikos-gold);
+}
+:root[data-marca="oikos"] [data-slot="progress"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 28%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="progress-indicator"] {
+  background: var(--hoikos-gold);
+}
+:root[data-marca="oikos"] [data-slot="slider-track"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 34%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="slider-range"] {
+  background: var(--hoikos-gold);
+}
+:root[data-marca="oikos"] [data-slot="slider-thumb"] {
+  border-color: var(--hoikos-gold);
+  background: var(--hoikos-paper);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--hoikos-soil) 14%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="alert"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 46%, var(--hoikos-paper));
+  background: color-mix(in srgb, var(--hoikos-paper) 94%, var(--hoikos-linen));
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="empty"] {
+  border: 1px dashed color-mix(in srgb, var(--hoikos-stone) 66%, var(--hoikos-paper));
+  border-radius: calc(var(--radius) + 8px);
+  background: color-mix(in srgb, var(--hoikos-paper) 68%, var(--hoikos-linen));
+}
+:root[data-marca="oikos"] [data-slot="avatar"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 54%, var(--hoikos-paper));
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--hoikos-soil) 8%, transparent);
+}
+:root[data-marca="oikos"] [data-slot="skeleton"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 26%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="separator"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 36%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="accordion-item"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 38%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="accordion-trigger"] {
+  transition: color 120ms ease, background-color 120ms ease;
+}
+@media (hover: hover) {
+:root[data-marca="oikos"] [data-slot="accordion-trigger"]:hover {
+    color: var(--hoikos-gold);
+  }
+}
+:root[data-marca="oikos"] [data-slot="tooltip-content"] {
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 18%, var(--hoikos-soil));
+  background: var(--hoikos-soil);
+  color: var(--hoikos-paper);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--hoikos-black) 18%, transparent);
+}
+:root[data-marca="oikos"] * {
+  scrollbar-color:
+    color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper))
+    color-mix(in srgb, var(--hoikos-linen) 82%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] [data-slot="scroll-area-thumb"] {
+  background: color-mix(in srgb, var(--hoikos-stone) 72%, var(--hoikos-paper));
+}
+:root[data-marca="oikos"] .nexo-header {
+  background: var(--hoikos-white);
+  border-bottom-color: var(--border);
+  box-shadow: 0 3px 14px color-mix(in srgb, var(--hoikos-soil) 4%, transparent);
+}
+:root[data-marca="oikos"] .nexo-canvas { padding: clamp(1.25rem, 3vw, 3rem); }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="header"] { padding: 1.5rem 1.1rem 1.25rem; gap: 1.5rem; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="sidebar"] { background: var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="content"] { gap: 0.5rem; scrollbar-width: thin; scrollbar-color: var(--hoikos-stone) var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="group"] { padding: 0.6rem 0.75rem; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="group-label"] { margin-bottom: 0.4rem; font-size: 0.625rem; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"] { min-height: 2.5rem; border-radius: 4px; font-size: 0.8125rem; }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: var(--hoikos-linen);
+  color: var(--hoikos-earth);
+  border-color: var(--hoikos-linen);
+  box-shadow: inset 3px 0 0 var(--hoikos-gold), 0 3px 8px color-mix(in srgb, var(--hoikos-soil) 18%, transparent);
+}
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"][data-active="true"] svg { color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="footer"] { background: var(--hoikos-soil); padding: 0.8rem; }
+:root[data-marca="oikos"] .nexo-sidebar .drap-company-select, :root[data-marca="oikos"] [data-mobile="true"] .drap-company-select {
+  background: var(--hoikos-soil);
+  color: var(--hoikos-paper);
+  border-color: color-mix(in srgb, var(--hoikos-stone) 45%, var(--hoikos-earth));
+  box-shadow: none;
+  font-size: 0.8125rem;
+}
+:root[data-marca="oikos"] .drap-company-select [data-slot="select-value"] { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+:root[data-marca="oikos"] :is(.bg-primary, main.bg-drap-950) :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"]) {
+  background: var(--hoikos-soil);
+  color: var(--hoikos-paper);
+  border-color: var(--hoikos-stone);
+  box-shadow: none;
+}
+:root[data-marca="oikos"] :is(.bg-primary, main.bg-drap-950) :is([data-slot="label"], [data-slot="field-label"]) { color: var(--hoikos-paper); }
+:root[data-marca="oikos"] [data-mobile="true"][data-sidebar="sidebar"] {
+  background: var(--hoikos-earth);
+  color: var(--hoikos-paper);
+  --muted-foreground: var(--hoikos-stone);
+}
+:root[data-marca="oikos"] [data-mobile="true"] [data-sidebar="menu-button"][data-active="true"] { background: var(--hoikos-linen); color: var(--hoikos-earth); box-shadow: inset 3px 0 0 var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-page-intro { padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+:root[data-marca="oikos"] .drap-page-intro .eyebrow { color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-page-intro h1 { font-size: clamp(2.25rem, 3vw, 3.25rem); color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-overview { display: grid; gap: 2rem; }
+:root[data-marca="oikos"] .drap-overview-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 1.5rem; }
+:root[data-marca="oikos"] .drap-overview-heading .eyebrow { color: var(--hoikos-gold); margin-bottom: 0.75rem; }
+:root[data-marca="oikos"] .drap-overview-heading h1 { font-size: clamp(2.5rem, 3.5vw, 3.75rem); color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-overview-heading h1 + p { margin-top: 0.6rem; font-size: 0.875rem; color: var(--muted-foreground); }
+:root[data-marca="oikos"] .drap-company-context { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.8rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.75rem; color: var(--hoikos-earth); max-width: 22rem; overflow-wrap: anywhere; }
+:root[data-marca="oikos"] .drap-company-context svg { flex-shrink: 0; color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-focus {
+  display: flex; align-items: center; justify-content: space-between; gap: 2rem;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+  background: var(--hoikos-earth); color: var(--hoikos-paper);
+  border: 1px solid var(--hoikos-soil); border-left: 4px solid var(--hoikos-gold); border-radius: 4px;
+  box-shadow: 0 5px 0 var(--hoikos-linen), 0 14px 28px color-mix(in srgb, var(--hoikos-soil) 12%, transparent);
+}
+:root[data-marca="oikos"] .drap-focus-copy { max-width: 44rem; }
+:root[data-marca="oikos"] .drap-focus .eyebrow { color: var(--hoikos-stone); font-size: 0.625rem; }
+:root[data-marca="oikos"] .drap-focus h2 { margin: 0.8rem 0; font-size: clamp(1.875rem, 2.5vw, 2.8rem); text-wrap: balance; }
+:root[data-marca="oikos"] .drap-focus h2 + p { color: var(--hoikos-paper); opacity: 0.8; max-width: 37rem; font-size: 0.875rem; line-height: 1.65; }
+:root[data-marca="oikos"] .drap-focus-action { display: flex; flex-direction: column; align-items: flex-end; gap: 1rem; flex-shrink: 0; }
+:root[data-marca="oikos"] .drap-focus-action [data-slot="button"] { background: var(--hoikos-paper); color: var(--hoikos-earth); min-height: 2.75rem; padding: 0.75rem 1.15rem; box-shadow: 0 3px 8px color-mix(in srgb, var(--hoikos-black) 15%, transparent); }
+:root[data-marca="oikos"] .drap-focus-action [data-slot="button"]:hover { background: var(--hoikos-white); }
+:root[data-marca="oikos"] .drap-focus-action > span { font-size: 0.625rem; color: var(--hoikos-stone); letter-spacing: 0.06em; }
+:root[data-marca="oikos"] .drap-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); border: 1px solid var(--border); border-radius: 4px; background: var(--hoikos-white); box-shadow: 0 4px 14px color-mix(in srgb, var(--hoikos-soil) 5%, transparent); overflow: hidden; }
+:root[data-marca="oikos"] .drap-metric { padding: 1.4rem 1.6rem; border-left: 1px solid var(--border); }
+:root[data-marca="oikos"] .drap-metric:first-child { border-left: 0; }
+:root[data-marca="oikos"] .drap-metric-label { display: flex; align-items: center; gap: 0.6rem; color: var(--muted-foreground); font-size: 0.8125rem; }
+:root[data-marca="oikos"] .drap-metric-label svg { color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-metric-value { font-size: 2.5rem; line-height: 1.2; font-weight: 400; margin: 0.75rem 0 0.4rem; color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-metric-detail { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; color: var(--muted-foreground); }
+:root[data-marca="oikos"] .drap-metric[data-attention] { background: var(--hoikos-linen); box-shadow: inset 0 3px 0 var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-metric[data-attention] .drap-metric-detail { color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.15rem; }
+:root[data-marca="oikos"] .drap-section-heading h2 { font-size: clamp(1.6rem, 2vw, 2rem); color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-section-heading .eyebrow { color: var(--hoikos-gold); font-size: 0.6rem; margin-bottom: 0.5rem; }
+:root[data-marca="oikos"] .drap-section-heading > span { color: var(--muted-foreground); font-size: 0.75rem; }
+:root[data-marca="oikos"] .drap-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
+:root[data-marca="oikos"] .drap-step { padding: 1.35rem 1.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--hoikos-linen); box-shadow: 0 2px 0 color-mix(in srgb, var(--hoikos-stone) 25%, transparent); transition: box-shadow 160ms ease, border-color 160ms ease; }
+:root[data-marca="oikos"] .drap-step:hover { border-color: var(--hoikos-stone); box-shadow: 0 6px 18px color-mix(in srgb, var(--hoikos-soil) 7%, transparent); }
+:root[data-marca="oikos"] .drap-step-top { display: flex; justify-content: space-between; align-items: center; color: var(--hoikos-gold); margin-bottom: 1rem; }
+:root[data-marca="oikos"] .drap-step-top > span { font-size: 0.75rem; letter-spacing: 0.12em; border-bottom: 1px solid var(--hoikos-gold); padding-bottom: 0.35rem; }
+:root[data-marca="oikos"] .drap-step h3 { font-size: 1rem; font-weight: 500; color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-step > p { margin-top: 0.35rem; font-size: 0.8125rem; line-height: 1.5; color: var(--muted-foreground); }
+:root[data-marca="oikos"] .drap-step [data-slot="button"] { padding: 0; margin-top: 1rem; color: var(--hoikos-gold); font-size: 0.8125rem; }
+:root[data-marca="oikos"] .drap-overview-columns { display: grid; grid-template-columns: 1.15fr 1fr; gap: 1.5rem; }
+:root[data-marca="oikos"] .drap-panel { min-width: 0; padding: 1.5rem; border: 1px solid var(--border); border-top: 2px solid var(--hoikos-earth); border-radius: 4px; box-shadow: 0 5px 18px color-mix(in srgb, var(--hoikos-soil) 5%, transparent); }
+:root[data-marca="oikos"] .drap-panel .drap-section-heading { border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 0; }
+:root[data-marca="oikos"] .drap-panel [data-slot="button"] { padding: 0; font-size: 0.75rem; color: var(--hoikos-gold); white-space: nowrap; }
+:root[data-marca="oikos"] .drap-panel-empty { min-height: 8rem; display: flex; align-items: center; gap: 1.1rem; padding: 1.5rem 0 0.5rem; }
+:root[data-marca="oikos"] .drap-panel-empty > svg { color: var(--hoikos-gold); flex-shrink: 0; width: 2.5rem; height: 2.5rem; stroke-width: 1; }
+:root[data-marca="oikos"] .drap-panel-empty h3 { font-size: 0.875rem; color: var(--hoikos-earth); font-weight: 500; }
+:root[data-marca="oikos"] .drap-panel-empty p { font-size: 0.8125rem; line-height: 1.6; color: var(--muted-foreground); max-width: 22rem; margin-top: 0.4rem; }
+:root[data-marca="oikos"] .drap-task-row { display: flex; align-items: center; gap: 0.7rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+:root[data-marca="oikos"] .drap-task-row:last-child { border-bottom: 0; }
+:root[data-marca="oikos"] .drap-task-check { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border: 1px solid var(--hoikos-stone); border-radius: 50%; color: transparent; flex-shrink: 0; }
+:root[data-marca="oikos"] .drap-task-check:hover:not(:disabled) { color: var(--hoikos-gold); border-color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-task-check:disabled { cursor: not-allowed; opacity: 0.5; }
+:root[data-marca="oikos"] .drap-project-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.7rem; padding: 1rem 0; border-bottom: 1px solid var(--border); }
+:root[data-marca="oikos"] .drap-project-row:last-child { border-bottom: 0; }
+:root[data-marca="oikos"] .drap-project-row h3 { font-size: 0.95rem; font-weight: 500; color: var(--hoikos-earth); overflow-wrap: anywhere; }
+:root[data-marca="oikos"] .drap-project-row > svg { color: var(--hoikos-gold); margin-top: 0.4rem; }
+:root[data-marca="oikos"] .drap-project-row:hover h3 { color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-project-progress { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.75rem; font-size: 0.75rem; color: var(--muted-foreground); }
+:root[data-marca="oikos"] .drap-project-progress [data-slot="progress"] { height: 4px; }
+@media (max-width: 1100px) {
+:root[data-marca="oikos"] .drap-focus { align-items: flex-start; flex-direction: column; gap: 1.2rem; }
+:root[data-marca="oikos"] .drap-focus-action { align-items: flex-start; }
+:root[data-marca="oikos"] .drap-focus-action > span { display: none; }
+:root[data-marca="oikos"] .drap-overview-columns { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+:root[data-marca="oikos"] .drap-overview { gap: 1.5rem; }
+:root[data-marca="oikos"] .drap-overview-heading { align-items: flex-start; flex-direction: column; gap: 0.9rem; }
+:root[data-marca="oikos"] .drap-company-context { font-size: 0.7rem; }
+:root[data-marca="oikos"] .drap-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:root[data-marca="oikos"] .drap-metric { padding: 1rem; border-bottom: 1px solid var(--border); }
+:root[data-marca="oikos"] .drap-metric:nth-child(odd) { border-left: 0; }
+:root[data-marca="oikos"] .drap-metric-label { font-size: 0.75rem; gap: 0.35rem; }
+:root[data-marca="oikos"] .drap-metric-value { font-size: 2rem; }
+:root[data-marca="oikos"] .drap-steps { grid-template-columns: 1fr; }
+:root[data-marca="oikos"] .drap-section-heading > span { display: none; }
+:root[data-marca="oikos"] .drap-panel { padding: 1.1rem; }
+:root[data-marca="oikos"] .drap-panel .drap-section-heading { align-items: flex-start; flex-wrap: wrap; gap: 0.4rem; }
+:root[data-marca="oikos"] .nexo-header { gap: 0.5rem; padding-inline: 0.75rem; }
+:root[data-marca="oikos"] .nexo-header > [data-slot="badge"] { display: none; }
+:root[data-marca="oikos"] .nexo-header [data-slot="input"] { font-size: 0.75rem; min-width: 0; }
+:root[data-marca="oikos"] .nexo-header > div { min-width: 0; }
+}
+@keyframes oikos-surface-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+:root[data-marca="oikos"] .nexo-canvas > div {
+  animation: oikos-surface-enter 180ms ease-out both;
+}
+@media (max-width: 640px) {
+:root[data-marca="oikos"] .nexo-header {
+    min-height: 4rem;
+    backdrop-filter: none;
+  }
+:root[data-marca="oikos"] [data-slot="card"] {
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--hoikos-soil) 5%, transparent);
+  }
+:root[data-marca="oikos"] [data-slot="dialog-content"], :root[data-marca="oikos"] [data-slot="alert-dialog-content"] {
+    max-width: calc(100vw - 1.5rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+:root[data-marca="oikos"] .nexo-canvas > div {
+    animation: none !important;
+  }
+:root[data-marca="oikos"] .nexo-sidebar [data-sidebar="menu-button"], :root[data-marca="oikos"] [data-slot="table-row"], :root[data-marca="oikos"] [data-slot="tabs-trigger"], :root[data-marca="oikos"] [data-slot="dropdown-menu-item"], :root[data-marca="oikos"] [data-slot="context-menu-item"], :root[data-marca="oikos"] [data-slot="select-item"], :root[data-marca="oikos"] [data-slot="command-item"] {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+/* --- hoikos-workspaces.css (identidade H.OIKOS) --- */
+:root[data-marca="oikos"] .nexo-canvas { background: var(--hoikos-paper); }
+:root[data-marca="oikos"] .drap-module-heading {
+  position: relative;
+  padding: clamp(1.25rem, 2.5vw, 2.5rem);
+  border: 1px solid var(--hoikos-stone);
+  border-left: 4px solid var(--hoikos-gold);
+  border-radius: 12px;
+  background: var(--hoikos-linen);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--hoikos-earth) 5%, transparent);
+}
+:root[data-marca="oikos"] .drap-module-heading .eyebrow { color: var(--hoikos-gold); letter-spacing: .2em; }
+:root[data-marca="oikos"] .drap-module-heading .display-heading { font-size: clamp(2.25rem, 3.2vw, 3.5rem); line-height: 1.12; }
+:root[data-marca="oikos"] .drap-module-heading > div:first-child > p:last-child { max-width: 66ch; line-height: 1.6; }
+:root[data-marca="oikos"] .drap-module-heading > div:last-child { flex-shrink: 0; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card"] {
+  border-color: color-mix(in srgb, var(--hoikos-stone) 55%, var(--hoikos-white));
+  border-radius: 12px;
+  box-shadow: 0 2px 3px color-mix(in srgb, var(--hoikos-earth) 3%, transparent), 0 10px 30px color-mix(in srgb, var(--hoikos-earth) 5%, transparent);
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card-header"] {
+  position: relative;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--hoikos-stone) 35%, var(--hoikos-white));
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card-title"] { color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-list"][data-orientation="horizontal"], :root[data-marca="oikos"] .drap-finance [data-slot="tabs-list"] {
+  width: 100%; height: auto; min-height: 3.5rem; padding: .4rem;
+  justify-content: flex-start; gap: .35rem;
+  border: 1px solid color-mix(in srgb, var(--hoikos-stone) 55%, var(--hoikos-white));
+  border-radius: 10px; background: var(--hoikos-white);
+  overflow-x: auto;
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-list"] > [data-slot="tabs-trigger"] {
+  flex: 0 0 auto; height: 2.6rem; padding-inline: 1.25rem; border-radius: 6px;
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-trigger"][data-state="active"] {
+  background: var(--hoikos-earth); color: var(--hoikos-white);
+  border-color: var(--hoikos-earth); box-shadow: inset 0 -3px 0 var(--hoikos-gold);
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-trigger"][data-state="active"] svg { color: var(--hoikos-paper); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty"] {
+  min-height: 13rem; padding: clamp(1.5rem, 3vw, 3rem);
+  background: var(--hoikos-white); border-style: solid;
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-header"] { max-width: 34rem; gap: .65rem; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-icon"][data-variant="icon"] {
+  width: 3.5rem; height: 3.5rem; margin-bottom: .5rem;
+  border: 1px solid var(--hoikos-stone); border-radius: 12px;
+  background: var(--hoikos-linen); color: var(--hoikos-gold);
+  box-shadow: 0 4px 0 var(--hoikos-paper);
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-title"] { font-size: 1.1rem; color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card"] [data-slot="empty"] { border: 0; }
+@media (min-width: 768px) {
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty"]:has([data-slot="empty-icon"]) { flex-direction: row; justify-content: flex-start; text-align: left; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-header"]:has([data-slot="empty-icon"]) { display: grid; grid-template-columns: 3.5rem 1fr; column-gap: 1.5rem; max-width: 42rem; text-align: left; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-icon"] { grid-row: 1 / 3; margin: 0; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-content"] { margin-left: auto; width: auto; }
+}
+:root[data-marca="oikos"] .nexo-canvas [data-slot="table-head"] { background: var(--hoikos-linen); color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="table-cell"] { padding-block: 1rem; }
+:root[data-marca="oikos"] .drap-finance-metric { position: relative; overflow: hidden; min-height: 150px; }
+:root[data-marca="oikos"] .drap-finance-metric::after { content: ""; position: absolute; bottom: 0; left: 1.25rem; width: 2.5rem; height: 3px; background: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-finance-metric .metric-number { font-size: clamp(1.4rem, 1.7vw, 2rem); letter-spacing: -.035em; }
+:root[data-marca="oikos"] .drap-metric-icon { background: var(--hoikos-linen); color: var(--hoikos-gold); border: 1px solid var(--hoikos-stone); }
+:root[data-marca="oikos"] .nexo-canvas .drap-finance-metric--primary { background: var(--hoikos-earth); border-color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-finance-metric--primary p { color: var(--hoikos-paper); }
+:root[data-marca="oikos"] .drap-finance-metric--primary .metric-number { color: var(--hoikos-white); }
+:root[data-marca="oikos"] .drap-finance-metric--primary .drap-metric-icon { background: var(--hoikos-soil); color: var(--hoikos-paper); border-color: var(--hoikos-gold); }
+:root[data-marca="oikos"] .nexo-canvas .drap-finance-metric--gold { background: var(--hoikos-linen); border-top: 3px solid var(--hoikos-gold); }
+@media (max-width: 640px) {
+:root[data-marca="oikos"] .drap-module-heading { gap: 1.25rem; }
+:root[data-marca="oikos"] .drap-module-heading > div:last-child { flex-shrink: 1; }
+:root[data-marca="oikos"] .drap-module-heading .display-heading { overflow-wrap: anywhere; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { padding-inline: .85rem; }
+:root[data-marca="oikos"] .drap-finance-metric { min-height: 128px; }
+}
+:root[data-marca="oikos"] .nexo-canvas { background: var(--hoikos-white); }
+:root[data-marca="oikos"] .drap-module-heading, :root[data-marca="oikos"] .drap-focus {
+  isolation: isolate; position: relative; overflow: hidden;
+  min-height: 250px; border-radius: 2px; border: 1px solid var(--hoikos-stone);
+  border-top: 3px solid var(--hoikos-earth);
+  box-shadow: 6px 6px 0 var(--hoikos-linen), 0 16px 36px color-mix(in srgb, var(--hoikos-earth) 7%, transparent);
+}
+:root[data-marca="oikos"] .drap-module-heading { align-items: flex-start; padding: 2.5rem 3rem; background: var(--hoikos-paper); }
+:root[data-marca="oikos"] .drap-module-heading::after, :root[data-marca="oikos"] .drap-focus::after {
+  content: ""; position: absolute; z-index: -1; pointer-events: none;
+  width: 48%; height: 100%; right: 0; top: 0;
+  background: url('/brand/architectural-study.svg') center / cover no-repeat;
+  opacity: .65;
+}
+:root[data-marca="oikos"] .drap-module-heading::before {
+  content: ""; position: absolute; bottom: 1.25rem; left: 3rem;
+  width: 3rem; height: 5px; border-block: 1px solid var(--hoikos-gold);
+}
+:root[data-marca="oikos"] .drap-module-heading > div:first-child { max-width: 60%; }
+:root[data-marca="oikos"] .drap-module-heading > div:last-child:not(:first-child), :root[data-marca="oikos"] .drap-module-heading > button, :root[data-marca="oikos"] .drap-module-heading > select {
+  align-self: flex-end; position: relative; z-index: 1;
+}
+:root[data-marca="oikos"] .drap-module-heading .display-heading { font-size: clamp(2.5rem, 4.2vw, 4.5rem); margin-top: 1.1rem; }
+:root[data-marca="oikos"] .drap-module-heading .eyebrow, :root[data-marca="oikos"] .drap-overview-heading .eyebrow { display: flex; align-items: center; gap: .75rem; }
+:root[data-marca="oikos"] .drap-module-heading .eyebrow::before, :root[data-marca="oikos"] .drap-overview-heading .eyebrow::before { content: ""; width: 1.5rem; height: 1px; background: var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-module-heading > div:first-child > p:last-child { max-width: 47ch; }
+:root[data-marca="oikos"] .drap-overview-heading { border-bottom: 1px solid var(--hoikos-stone); padding-bottom: 1.5rem; }
+:root[data-marca="oikos"] .drap-overview-heading h1 { font-size: clamp(3rem, 4.5vw, 4.75rem); }
+:root[data-marca="oikos"] .drap-focus { min-height: 310px; padding: 3rem; align-items: flex-start; background: var(--hoikos-earth); border-color: var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-focus::after { width: 47%; opacity: .5; }
+:root[data-marca="oikos"] .drap-focus-copy { max-width: 53%; }
+:root[data-marca="oikos"] .drap-focus h2 { font-size: clamp(2rem, 3.5vw, 3.6rem); line-height: 1.16; }
+:root[data-marca="oikos"] .drap-focus-action { align-self: flex-end; position: relative; z-index: 1; padding: 1rem; background: var(--hoikos-earth); border: 1px solid var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-focus-action > span { color: var(--hoikos-paper); }
+:root[data-marca="oikos"] .drap-metrics { border-radius: 0; box-shadow: none; border-inline: 0; border-bottom: 2px solid var(--hoikos-earth); }
+:root[data-marca="oikos"] .drap-metric { position: relative; padding: 1.6rem 2rem; }
+:root[data-marca="oikos"] .drap-metric-value { font-size: 3.5rem; font-weight: 300; }
+:root[data-marca="oikos"] .drap-step { position: relative; border-radius: 1px; background: var(--hoikos-white); padding: 1.75rem; border-top: 2px solid var(--hoikos-gold); }
+:root[data-marca="oikos"] .drap-step-top > span { font-size: 2.2rem; font-weight: 300; line-height: 1; border: 0; color: var(--hoikos-stone); }
+:root[data-marca="oikos"] .drap-step h3 { font-size: 1.2rem; }
+:root[data-marca="oikos"] .drap-panel { background: var(--hoikos-paper); border-radius: 1px; box-shadow: none; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card"] { border-radius: 3px; box-shadow: 0 6px 18px color-mix(in srgb, var(--hoikos-earth) 6%, transparent); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="card-header"] { background: var(--hoikos-paper); padding-top: 1.25rem; margin-top: -1.5rem; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-list"] { border-radius: 2px; border-bottom: 2px solid var(--hoikos-earth); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="tabs-list"] > [data-slot="tabs-trigger"] { border-radius: 2px; }
+:root[data-marca="oikos"] .drap-finance-metric { min-height: 170px; }
+:root[data-marca="oikos"] .drap-finance-metric::after { width: calc(100% - 2.5rem); height: 1px; bottom: 1.2rem; }
+:root[data-marca="oikos"] .drap-finance-metric .drap-metric-icon { border-radius: 50%; background: transparent; }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-icon"][data-variant="icon"] { border-radius: 1px; transform: rotate(-4deg); }
+:root[data-marca="oikos"] .nexo-canvas [data-slot="empty-icon"] svg { transform: rotate(4deg); }
+@media (max-width: 1100px) {
+:root[data-marca="oikos"] .drap-focus { flex-direction: column; }
+:root[data-marca="oikos"] .drap-focus-copy { max-width: 70%; }
+:root[data-marca="oikos"] .drap-focus-action { align-self: flex-start; }
+:root[data-marca="oikos"] .drap-module-heading { padding: 2rem; }
+:root[data-marca="oikos"] .drap-module-heading::before { left: 2rem; }
+}
+@media (max-width: 640px) {
+:root[data-marca="oikos"] .drap-module-heading { padding: 1.5rem; min-height: 280px; }
+:root[data-marca="oikos"] .drap-module-heading::after { width: 65%; opacity: .14; }
+:root[data-marca="oikos"] .drap-module-heading > div:first-child { max-width: 100%; }
+:root[data-marca="oikos"] .drap-module-heading > div:last-child:not(:first-child), :root[data-marca="oikos"] .drap-module-heading > button, :root[data-marca="oikos"] .drap-module-heading > select { align-self: flex-start; }
+:root[data-marca="oikos"] .drap-module-heading::before { display: none; }
+:root[data-marca="oikos"] .drap-module-heading .display-heading { font-size: 2.8rem; }
+:root[data-marca="oikos"] .drap-focus { padding: 1.5rem; }
+:root[data-marca="oikos"] .drap-focus::after { width: 100%; opacity: .12; }
+:root[data-marca="oikos"] .drap-focus-copy { max-width: 100%; }
+:root[data-marca="oikos"] .drap-focus-action { padding: .75rem; }
+:root[data-marca="oikos"] .drap-metric { padding: 1rem; }
+:root[data-marca="oikos"] .drap-metric-value { font-size: 2.5rem; }
+}
+:root[data-marca="oikos"] .nexo-canvas { position: relative; isolation: isolate; }
+:root[data-marca="oikos"] .nexo-canvas::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; z-index: -1;
+  height: min(58vh, 560px); pointer-events: none;
+  background-image: var(--ambiente); background-size: cover;
+  background-position: center 38%; background-repeat: no-repeat;
+  opacity: .1;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, color-mix(in srgb, #000 45%, transparent) 52%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, color-mix(in srgb, #000 45%, transparent) 52%, transparent 100%);
+}
+:root[data-marca="oikos"] .drap-module-heading::after, :root[data-marca="oikos"] .drap-focus::after {
+  background-image: var(--ambiente, url('/brand/architectural-study.svg'));
+  background-size: cover;
+  background-position: center;
+  width: 52%;
+  opacity: 1;
+  
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 26%), linear-gradient(to bottom, #000 42%, transparent 96%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 26%), linear-gradient(to bottom, #000 42%, transparent 96%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+:root[data-marca="oikos"] .drap-focus::after { width: 50%; opacity: .5; }
+:root[data-marca="oikos"] .nexo-canvas[data-module="overview"] { --ambiente: url('/ambientes/atelie.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="projects"] { --ambiente: url('/ambientes/maquete.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="works"] { --ambiente: url('/ambientes/obra.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="budgets"] { --ambiente: url('/ambientes/amostras.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="schedule"] { --ambiente: url('/ambientes/escada-travertino.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="diary"] { --ambiente: url('/ambientes/casa-entardecer.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="portal"] { --ambiente: url('/ambientes/entrada-arco.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="crm"] { --ambiente: url('/ambientes/poltronas.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="finance"] { --ambiente: url('/ambientes/fachada-varandas.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="team"] { --ambiente: url('/ambientes/atelie.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="tasks"] { --ambiente: url('/ambientes/escada-travertino.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="files"] { --ambiente: url('/ambientes/biblioteca.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="sheets"] { --ambiente: url('/ambientes/amostras.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="usage"] { --ambiente: url('/ambientes/estar-piscina.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="reminders"] { --ambiente: url('/ambientes/poltronas.webp'); }
+:root[data-marca="oikos"] .nexo-canvas[data-module="studio"] { --ambiente: url('/ambientes/prancheta.webp'); }
+@media (prefers-contrast: more) {
+:root[data-marca="oikos"] .nexo-canvas::before { display: none; }
+:root[data-marca="oikos"] .drap-module-heading::after, :root[data-marca="oikos"] .drap-focus::after { opacity: .28; }
+}
+@media (max-width: 640px) {
+:root[data-marca="oikos"] .nexo-canvas::before { height: 34vh; opacity: .08; }
+:root[data-marca="oikos"] .drap-module-heading::after {
+    width: 100%; opacity: .16;
+    -webkit-mask-image: none; mask-image: none;
+  }
+:root[data-marca="oikos"] .drap-focus::after { width: 100%; opacity: .3; -webkit-mask-image: none; mask-image: none; }
+}
