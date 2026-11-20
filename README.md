@@ -408,14 +408,23 @@ biblioteca só fecha quando os quatro saem. Desligar não apaga dado — religar
 escolha registrada, a empresa tem tudo, como antes. Cada alteração fica em
 `platform_audit_events` (`platform.modules_changed`).
 
-**Identidade visual (contratante e administradores).** Item **Identidade visual** no menu.
-A empresa envia o logotipo em PNG, JPEG, WebP, SVG ou o PDF do manual da marca: o navegador
-transforma a primeira página do PDF (e o SVG) em imagem, corta as margens brancas e sugere
-as cores a partir das cores dominantes. São três cores — principal (botões e links), menu e
-faixa de destaque —, aplicadas às variáveis de que toda a interface deriva. Como o texto
-sobre elas é branco, o servidor escurece no mesmo tom a cor clara demais até o contraste de
-4,5:1. O servidor aceita só PNG/JPEG/WebP de até 400 KB, conferidos pelos bytes; o logotipo é
-servido pela própria API, sempre da empresa da sessão.
+**Identidade visual de cada empresa (superadmin e contratante).** O superadministrador envia o
+logotipo de qualquer empresa em `/superadmin` → empresa → **Identidade visual de …**; o
+contratante e os administradores fazem o mesmo no item **Identidade visual** do menu. Aceita
+PNG, JPEG, WebP, SVG ou o PDF do manual da marca: o navegador transforma a primeira página do
+PDF (e o SVG) em imagem e corta as margens brancas. **O envio já basta**: as cores do
+logotipo são lidas e gravadas na hora — a cor de marca mais presente vira a principal
+(botões), a segunda cor de outro matiz vira a faixa de destaque e a mais escura vira o menu.
+Dessas três sai a paleta inteira da plataforma (`paletaCompleta`, em `lib/empresa-config.ts`):
+menu, faixa, ação, texto secundário, cinzas, fundo da página, cartões e texto, na mesma família
+de tons — o mesmo que o tema da H.OIKOS faz à mão, agora automático para toda empresa.
+Componentes, espaçamentos e tipografia não mudam. Cada tom tem piso de contraste (texto branco
+≥ 4,5:1 sobre os escuros, texto principal ≥ 15:1 sobre o fundo); cor clara demais é escurecida
+no mesmo tom. As três cores ficam abertas para ajuste fino. Empresa com marca própria usa a
+paleta dela mesmo onde havia tema fixo. O servidor aceita só PNG/JPEG/WebP de até 400 KB,
+conferidos pelos bytes; o logotipo é servido pela API, sempre da empresa da sessão (ou, no
+painel, só ao superadmin). Alteração pelo superadmin fica em `platform_audit_events`
+(`platform.branding_changed`); pela empresa, em `audit_events`.
 
 **Login e senha criados pela empresa.** Em Equipe há duas formas de dar acesso: **Convidar
 por link** (a pessoa escolhe a senha) e **Criar login e senha** (quem cria define a senha

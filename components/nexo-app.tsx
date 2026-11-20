@@ -380,7 +380,7 @@ function TermsGate({ version, onAccepted }: { version: string; onAccepted: () =>
   return <AcessoLayout><Card className="relative w-full border-white/10 bg-drap-deep text-white shadow-none"><CardContent className="p-7 sm:p-9"><Brand variant="stacked" dark className="mx-auto w-[200px]" /><ShieldCheck className="mt-9 size-11 text-drap-300" /><h1 className="display-heading mt-5 text-4xl">Proteção e transparência</h1><p className="mt-3 leading-7 text-drap-300">Antes de continuar, confirme os termos atuais. Eles explicam os níveis de acesso, a separação entre empresas e os limites do superadministrador.</p><label className="mt-7 flex items-start gap-3 rounded-md border border-white/10 bg-white/[0.05] p-4 text-sm leading-6 text-drap-200"><Checkbox checked={checked} onCheckedChange={(value) => setChecked(value === true)} className="mt-1 border-drap-500" /><span>Li e aceito os <a href="/termos" target="_blank" className="font-medium text-drap-300 underline underline-offset-2">Termos de Uso e Privacidade</a> (versão {version}).</span></label>{error ? <p role="alert" className="mt-4 text-sm text-drap-300">{error}</p> : null}<Button onClick={() => void accept()} disabled={!checked || saving} className="mt-6 h-11 w-full bg-white text-drap-950 hover:bg-drap-100">{saving ? <LoaderCircle className="animate-spin" /> : <Check />}Aceitar e continuar</Button></CardContent></Card></AcessoLayout>;
 }
 
-function Workspace({ session, reloadSession }: { session: SessionData; reloadSession: () => Promise<void> }) {
+function Workspace({ session, reloadSession, refreshSession }: { session: SessionData; reloadSession: () => Promise<void>; refreshSession: () => Promise<void> }) {
   const [activeModule, setActiveModule] = useState<ModuleId>("overview");
   useCoresDaEmpresa(session.branding);
   // Itens do menu que o superadministrador liberou para a empresa. Ele mesmo vê tudo;
@@ -518,7 +518,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
     if (activeModule === "layout") return <LayoutWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("layout")} empresa={session.organization?.name ?? ""} />;
     if (activeModule === "comunicacao") return <ComunicacaoWorkspace key={session.organization?.id} canUseLibrary={canView("prancheta")} onUnread={setUnreadMessages} />;
     if (activeModule === "tasks") return <TasksWorkspace tasks={tasks} members={members} query={query} canEdit={canEdit("tasks")} onCreate={() => openCreate("task")} onChanged={loadData} />;
-    if (activeModule === "marca") return <div className="space-y-5"><PageIntro module="marca" /><IdentidadeVisual key={`${session.organization?.id}-${session.branding?.revision ?? 0}`} marca={session.branding} empresa={session.organization?.name ?? ""} onSaved={reloadSession} /></div>;
+    if (activeModule === "marca") return <div className="space-y-5"><PageIntro module="marca" /><IdentidadeVisual key={`${session.organization?.id}-${session.branding?.revision ?? 0}`} marca={session.branding} empresa={session.organization?.name ?? ""} onSaved={refreshSession} /></div>;
     if (activeModule === "team") return <div className="space-y-5"><PageIntro module="team" />{canView("tasks") && <TeamWorkload members={members} tasks={tasks} />}<TeamAccessManager key={session.organization?.id} currentMemberId={session.member?.id} members={members} canManage={podeAdministrarEmpresa(session.member?.role) && canEdit("team")} canResetOwner={session.authMethod === "superadmin"} currentRole={session.member?.role ?? ""} currentPermissions={session.member?.permissions} canCreateAccounts={Boolean(session.member?.canCreateAccounts)} enabledModules={session.organization?.enabledModules} onMembersChanged={loadData} /></div>;
     if (activeModule === "finance") return <FinanceWorkspace key={session.organization?.id} projects={projects} query={query} canEdit={canEdit("finance")} canManageConnection={podeAdministrarEmpresa(session.member?.role) && canEdit("finance")} onProjectsChanged={loadData} />;
     if (activeModule === "proposals") return <div className="space-y-5"><PageIntro module="proposals" /><ProposalsWorkspace key={session.organization?.id} projects={projects} clients={clients} query={query} canEdit={canEdit("proposals")} organizationName={session.organization?.name ?? ""} timezone={session.organization?.timezone ?? "America/Sao_Paulo"} /></div>;
@@ -557,6 +557,9 @@ export function NexoApp() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [entrando, setEntrando] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Atualiza a sessão sem a tela de carregamento: a pessoa continua onde está (salvar a
+  // identidade visual não pode jogá-la de volta para a Visão geral).
+  const refreshSession = useCallback(async () => { setSession(await requestJson<SessionData>("/api/session")); }, []);
   const loadSession = useCallback(async () => { await Promise.resolve(); setLoading(true); try { setSession(await requestJson<SessionData>("/api/session")); } catch (cause) { toast.error(cause instanceof Error ? cause.message : "Não foi possível abrir sua conta."); } finally { setLoading(false); } }, []);
   useEffect(() => { const timer = window.setTimeout(() => { void loadSession(); }, 0); return () => window.clearTimeout(timer); }, [loadSession]);
   const [expired, setExpired] = useState(false);
@@ -582,5 +585,5 @@ export function NexoApp() {
   if (session.needsOrganization) return <OrganizationForm onCreated={loadSession} />;
   if (!ready) return <LoadingScreen />;
   if (session.terms && !session.terms.accepted) return <TermsGate version={session.terms.version} onAccepted={loadSession} />;
-  return <Workspace session={session} reloadSession={loadSession} />;
+  return <Workspace session={session} reloadSession={loadSession} refreshSession={refreshSession} />;
 }

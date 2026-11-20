@@ -201,3 +201,60 @@ export function excedeQuemConcede(concedido: PermissionSet, concedente: Permissi
   return permissionModules.filter((modulo) =>
     (recortado[modulo].view && !concedente[modulo].view) || (recortado[modulo].edit && !concedente[modulo].edit));
 }
+
+// ─── Paleta completa a partir da marca ───
+
+function paraCanais(hex: string): [number, number, number] {
+  return [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
+}
+function paraHex([r, g, b]: [number, number, number]) {
+  return `#${[r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("")}`;
+}
+/** Mistura `a` com `b`; `peso` é quanto de `b` entra (0 a 1). */
+export function misturar(a: string, b: string, peso: number) {
+  const [x, y] = [paraCanais(a), paraCanais(b)];
+  return paraHex([0, 1, 2].map((i) => x[i] * (1 - peso) + y[i] * peso) as [number, number, number]);
+}
+/** Escurece no mesmo tom até o contraste com `fundo` chegar ao mínimo. */
+function escurecerAte(hex: string, fundo: string, minimo: number) {
+  let atual = hex;
+  for (let passo = 0; passo < 80 && contraste(atual, fundo) < minimo; passo += 1) atual = misturar(atual, "#000000", 0.06);
+  return atual;
+}
+
+export type CoresDaMarca = { menuColor: string | null; accentColor: string | null; bandColor: string | null };
+
+/**
+ * Todas as cores da interface a partir das três da marca, como o tema da H.OIKOS faz à mão:
+ * menu, faixa e botão vêm da marca; bordas, cinzas, fundo da página, cartões e texto são
+ * tons da mesma família. Componentes, espaçamentos e tipografia não mudam — só a paleta.
+ *
+ * Cada tom tem um piso de contraste, porque a interface põe texto branco sobre os escuros e
+ * texto escuro sobre os claros. Sem as três cores, nada muda: vale a paleta da plataforma.
+ */
+export function paletaCompleta(cores: CoresDaMarca | null | undefined): Record<string, string> {
+  if (!cores?.menuColor && !cores?.accentColor && !cores?.bandColor) return {};
+  const accent = ajustarParaTextoBranco(normalizarCor(cores.accentColor) ?? normalizarCor(cores.bandColor) ?? normalizarCor(cores.menuColor)!);
+  const deep = ajustarParaTextoBranco(normalizarCor(cores.menuColor) ?? misturar(accent, "#000000", 0.62), 9);
+  const band = ajustarParaTextoBranco(normalizarCor(cores.bandColor) ?? misturar(accent, deep, 0.4));
+  const stone = misturar(accent, "#ffffff", 0.93);
+  const paper = misturar(accent, "#ffffff", 0.985);
+  // Aço: texto secundário e bordas sobre fundo claro — escuro o bastante para ler.
+  const support = escurecerAte(misturar(deep, accent, 0.25), paper, 9);
+  return {
+    "--drap-deep": deep,
+    "--drap-band": band,
+    "--drap-accent": accent,
+    "--drap-support": support,
+    "--drap-graphite": escurecerAte(misturar(support, "#ffffff", 0.38), "#ffffff", 4.5),
+    "--drap-mist": misturar(support, "#ffffff", 0.6),
+    "--drap-fog": misturar(support, "#ffffff", 0.5),
+    "--drap-stone": stone,
+    "--drap-paper": paper,
+    "--drap-ink": escurecerAte(misturar(deep, "#000000", 0.55), stone, 15),
+    "--sidebar-accent": misturar(deep, "#ffffff", 0.14),
+  };
+}
+
+/** Nomes de todas as variáveis que a marca pode trocar, para devolver as da plataforma. */
+export const variaveisDaPaleta = ["--drap-deep", "--drap-band", "--drap-accent", "--drap-support", "--drap-graphite", "--drap-mist", "--drap-fog", "--drap-stone", "--drap-paper", "--drap-ink", "--sidebar-accent"];

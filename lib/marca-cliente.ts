@@ -1,6 +1,6 @@
 "use client";
 
-import { ajustarParaTextoBranco, contraste } from "@/lib/empresa-config";
+import { ajustarParaTextoBranco, contraste, paletaCompleta, variaveisDaPaleta, type CoresDaMarca } from "@/lib/empresa-config";
 
 // Preparação do logotipo no navegador. A empresa manda o que tiver — PNG, JPEG, WebP,
 // SVG ou o PDF do manual da marca — e o servidor recebe sempre um bitmap pequeno: a
@@ -90,25 +90,44 @@ function saturacao(cor: string) {
   return max === 0 ? 0 : (max - min) / max;
 }
 
+function matiz(cor: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(cor.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+function distanciaDeMatiz(a: string, b: string) {
+  const d = Math.abs(matiz(a) - matiz(b));
+  return Math.min(d, 360 - d);
+}
+
 function escurecer(cor: string, fator: number) {
   const [r, g, b] = [1, 3, 5].map((i) => Number.parseInt(cor.slice(i, i + 2), 16));
   return hex(r * fator, g * fator, b * fator);
 }
 
 /**
- * Das cores do logotipo, uma sugestão para as três posições da interface. A cor mais
- * viva vira o botão; o menu fica com a mais escura (ou o botão bem escurecido) e a
- * faixa, com um meio-termo. Tudo passa pelo mesmo ajuste de leitura do servidor.
+ * Das cores do logotipo, uma sugestão para as três posições da interface. A paleta chega
+ * em ordem de presença no logotipo:
+ *  - a cor de marca mais presente (com saturação) vira a cor principal, dos botões;
+ *  - a segunda cor de marca, se houver, vira a faixa de destaque — é o que dá à interface
+ *    as duas cores da marca, como no tema da H.OIKOS;
+ *  - o menu fica com a cor mais escura do logotipo, ou com a principal bem escurecida.
+ * Tudo passa pelo mesmo ajuste de leitura do servidor.
  */
 export function sugerirCores(paleta: string[]) {
   if (!paleta.length) return null;
-  const viva = [...paleta].sort((a, b) => saturacao(b) - saturacao(a))[0];
-  // "Escura" é a que já dá ao branco contraste de menu (9:1); sem ela, o botão bem escurecido.
-  const escura = paleta.find((cor) => cor !== viva && contraste(cor, "#ffffff") >= 9) ?? escurecer(viva, 0.32);
+  const marcantes = paleta.filter((cor) => saturacao(cor) >= 0.25);
+  const principal = marcantes[0] ?? paleta[0];
+  // Outro matiz de verdade: o verde-escuro do texto de um logotipo verde não é segunda cor.
+  const segunda = marcantes.find((cor) => distanciaDeMatiz(cor, principal) >= 30);
+  const escura = paleta.find((cor) => cor !== principal && contraste(cor, "#ffffff") >= 9) ?? escurecer(principal, 0.32);
   return {
-    accentColor: ajustarParaTextoBranco(viva),
-    menuColor: ajustarParaTextoBranco(escura),
-    bandColor: ajustarParaTextoBranco(escurecer(viva, 0.7)),
+    accentColor: ajustarParaTextoBranco(principal),
+    menuColor: ajustarParaTextoBranco(escura, 9),
+    bandColor: ajustarParaTextoBranco(segunda ?? escurecer(principal, 0.7)),
   };
 }
 
@@ -151,13 +170,12 @@ export async function prepararLogotipo(arquivo: File): Promise<LogotipoPreparado
   return { base64: btoa(binario), mime, previewUrl: URL.createObjectURL(blob), paleta };
 }
 
-/** Aplica as cores da empresa às variáveis de que toda a interface deriva. */
-export function aplicarCoresNaPagina(cores: { menuColor: string | null; accentColor: string | null; bandColor: string | null } | null | undefined) {
+/** Aplica a paleta inteira da empresa às variáveis de que toda a interface deriva. */
+export function aplicarCoresNaPagina(cores: CoresDaMarca | null | undefined) {
   const raiz = document.documentElement.style;
-  const definir = (variavel: string, valor: string | null | undefined) => valor ? raiz.setProperty(variavel, valor) : raiz.removeProperty(variavel);
-  definir("--drap-deep", cores?.menuColor);
-  definir("--drap-accent", cores?.accentColor);
-  definir("--drap-band", cores?.bandColor);
-  // Item selecionado no menu: um tom acima da própria cor do menu, e não o aço padrão.
-  definir("--sidebar-accent", cores?.menuColor ? `color-mix(in srgb, #ffffff 14%, ${cores.menuColor})` : null);
+  const paleta = paletaCompleta(cores);
+  for (const variavel of variaveisDaPaleta) {
+    if (paleta[variavel]) raiz.setProperty(variavel, paleta[variavel]);
+    else raiz.removeProperty(variavel);
+  }
 }

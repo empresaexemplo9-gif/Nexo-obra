@@ -72,7 +72,8 @@ export async function GET(request: Request) {
         terms: { version: CURRENT_TERMS_VERSION, accepted: context.termsAccepted },
         organization: context.organization,
         // Marca derivada da empresa resolvida no servidor; só muda a aparência.
-        marca: marcaDaOrganizacao(context.organization.id),
+        // Empresa com identidade visual própria usa a paleta dela, inclusive onde havia tema fixo.
+        marca: branding.menuColor || branding.accentColor || branding.bandColor ? "drap" : marcaDaOrganizacao(context.organization.id),
         organizations: memberships.map((membership) => ({
           id: membership.organization_id,
           name: membership.organization_name,

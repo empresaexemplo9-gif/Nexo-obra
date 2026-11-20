@@ -214,3 +214,48 @@ test("o Financeiro nasce com todos os acessos e a hierarquia de cargos é estrit
   assert.equal(config.podeCriarPerfil("manager", "papel-inventado"), false);
   assert.ok(config.contraste(config.ajustarParaTextoBranco("#fafafa"), "#ffffff") >= 4.5);
 });
+
+const marcaSuperRoute = await h.load("/app/api/superadmin/organizations/[organizationId]/marca/route.ts");
+const logoSuperRoute = await h.load("/app/api/superadmin/organizations/[organizationId]/marca/logo/route.ts");
+
+test("a paleta inteira sai das cores da marca, sempre legível", () => {
+  assert.deepEqual(config.paletaCompleta(null), {}, "sem marca, vale a paleta da plataforma");
+  for (const marca of [
+    { menuColor: null, accentColor: "#ffe600", bandColor: null },          // amarelo claro
+    { menuColor: "#7a0019", accentColor: "#e30613", bandColor: "#b0001e" }, // vermelhos
+    { menuColor: null, accentColor: "#00a859", bandColor: null },          // verde vivo
+    { menuColor: "#ffffff", accentColor: "#f5f5f5", bandColor: "#eeeeee" }, // tudo branco
+  ]) {
+    const p = config.paletaCompleta(marca);
+    for (const escuro of ["--drap-deep", "--drap-band", "--drap-accent", "--drap-graphite"]) {
+      assert.ok(config.contraste(p[escuro], "#ffffff") >= 4.5, `${escuro} de ${JSON.stringify(marca)} recebe texto branco`);
+    }
+    assert.ok(config.contraste(p["--drap-ink"], p["--drap-stone"]) >= 15, "texto principal sobre o fundo");
+    assert.ok(config.contraste(p["--drap-support"], p["--drap-paper"]) >= 9, "texto secundário sobre os cartões");
+    assert.ok(config.contraste(p["--drap-paper"], "#000000") > 18, "cartões continuam claros");
+  }
+});
+
+test("o superadmin envia o logotipo de qualquer empresa e a empresa passa a usar a marca", async () => {
+  const url = `/api/superadmin/organizations/${orgA}/marca`;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]).toString("base64");
+  const corpo = { menuColor: "#123456", accentColor: "#e30613", bandColor: null, logo: { mime: "image/png", base64: png }, revision: 0 };
+
+  // O contratante não alcança a rota da plataforma.
+  const dono = await marcaSuperRoute.PUT(h.request("owner", url, { method: "PUT", json: corpo }), params({ organizationId: orgA }));
+  assert.ok([401, 503].includes(dono.status));
+
+  const salvo = await marcaSuperRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify(corpo) }), params({ organizationId: orgA }));
+  assert.equal(salvo.status, 200);
+  assert.equal((await salvo.json()).branding.hasLogo, true);
+  assert.equal(h.db.sqlite.prepare("SELECT count(*) n FROM platform_audit_events WHERE action = 'platform.branding_changed'").get().n, 1);
+  assert.equal((await logoSuperRoute.GET(await comoSuperadmin(`${url}/logo`), params({ organizationId: orgA }))).status, 200);
+
+  // A equipe da empresa recebe a marca na sessão; a outra empresa não.
+  const sessao = await (await sessionRoute.GET(h.request("owner", "/api/session"))).json();
+  assert.equal(sessao.branding.accentColor, "#e30613");
+  assert.equal(sessao.marca, "drap");
+  assert.equal((await logoRoute.GET(h.request("owner", "/api/organization/branding/logo"))).status, 200);
+  const outra = await (await sessionRoute.GET(h.request("owner-b", "/api/session", { org: orgB }))).json();
+  assert.equal(outra.branding.hasLogo, false);
+});
