@@ -6,6 +6,7 @@ import {
   auditStatement,
   ensureFound,
   jsonBody,
+  requireFerramenta,
   requireModulePermission,
   requireOrganizationContext,
   validationError,
@@ -67,8 +68,8 @@ export async function PATCH(request: Request, route: RouteContext) {
     requireModulePermission(context, "projects", "edit");
     const { projectId } = await route.params;
     const current = ensureFound(
-      await context.db.prepare("SELECT id, start_date, target_date FROM projects WHERE id = ?1 AND organization_id = ?2")
-        .bind(projectId, context.organization.id).first<{ id: string; start_date: string | null; target_date: string | null }>(),
+      await context.db.prepare("SELECT id, kind, start_date, target_date FROM projects WHERE id = ?1 AND organization_id = ?2")
+        .bind(projectId, context.organization.id).first<{ id: string; kind: string; start_date: string | null; target_date: string | null }>(),
       "Projeto",
     );
     const parsed = updateProjectSchema.safeParse(await jsonBody(request));
@@ -95,7 +96,11 @@ export async function PATCH(request: Request, route: RouteContext) {
     if (data.clientId !== undefined) add("client_id", data.clientId);
     if (data.code !== undefined) add("code", data.code);
     if (data.name !== undefined) add("name", data.name);
-    if (data.kind !== undefined) { add("kind", data.kind); add("type", data.kind); }
+    if (data.kind !== undefined) {
+      // Trocar o tipo é cadastrar no outro item do menu; editar sem trocar segue livre.
+      if (data.kind !== current.kind) requireFerramenta(context, data.kind === "work" ? "works" : "projects");
+      add("kind", data.kind); add("type", data.kind);
+    }
     if (data.status !== undefined) add("status", data.status);
     if (data.phase !== undefined) { add("phase", data.phase); add("stage", data.phase); }
     if (data.progressPercent !== undefined) { add("progress_percent", data.progressPercent); add("progress", data.progressPercent); }

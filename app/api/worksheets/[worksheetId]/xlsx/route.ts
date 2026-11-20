@@ -1,4 +1,4 @@
-import { ApiError, apiRoute, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { loadWorksheet } from "@/lib/server/worksheet-access";
 import { exportXlsx, importXlsx, readXlsxBody } from "@/lib/server/worksheet-xlsx";
 import { contentSchema } from "@/lib/worksheets";
@@ -10,6 +10,7 @@ type RouteContext = { params: Promise<{ worksheetId: string }> };
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const { row } = await loadWorksheet(context, (await route.params).worksheetId);
     const revision = new URL(request.url).searchParams.get("revision");
     if (revision !== null && Number(revision) !== row.revision) throw new ApiError(409, "worksheet_conflict", "A planilha mudou em outro acesso. Reabra antes de exportar.");
@@ -25,6 +26,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const { access, row } = await loadWorksheet(context, (await route.params).worksheetId);
     if (!access.canEdit) throw new ApiError(403, "worksheet_read_only", "Seu acesso a esta planilha é somente de leitura.");
     if (row.kind === "document") throw new ApiError(400, "not_sheet", "Escolha uma planilha.");

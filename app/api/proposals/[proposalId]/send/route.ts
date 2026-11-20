@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { parseContent, proposalResponse, proposalSelect, type ProposalRow } from "@/lib/server/proposals";
 import { PROPOSAL_CHANNELS } from "@/lib/proposals";
 
@@ -19,6 +19,7 @@ const sendSchema = z.object({ channel: z.enum(PROPOSAL_CHANNELS) }).strict();
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "edit");
     const { proposalId } = await route.params;
     const parsed = sendSchema.safeParse(await jsonBody(request));

@@ -7,6 +7,7 @@ import {
   apiRoute,
   auditStatement,
   jsonBody,
+  requireFerramenta,
   requireModulePermission,
   requireOrganizationContext,
   validationError,
@@ -81,6 +82,8 @@ export async function POST(request: Request) {
     const parsed = createProjectSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;
+    // Projetos e Obras são itens separados do menu: cadastrar obra exige a ferramenta Obras.
+    requireFerramenta(context, data.kind === "work" ? "works" : "projects");
     // Orçamento previsto é dado de orçamento: quem só edita obras não o define.
     if (data.budgetCents && !context.member.permissions.budgets.edit) {
       throw new ApiError(403, "budget_permission_required", "Seu perfil não pode definir o orçamento previsto da obra.");

@@ -1,4 +1,4 @@
-import { apiRoute, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { apiRoute, requireModulePermission, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { createPasswordReset } from "@/lib/server/password-reset";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
@@ -12,6 +12,7 @@ export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "edit");
     const { memberId } = await route.params;
     const reset = await createPasswordReset(context, memberId);

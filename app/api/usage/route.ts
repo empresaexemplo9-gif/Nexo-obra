@@ -8,6 +8,7 @@ import {
   requireOrganizationContext,
   validationError,
   type OrganizationContext,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { renewedSessionCookie } from "@/lib/server/auth";
 import { clientAccess } from "@/lib/server/portal";
@@ -82,6 +83,7 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request, undefined, { allowUnacceptedTerms: true });
+    requireFerramenta(context, "usage");
     const url = new URL(request.url);
     const range = parseUsageRange(url, context.organization.timezone);
     const platform = isPlatformSuperAdmin(context);

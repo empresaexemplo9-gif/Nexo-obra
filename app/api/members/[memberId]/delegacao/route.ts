@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ApiError, apiRoute, canManageOrganizationAccess, isPlatformSuperAdmin, jsonBody,
   requireModulePermission, requireOrganizationContext, validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 import { perfisQueRecebemDelegacao, podeCriarPerfil } from "@/lib/empresa-config";
@@ -16,6 +17,7 @@ export async function PUT(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "edit");
     if (!canManageOrganizationAccess(context)) {
       throw new ApiError(403, "access_management_denied", "Somente o contratante ou um administrador autorizado entrega esta ferramenta.");

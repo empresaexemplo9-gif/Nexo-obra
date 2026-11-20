@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { newLinkNonce, nextProposalCode, proposalResponse, proposalSelect, type ProposalRow } from "@/lib/server/proposals";
 import { defaultProposalContent, newId, proposalTotals, type ProposalItem } from "@/lib/proposals";
 
@@ -19,6 +19,7 @@ const createSchema = z.object({
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "view");
     const rows = await context.db.prepare(`${proposalSelect} WHERE pr.organization_id = ?1 ORDER BY pr.updated_at DESC LIMIT 300`)
       .bind(context.organization.id).all<ProposalRow>();
@@ -35,6 +36,7 @@ type ClientRow = { id: string; name: string; email: string | null; phone: string
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "edit");
     const parsed = createSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);

@@ -3,6 +3,7 @@ import {
   apiRoute,
   requireModulePermission,
   requireOrganizationContext,
+  requireFerramenta,
 } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +64,7 @@ export type WorksheetSourceId = keyof typeof sources;
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const url = new URL(request.url);
     const requested = url.searchParams.get("source");
     if (!requested) {

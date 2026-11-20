@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { apiRoute, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { apiRoute, jsonBody, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { dailyReminders } from "@/lib/server/reminders";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,7 @@ const markSchema = z.object({
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "reminders");
     return Response.json(await dailyReminders(context), { headers: { "Cache-Control": "private, no-store" } });
   });
 }
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "reminders");
     const parsed = markSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const agenda = await dailyReminders(context);

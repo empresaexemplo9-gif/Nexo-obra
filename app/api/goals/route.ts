@@ -8,6 +8,7 @@ import {
   jsonBody,
   requireOrganizationContext,
   validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { dailyReminders, GOAL_METRICS } from "@/lib/server/reminders";
 
@@ -35,6 +36,7 @@ function requireGoalManager(context: Awaited<ReturnType<typeof requireOrganizati
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "reminders");
     const agenda = await dailyReminders(context);
     return Response.json({
       goals: agenda.goals,
@@ -47,6 +49,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "reminders");
     requireGoalManager(context);
     const parsed = goalSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);

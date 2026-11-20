@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, apiRoute, canManageOrganizationAccess, isPlatformSuperAdmin, jsonBody, validationError, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, canManageOrganizationAccess, isPlatformSuperAdmin, jsonBody, validationError, requireModulePermission, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { normalizePermissions, permissionModules, parseStoredPermissions } from "@/lib/permissions";
 import { excedeQuemConcede } from "@/lib/empresa-config";
 import { delegacoesDaEmpresa } from "@/lib/server/empresa-config";
@@ -58,6 +58,7 @@ export async function PATCH(request: Request) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "edit");
     if (!canManageOrganizationAccess(context)) throw new ApiError(403, "access_management_denied", "Somente administradores autorizados podem alterar acessos.");
     const parsed = updateSchema.safeParse(await jsonBody(request));

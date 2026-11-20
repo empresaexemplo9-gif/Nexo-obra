@@ -1,4 +1,4 @@
-import { ApiError, apiRoute, auditStatement, canManageOrganizationAccess, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, canManageOrganizationAccess, requireModulePermission, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,7 @@ export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "edit");
     if (!canManageOrganizationAccess(context)) {
       throw new ApiError(403, "access_management_denied", "Seu perfil não pode revogar acessos.");

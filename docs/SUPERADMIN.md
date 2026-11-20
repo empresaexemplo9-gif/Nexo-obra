@@ -10,9 +10,9 @@ empresas. A partir dessa sessão ele tem poder total sobre a plataforma.
 - Abrir qualquer empresa e operar todos os módulos com leitura e edição: visão geral,
   projetos, obras, orçamentos, cronograma, diário, portal do cliente, CRM, financeiro,
   equipe, tarefas e arquivos.
-- Ligar e desligar os módulos contratados de cada empresa (Visão geral e Equipe ficam
-  sempre ligados). A empresa inteira, contratante incluído, só usa o que estiver ligado;
-  o superadmin continua vendo tudo ao abrir a empresa.
+- Escolher, item por item, o que aparece no menu lateral de cada empresa (nenhum item é
+  obrigatório). A empresa inteira, contratante incluído, só usa o que estiver ligado; o
+  superadmin continua vendo tudo ao abrir a empresa.
 - Bloquear, suspender e restaurar acessos, vincular assinatura e acompanhar indicadores.
 - Operar uma empresa mesmo com acesso bloqueado ou assinatura ainda não confirmada,
   que é justamente o cenário em que o suporte precisa entrar.

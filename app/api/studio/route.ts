@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { documentoSchema, documentoVazio } from "@/lib/prancheta";
-import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { documentoParaBanco, lerCorpo } from "@/lib/server/studio-corpo";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,7 @@ const selecao = `SELECT d.id, d.nome, d.especie, d.revisao, d.project_id,
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "view");
     const projectId = new URL(request.url).searchParams.get("projectId")?.trim();
     const filtros = ["d.organization_id = ?1"];
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
     const analisado = criarSchema.safeParse(await lerCorpo(request));
     if (!analisado.success) throw validationError(analisado.error.flatten().fieldErrors);

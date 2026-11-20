@@ -1,5 +1,5 @@
 import type { PermissionModule } from "@/lib/permissions";
-import { lerModulosHabilitados, marcaPadrao, type MarcaDaEmpresa } from "@/lib/empresa-config";
+import { lerConfiguracao, marcaPadrao, type ConfiguracaoDaEmpresa, type MarcaDaEmpresa } from "@/lib/empresa-config";
 
 /**
  * As três tabelas desta configuração chegam por migração aditiva, aplicada de hora em
@@ -20,12 +20,16 @@ async function tolerante<T>(consulta: () => Promise<T>, padrao: T): Promise<T> {
   catch (error) { if (tabelaAusente(error)) return padrao; throw error; }
 }
 
-export async function modulosDaEmpresa(db: D1Database, organizationId: string): Promise<PermissionModule[]> {
+export async function configuracaoDaEmpresa(db: D1Database, organizationId: string): Promise<ConfiguracaoDaEmpresa> {
   const linha = await tolerante(
     () => db.prepare("SELECT enabled_json FROM organization_modules WHERE organization_id = ?1").bind(organizationId).first<{ enabled_json: string }>(),
     null,
   );
-  return lerModulosHabilitados(linha?.enabled_json);
+  return lerConfiguracao(linha?.enabled_json);
+}
+
+export async function modulosDaEmpresa(db: D1Database, organizationId: string): Promise<PermissionModule[]> {
+  return (await configuracaoDaEmpresa(db, organizationId)).modulos;
 }
 
 export async function membroPodeCriarContas(db: D1Database, organizationId: string, memberId: string) {

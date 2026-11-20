@@ -1,4 +1,4 @@
-import { ApiError, apiRoute, auditStatement, ensureFound, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, ensureFound, requireFerramenta, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
 import { budgetResponse, budgetSelect, type BudgetRow } from "@/lib/server/budgets-records";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ type CopyItem = {
 };
 export async function POST(request: Request, route: { params: Promise<{ budgetId: string }> }) {
   return apiRoute(async () => {
-    const context = await requireOrganizationContext(request); requireModulePermission(context, "budgets", "edit");
+    const context = await requireOrganizationContext(request); requireFerramenta(context, "budgets"); requireModulePermission(context, "budgets", "edit");
     const { budgetId } = await route.params;
     // Header and items are read in the same transaction, including when copying an editable draft.
     const snapshot = await context.db.batch([

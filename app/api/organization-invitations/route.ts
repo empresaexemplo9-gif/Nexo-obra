@@ -10,6 +10,7 @@ import {
   requireModulePermission,
   requireOrganizationContext,
   validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { createInvitationToken, invitationTokenHash } from "@/lib/server/invitations";
 import {
@@ -55,6 +56,7 @@ function response(row: InvitationRow) {
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "view");
     if (!canManageOrganizationAccess(context)) throw new ApiError(403, "access_management_denied", "Somente administradores da empresa consultam os convites de acesso.");
     const result = await context.db.prepare(
@@ -70,6 +72,7 @@ export async function POST(request: Request) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "edit");
     if (!canManageOrganizationAccess(context)) {
       throw new ApiError(403, "access_management_denied", "Somente o contratante ou um administrador autorizado pode criar acessos.");

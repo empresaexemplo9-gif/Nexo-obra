@@ -388,15 +388,25 @@ saiu e quem mandou apagar.
 
 ## Módulos contratados, identidade visual e criação de acessos
 
-**Módulos por empresa (superadmin).** Em `/superadmin` → *Assinaturas, parceiros e acessos* →
-empresa → **Módulos contratados**, o superadministrador liga e desliga os módulos da empresa.
-Visão geral e Equipe ficam sempre ligados. A permissão efetiva de cada pessoa — contratante
-incluído — é o que ela recebeu **∩** o que a empresa contratou, calculada em
-`contextFromMembership` (`lib/server/backend.ts`): toda rota que já conferia módulo passa a
-respeitar o contrato sem mudar uma linha. Desligar esconde o módulo do menu e faz a API
-responder `403`; nenhum dado é apagado, e religar devolve tudo. Sem escolha registrada, a
-empresa tem todos os módulos, como antes. Cada alteração fica em `platform_audit_events`
-(`platform.modules_changed`). O superadmin continua enxergando tudo ao abrir a empresa.
+**Menu por empresa (superadmin).** Em `/superadmin` → *Assinaturas, parceiros e acessos* →
+empresa → **Menu da empresa**, o superadministrador marca, item por item, o que aparece no
+menu lateral daquela empresa: Visão geral, Lembretes, Projetos, Obras, Orçamentos, Propostas,
+Compras, Cronograma, Prancheta, Documentos e PDF, Editor CAD, Criador de layout, Comunicação,
+CRM, Portal do cliente, Financeiro, Equipe, Identidade visual, Diário, Tarefas, Arquivos,
+Planilha e Tempo de uso. Nenhum é obrigatório. Vale para todos os acessos reais da empresa,
+contratante incluído; o superadmin continua vendo tudo, e a demonstração pública não é afetada.
+
+Cada item precisa de certos dados (Orçamentos lê projetos; Financeiro também). A permissão
+efetiva de cada pessoa é o que ela recebeu **∩** os dados dos itens ligados, calculada em
+`contextFromMembership` (`lib/server/backend.ts`) — Visão geral e Equipe seguem como dados de
+base, sem mostrar as telas. Itens que dividem os mesmos dados têm trava própria na API
+(`requireFerramenta`): Comunicação, Planilha, Lembretes, Tempo de uso, Editor CAD, Criador de
+layout, Propostas, escrita de Orçamentos, administração da Equipe, Identidade visual e o
+cadastro de Obras separado do de Projetos. Prancheta e Documentos e PDF dividem a biblioteca
+de arquivos com o Editor CAD e o Criador de layout: desligados sozinhos, somem do menu; a
+biblioteca só fecha quando os quatro saem. Desligar não apaga dado — religar devolve tudo. Sem
+escolha registrada, a empresa tem tudo, como antes. Cada alteração fica em
+`platform_audit_events` (`platform.modules_changed`).
 
 **Identidade visual (contratante e administradores).** Item **Identidade visual** no menu.
 A empresa envia o logotipo em PNG, JPEG, WebP, SVG ou o PDF do manual da marca: o navegador

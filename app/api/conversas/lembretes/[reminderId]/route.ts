@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { apiRoute, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { apiRoute, jsonBody, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { setReminderDone } from "@/lib/server/chat";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,7 @@ const schema = z.object({ done: z.boolean() }).strict();
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "comunicacao");
     const parsed = schema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten());
     const { reminderId } = await route.params;

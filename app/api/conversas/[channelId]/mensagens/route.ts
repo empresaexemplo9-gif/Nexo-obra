@@ -1,4 +1,4 @@
-import { apiRoute, jsonBody, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { apiRoute, jsonBody, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { listMessages, messageSchema, postMessage } from "@/lib/server/chat";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,7 @@ const isoOrNull = (value: string | null) => (value && /^\d{4}-\d{2}-\d{2}T[\d:.]
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "comunicacao");
     const { channelId } = await route.params;
     const search = new URL(request.url).searchParams;
     return Response.json(await listMessages(context, channelId, { since: isoOrNull(search.get("since")), before: isoOrNull(search.get("before")) }));
@@ -19,6 +20,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "comunicacao");
     const parsed = messageSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten());
     const { channelId } = await route.params;

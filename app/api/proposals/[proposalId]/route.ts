@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { proposalResponse, proposalSelect, type ProposalRow } from "@/lib/server/proposals";
 import { proposalContentSchema, proposalTotals } from "@/lib/proposals";
 
@@ -27,6 +27,7 @@ async function load(context: Awaited<ReturnType<typeof requireOrganizationContex
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "view");
     const { proposalId } = await route.params;
     const row = await load(context, proposalId);
@@ -43,6 +44,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "edit");
     const { proposalId } = await route.params;
     const current = await load(context, proposalId);
@@ -82,6 +84,7 @@ export async function PATCH(request: Request, route: RouteContext) {
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "proposals");
     requireModulePermission(context, "budgets", "edit");
     const { proposalId } = await route.params;
     const current = await load(context, proposalId);

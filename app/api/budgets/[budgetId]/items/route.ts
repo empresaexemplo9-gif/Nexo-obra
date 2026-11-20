@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function POST(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "budgets");
     requireModulePermission(context, "budgets", "edit");
     const { budgetId } = await route.params;
     const budget = await ownedBudget(context.db, budgetId, context.organization.id);

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ApiError, apiRoute, jsonBody, requireOrganizationContext, validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 import { podeAdministrarEmpresa } from "@/lib/permissions";
@@ -50,6 +51,7 @@ export async function PUT(request: Request) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "marca");
     if (!podeAdministrarEmpresa(context.member.role)) {
       throw new ApiError(403, "branding_denied", "Somente o contratante ou um administrador altera a identidade visual.");
     }

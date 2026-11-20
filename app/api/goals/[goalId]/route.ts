@@ -7,6 +7,7 @@ import {
   canManageOrganizationAccess,
   ensureFound,
   requireOrganizationContext,
+  requireFerramenta,
 } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,7 @@ type RouteContext = { params: Promise<{ goalId: string }> };
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "reminders");
     if (!canManageOrganizationAccess(context)) {
       throw new ApiError(403, "goal_manager_required", "Somente o contratante ou um administrador encerra metas.");
     }

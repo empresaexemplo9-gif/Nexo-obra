@@ -1,4 +1,4 @@
-import { apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { criarLayout, criarSchema, listarLayouts } from "@/lib/server/layouts";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "layout");
     requireModulePermission(context, "studio", "view");
     return Response.json({ layouts: await listarLayouts(context) });
   });
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "layout");
     requireModulePermission(context, "studio", "edit");
     const parsed = criarSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten());

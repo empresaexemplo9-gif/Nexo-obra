@@ -152,6 +152,24 @@ test("o colaborador não vê Financeiro, Clientes nem Equipe no menu", async () 
   assert.doesNotMatch(itens, /Equipe/);
 });
 
+test("o menu mostra só os itens que o superadmin liberou para a empresa, até para o contratante", async () => {
+  const organizacao = { id: "org", name: "Escritório Exemplo", slug: "escritorio", timezone: "America/Sao_Paulo", enabledTools: ["tasks", "comunicacao", "budgets"] };
+  const calls = await abrir(sessionFor("owner", { organization: organizacao }), { "/api/conversas": { channels: [], unreadTotal: 0 } });
+  const itens = menu().join(" | ");
+  for (const ligado of ["Tarefas", "Comunicação", "Orçamentos"]) assert.match(itens, new RegExp(ligado), `${ligado} foi liberado`);
+  for (const desligado of ["Visão geral", "Projetos", "Obras", "Financeiro", "Equipe", "Lembretes", "Editor CAD", "Identidade visual"]) {
+    assert.doesNotMatch(itens, new RegExp(desligado), `${desligado} não foi contratado`);
+  }
+  assert.equal(calls.some((call) => call.path.startsWith("/api/reminders")), false, "lembretes desligados não são consultados");
+});
+
+test("o superadmin enxerga o menu inteiro mesmo com itens desligados na empresa", async () => {
+  const organizacao = { id: "org", name: "Escritório Exemplo", slug: "escritorio", timezone: "America/Sao_Paulo", enabledTools: ["tasks"] };
+  await abrir(sessionFor("superadmin", { authMethod: "superadmin", organization: organizacao }), { "/api/conversas": { channels: [], unreadTotal: 0 } });
+  const itens = menu().join(" | ");
+  for (const item of ["Visão geral", "Projetos", "Financeiro", "Equipe"]) assert.match(itens, new RegExp(item));
+});
+
 test("o parceiro entra em leitura: sem botão de criar", async () => {
   await abrir(sessionFor("partner"));
   assert.equal(findByText(container, /^Criar$/), null, "parceiro não cria registro");

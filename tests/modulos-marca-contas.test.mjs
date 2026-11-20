@@ -32,7 +32,12 @@ async function comoSuperadmin(path, init = {}) {
 }
 const desligar = (org, enabled) => h.db.sqlite.prepare("INSERT INTO organization_modules (organization_id, enabled_json, revision, updated_by, updated_at) VALUES (?,?,1,'t',0)")
   .run(org, JSON.stringify(enabled));
-const semCrm = config.modulosContrataveis.filter((m) => m !== "crm");
+// Formato anterior (lista de módulos de dados), que continua sendo lido.
+const semCrm = ["projects", "budgets", "schedule", "diary", "portal", "finance", "tasks", "files", "studio", "purchases"];
+const ligar = (org, ferramentas) => h.db.sqlite.prepare("INSERT INTO organization_modules (organization_id, enabled_json, revision, updated_by, updated_at) VALUES (?,?,1,'t',0)")
+  .run(org, JSON.stringify({ ferramentas }));
+const conversasRoute = await h.load("/app/api/conversas/route.ts");
+const projectsRoute = await h.load("/app/api/projects/route.ts");
 
 test("módulo desligado some da sessão e a API recusa, só naquela empresa", async () => {
   desligar(orgA, semCrm);
@@ -48,12 +53,38 @@ test("módulo desligado some da sessão e a API recusa, só naquela empresa", as
   assert.equal((await clientsRoute.GET(h.request("owner-b", "/api/clients", { org: orgB }))).status, 200);
 });
 
+test("cada item do menu é uma escolha: Comunicação e Obras desligadas, o resto segue", async () => {
+  const semComunicacaoNemObras = config.todasAsFerramentas.filter((id) => id !== "comunicacao" && id !== "works");
+  ligar(orgA, semComunicacaoNemObras);
+  const sessao = await (await sessionRoute.GET(h.request("owner", "/api/session"))).json();
+  assert.equal(sessao.organization.enabledTools.includes("comunicacao"), false);
+  assert.equal(sessao.organization.enabledTools.includes("projects"), true);
+
+  const conversa = await conversasRoute.GET(h.request("owner", "/api/conversas"));
+  assert.equal(conversa.status, 403);
+  assert.equal((await conversa.json()).code, "tool_not_contracted");
+  assert.equal((await conversasRoute.GET(h.request("owner-b", "/api/conversas", { org: orgB }))).status, 200, "outra empresa não muda");
+
+  const novo = (kind) => projectsRoute.POST(h.request("owner", "/api/projects", { method: "POST", json: { name: "Casa Nova", code: `C-${kind}`, kind, phase: "briefing", budgetCents: 0 } }));
+  assert.equal((await novo("work")).status, 403, "sem Obras, não cadastra obra");
+  assert.equal((await novo("project")).status, 201, "com Projetos, cadastra projeto");
+});
+
+test("empresa sem nenhuma ferramenta não acessa dados de tela nenhuma", async () => {
+  ligar(orgA, []);
+  const sessao = await (await sessionRoute.GET(h.request("owner", "/api/session"))).json();
+  assert.deepEqual(sessao.organization.enabledTools, []);
+  assert.equal((await clientsRoute.GET(h.request("owner", "/api/clients"))).status, 403);
+  assert.equal((await projectsRoute.GET(h.request("owner", "/api/projects"))).status, 403);
+});
+
 test("banco sem a migração nova continua funcionando com tudo liberado", async () => {
   h.db.sqlite.exec("DROP TABLE organization_modules; DROP TABLE organization_branding; DROP TABLE member_delegations;");
   const resposta = await sessionRoute.GET(h.request("owner", "/api/session"));
   assert.equal(resposta.status, 200);
   const sessao = await resposta.json();
   assert.equal(sessao.organization.enabledModules.length, 13);
+  assert.equal(sessao.organization.enabledTools.length, config.todasAsFerramentas.length);
   assert.equal(sessao.branding.hasLogo, false);
   assert.equal((await clientsRoute.GET(h.request("owner", "/api/clients"))).status, 200);
 });
@@ -68,15 +99,19 @@ test("só o superadmin liga e desliga módulos, com revisão e rastro", async ()
 
   const lido = await (await modulosRoute.GET(await comoSuperadmin(url), params({ organizationId: orgA }))).json();
   assert.equal(lido.revision, 0);
-  assert.equal(lido.enabled.length, 13, "sem escolha, tudo ligado");
+  assert.equal(lido.ferramentas.length, config.todasAsFerramentas.length, "sem escolha, tudo ligado");
 
-  const salvo = await modulosRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify({ enabled: ["projects", "tasks"], revision: 0 }) }), params({ organizationId: orgA }));
+  const salvo = await modulosRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify({ ferramentas: ["tasks", "comunicacao"], revision: 0 }) }), params({ organizationId: orgA }));
   assert.equal(salvo.status, 200);
   const corpo = await salvo.json();
-  assert.deepEqual(corpo.enabled, ["overview", "projects", "team", "tasks"], "visão geral e equipe nunca saem");
+  assert.deepEqual(corpo.ferramentas, ["comunicacao", "tasks"]);
+  assert.deepEqual(corpo.modulos, ["overview", "projects", "team", "tasks"], "Tarefas precisa dos projetos; visão geral e equipe são dados de base");
+  // Ferramenta inventada não entra.
+  const invalido = await modulosRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify({ ferramentas: ["hackear"], revision: 1 }) }), params({ organizationId: orgA }));
+  assert.equal(invalido.status, 400);
 
   // Revisão velha não sobrescreve.
-  const velho = await modulosRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify({ enabled: semCrm, revision: 0 }) }), params({ organizationId: orgA }));
+  const velho = await modulosRoute.PUT(await comoSuperadmin(url, { method: "PUT", body: JSON.stringify({ ferramentas: [], revision: 0 }) }), params({ organizationId: orgA }));
   assert.equal(velho.status, 409);
   const rastro = h.db.sqlite.prepare("SELECT count(*) n FROM platform_audit_events WHERE organization_id = ? AND action = 'platform.modules_changed'").get(orgA);
   assert.equal(rastro.n, 1);

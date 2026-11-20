@@ -6,6 +6,7 @@ import {
   jsonBody,
   requireOrganizationContext,
   validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { worksheetResponse, worksheetSchema, type WorksheetRow } from "@/lib/worksheets";
 import { buildTemplateContent, templateById } from "@/lib/worksheet-templates";
@@ -18,6 +19,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const superAdmin = isPlatformSuperAdmin(context);
     // A planilha restrita só entra na lista de quem tem liberação — ou do superadmin.
     const result = await context.db.prepare(
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const parsed = worksheetSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
     const data = parsed.data;

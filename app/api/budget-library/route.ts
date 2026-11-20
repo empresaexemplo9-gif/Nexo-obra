@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +28,7 @@ const columns = "id, code, description, category, unit, unit_cost_cents, default
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "budgets");
     requireModulePermission(context, "budgets", "view");
     const query = new URL(request.url).searchParams.get("q")?.trim() ?? "";
     const statement = query
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "budgets");
     requireModulePermission(context, "budgets", "edit");
     const parsed = catalogItemSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);

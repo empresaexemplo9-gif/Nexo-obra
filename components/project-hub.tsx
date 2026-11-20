@@ -2,7 +2,7 @@
 
 import { BrandLogo } from "@/components/brand-logo";
 import { LogoDaEmpresa, useCoresDaEmpresa } from "@/components/marca-empresa";
-import type { MarcaDaEmpresa } from "@/lib/empresa-config";
+import type { Ferramenta, MarcaDaEmpresa } from "@/lib/empresa-config";
 import { aplicarMarca, type Marca } from "@/lib/marca";
 import { ProjectEditor } from "@/components/project-editor";
 import Link from "next/link";
@@ -46,7 +46,8 @@ type SessionData = {
   signInPath?: string;
   member?: { role: string; permissions: PermissionSet };
   terms?: { accepted: boolean };
-  organization?: { name: string };
+  authMethod?: string;
+  organization?: { name: string; enabledTools?: Ferramenta[] };
   branding?: MarcaDaEmpresa;
 };
 
@@ -117,7 +118,11 @@ function formatDate(value: string | null) {
 }
 
 function can(session: SessionData | null, module: PermissionModule) {
-  return Boolean(session?.member?.permissions[module].view);
+  if (!session?.member?.permissions[module]?.view) return false;
+  // Itens do menu que a empresa contratou. O superadministrador vê tudo.
+  const ligadas = session.authMethod === "superadmin" ? null : session.organization?.enabledTools;
+  if (!ligadas) return true;
+  return module === "projects" ? ligadas.includes("projects") || ligadas.includes("works") : (ligadas as string[]).includes(module);
 }
 
 function StateBadge({ status }: { status: string }) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, ensureFound, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { budgetResponse, budgetSelect, type BudgetRow } from "@/lib/server/budgets-records";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "budgets");
     requireModulePermission(context, "budgets", "edit");
     const { budgetId } = await route.params;
     const current = ensureFound(await context.db.prepare("SELECT id, status, sent_at, approved_at, bdi_percent, margin_percent FROM budget_versions WHERE id = ?1 AND organization_id = ?2")

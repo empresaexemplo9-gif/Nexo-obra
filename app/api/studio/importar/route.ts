@@ -3,7 +3,7 @@ import { z } from "zod";
 import { UNIDADES, Unidade } from "@/lib/integrations/dxf";
 import { createFormatRegistry, MAX_CAD_BYTES } from "@/lib/cad-formats";
 import { converterDwgParaDxfBytes, DwgConversaoFalhou, DwgConversorIndisponivel } from "@/lib/server/dwg-converter";
-import { ApiError, apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { readWholeFile, requireReadableFile } from "@/lib/server/org-files";
 import { responder } from "@/lib/server/studio-corpo";
 
@@ -61,6 +61,7 @@ async function lerEnvioDireto(request: Request, contentType: string) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
 
     const contentType = request.headers.get("content-type") ?? "";

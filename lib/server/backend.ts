@@ -14,8 +14,8 @@ import { MAINTENANCE_ORGANIZATION_ID, maintenanceOrganizationStatement, readMain
 import { readSuperAdminIdentity, rejectCrossSiteMutation, SUPERADMIN_DISPLAY_NAME, SUPERADMIN_USER_ID } from "@/lib/server/superadmin";
 import { readSessionUser, sessionPredatesPassword } from "@/lib/server/auth";
 import { runtimeEnv } from "@/lib/server/runtime";
-import { modulosDaEmpresa } from "@/lib/server/empresa-config";
-import { aplicarModulosDaEmpresa } from "@/lib/empresa-config";
+import { configuracaoDaEmpresa } from "@/lib/server/empresa-config";
+import { aplicarModulosDaEmpresa, ferramentasDoMenu, type Ferramenta } from "@/lib/empresa-config";
 
 export { ApiError };
 
@@ -23,8 +23,11 @@ export type OrganizationContext = {
   db: D1Database;
   user: { id: string; email: string; displayName: string };
   member: { id: string; externalUserId: string; role: string; permissions: PermissionSet };
-  /** `enabledModules`: o que o superadministrador liberou para a empresa. */
-  organization: { id: string; name: string; slug: string; timezone: string; enabledModules: PermissionModule[] };
+  /**
+   * `enabledTools`: itens do menu que o superadministrador liberou para a empresa.
+   * `enabledModules`: dados que essas ferramentas precisam — o recorte das permissões.
+   */
+  organization: { id: string; name: string; slug: string; timezone: string; enabledModules: PermissionModule[]; enabledTools: Ferramenta[] };
   termsAccepted: boolean;
 };
 
@@ -202,7 +205,8 @@ async function superAdminContext(
   const member = await superAdminMember(db, found.id, identity.email);
   // O superadministrador continua com tudo, inclusive módulo desligado: é ele quem
   // configura e dá suporte. A lista vai junto para a tela mostrar o que a empresa tem.
-  const organization = { ...found, enabledModules: await modulosDaEmpresa(db, found.id) };
+  const configuracao = await configuracaoDaEmpresa(db, found.id);
+  const organization = { ...found, enabledModules: configuracao.modulos, enabledTools: configuracao.ferramentas };
   return {
     db,
     user: { id: identity.id, email: identity.email, displayName: identity.displayName },
@@ -239,7 +243,7 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
   // Permissão efetiva = o que o membro recebeu ∩ o que a empresa contratou. Recortar aqui,
   // no único ponto que monta o contexto, faz toda rota que já confere módulo respeitar o
   // contrato sem mudar uma linha dela. Vale também para o contratante.
-  const enabledModules = await modulosDaEmpresa(db, membership.organization_id);
+  const { modulos: enabledModules, ferramentas: enabledTools } = await configuracaoDaEmpresa(db, membership.organization_id);
   return {
     db,
     user: { id: identity.id, email: identity.email, displayName: membership.member_name || identity.displayName },
@@ -255,6 +259,7 @@ async function contextFromMembership(db: D1Database, identity: AuthenticatedIden
       slug: membership.organization_slug,
       timezone: membership.timezone,
       enabledModules,
+      enabledTools,
     },
     termsAccepted: Boolean(acceptedTerms),
   };
@@ -272,6 +277,17 @@ export function requireModulePermission(context: OrganizationContext, module: Pe
   if (!isPlatformSuperAdmin(context) && !context.member.permissions[module][action]) {
     throw new ApiError(403, "module_permission_denied", "Seu acesso não permite esta operação.");
   }
+}
+
+/**
+ * Trava por ferramenta, para telas que dividem o mesmo grupo de dados (Comunicação e
+ * Visão geral, Editor CAD e Prancheta, Propostas e Orçamentos). O superadministrador
+ * passa sempre: é ele quem configura e dá suporte.
+ */
+export function requireFerramenta(context: OrganizationContext, ferramenta: Ferramenta) {
+  if (isPlatformSuperAdmin(context) || context.organization.enabledTools.includes(ferramenta)) return;
+  const rotulo = ferramentasDoMenu.find((item) => item.id === ferramenta)?.rotulo ?? ferramenta;
+  throw new ApiError(403, "tool_not_contracted", `${rotulo} não está disponível para esta empresa.`);
 }
 
 export function canManageOrganizationAccess(context: OrganizationContext) {

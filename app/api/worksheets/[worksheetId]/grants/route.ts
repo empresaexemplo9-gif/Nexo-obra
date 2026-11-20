@@ -9,6 +9,7 @@ import {
   jsonBody,
   requireOrganizationContext,
   validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { type WorksheetRow } from "@/lib/worksheets";
 
@@ -27,6 +28,7 @@ const grantSchema = z.object({
 // acesso é de leitura ou de leitura e edição.
 async function governedWorksheet(request: Request, route: RouteContext) {
   const context = await requireOrganizationContext(request);
+  requireFerramenta(context, "sheets");
   if (!isPlatformSuperAdmin(context)) {
     throw new ApiError(403, "analysis_superadmin_only", "Somente o superadministrador libera acesso a esta planilha.");
   }

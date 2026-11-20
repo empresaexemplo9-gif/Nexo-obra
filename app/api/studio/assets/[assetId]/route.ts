@@ -1,4 +1,4 @@
-import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { deleteObject, getObject } from "@/lib/server/storage";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +20,7 @@ async function daEmpresa(context: Awaited<ReturnType<typeof requireOrganizationC
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "view");
     const { assetId } = await route.params;
     const linha = await daEmpresa(context, assetId);
@@ -39,6 +40,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
     const { assetId } = await route.params;
     const linha = await daEmpresa(context, assetId);

@@ -9,6 +9,7 @@ import {
   jsonBody,
   requireOrganizationContext,
   validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { SHEET_MAX_COLUMNS, SHEET_MAX_ROWS } from "@/lib/spreadsheet";
 import { contentSchema, worksheetResponse, type WorksheetRow } from "@/lib/worksheets";
@@ -28,6 +29,7 @@ const updateSchema = z.object({
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const { worksheetId: id } = await route.params;
     const { row, access } = await loadWorksheet(context, id);
     return Response.json({ worksheet: worksheetResponse(row), access }, { headers: { "Cache-Control": "private, no-store" } });
@@ -38,6 +40,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function PATCH(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const { worksheetId: id } = await route.params;
     const parsed = updateSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten().fieldErrors);
@@ -70,6 +73,7 @@ export async function PATCH(request: Request, route: RouteContext) {
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "sheets");
     const { worksheetId: id } = await route.params;
     const { row, access } = await loadWorksheet(context, id);
     if (!access.canDelete) {

@@ -1,4 +1,4 @@
-import { apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { apiRoute, jsonBody, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { abrirLayout, excluirLayout, salvarLayout, salvarSchema } from "@/lib/server/layouts";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +8,7 @@ type RouteContext = { params: Promise<{ layoutId: string }> };
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "layout");
     requireModulePermission(context, "studio", "view");
     const { layoutId } = await route.params;
     return Response.json({ layout: await abrirLayout(context, layoutId) });
@@ -17,6 +18,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function PUT(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "layout");
     requireModulePermission(context, "studio", "edit");
     const parsed = salvarSchema.safeParse(await jsonBody(request));
     if (!parsed.success) throw validationError(parsed.error.flatten());
@@ -28,6 +30,7 @@ export async function PUT(request: Request, route: RouteContext) {
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "layout");
     requireModulePermission(context, "studio", "edit");
     const { layoutId } = await route.params;
     await excluirLayout(context, layoutId);

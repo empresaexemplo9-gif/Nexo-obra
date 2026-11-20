@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { documentoSchema } from "@/lib/prancheta";
 import { ESPECIES, resposta } from "@/lib/server/studio-response";
-import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, validationError, requireFerramenta } from "@/lib/server/backend";
 import { documentoDoBanco, documentoParaBanco, lerCorpo, responder } from "@/lib/server/studio-corpo";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +54,7 @@ async function documentoDaLinha(linha: Linha) {
 export async function GET(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "view");
     const { drawingId } = await route.params;
     const linha = await daEmpresa(context, drawingId);
@@ -65,6 +66,7 @@ export async function GET(request: Request, route: RouteContext) {
 export async function PUT(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
     const { drawingId } = await route.params;
     const analisado = salvarSchema.safeParse(await lerCorpo(request));
@@ -107,6 +109,7 @@ export async function PUT(request: Request, route: RouteContext) {
 export async function DELETE(request: Request, route: RouteContext) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
     const { drawingId } = await route.params;
     const linha = await daEmpresa(context, drawingId);

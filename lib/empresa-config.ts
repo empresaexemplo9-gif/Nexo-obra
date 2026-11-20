@@ -10,42 +10,88 @@ import {
 // Ficam num módulo sem dependência de servidor para a tela mostrar exatamente a mesma
 // regra que a API aplica.
 
-// ─── Módulos contratados ───
+// ─── Ferramentas contratadas ───
+//
+// A unidade que o superadministrador escolhe é cada item do menu lateral. Por trás, cada
+// ferramenta precisa de certos módulos de dados (a de Orçamentos lê projetos, a de
+// Financeiro também). O servidor libera os dados que as ferramentas ligadas precisam e
+// recusa o resto; a tela mostra só as ferramentas ligadas.
 
-/** Sem estes a empresa não abre nem administra a própria equipe; nunca são desligados. */
+export const secoesDoMenu = ["Trabalho", "Negócio", "Organização"] as const;
+
+export const ferramentasDoMenu = [
+  { id: "overview", rotulo: "Visão geral", secao: "Trabalho", modulos: ["overview"] },
+  { id: "reminders", rotulo: "Lembretes do dia", secao: "Trabalho", modulos: ["overview"] },
+  { id: "projects", rotulo: "Projetos", secao: "Trabalho", modulos: ["projects"] },
+  { id: "works", rotulo: "Obras", secao: "Trabalho", modulos: ["projects"] },
+  { id: "budgets", rotulo: "Orçamentos", secao: "Trabalho", modulos: ["budgets", "projects"] },
+  { id: "proposals", rotulo: "Propostas", secao: "Trabalho", modulos: ["budgets", "projects"] },
+  { id: "purchases", rotulo: "Compras", secao: "Trabalho", modulos: ["purchases", "projects"] },
+  { id: "schedule", rotulo: "Cronograma", secao: "Trabalho", modulos: ["schedule", "tasks", "projects"] },
+  { id: "prancheta", rotulo: "Prancheta", secao: "Trabalho", modulos: ["studio", "projects"] },
+  { id: "documentos", rotulo: "Documentos e PDF", secao: "Trabalho", modulos: ["studio", "projects"] },
+  { id: "studio", rotulo: "Editor CAD", secao: "Trabalho", modulos: ["studio", "projects"] },
+  { id: "layout", rotulo: "Criador de layout", secao: "Trabalho", modulos: ["studio", "projects"] },
+  { id: "comunicacao", rotulo: "Comunicação", secao: "Trabalho", modulos: ["overview"] },
+  { id: "crm", rotulo: "CRM e clientes", secao: "Negócio", modulos: ["crm"] },
+  { id: "portal", rotulo: "Portal do cliente", secao: "Negócio", modulos: ["portal", "projects"] },
+  { id: "finance", rotulo: "Financeiro", secao: "Negócio", modulos: ["finance", "projects"] },
+  { id: "team", rotulo: "Equipe", secao: "Negócio", modulos: ["team"] },
+  { id: "marca", rotulo: "Identidade visual", secao: "Negócio", modulos: [] },
+  { id: "diary", rotulo: "Diário de obra", secao: "Organização", modulos: ["diary", "projects"] },
+  { id: "tasks", rotulo: "Tarefas", secao: "Organização", modulos: ["tasks", "projects"] },
+  { id: "files", rotulo: "Arquivos", secao: "Organização", modulos: ["files", "projects"] },
+  { id: "sheets", rotulo: "Planilha e documento", secao: "Organização", modulos: ["overview"] },
+  { id: "usage", rotulo: "Tempo de uso", secao: "Organização", modulos: ["overview"] },
+] as const satisfies readonly { id: string; rotulo: string; secao: typeof secoesDoMenu[number]; modulos: readonly PermissionModule[] }[];
+
+export type Ferramenta = typeof ferramentasDoMenu[number]["id"];
+export const todasAsFerramentas: Ferramenta[] = ferramentasDoMenu.map((item) => item.id);
+
+/**
+ * Dados que continuam acessíveis mesmo com a tela desligada: sem Visão geral e Equipe o
+ * servidor não sabe quem é a equipe (responsáveis de tarefa, autores de mensagem). Isso
+ * não mostra as telas — só mantém os dados de base de pé.
+ */
 export const modulosEssenciais: readonly PermissionModule[] = ["overview", "team"];
 
-export const modulosContrataveis: PermissionModule[] = permissionModules.filter((modulo) => !modulosEssenciais.includes(modulo));
+/** O que cada grupo de dados cobre, para mensagens e documentação. */
+export const ferramentasDoModulo: Record<PermissionModule, string> = Object.fromEntries(permissionModules.map((modulo) => [
+  modulo,
+  ferramentasDoMenu.filter((item) => (item.modulos as readonly PermissionModule[]).includes(modulo)).map((item) => item.rotulo).join(", "),
+])) as Record<PermissionModule, string>;
 
-/** O que cada módulo leva junto no menu, para o superadmin saber o que está desligando. */
-export const ferramentasDoModulo: Record<PermissionModule, string> = {
-  overview: "Visão geral, lembretes, comunicação, planilhas e tempo de uso",
-  projects: "Projetos e obras",
-  budgets: "Orçamentos e propostas",
-  schedule: "Cronograma",
-  diary: "Diário de obra",
-  portal: "Portal do cliente",
-  crm: "CRM e clientes",
-  finance: "Financeiro, cobranças e notas",
-  team: "Equipe e acessos",
-  tasks: "Tarefas",
-  files: "Arquivos",
-  studio: "Prancheta, Documentos e PDF, Editor CAD e Criador de layout",
-  purchases: "Compras e suprimentos",
-};
+export type ConfiguracaoDaEmpresa = { ferramentas: Ferramenta[]; modulos: PermissionModule[] };
 
-/** Lê o que foi gravado. Ausente ou ilegível vale como "tudo liberado", o estado de antes. */
+export function modulosDasFerramentas(ferramentas: readonly Ferramenta[]): PermissionModule[] {
+  const ligados = new Set<PermissionModule>(modulosEssenciais);
+  for (const item of ferramentasDoMenu) if (ferramentas.includes(item.id)) for (const modulo of item.modulos) ligados.add(modulo);
+  return permissionModules.filter((modulo) => ligados.has(modulo));
+}
+
+/**
+ * Lê o que foi gravado. Ausente ou ilegível vale como "tudo liberado", o estado de antes.
+ * Aceita também o formato anterior (lista de módulos): cada módulo vira as ferramentas dele.
+ */
+export function lerConfiguracao(valor: string | null | undefined): ConfiguracaoDaEmpresa {
+  const tudo = { ferramentas: [...todasAsFerramentas], modulos: [...permissionModules] };
+  if (!valor) return tudo;
+  let lido: unknown;
+  try { lido = JSON.parse(valor); } catch { return tudo; }
+  let ferramentas: Ferramenta[];
+  if (Array.isArray(lido)) {
+    const modulos = new Set(lido);
+    ferramentas = ferramentasDoMenu.filter((item) => item.modulos.length === 0 || item.modulos.every((modulo) => modulos.has(modulo) || modulosEssenciais.includes(modulo))).map((item) => item.id);
+  } else if (lido && typeof lido === "object" && Array.isArray((lido as { ferramentas?: unknown }).ferramentas)) {
+    const escolhidas = new Set((lido as { ferramentas: unknown[] }).ferramentas);
+    ferramentas = todasAsFerramentas.filter((id) => escolhidas.has(id));
+  } else return tudo;
+  return { ferramentas, modulos: modulosDasFerramentas(ferramentas) };
+}
+
+/** Mantida para quem só precisa dos módulos de dados. */
 export function lerModulosHabilitados(valor: string | null | undefined): PermissionModule[] {
-  if (!valor) return [...permissionModules];
-  try {
-    const lista = JSON.parse(valor) as unknown;
-    if (!Array.isArray(lista)) return [...permissionModules];
-    const escolhidos = new Set(lista.filter((item): item is PermissionModule => permissionModules.includes(item as PermissionModule)));
-    for (const essencial of modulosEssenciais) escolhidos.add(essencial);
-    return permissionModules.filter((modulo) => escolhidos.has(modulo));
-  } catch {
-    return [...permissionModules];
-  }
+  return lerConfiguracao(valor).modulos;
 }
 
 /** Permissão efetiva: o que o membro recebeu, recortado pelo que a empresa contratou. */

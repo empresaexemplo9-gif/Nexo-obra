@@ -1,4 +1,4 @@
-import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext } from "@/lib/server/backend";
+import { ApiError, apiRoute, auditStatement, requireModulePermission, requireOrganizationContext, requireFerramenta } from "@/lib/server/backend";
 import { deleteObject, putObject } from "@/lib/server/storage";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +92,7 @@ async function formularioLimitado(request: Request) {
 export async function GET(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "view");
     const categoria = new URL(request.url).searchParams.get("categoria")?.trim();
     const filtros = ["organization_id = ?1"];
@@ -107,6 +108,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return apiRoute(async () => {
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "studio");
     requireModulePermission(context, "studio", "edit");
     const formulario = await formularioLimitado(request);
     const arquivo = formulario.get("file");

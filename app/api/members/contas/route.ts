@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ApiError, apiRoute, canManageOrganizationAccess, isPlatformSuperAdmin, jsonBody,
   requireModulePermission, requireOrganizationContext, validationError,
+  requireFerramenta,
 } from "@/lib/server/backend";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
 import { assertPlatformAccess } from "@/lib/server/platform-access";
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   return apiRoute(async () => {
     rejectCrossSiteMutation(request);
     const context = await requireOrganizationContext(request);
+    requireFerramenta(context, "team");
     requireModulePermission(context, "team", "view");
     const total = context.member.role === "owner" || isPlatformSuperAdmin(context);
     const autorizado = total || canManageOrganizationAccess(context)
