@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandLogo, type BrandVariant } from "@/components/brand-logo";
+import { aplicarMarca, MARCAS, type Marca } from "@/lib/marca";
 import { TeamWorkload } from "@/components/team-workload";
 import { TasksWorkspace } from "@/components/tasks-workspace";
 import Link from "next/link";
@@ -141,6 +142,7 @@ type SessionData = {
   branding?: MarcaDaSessao;
   terms?: { version: string; accepted: boolean };
   organization?: Organization & { enabledModules?: PermissionModule[] };
+  marca?: Marca;
   organizations: Organization[];
 };
 type Client = { id: string; name: string; email: string | null; phone: string | null; document: string | null; updatedAt: string };
@@ -475,7 +477,7 @@ function Workspace({ session, reloadSession }: { session: SessionData; reloadSes
         </section>
         <section className="drap-focus" aria-labelledby="drap-focus-title">
           <div className="drap-focus-copy"><p className="eyebrow">O que move o trabalho hoje</p><h2 id="drap-focus-title" className="display-heading">{overdue.length ? "Prazos que precisam de atenção." : activeProjects.length ? "Cada projeto, um próximo passo." : "Espaço para o seu próximo projeto."}</h2><p>{overdue.length ? `${overdue.length} tarefa(s) vencida(s). Revise os prazos e organize as próximas entregas.` : activeProjects.length ? `${activeProjects.length} trabalho(s) em andamento. Acompanhe as entregas e mantenha a equipe alinhada.` : "Reúna clientes, projetos e entregas em um só lugar. Comece pelo primeiro cadastro."}</p></div>
-          <div className="drap-focus-action">{overdue.length && canView("tasks") ? <Button onClick={() => setActiveModule("tasks")}>Revisar tarefas<ArrowUpRight /></Button> : canEdit("projects") ? <Button onClick={() => openCreate("project")}>Novo projeto<Plus /></Button> : <Button onClick={() => setActiveModule("reminders")}>Ver lembretes<ArrowUpRight /></Button>}<span>DRAP · Backoffice para arquitetos</span></div>
+          <div className="drap-focus-action">{overdue.length && canView("tasks") ? <Button onClick={() => setActiveModule("tasks")}>Revisar tarefas<ArrowUpRight /></Button> : canEdit("projects") ? <Button onClick={() => openCreate("project")}>Novo projeto<Plus /></Button> : <Button onClick={() => setActiveModule("reminders")}>Ver lembretes<ArrowUpRight /></Button>}<span>{MARCAS[session.marca ?? "drap"].assinatura}</span></div>
         </section>
         <section className="drap-metrics" aria-label="Indicadores da empresa">
           {canView("projects") && <Kpi icon={FolderKanban} label="Trabalhos ativos" value={String(activeProjects.length)} detail={`${projects.length} cadastrados`} />}
@@ -558,6 +560,9 @@ export function NexoApp() {
     if (current && !current.authenticated) { setExpired(true); setSession(current); }
   }, []);
   useUsageHeartbeat(Boolean(session?.authenticated && session.organization && !session.portalOnly), undefined, signedOut);
+  // A marca acompanha a empresa aberta (vem do servidor); sem empresa, volta à da plataforma.
+  const marca: Marca = session?.authenticated && session.organization && !session.portalOnly ? session.marca ?? "drap" : "drap";
+  useEffect(() => { if (session) aplicarMarca(marca); }, [session, marca]);
   if (loading || !session) return <LoadingScreen />;
   // Visitante sem conta vê a página de apresentação; o formulário de entrada abre pelo
   // botão dela. Sessão que venceu no meio do trabalho vai direto ao formulário.

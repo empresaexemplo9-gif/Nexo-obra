@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CURRENT_TERMS_VERSION } from "@/lib/terms";
+import { marcaDaOrganizacao } from "@/lib/marca";
 import { readMaintenanceIdentity } from "@/lib/server/maintenance";
 import { portalAccessesForUser } from "@/lib/server/portal";
 import { rejectCrossSiteMutation } from "@/lib/server/superadmin";
@@ -70,6 +71,8 @@ export async function GET(request: Request) {
         branding,
         terms: { version: CURRENT_TERMS_VERSION, accepted: context.termsAccepted },
         organization: context.organization,
+        // Marca derivada da empresa resolvida no servidor; só muda a aparência.
+        marca: marcaDaOrganizacao(context.organization.id),
         organizations: memberships.map((membership) => ({
           id: membership.organization_id,
           name: membership.organization_name,
