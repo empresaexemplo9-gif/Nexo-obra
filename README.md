@@ -598,3 +598,7 @@ A equipe com permissão de edição do portal publica textos e solicitações im
 Esta entrega não inclui disparo automático de e-mail/WhatsApp, documentos arbitrários ou sincronização automática de aprovações com orçamentos. Os links de convite são copiados para envio pelo administrador.
 
 Validação: testes de API executam as migrações e SQL reais em SQLite, substituindo apenas o transporte D1 e o armazenamento R2 em memória. Cobrem isolamento, convite expirado, aceite obrigatório, revogação, permissões, decisão idempotente e fotos privadas.
+
+## Titularidade e licença
+
+Software proprietário desenvolvido e distribuído por **DRAP INTELIGENCIA DE MERCADO LTDA** (nome fantasia DRAP SOLUCOES PERSONALIZADAS), CNPJ 64.759.314/0001-55, Goiânia/GO. Todos os direitos reservados; uso somente mediante contrato com a DRAP. Veja `LICENSE`.

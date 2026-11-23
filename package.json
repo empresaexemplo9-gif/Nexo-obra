@@ -83,5 +83,7 @@
     "typescript": "5.9.3",
     "vite": "8.0.13"
   },
-  "type": "module"
+  "type": "module",
+  "license": "UNLICENSED",
+  "author": "DRAP INTELIGENCIA DE MERCADO LTDA (CNPJ 64.759.314/0001-55)"
 }
