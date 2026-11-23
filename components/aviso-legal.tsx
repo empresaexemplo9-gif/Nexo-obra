@@ -17,7 +17,7 @@ export function AvisoLegal({ className }: { className?: string }) {
       }}
     >
       <p style={{ margin: 0 }}>
-        © {new Date().getFullYear()} {TITULAR.razaoSocial} · CNPJ {TITULAR.cnpj} · Software proprietário. Todos os
+        © {new Date().getFullYear()} {TITULAR.razaoSocial} · <span style={{ whiteSpace: "nowrap" }}>CNPJ {TITULAR.cnpj}</span> · Software proprietário. Todos os
         direitos reservados.
       </p>
       <p style={{ margin: 0 }}>
