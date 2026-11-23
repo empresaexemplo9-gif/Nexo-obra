@@ -6,6 +6,7 @@ import "./oikos-tema.css";
 
 import { Toaster } from "@/components/ui/sonner";
 import { MARCA_BOOT_SCRIPT } from "@/lib/marca";
+import { AvisoLegal } from "@/components/aviso-legal";
 
 export const metadata: Metadata = {
   title: "DRAP Backoffice para Arquitetos",
@@ -38,7 +39,7 @@ export default function RootLayout({
       </head>
       {/* Avisos em todas as páginas: o Editor CAD e a página de projeto abrem fora do
           aplicativo principal, e sem isto seus erros e confirmações não apareciam. */}
-      <body>{children}<Toaster position="bottom-right" /></body>
+      <body>{children}<AvisoLegal /><Toaster position="bottom-right" /></body>
     </html>
   );
 }
